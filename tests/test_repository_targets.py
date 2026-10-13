@@ -2,7 +2,7 @@ from pathlib import Path
 
 from scripts import auto_updater, safety_updater
 
-REPOSITORY = "boutg16-lang/CAT"
+REPOSITORY = "boutg16-lang/CQT1"
 ROOT = Path(__file__).resolve().parent.parent
 
 

@@ -9,7 +9,7 @@
 
 #define MyAppName "OUSSAMA Cutter"
 #define MyAppPublisher "OUSSAMA Cutter"
-#define MyAppURL "https://github.com/boutg16-lang/CAT"
+#define MyAppURL "https://github.com/boutg16-lang/CQT1"
 #define MyAppExeName "OUSSAMA-Cutter.exe"
 
 [Setup]

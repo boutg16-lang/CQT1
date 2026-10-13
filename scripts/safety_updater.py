@@ -32,7 +32,7 @@ import time
 import urllib.request
 
 REMOTE_URL = ("https://raw.githubusercontent.com/"
-              "boutg16-lang/CAT/main/safety_blocklist.json")
+              "boutg16-lang/CQT1/main/safety_blocklist.json")
 
 # v7.18: fallback mirrors / community packs merged on top of the canonical
 # pack. Each entry may also carry "required": False to tolerate a dead mirror.

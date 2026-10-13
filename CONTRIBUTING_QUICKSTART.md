@@ -5,8 +5,8 @@
 ## 1. التهيئة
 
 ```bash
-git clone https://github.com/boutg16-lang/CAT.git
-cd CAT
+git clone https://github.com/boutg16-lang/CQT1.git
+cd CQT1
 python3 -m venv .venv && source .venv/bin/activate
 make dev-install
 cp .env.example .env      # ثم املأ المفاتيح المطلوبة

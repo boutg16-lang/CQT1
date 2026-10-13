@@ -38,7 +38,7 @@ import subprocess
 import sys
 import urllib.request
 
-REPO = "boutg16-lang/CAT"
+REPO = "boutg16-lang/CQT1"
 UPDATES_DIR = "updates"
 UPDATE_INFO = "update_info.json"
 

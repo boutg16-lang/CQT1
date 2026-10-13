@@ -1,13 +1,13 @@
 # OUSSAMA Cutter
-[![CI](https://github.com/boutg16-lang/CAT/actions/workflows/ci.yml/badge.svg)](https://github.com/boutg16-lang/CAT/actions/workflows/ci.yml)
+[![CI](https://github.com/boutg16-lang/CQT1/actions/workflows/ci.yml/badge.svg)](https://github.com/boutg16-lang/CQT1/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Discord](https://dcbadge.limes.pink/api/server/tAdPHFAbud)](https://discord.gg/tAdPHFAbud)<br>
 
 **OUSSAMA Cutter — alternativa open-source gratuita ao Opus Clip, com processamento local e recursos online quando escolhidos.**
 Transforme vídeos longos do YouTube em shorts virais otimizados para TikTok, Instagram Reels e YouTube Shorts – com IA de ponta, legendas dinâmicas, *face tracking* preciso e tradução automática. O processamento de mídia ocorre localmente; recursos online podem enviar os dados necessários ao serviço selecionado.
 
-[![Stars](https://img.shields.io/github/stars/boutg16-lang/CAT?style=social)](https://github.com/boutg16-lang/CAT/stargazers)
-[![Forks](https://img.shields.io/github/forks/boutg16-lang/CAT?style=social)](https://github.com/boutg16-lang/CAT/network/members)
+[![Stars](https://img.shields.io/github/stars/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/stargazers)
+[![Forks](https://img.shields.io/github/forks/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/network/members)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1UZKzeqjIeEyvq9nPx7s_4mU6xlkZQn_R?usp=sharing)
 
 [English](README_en.md) • [Português](README.md) • [العربية](README_ar.md)

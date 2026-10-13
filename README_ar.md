@@ -1,13 +1,13 @@
 # OUSSAMA Cutter
-[![CI](https://github.com/boutg16-lang/CAT/actions/workflows/ci.yml/badge.svg)](https://github.com/boutg16-lang/CAT/actions/workflows/ci.yml)
+[![CI](https://github.com/boutg16-lang/CQT1/actions/workflows/ci.yml/badge.svg)](https://github.com/boutg16-lang/CQT1/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 
 **بديل مجاني ومفتوح المصدر لـ Opus Clip، مع معالجة محلية وخدمات إنترنت عند اختيارها.**
 حوّل فيديوهات يوتيوب الطويلة إلى مقاطع قصيرة جاهزة لـ TikTok وInstagram Reels وYouTube Shorts — بذكاء اصطناعي متقدم، وترجمات ديناميكية، وتتبع دقيق للوجه، وترجمة تلقائية. تُعالج الوسائط محلياً؛ وقد ترسل الميزات المتصلة بالإنترنت البيانات اللازمة إلى الخدمة المختارة.
 
-[![Stars](https://img.shields.io/github/stars/boutg16-lang/CAT?style=social)](https://github.com/boutg16-lang/CAT/stargazers)
-[![Forks](https://img.shields.io/github/forks/boutg16-lang/CAT?style=social)](https://github.com/boutg16-lang/CAT/network/members)
+[![Stars](https://img.shields.io/github/stars/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/stargazers)
+[![Forks](https://img.shields.io/github/forks/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/network/members)
 
 [English](README_en.md) • [Português](README.md) • **العربية**
 > **الإسناد / الاعتماد** — هذا المشروع فرع (fork) من مشروع
@@ -80,8 +80,8 @@ $env:VIRALCUTTER_LANG="en_US"; python webui/app.py
 **الطريقة 1 — سكربت واحد (موصى بها):**
 ```bat
 :: 1) نزّل المشروع (زر Code ← Download ZIP وفك الضغط، أو:)
-git clone https://github.com/boutg16-lang/CAT.git
-cd ViralCutter
+git clone https://github.com/boutg16-lang/CQT1.git
+cd CQT1
 
 :: 2) شغّل المثبّت (يثبّت بايثون/الاعتماديات/FFmpeg/whisperx — اسألك عن كرت الشاشة)
 install_dependencies.bat
