@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install ffmpeg (real-video smoke tests)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run Ruff lint
+        run: ruff check .
+      - name: Audit dependencies
+        run: pip-audit --progress-spinner off --format json --output pip-audit-${{ matrix.python-version }}.json
+      - name: Generate SBOM
+        run: pip-audit --progress-spinner off --format cyclonedx-json --output sbom-${{ matrix.python-version }}.json
+      - name: Audit dependency licenses
+        run: pip-licenses --fail-on="GPL;AGPL" --format=markdown --output-file=licenses-${{ matrix.python-version }}.md
+      - name: Build package
+        run: python -m build --wheel --sdist
+      - name: Run deterministic quality benchmark
+        run: python -m scripts.quality_benchmark --output quality-benchmark-${{ matrix.python-version }}.json
+      - name: Run unit tests
+        run: pytest -v
+      # Upload LAST so a shared artifact-storage quota (issue #26) can never
+      # hide the test result — previously this step failed the job before
+      # pytest ran, making a green commit look red for no code reason.
+      - name: Upload build and compliance reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: compliance-${{ matrix.python-version }}
+          path: |
+            dist/*
+            sbom-${{ matrix.python-version }}.json
+            pip-audit-${{ matrix.python-version }}.json
+            licenses-${{ matrix.python-version }}.md
+            quality-benchmark-${{ matrix.python-version }}.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows-quality:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg
+        shell: powershell
+        run: choco install ffmpeg -y --no-progress
+      - name: Install lightweight quality test tools
+        run: python -m pip install --upgrade pytest
+      - name: Run deterministic benchmark on Windows
+        run: python -m scripts.quality_benchmark --output quality-benchmark-windows.json
+      - name: Run portable exporter and benchmark tests
+        run: python -m pytest -q tests/test_otio_export.py tests/test_quality_benchmark.py
+      - name: Upload Windows quality report
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-windows
+          path: quality-benchmark-windows.json
+          if-no-files-found: warn
+          retention-days: 7

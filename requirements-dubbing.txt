@@ -1,0 +1,10 @@
+# Optional: multilingual dubbing (scripts/dubbing.py, v7.50)
+#
+# The `edge` provider is free and needs no API key, BUT it sends the transcript
+# text to Microsoft's service. It stays refused until you opt in with
+# VIRALCUTTER_TTS_ALLOW_NETWORK=1 (or the "allow network" checkbox in the
+# WebUI dubbing controls).
+#
+# The `file` provider needs nothing: point it at a folder of your own
+# recordings instead.
+edge-tts>=7.2.8

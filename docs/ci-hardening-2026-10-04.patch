@@ -1,0 +1,139 @@
+diff --git a/.github/workflows/arabic-lexicon-freshness.yml b/.github/workflows/arabic-lexicon-freshness.yml
+index ac2a386..acbf021 100644
+--- a/.github/workflows/arabic-lexicon-freshness.yml
++++ b/.github/workflows/arabic-lexicon-freshness.yml
+@@ -14,6 +14,10 @@ on:
+     - cron: "0 6 * * 1" # Mondays 06:00 UTC
+   workflow_dispatch:
+
++concurrency:
++  group: lexicon-freshness-${{ github.ref }}
++  cancel-in-progress: true
++
+ permissions:
+   issues: write
+   contents: read
+@@ -21,6 +25,7 @@ permissions:
+ jobs:
+   check:
+     runs-on: ubuntu-latest
++    timeout-minutes: 15
+     steps:
+       - uses: actions/checkout@v7
+
+diff --git a/.github/workflows/build-exe.yml b/.github/workflows/build-exe.yml
+index ce8a8a2..61ea68a 100644
+--- a/.github/workflows/build-exe.yml
++++ b/.github/workflows/build-exe.yml
+@@ -30,8 +30,16 @@ on:
+       - "v*"
+   workflow_dispatch:
+
++# Default to read-only; the single job that creates a Release opts into
++# contents: write explicitly. (GitHub Actions has no step-level permissions,
++# and build+release must stay in one job so a full artifact-storage quota
++# cannot block the release — see issue #26.)
+ permissions:
+-  contents: write
++  contents: read
++
++concurrency:
++  group: build-exe-${{ github.ref }}
++  cancel-in-progress: true
+
+ env:
+   # Must equal EXE(..., name=...) in packaging/viralcutter.spec
+@@ -40,6 +48,9 @@ env:
+ jobs:
+   build-windows:
+     runs-on: windows-latest
++    timeout-minutes: 45
++    permissions:
++      contents: write
+     steps:
+       - name: Checkout
+         uses: actions/checkout@v7
+@@ -179,7 +190,10 @@ jobs:
+       # then produced no downloadable release at all.
+       - name: Create / update GitHub Release (tag pushes only)
+         if: startsWith(github.ref, 'refs/tags/v')
+-        uses: softprops/action-gh-release@v3
++        # Pinned to the reviewed v3 commit (not the mutable tag) because this
++        # third-party action runs with contents: write. Dependabot's
++        # github-actions ecosystem keeps the SHA current.
++        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+         with:
+           name: OUSSAMA Cutter ${{ github.ref_name }}
+           tag_name: ${{ github.ref_name }}
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index fed5b62..41495d8 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -8,9 +8,14 @@ on:
+ permissions:
+   contents: read
+
++concurrency:
++  group: ci-${{ github.workflow }}-${{ github.ref }}
++  cancel-in-progress: true
++
+ jobs:
+   test:
+     runs-on: ubuntu-latest
++    timeout-minutes: 30
+     strategy:
+       matrix:
+         python-version: ["3.10", "3.11", "3.12"]
+@@ -56,6 +61,7 @@ jobs:
+
+   windows-quality:
+     runs-on: windows-latest
++    timeout-minutes: 20
+     steps:
+       - uses: actions/checkout@v7
+       - uses: actions/setup-python@v7
+diff --git a/.github/workflows/safety-blocklist-freshness.yml b/.github/workflows/safety-blocklist-freshness.yml
+index bd56e9f..39edc20 100644
+--- a/.github/workflows/safety-blocklist-freshness.yml
++++ b/.github/workflows/safety-blocklist-freshness.yml
+@@ -18,6 +18,10 @@ on:
+   push:
+     branches: [main]
+
++concurrency:
++  group: blocklist-freshness-${{ github.ref }}
++  cancel-in-progress: true
++
+ permissions:
+   contents: read
+   issues: write
+@@ -25,6 +29,7 @@ permissions:
+ jobs:
+   check:
+     runs-on: ubuntu-latest
++    timeout-minutes: 15
+     steps:
+       - uses: actions/checkout@v7
+
+diff --git a/.github/workflows/youtube-policy-watch.yml b/.github/workflows/youtube-policy-watch.yml
+index 95c366e..1503077 100644
+--- a/.github/workflows/youtube-policy-watch.yml
++++ b/.github/workflows/youtube-policy-watch.yml
+@@ -15,6 +15,10 @@ on:
+     - cron: "0 9 * * *" # daily 09:00 UTC
+   workflow_dispatch:
+
++concurrency:
++  group: policy-watch-${{ github.ref }}
++  cancel-in-progress: true
++
+ permissions:
+   issues: write
+   contents: read
+@@ -22,6 +26,7 @@ permissions:
+ jobs:
+   watch:
+     runs-on: ubuntu-latest
++    timeout-minutes: 15
+     steps:
+       - uses: actions/checkout@v7

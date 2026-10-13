@@ -1,0 +1,223 @@
+diff --git a/.github/workflows/build-exe.yml b/.github/workflows/build-exe.yml
+index ea8a4a9..ce8a8a2 100644
+--- a/.github/workflows/build-exe.yml
++++ b/.github/workflows/build-exe.yml
+@@ -7,12 +7,22 @@ name: Build Windows EXE
+ #
+ # Triggers:
+ #   * push of a v* tag   → builds AND creates/updates a GitHub Release with
+-#                          ViralCutter.exe (fpcalc + ffmpeg bundled inside)
++#                          OUSSAMA-Cutter.exe + checksums.txt (fpcalc + ffmpeg
++#                          bundled inside)
+ #   * manual dispatch    → builds the current branch and uploads the exe as a
+ #                          workflow artifact (for testing) — no release created
+ #
+ # The exe ships with fpcalc.exe (music fingerprint check) and ffmpeg/ffprobe
+ # (video processing) bundled, so it works out of the box on a clean Windows.
++#
++# Single source of truth for the binary name: `EXE_NAME` below must match
++# `name=` in packaging/viralcutter.spec. A future rebrand is therefore a
++# one-line change here (issue #25).
++#
++# Release assets, in order of importance for the auto-updater:
++#   * OUSSAMA-Cutter.exe — the binary
++#   * checksums.txt      — SHA-256 manifest; scripts/auto_updater.py is
++#                          fail-closed and REFUSES any release without it.
+ 
+ on:
+   push:
+@@ -23,6 +33,10 @@ on:
+ permissions:
+   contents: write
+ 
++env:
++  # Must equal EXE(..., name=...) in packaging/viralcutter.spec
++  EXE_NAME: OUSSAMA-Cutter.exe
++
+ jobs:
+   build-windows:
+     runs-on: windows-latest
+@@ -44,6 +58,25 @@ jobs:
+           pip install -r requirements.txt || echo "WARN: some optional deps failed to install on this runner"
+           pip install -r requirements-upload.txt || echo "WARN: upload stack incomplete"
+ 
++      - name: Verify spec and workflow agree on the binary name
++        shell: bash
++        run: |
++          # Cheap guard against exactly the v7.18 regression: the spec was
++          # renamed to OUSSAMA-Cutter while this workflow still looked for
++          # dist/ViralCutter.exe, so every build hung in the smoke test.
++          SPEC_NAME=$(python -c "
++          import re, pathlib
++          src = pathlib.Path('packaging/viralcutter.spec').read_text(encoding='utf-8')
++          marker = src.index('EXE(')
++          print(re.search(r'name\s*=\s*[\"\\']([^\"\\']+)[\"\\']', src[marker:]).group(1))
++          ")
++          echo "spec name:     $SPEC_NAME"
++          echo "workflow EXE_NAME: $EXE_NAME"
++          if [ "$SPEC_NAME.exe" != "$EXE_NAME" ]; then
++            echo "::error::EXE_NAME ($EXE_NAME) does not match packaging/viralcutter.spec (${SPEC_NAME}.exe)"
++            exit 1
++          fi
++
+       - name: Download fpcalc + ffmpeg for bundling
+         shell: bash
+         run: |
+@@ -69,6 +102,11 @@ jobs:
+         run: |
+           pyinstaller packaging/viralcutter.spec --noconfirm --clean
+           ls -lh dist/
++          if [ ! -f "dist/$EXE_NAME" ]; then
++            echo "::error::PyInstaller did not produce dist/$EXE_NAME"
++            ls -lh dist/ || true
++            exit 1
++          fi
+ 
+       - name: Smoke-test the exe (WebUI must boot)
+         shell: bash
+@@ -76,39 +114,86 @@ jobs:
+           # Launch the exe in WebUI mode and wait until http://127.0.0.1:7860
+           # answers 200. This catches frozen-bundle breakage (missing data
+           # files, missing hidden imports) BEFORE anything is released.
+-          # Every curl is time-bounded (--max-time) and the whole step is
+-          # wrapped in `timeout` so it can never hang the job.
+-          timeout 300 bash -c '
+-            ./dist/ViralCutter.exe --webui > webui_smoke.log 2>&1 &
+-            EXE_PID=$!
+-            for i in $(seq 1 55); do
+-              CODE=$(curl -s --max-time 4 -o /dev/null -w "%{http_code}" http://127.0.0.1:7860/ 2>/dev/null || echo 000)
+-              if [ "$CODE" = "200" ]; then
+-                echo "OK: WebUI responded HTTP 200 after ${i}x5s"
+-                kill $EXE_PID 2>/dev/null || true
+-                exit 0
+-              fi
+-              sleep 5
+-            done
+-            echo "FAIL: WebUI did not respond in time — log tail:"
+-            tail -60 webui_smoke.log || true
+-            kill $EXE_PID 2>/dev/null || true
++          #
++          # Hardening (issue #25 — the old version silently burned the whole
++          # 300s job timeout with no diagnostics):
++          #   * fail immediately with a clear message when the exe is missing
++          #   * detect an early crash instead of polling a dead process
++          #   * bounded curl calls + an internal 240s deadline (< 300s step
++          #     timeout) so the log always gets printed
++          #   * a trap prints webui_smoke.log on EVERY exit path
++          EXE="dist/$EXE_NAME"
++          if [ ! -f "$EXE" ]; then
++            echo "::error::missing $EXE — nothing to smoke-test"
++            ls -lh dist/ || true
+             exit 1
+-          '
++          fi
+ 
+-      - name: Upload exe as workflow artifact
+-        uses: actions/upload-artifact@v7
+-        with:
+-          name: ViralCutter-win-x64
+-          path: dist/ViralCutter.exe
+-          if-no-files-found: error
++          cleanup() {
++            local rc=$?
++            if [ -f webui_smoke.log ]; then
++              echo "----- webui_smoke.log (tail -80) -----"
++              tail -80 webui_smoke.log || true
++            else
++              echo "(no webui_smoke.log was produced)"
++            fi
++            kill "$EXE_PID" 2>/dev/null || true
++            wait "$EXE_PID" 2>/dev/null || true
++            return $rc
++          }
+ 
++          "$EXE" --webui > webui_smoke.log 2>&1 &
++          EXE_PID=$!
++          trap cleanup EXIT
++
++          DEADLINE=$((SECONDS + 240))
++          while [ "$SECONDS" -lt "$DEADLINE" ]; do
++            if ! kill -0 "$EXE_PID" 2>/dev/null; then
++              echo "::error::the exe exited before serving the WebUI — log follows"
++              exit 1
++            fi
++            CODE=$(curl -s --max-time 4 -o /dev/null -w "%{http_code}" http://127.0.0.1:7860/ 2>/dev/null || echo 000)
++            if [ "$CODE" = "200" ]; then
++              echo "OK: WebUI responded HTTP 200 after $((SECONDS))s"
++              exit 0
++            fi
++            sleep 5
++          done
++
++          echo "::error::WebUI did not respond within 240s"
++          exit 1
++
++      - name: Generate checksums manifest
++        shell: bash
++        run: |
++          # scripts/auto_updater.py is fail-closed: it refuses to install an
++          # update from a release with no checksums.txt / SHA256SUMS asset.
++          # Emitting it here is what makes in-app updates actually work.
++          cd dist
++          sha256sum "$EXE_NAME" > checksums.txt
++          cat checksums.txt
++
++      # The Release comes BEFORE the artifact upload on purpose: artifact
++      # storage is a shared account quota (issue #26), and hitting it used to
++      # fail the job before the release step ever ran — a successful build
++      # then produced no downloadable release at all.
+       - name: Create / update GitHub Release (tag pushes only)
+         if: startsWith(github.ref, 'refs/tags/v')
+         uses: softprops/action-gh-release@v3
+         with:
+-          name: ViralCutter ${{ github.ref_name }}
++          name: OUSSAMA Cutter ${{ github.ref_name }}
+           tag_name: ${{ github.ref_name }}
+           files: |
+-            dist/ViralCutter.exe
++            dist/${{ env.EXE_NAME }}
++            dist/checksums.txt
+           generate_release_notes: true
++
++      - name: Upload exe as workflow artifact
++        uses: actions/upload-artifact@v7
++        with:
++          name: OUSSAMA-Cutter-win-x64
++          path: |
++            dist/${{ env.EXE_NAME }}
++            dist/checksums.txt
++          if-no-files-found: error
++          retention-days: 7
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 4f7d217..31963fa 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -33,6 +33,11 @@ jobs:
+         run: python -m build --wheel --sdist
+       - name: Run deterministic quality benchmark
+         run: python -m scripts.quality_benchmark --output quality-benchmark-${{ matrix.python-version }}.json
++      - name: Run unit tests
++        run: pytest -v
++      # Upload LAST so a shared artifact-storage quota (issue #26) can never
++      # hide the test result — previously this step failed the job before
++      # pytest ran, making a green commit look red for no code reason.
+       - name: Upload build and compliance reports
+         uses: actions/upload-artifact@v7
+         with:
+@@ -43,8 +48,8 @@ jobs:
+             pip-audit-${{ matrix.python-version }}.json
+             licenses-${{ matrix.python-version }}.md
+             quality-benchmark-${{ matrix.python-version }}.json
+-      - name: Run unit tests
+-        run: pytest -v
++          if-no-files-found: warn
++          retention-days: 7
+ 
+   windows-quality:
+     runs-on: windows-latest
+@@ -67,3 +72,5 @@ jobs:
+         with:
+           name: quality-windows
+           path: quality-benchmark-windows.json
++          if-no-files-found: warn
++          retention-days: 7
