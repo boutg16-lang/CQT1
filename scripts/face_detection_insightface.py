@@ -1,0 +1,205 @@
+import os
+import sys
+import warnings
+from contextlib import contextmanager
+
+import cv2
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+try:
+    from insightface.app import FaceAnalysis
+    INSIGHTFACE_AVAILABLE = True
+except Exception:
+    # InsightFace has native dependencies that may fail during import when
+    # NumPy/ONNX wheels are incompatible. Keep the optional fallback path alive.
+    INSIGHTFACE_AVAILABLE = False
+
+app = None
+
+@contextmanager
+def suppress_stdout_stderr():
+    """A context manager that redirects stdout and stderr to devnull"""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+def init_insightface():
+    """Explicit initialization if needed outside import."""
+    global app
+    if not INSIGHTFACE_AVAILABLE:
+        raise ImportError("InsightFace not installed. Please install it.")
+
+    if app is None:
+        # Provider options to reduce logging if possible (often needs env var)
+        # But redirection is safer for C++ logs
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+
+        try:
+            import onnxruntime as ort
+            available = ort.get_available_providers()
+            print(f"InsightFace: Available ONNX Providers: {available}")
+            if 'CUDAExecutionProvider' not in available:
+                print("WARNING: CUDAExecutionProvider not found. InsightFace will likely run on CPU.")
+                print("To fix, install onnxruntime-gpu: pip install onnxruntime-gpu")
+        except Exception as e:
+            print(f"InsightFace: Could not check available providers: {e}")
+
+        with suppress_stdout_stderr():
+            app = FaceAnalysis(name='buffalo_l', providers=providers)
+            app.prepare(ctx_id=0, det_size=(640, 640))
+    return app
+
+def detect_faces_insightface(frame):
+    """
+    Detect faces using InsightFace.
+    Returns a list of dicts with 'bbox' and 'kps'.
+    bbox is [x1, y1, x2, y2], kps is 5 keypoints (eyes, nose, mouth corners).
+    """
+    global app
+    if app is None:
+        init_insightface()
+
+    faces = app.get(frame)
+    results = []
+    for face in faces:
+        # Convert bbox to int
+        bbox = face.bbox.astype(int)
+        res = {
+            'bbox': bbox, # [x1, y1, x2, y2]
+            'kps': face.kps,
+            'det_score': face.det_score
+        }
+        if hasattr(face, 'landmark_2d_106') and face.landmark_2d_106 is not None:
+             res['landmark_2d_106'] = face.landmark_2d_106
+        if hasattr(face, 'landmark_3d_68') and face.landmark_3d_68 is not None:
+             res['landmark_3d_68'] = face.landmark_3d_68
+
+        results.append(res)
+    return results
+
+def crop_and_resize_insightface(frame, face_bbox, target_width=1080, target_height=1920, headroom=0.0, face_zoom=0.0):
+    """
+    Crops and resizes the frame to target dimensions centered on the face_bbox.
+    face_bbox: [x1, y1, x2, y2]
+
+    ``headroom`` (0.0 = centered) shifts the crop upward so the face sits in
+    the upper third of the 9:16 frame — the classic "talking head" framing
+    used by professional Shorts editors. 0.0 .. 0.3 are sane values.
+
+    ``face_zoom`` (0.0 = legacy behaviour) makes the crop height adapt to the
+    face size so the face occupies roughly that fraction of the frame height
+    (0.33 ≈ the standard talking-head zoom). The crop never gets tighter
+    than 40% of the source height, so group shots keep their context. When
+    the requested zoom would make the 9:16 window narrower than the face
+    (face bisected), the zoom is relaxed to the largest value that still
+    fits the full face width with ~6% margin; only when no window inside the
+    source can contain the face (extreme close-up) does it fall back to the
+    centered full-height crop (best effort).
+    """
+    h, w, _ = frame.shape
+    x1, y1, x2, y2 = [float(value) for value in face_bbox[:4]]
+    face_center_x = int(round((x1 + x2) / 2.0))
+    face_center_y = int(round((y1 + y2) / 2.0))
+    face_h = max(1.0, y2 - y1)
+
+    # Calculate crop area based on target aspect ratio and face position
+    # We want to keep the face roughly in the upper-middle or center?
+    # Usually center for simple implementation, or slightly upper for "talking head".
+
+    # Logic similar to one_face.py but adapted
+
+    # Determine the scaling factor to ensure the crop covers the target height
+    # Ideally we want the height of the video to match the target height after resize
+    # But usually we source from landscape (16:9) to portrait (9:16).
+    # We need to crop a 9:16 area from the source.
+
+    # Calculate source crop height/width maintaining 9:16 ratio
+    # Trying to maximize height usage of the source frame usually.
+
+    # Let's say we want to use the full height of the source if possible
+    if face_zoom and float(face_zoom) > 0.0:
+        # Face-size-aware framing: the face should fill about ``face_zoom``
+        # of the output height instead of always using the full source
+        # height (which leaves distant speakers tiny in the Short).
+        zoom_fraction = min(0.9, max(0.1, float(face_zoom)))
+
+        # Horizontal-fit relaxation: a 9:16 window is only target_width /
+        # target_height (~56%) as wide as it is tall, so a face that is wide
+        # relative to its height gets bisected when framed by height alone —
+        # the crop cuts the ears off. The largest zoom whose window still
+        # fits the WHOLE face width with ~6% margin solves
+        #     face_w * 1.06 <= source_w = (face_h / z) * (tw / th)
+        #   => z_fit = (face_h * target_width) / ((face_w * 1.06) * target_height)
+        face_w = max(1.0, x2 - x1)
+        z_fit = (face_h * target_width) / ((face_w * 1.06) * target_height)
+        if z_fit < zoom_fraction:
+            # Requested zoom would cut the face sideways: zoom out just
+            # enough to fit it (but never below the 0.1 floor).
+            zoom_fraction = max(z_fit, 0.1)
+
+        source_h = int(face_h / zoom_fraction)
+        # Clamp: never tighter than 40% of the source height, never looser
+        # than the full source frame.
+        source_h = max(int(h * 0.4), min(source_h, int(h)))
+        # Extreme close-up fallback: when even the relaxed zoom would still
+        # need more than the full source height (face_h / zoom_fraction >= h,
+        # so the clamp above lands on source_h == h) AND the resulting
+        # full-frame window is still narrower than the face below, no 9:16
+        # window inside this source can contain the face — any crop bisects
+        # it. The clamps then fall back to the centered full-height crop
+        # (identical to the legacy face_zoom=0 geometry); best effort.
+    else:
+        source_h = int(h)
+    source_w = int(source_h * (target_width / target_height))
+
+    if source_w > w:
+        # If the calculated width is wider than the source image, we are limited by width
+        source_w = int(w)
+        source_h = int(source_w * (target_height / target_width))
+
+    # Headroom: nudge the crop upward so the eyes land ~1/3 down the frame.
+    # Each 0.1 shifts the crop center up by 10% of the crop height.
+    if headroom > 0:
+        shift = int(source_h * min(0.35, float(headroom)))
+        # Keep the whole face inside the crop: shifting up by more than
+        # (source_h - face_h) / 2 pushes the chin out of the frame. The old
+        # face_h/4 cap silently disabled headroom for any face smaller than
+        # half the frame — i.e. almost all talking-head footage.
+        max_shift = max(0, int((source_h - face_h) / 2.0))
+        shift = min(shift, max_shift)
+    else:
+        shift = 0
+
+    # Calculate top-left corner of the crop
+    crop_x1 = int(face_center_x - (source_w // 2))
+    crop_y1 = int(face_center_y - (source_h // 2) - shift)
+
+    # Adjust to stay within bounds
+    crop_x1 = max(0, min(crop_x1, w - source_w))
+    crop_y1 = max(0, min(crop_y1, h - source_h))
+
+    crop_x2 = int(crop_x1 + source_w)
+    crop_y2 = int(crop_y1 + source_h)
+
+    # Crop
+    cropped = frame[crop_y1:crop_y2, crop_x1:crop_x2]
+
+    # Resize to final target
+    result = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
+
+    return result
+
+if __name__ == "__main__":
+    # Test block
+    print("Testing InsightFace...")
+    # Create a dummy image or try to load one if available, but for now just print config
+    print("InsightFace initialized.")

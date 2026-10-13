@@ -1,0 +1,19 @@
+# CODEOWNERS — مراجعة إلزامية للملفات الحسّاسة.
+# كل مسار هنا يستدعي مُراجِعاً تلقائياً عند أي Pull Request يلمسه.
+
+# المالك الافتراضي لكل شيء
+*                           @boutg16-lang
+
+# منطق السلامة والرقابة — لا يُدمَج بدون مراجعة
+**/safety_filter.py         @boutg16-lang
+**/upload_gate.py           @boutg16-lang
+**/censor_engine.py         @boutg16-lang
+
+# أتمتة CI/CD وإعدادات الجودة
+/.github/workflows/         @boutg16-lang
+/.github/CODEOWNERS         @boutg16-lang
+/.pre-commit-config.yaml    @boutg16-lang
+/pyproject.toml             @boutg16-lang
+
+# الأسرار والإعدادات
+/.env.example               @boutg16-lang

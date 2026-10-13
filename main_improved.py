@@ -1,0 +1,2025 @@
+import os
+import sys
+
+# Suppress unnecessary logs before importing heavy libs
+os.environ["ORT_LOGGING_LEVEL"] = "3" 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+# Frozen exe: bundled tools (ffmpeg.exe, ffprobe.exe, fpcalc.exe) live in the
+# onefile extraction dir (sys._MEIPASS). Put it on PATH so every subprocess
+# that calls "ffmpeg"/"ffprobe" by name resolves them — no external install.
+if getattr(sys, "frozen", False):
+    _bundle_dir = getattr(sys, "_MEIPASS", "") or os.path.dirname(os.path.abspath(sys.executable))
+    if _bundle_dir and _bundle_dir not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = _bundle_dir + os.pathsep + os.environ.get("PATH", "")
+
+import warnings
+
+warnings.filterwarnings("ignore")
+
+import hashlib
+import json
+import shutil
+import time
+
+from app_brand import APP_NAME
+from i18n.i18n import DEFAULT_LANGUAGE, I18nAuto
+
+try:
+    from webui.project_store import append_event as _append_project_event
+    from webui.project_store import create_project as _create_project
+    from webui.project_store import resolve_project_input as _resolve_project_input
+    from webui.project_store import update_manifest as _update_project_manifest
+except Exception:
+    _append_project_event = None
+    _create_project = None
+    _resolve_project_input = None
+    _update_project_manifest = None
+
+from scripts import (
+    adjust_subtitles,
+    audio_qc,
+    burn_subtitles,
+    censor_engine,
+    checkpoint,
+    content_guard,
+    crash_report,
+    create_viral_segments,
+    cut_segments,
+    download_video,
+    edit_video,
+    media_validation,
+    metadata_compliance,
+    oom_guard,
+    polish,
+    risk_scorecard,
+    safety_ai,
+    safety_filter,
+    save_json,
+    secure_config,
+    transcription_validation,
+    translate_json,
+    upload_gate,
+)
+
+# Inicializa sistema de tradução (default: Arabic; override with VIRALCUTTER_LANG)
+i18n = I18nAuto(DEFAULT_LANGUAGE)
+
+# Leaf pipeline utilities (verbose gate, PROGRESS| protocol, temp-file
+# cleanup, subtitle BGR palette, JSON/interval helpers) — extracted from this
+# file into scripts/pipeline_utils.py; behaviour is unchanged.
+from scripts.pipeline_utils import (
+    COLORS,
+    cleanup_temp_files,
+    debug,
+    emit_progress,
+    load_json_file,
+    parse_face_detect_interval,
+    set_verbose,
+)
+
+
+def describe_transcription_device(requested):
+    """Resolve the actual transcription device for the live WebUI status."""
+    requested = str(requested or "auto").strip().lower()
+    if requested not in {"auto", "cpu", "cuda"}:
+        requested = "auto"
+    try:
+        import torch
+        cuda_available = bool(torch.cuda.is_available())
+        if requested == "cuda" and not cuda_available:
+            return {"actual": "unavailable", "requested": requested, "name": "", "message": "CUDA مطلوبة لكن بطاقة NVIDIA غير متاحة"}
+        actual = "cuda" if requested == "cuda" or (requested == "auto" and cuda_available) else "cpu"
+        name = ""
+        if actual == "cuda":
+            try:
+                name = torch.cuda.get_device_name(0)
+            except Exception:
+                name = "NVIDIA GPU"
+        label = "NVIDIA GPU / CUDA" if actual == "cuda" else "CPU"
+        detail = " — {}".format(name) if name else ""
+        return {"actual": actual, "requested": requested, "name": name, "message": "يعمل الآن بواسطة {}{}".format(label, detail)}
+    except Exception:
+        return {"actual": "cpu", "requested": requested, "name": "", "message": "يعمل الآن بواسطة CPU (Torch/CUDA غير قابل للفحص)"}
+#
+
+def record_project_state(project_folder, status, *, error=None, args=None, source=None):
+    """Best-effort durable project status for both CLI and WebUI runs."""
+    if not project_folder or not _update_project_manifest:
+        return
+    try:
+        settings = {
+            "workflow": getattr(args, "workflow", None) if args else None,
+            "whisper_model": getattr(args, "model", None) if args else None,
+            "platform": getattr(args, "platform", None) if args else None,
+        }
+        _update_project_manifest(
+            project_folder,
+            status=status,
+            source=source or {},
+            settings={k: v for k, v in settings.items() if v is not None},
+            last_error=str(error)[:4000] if error else None,
+        )
+        if _append_project_event:
+            _append_project_event(
+                project_folder,
+                "pipeline_" + str(status),
+                {"error": str(error)[:500] if error else None},
+            )
+    except Exception as exc:
+        debug("Project manifest update skipped: {}".format(exc))
+
+
+def _segment_settings_fingerprint(args):
+    """Deterministic fingerprint of the segment-generation settings (v7.32,
+    extended v7.40).
+
+    Stored as ``source_meta.config_fp`` next to the source-video fingerprint
+    whenever viral segments are saved. The ``--skip-prompts`` reuse check
+    compares it before loading: windows chosen for the OLD min/max duration,
+    chunk size, language or count must not be reused after the user changes
+    those settings. v7.40 additionally fingerprints the viral/themes mode,
+    the AI backend + model, the transcription model, scene snapping, the
+    selection-scoring version and the prompt version — any change to those
+    changes which clips are chosen, so old results are regenerated instead
+    of silently reused. Built ONLY from argparse values (plus the stable
+    module-level version fingerprints) so the pre-prompts reuse check and
+    the post-generation save compute the identical payload.
+    """
+    payload = {
+        "segments": getattr(args, "segments", None),
+        "min_duration": getattr(args, "min_duration", None),
+        "max_duration": getattr(args, "max_duration", None),
+        "chunk_size": getattr(args, "chunk_size", None),
+        "title_language": getattr(args, "title_language", None),
+        # v7.40 additions (None on old callers → stable comparison):
+        "viral": bool(getattr(args, "viral", False)),
+        "themes": str(getattr(args, "themes", None) or ""),
+        "ai_backend": getattr(args, "ai_backend", None),
+        "ai_model_name": getattr(args, "ai_model_name", None),
+        "transcribe_model": getattr(args, "model", None),
+        "scene_snap": bool(getattr(args, "scene_snap", False)),
+        "prompt_version": create_viral_segments.prompt_version_fingerprint(),
+        # v7.41: a runtime selection-weights override (or a scoring-version
+        # bump) changes which clips are chosen, so it belongs in the settings
+        # fingerprint — not only in the saved payload.
+        "selection_weights": create_viral_segments.selection_weights_fingerprint(),
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                     separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _segment_cache_staleness_reason(data, video_path, project_folder, args):
+    source_fingerprint = (
+        create_viral_segments.source_video_fingerprint(video_path)
+        if video_path else None
+    )
+    config_fingerprint = _segment_settings_fingerprint(args)
+    transcript_fingerprint = None
+    try:
+        transcript = create_viral_segments.load_transcript(project_folder)
+        transcript_fingerprint = create_viral_segments.transcript_fingerprint(transcript)
+    except Exception as exc:
+        debug("Could not verify cached segment transcript: {}".format(exc))
+    return create_viral_segments.segment_cache_staleness_reason(
+        data, source_fingerprint, config_fingerprint, transcript_fingerprint)
+
+
+def _report_stale_segment_cache(reason):
+    print(i18n(
+        "Saved clip choices are incomplete or outdated; regenerating with the current selection rules."
+    ))
+    debug("Segment cache invalidated: {}".format(reason))
+
+def get_subtitle_config(config_path=None):
+    """
+    Returns the subtitle configuration dictionary.
+    Can be expanded to load from a JSON/YAML file in the future.
+    """
+    # Default Config
+    base_color_transparency = "00"
+    outline_transparency = "FF" 
+    highlight_color_transparency = "00"
+    shadow_color_transparency = "00"
+    
+    config = {
+        "font": "Montserrat-Regular",
+        "base_size": 30,
+        "base_color": f"&H{base_color_transparency}{COLORS['white']}&",
+        "highlight_size": 35,
+        "words_per_block": 3,
+        "gap_limit": 0.5,
+        "mode": 'highlight', # Options: 'no_highlight', 'word_by_word', 'highlight'
+        "highlight_color": f"&H{highlight_color_transparency}{COLORS['green']}&",
+        "vertical_position": 210, # 1=170(top), ... 4=60(default)
+        "alignment": 2, # 2=Center
+        "bold": 0,
+        "italic": 0,
+        "underline": 0,
+        "strikeout": 0,
+        "border_style": 2, # 1=outline, 3=box
+        "outline_thickness": 1.5,
+        "outline_color": f"&H{outline_transparency}{COLORS['grey']}&",
+        "shadow_size": 2,
+        "shadow_color": f"&H{shadow_color_transparency}{COLORS['black']}&",
+        "remove_punctuation": True,
+        "caption_animation": "none",
+        "auto_emoji": False,
+    }
+
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                loaded_config = json.load(f)
+                config.update(loaded_config)
+                print(i18n("Loaded subtitle config from {}").format(config_path))
+        except Exception as e:
+            print(i18n("Error loading subtitle config: {}. Using defaults.").format(e))
+    
+    return config
+
+def interactive_input_int(prompt_text):
+    """Solicita um inteiro ao usuário via terminal."""
+    while True:
+        try:
+            value = int(input(i18n(prompt_text)))
+            if value > 0:
+                return value
+            print(i18n("\nError: Number must be greater than 0."))
+        except ValueError:
+            print(i18n("\nError: The value you entered is not an integer. Please try again."))
+
+def _launch_webui():
+    """Launch the Gradio WebUI — the default action when the app is opened
+    without arguments (double-click), packaged or from source.
+
+    The WebUI runs a local server on http://localhost:7860 and opens the
+    browser. On failure (packaged exe) the console shows the error and stays
+    open so the user can read it, and a crash log is written next to the app.
+    """
+    # Guarantee: nothing critical missing before the UI boots (installs
+    # missing core deps / repairs config automatically).
+    if _preflight_or_exit(mode="auto-fix") == 1:
+        print("[preflight] Critical problems remain — fix the items above, then run again.")
+        return 1
+    try:
+        print(i18n("Launching ViralCutter WebUI → http://localhost:7860/ "
+                   "(keep this window open while using the app)"))
+        import threading
+        import webbrowser
+        threading.Timer(1.5, lambda: webbrowser.open("http://localhost:7860/")).start()
+        import os as _os
+        webui_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "webui")
+        if webui_dir not in sys.path:
+            sys.path.insert(0, webui_dir)
+        import app as _webui_app  # noqa: F401 — module-level code builds the UI
+        # The server itself lives in app._launch() (was under `if __name__ ==
+        # "__main__":` and thus NEVER ran on plain import — the frozen exe
+        # silently exited 0 without starting anything).
+        return _webui_app._launch([])
+    except Exception as e:
+        print(i18n("{} WebUI failed to start: {}").format(APP_NAME, e))
+        import traceback
+        traceback.print_exc()
+        try:
+            from scripts import crash_report
+            crash_report.report("webui", e, log_path=_os.path.join(
+                _os.path.dirname(_os.path.abspath(
+                    sys.executable if getattr(sys, "frozen", False) else __file__)),
+                "crash_report.log"))
+        except Exception:
+            pass
+        if getattr(sys, "frozen", False):
+            try:
+                input("Press Enter to close this window...")
+            except Exception:
+                pass
+        return 1
+
+
+def _self_check():
+    """Import the optional stacks and report whether one transcription path works."""
+    checks = []
+
+    def check(label, module):
+        try:
+            __import__(module)
+            checks.append((label, True, ""))
+            return True
+        except Exception as error:
+            checks.append((label, False, str(error)[:120]))
+            return False
+
+    full_results = [check(label, module) for label, module in (
+        ("torch", "torch"),
+        ("torchaudio", "torchaudio"),
+        ("whisperx", "whisperx"),
+    )]
+    fallback_results = [check(label, module) for label, module in (
+        ("faster_whisper", "faster_whisper"),
+        ("ctranslate2", "ctranslate2"),
+    )]
+    full_transcription = all(full_results)
+    fallback_transcription = all(fallback_results)
+    gradio_ok = check("gradio", "gradio")
+    import shutil as _sh
+    ffmpeg_ok = _sh.which("ffmpeg") is not None
+    checks.append(("ffmpeg (bundled)", ffmpeg_ok, "" if ffmpeg_ok else "not on PATH"))
+    transcription_ok = full_transcription or fallback_transcription
+    ok = transcription_ok and gradio_ok and ffmpeg_ok
+    print("[self-check] transcription: {}".format(
+        "WhisperX" if full_transcription else "faster-whisper fallback" if fallback_transcription else "FAIL"))
+    for label, good, detail in checks:
+        print("[self-check] {}: {}".format(label, "OK" if good else "FAIL — " + detail))
+    print("[self-check] overall: {}".format("PASS" if ok else "FAIL"))
+    return 0 if ok else 1
+
+
+def _preflight_or_exit(mode="auto-fix"):
+    """Pre-flight check + auto-repair before the app does real work.
+
+    The guarantee: when this returns 0, everything critical is in place
+    (dependencies installed, ffmpeg found, config/assets OK) — the app can
+    start without surprises. Missing core packages are installed on the spot.
+
+    Returns the exit code to propagate: 0 = ready (warnings allowed), 1 =
+    critical problems remain (do NOT start), anything else = continue anyway.
+    Escape hatch: VIRALCUTTER_SKIP_PREFLIGHT=1 skips the whole check.
+    """
+    skip = os.getenv("VIRALCUTTER_SKIP_PREFLIGHT", "").strip().lower() in ("1", "true", "yes", "on")
+    if skip:
+        return 0
+    try:
+        from scripts import preflight
+        code = preflight.run_preflight(mode=mode, quiet=False)
+        # exit 2 == warnings only → the app still works → continue
+        return 1 if code == 1 else 0
+    except Exception as e:
+        print("[preflight] could not run the environment check ({}).".format(e))
+        print("[preflight] continuing anyway — install dependencies manually if things break.")
+        return 0
+
+
+def resolve_safety_backend(requested, ai_backend, api_key=None):
+    """Choose the contextual safety reviewer without changing viral analysis."""
+    requested = str(requested or "auto").strip().lower()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("OPENAI_MODERATION_API_KEY", "").strip()
+    gemini_key = str(api_key or "").strip() if ai_backend == "gemini" else os.getenv("GEMINI_API_KEY", "").strip()
+
+    if requested == "auto":
+        if openai_key:
+            return "openai-moderation", openai_key
+        if ai_backend in {"gemini", "g4f"}:
+            return ai_backend, gemini_key or api_key
+        if gemini_key:
+            return "gemini", gemini_key
+        return "local", None
+    if requested == "openai-moderation":
+        return requested, openai_key or (api_key if ai_backend == "openai-moderation" else None)
+    if requested == "gemini":
+        return requested, gemini_key or (api_key if ai_backend == "gemini" else None)
+    if requested == "g4f":
+        return requested, api_key
+    return "local", None
+
+
+def _contextual_review_text(segment, transcript_segments):
+    try:
+        start = float(segment.get("start_time", 0) or 0)
+        end = float(segment.get("end_time", start) or start)
+    except (TypeError, ValueError):
+        start, end = 0.0, -1.0
+    parts = []
+    for item in transcript_segments or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            item_start = float(item.get("start", 0) or 0)
+            item_end = float(item.get("end", item_start) or item_start)
+        except (TypeError, ValueError):
+            continue
+        text = str(item.get("text") or "").strip()
+        if text and item_end > start + 0.05 and item_start < end - 0.05:
+            parts.append(text)
+    if parts:
+        return " ".join(parts)
+    return str(segment.get("transcript_text") or "").strip()
+
+
+def run_safety_stage(viral_segments, *, project_folder, args, ai_backend, api_key, workflow_choice,
+                     safety_backend=None, safety_api_key=None):
+    """Stages 3.7–3.8: YouTube policy shield (extracted from main() for testability).
+
+    Auto-updates the blocklist, applies the keyword safety filter, then the
+    optional AI second-pass review. Returns the (possibly filtered)
+    viral_segments dict. Exits with code 1 when every segment was blocked in
+    block/censor mode — nothing left to cut is a hard stop, by design.
+    """
+    if workflow_choice == "3" or not viral_segments or "segments" not in viral_segments:
+        return viral_segments
+    if args.safety_mode == "off":
+        return viral_segments
+
+    review_backend, review_key = resolve_safety_backend(
+        safety_backend or getattr(args, "safety_backend", "auto"),
+        ai_backend,
+        safety_api_key if safety_api_key is not None else api_key,
+    )
+
+    # Auto-update the word list from GitHub (daily throttle, offline-safe)
+    if args.safety_autoupdate == "on":
+        try:
+            from scripts import safety_updater
+            upd = safety_updater.check_and_update()
+            if upd.get("status") == "updated":
+                print(i18n("[safety-updater] {}").format(upd["message"]))
+            elif upd.get("status") == "offline":
+                debug("Safety list update skipped (offline) — using local list.")
+        except Exception as e:
+            debug(f"Safety list auto-update failed: {e}")
+
+    print(i18n("Running safety filter (mode: {})...").format(args.safety_mode))
+    emit_progress("ai", 58, "فحص الأمان")
+    try:
+        filtered = safety_filter.apply_safety_filter(
+            viral_segments,
+            project_folder=project_folder,
+            mode=args.safety_mode,
+            min_severity=args.safety_min_severity,
+            extra_terms_path=args.safety_extra_terms,
+            i18n=i18n,
+        )
+        if filtered is not viral_segments:
+            viral_segments = filtered
+            save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+    except Exception as e:
+        print(i18n("Safety filter failed (continuing without it): {}").format(e))
+        if getattr(args, "safety_fail_closed", "on") == "on" and args.safety_mode in ("block", "censor"):
+            print(i18n("Safety filter failed; fail-closed policy refuses to continue."))
+            sys.exit(1)
+
+    # 3.8. Second-pass AI policy review (context-level violations)
+    if args.safety_ai == "off":
+        safety_ai.record_review_status(
+            project_folder, requested=False, status="disabled",
+            backend=review_backend, reviewed_clips=[], flagged=[])
+    else:
+        print(i18n("Contextual safety backend: {}.").format(review_backend))
+        kept_segments = viral_segments.get("segments", [])
+        transcript_for_review = safety_filter.load_transcript(project_folder)
+        clips = [{
+            "index": pos,
+            "title": seg.get("title", ""),
+            "start_time": seg.get("start_time"),
+            "end_time": seg.get("end_time"),
+            "text": _contextual_review_text(seg, transcript_for_review),
+        } for pos, seg in enumerate(kept_segments)]
+        if not clips:
+            safety_ai.record_review_status(
+                project_folder, requested=True, status="complete",
+                backend=review_backend, reviewed_clips=[], flagged=[])
+        elif safety_ai.should_run_ai_review(review_backend, args.safety_ai):
+            print(i18n("Running AI safety review..."))
+            safety_ai.record_review_status(
+                project_folder, requested=True, status="pending",
+                backend=review_backend, reviewed_clips=clips, flagged=[])
+            try:
+                verdicts = safety_ai.review_segments(
+                    clips, review_backend,
+                    api_key=review_key, model_name=args.ai_model_name)
+                if verdicts is None:
+                    raise RuntimeError("contextual safety review did not produce a complete result")
+                verdicts = safety_ai.validate_review_verdicts(clips, verdicts)
+                kept_after, ai_report = safety_ai.apply_ai_review(
+                    kept_segments, clips, verdicts, mode=args.safety_mode)
+                if ai_report:
+                    print(i18n("AI review: {} segment(s) flagged by AI policy review.").format(len(ai_report)))
+                    for entry in ai_report:
+                        print(i18n("[safety-ai]   ✗ '{}' — {}").format(entry["title"], entry["reason"]))
+                    viral_segments = dict(viral_segments)
+                    viral_segments["segments"] = kept_after
+                    save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+                else:
+                    print(i18n("AI review: all surviving segments look clean ✔"))
+                safety_ai.record_review_status(
+                    project_folder, requested=True, status="complete",
+                    backend=review_backend, reviewed_clips=clips, flagged=ai_report)
+            except Exception as e:
+                print(i18n("AI safety review failed: {}").format(e))
+                try:
+                    safety_ai.record_review_status(
+                        project_folder, requested=True, status="failed",
+                        backend=review_backend, reviewed_clips=clips, flagged=[])
+                except Exception as audit_error:
+                    debug("Could not persist failed AI review state: {}".format(audit_error))
+                if getattr(args, "safety_fail_closed", "on") == "on" and args.safety_mode in ("block", "censor"):
+                    print(i18n("AI safety review failed; fail-closed policy refuses to continue."))
+                    sys.exit(1)
+        else:
+            safety_ai.record_review_status(
+                project_folder, requested=True, status="unavailable",
+                backend=review_backend, reviewed_clips=clips, flagged=[])
+            debug("AI safety review unavailable for backend '{}'.".format(review_backend))
+
+    if args.safety_mode in ("block", "censor") and not viral_segments.get("segments"):
+        print(i18n("Error: All segments were blocked by the safety filter (hate speech / policy violations)."))
+        print(i18n("Check safety_report.json in the project folder for details. Nothing was cut."))
+        sys.exit(1)
+
+    return viral_segments
+
+
+def run_content_guard_stage(viral_segments, *, project_folder, workflow_choice):
+    """Remove previously published source windows before any new export."""
+    if workflow_choice == "3" or not viral_segments or "segments" not in viral_segments:
+        return viral_segments
+    segments = list(viral_segments.get("segments", []) or [])
+    if not segments:
+        return viral_segments
+    try:
+        kept, report = content_guard.filter_segments(
+            project_folder, segments, platform="youtube")
+        try:
+            if _update_project_manifest:
+                _update_project_manifest(
+                    project_folder,
+                    content_guard={
+                        "policy_version": report.get("policy_version"),
+                        "blocked": report.get("blocked", 0),
+                        "kept": report.get("kept", 0),
+                        "database": report.get("database"),
+                        "updated_at": report.get("generated_at"),
+                    },
+                )
+        except Exception as exc:
+            debug("Could not update content guard manifest: {}".format(exc))
+        blocked = report.get("blocked", 0)
+        if blocked:
+            blocked_codes = sorted({
+                reason.get("code", "policy_guard")
+                for entry in report.get("blocked_segments", [])
+                for reason in entry.get("reasons", [])
+            })
+            reason_summary = ", ".join(blocked_codes) or "policy_guard"
+            print("[content-guard] ⛔ {} candidate(s) blocked before cutting: {}".format(
+                blocked, reason_summary))
+            for entry in report.get("blocked_segments", [])[:10]:
+                reasons = entry.get("reasons", [])
+                detail = reasons[0].get("detail", "محتوى مكرر") if reasons else "محتوى مكرر"
+                print("[content-guard]   ✗ #{} '{}': {}".format(
+                    entry.get("index", "?"), entry.get("title", ""), detail))
+            updated = dict(viral_segments)
+            updated["segments"] = kept
+            save_json.save_viral_segments(updated, project_folder=project_folder, overwrite=True)
+            viral_segments = updated
+        if not kept:
+            print("[content-guard] لا توجد مقاطع جديدة آمنة للتصدير بعد مقارنة سجل المحتوى.")
+            sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        # A registry I/O failure must be visible, but should not silently delete
+        # a valid batch. The upload gate will still run its legacy barriers.
+        print("[content-guard] تعذر فحص قاعدة المحتوى؛ ستستمر الحواجز الأساسية: {}".format(exc))
+    return viral_segments
+
+
+def main():
+    if not hasattr(main, "_retried"):
+        main._retried = False
+    # Double-click UX: no arguments at all → open the WebUI (GUI), not the
+    # interactive CLI. Packaged users double-click the exe and expect a GUI.
+    if len(sys.argv) == 1:
+        return _launch_webui()
+    # Configuração de Argumentos via Linha de Comando (CLI)
+    from scripts.cli_args import build_parser
+    parser = build_parser()
+
+    args = parser.parse_args()
+
+    if args.autopilot:
+        args.skip_prompts = True
+        args.safety_mode = "block"
+        args.safety_ai = "on"
+        args.safety_fail_closed = "on"
+        args.safety_autoupdate = "on"
+        args.risk_scorecard = "on"
+        args.risk_gate = "block"
+        args.provenance_gate = "block"
+        args.metadata_gate = "block"
+        args.audio_qc = "on"
+        args.audio_qc_gate = "block"
+        args.music_check = "on"
+        args.music_gate = "block"
+        args.visual_check = "on"
+        args.visual_gate = "block"
+        args.ocr_check = "on"
+        args.ocr_gate = "block"
+        args.focus_active_speaker = True
+        args.polish = "on"
+        args.auto_learn_blocked = True
+        print("[autopilot] Strict AI-assisted safety mode enabled; missing or failed checks will stop the run.")
+
+    if args.webui:
+        return _launch_webui()
+
+    if args.self_check:
+        return _self_check()
+
+    # Pre-flight: verify everything is in place BEFORE real work (installs
+    # missing core deps automatically). Never blocks on optional warnings.
+    if args.preflight != "off":
+        code = _preflight_or_exit(mode="auto-fix" if args.preflight == "auto" else "check")
+        if code == 1:
+            print("[preflight] Critical problems remain — fix the items above, then run again.")
+            return 1
+    set_verbose(args.verbose)
+
+    # Version marker — helps support identify stale local copies
+    try:
+        from app_version import VERSION as _VERSION
+        print("{} v{} (check: update the project / see docs)".format(APP_NAME, _VERSION))
+    except Exception:
+        pass
+
+    # Escape hatch for testing without whisperx/torch (read by transcribe_video)
+    if args.allow_placeholder_transcription:
+        os.environ["VIRALCUTTER_ALLOW_PLACEHOLDER"] = "1"
+
+    # Platform template (Roadmap 5.2): resolve duration defaults once, up front.
+    if args.platform:
+        try:
+            from scripts import platform_templates
+            args.min_duration, args.max_duration, _tpl = platform_templates.resolve_durations(
+                args.platform, args.min_duration, args.max_duration)
+            print(i18n("Platform template: {}").format(
+                platform_templates.describe(args.platform)))
+            # yt_standard means 16:9 — make the output actually match the
+            # template (unless the user already picked an explicit aspect).
+            if args.platform == "yt_standard" and not args.output_aspect:
+                args.output_aspect = "16:9"
+                print("[reframe] --platform yt_standard → reframing output to 16:9 "
+                      "(override with --output-aspect 9:16)")
+        except Exception as e:
+            debug("Platform template failed: {}".format(e))
+    if args.min_duration is None:
+        args.min_duration = 15
+    if args.max_duration is None:
+        args.max_duration = 90
+
+    # Optional startup update check (Roadmap 1.2) — never blocks startup.
+    if args.check_updates:
+        try:
+            from scripts import auto_updater
+            upd = auto_updater.check_for_update()
+            if upd.get("update_available"):
+                print(i18n("[auto-update] 🚀 ViralCutter {} available (local: {}). "
+                           "Download: {}").format(
+                    upd.get("latest_version"), auto_updater.LOCAL_VERSION,
+                    upd.get("download_url") or "see GitHub Releases"))
+            elif upd.get("error"):
+                debug("Update check skipped: {}".format(upd["error"]))
+            else:
+                debug("Up to date (local: {}).".format(auto_updater.LOCAL_VERSION))
+        except Exception as e:
+            debug("Update check failed (ignored): {}".format(e))
+    
+    # Workflow Logic
+    workflow_choice = args.workflow
+    
+    # If Subtitles Only, checking project path
+    if workflow_choice == "3" and not args.project_path and not args.url and not args.skip_prompts:
+        # Prompt for project path or use latest if not provided?
+        pass # Will handle in main flow
+
+    # Modo Apenas Queimar Legenda (Legacy support, mapped to Workflow 3 internally if burn-only is set)
+    # Verifica o argumento CLI ou uma variável local hardcoded (para compatibilidade)
+    burn_only_mode = args.burn_only
+
+    if burn_only_mode:
+        print(i18n("Burn only mode activated. Switching to Workflow 3..."))
+        workflow_choice = "3"
+
+    # Obtenção de Inputs (CLI ou Interativo)
+    url = args.url
+    project_path_arg = args.project_path
+    local_video_arg = args.local_video
+    input_video = None
+    project_folder = None
+
+    # If a project is supplied, use its local source reference when available.
+    # Do not copy an already-existing computer file into VIRALS.
+    if project_path_arg:
+        if os.path.isdir(project_path_arg):
+            project_folder = os.path.abspath(project_path_arg)
+            url = None  # An explicit project always wins over a stale URL.
+            print(i18n("Using provided project path: {}").format(project_folder))
+            if _resolve_project_input:
+                input_video = _resolve_project_input(project_folder)
+            else:
+                possible_input = os.path.join(project_folder, "input.mp4")
+                input_video = possible_input if os.path.isfile(possible_input) else None
+
+            if not input_video and workflow_choice == "3":
+                # Subtitle-only projects may not need the source video.
+                input_video = os.path.join(project_folder, "dummy_input.mp4")
+            elif not input_video:
+                print(i18n("Error: Project has no accessible local source video."))
+                print(i18n("Open the project manifest and restore the original file path."))
+                sys.exit(1)
+        else:
+            print(i18n("Error: Provided project path does not exist."))
+            sys.exit(1)
+
+    # CLI local-file mode: create only the project metadata/artifact folder and
+    # keep the source video at its original location.
+    if not project_path_arg and local_video_arg:
+        local_video_path = os.path.abspath(os.path.expanduser(local_video_arg))
+        if not os.path.isfile(local_video_path):
+            print(i18n("Error: Local video file does not exist: {}" ).format(local_video_path))
+            sys.exit(1)
+        if not _create_project:
+            print(i18n("Error: Project storage is unavailable."))
+            sys.exit(1)
+        local_name = os.path.splitext(os.path.basename(local_video_path))[0]
+        local_name = "".join(ch for ch in local_name if ch.isalnum() or ch in " _-").strip() or "Local_Video"
+        virals_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VIRALS")
+        project_folder, _manifest = _create_project(
+            virals_root,
+            local_name,
+            source={"type": "local", "path": local_video_path, "filename": os.path.basename(local_video_path), "managed": False},
+            settings={"created_from": "cli", "storage": "external_reference"},
+            exist_ok=False,
+        )
+        input_video = local_video_path
+        url = None
+
+    # Se não temos URL via CLI nem Project Path, pedimos agora
+    if not url and not project_path_arg and not local_video_arg:
+        if args.skip_prompts:
+             print(i18n("No URL provided and skipping prompts. Trying to load latest project..."))
+             # Fallthrough to project loading logic
+        else:
+            user_input = input(i18n("Enter the YouTube video URL (or press Enter to use latest project): ")).strip()
+            if user_input:
+                url = user_input
+    
+    if not url and not input_video:
+        # Usuário apertou Enter (Vazio) -> Tentar pegar último projeto
+        base_virals = "VIRALS"
+        if os.path.exists(base_virals):
+            subdirs = [os.path.join(base_virals, d) for d in os.listdir(base_virals) if os.path.isdir(os.path.join(base_virals, d))]
+            if subdirs:
+                latest_project = max(subdirs, key=os.path.getmtime)
+                detected_video = _resolve_project_input(latest_project) if _resolve_project_input else os.path.join(latest_project, "input.mp4")
+                if detected_video and os.path.exists(detected_video):
+                    input_video = detected_video
+                    project_folder = latest_project
+                    print(i18n("Using latest project: {}").format(latest_project))
+                else:
+                    print(i18n("Latest project found but 'input.mp4' is missing."))
+                    sys.exit(1)
+            else:
+                print(i18n("No existing projects found in VIRALS folder."))
+                sys.exit(1)
+        else:
+             print(i18n("VIRALS folder not found. Cannot load latest project."))
+             sys.exit(1)
+
+    # -------------------------------------------------------------------------
+    # Checagem Antecipada de Segmentos Virais (Para pular configurações se já existirem)
+    # -------------------------------------------------------------------------
+    viral_segments = None
+    project_folder_anticipated = None
+
+    if input_video:
+        # For referenced local files, artifacts still belong to the project folder.
+        project_folder_anticipated = project_folder or os.path.dirname(input_video)
+        viral_segments_file = os.path.join(project_folder_anticipated, "viral_segments.txt")
+        
+        if os.path.exists(viral_segments_file):
+            print(i18n("\nExisting viral segments found: {}").format(viral_segments_file))
+            existing_count = None
+            existing_data = None
+            try:
+                with open(viral_segments_file, 'r', encoding='utf-8') as existing_handle:
+                    existing_data = json.load(existing_handle)
+                existing_count = len(existing_data.get("segments", [])) if isinstance(existing_data, dict) else None
+            except Exception:
+                existing_count = None
+            requested_count_hint = args.segments
+            if args.force_new_segments:
+                use_existing_json = 'no'  # explicit regeneration (WebUI checkbox)
+            elif requested_count_hint and existing_count and int(existing_count) != int(requested_count_hint):
+                use_existing_json = 'no'
+                print(i18n("Existing segments count ({}) differs from requested count ({}); generating fresh segments.").format(existing_count, requested_count_hint))
+            else:
+                stale_reason = _segment_cache_staleness_reason(
+                    existing_data, input_video, project_folder, args)
+                if stale_reason:
+                    use_existing_json = 'no'
+                    _report_stale_segment_cache(stale_reason)
+                elif args.skip_prompts:
+                    use_existing_json = 'yes'
+                else:
+                    use_existing_json = input(
+                        i18n("Use existing viral segments? (yes/no) [default: yes]: ")
+                    ).strip().lower()
+
+            if use_existing_json in ['', 'y', 'yes']:
+                try:
+                    with open(viral_segments_file, 'r', encoding='utf-8') as f:
+                        viral_segments = json.load(f)
+                    print(i18n("Loaded existing viral segments. Skipping configuration prompts."))
+                    if viral_segments and "segments" in viral_segments:
+                        print(f"DEBUG: Loaded {len(viral_segments['segments'])} segments from file.")
+                    else:
+                        debug("Loaded JSON but 'segments' key is missing or empty.")
+                except Exception as e:
+                    print(i18n("Error loading JSON: {}").format(e))
+
+    # Variaveis de config de IA (só necessárias se não tivermos os segmentos)
+    num_segments = None
+    viral_mode = False
+    themes = ""
+    ai_backend = "manual" # default
+    api_key = None
+
+    # Load API Config ONCE, unconditionally — it is also read later when
+    # saving process_config.json even on the resume path (viral_segments
+    # already exists), where it used to be undefined (NameError dodged only
+    # because ai_backend defaulted to "manual"). Env vars and the encrypted
+    # store take priority (Roadmap 4.4).
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'api_config.json')
+    api_config = secure_config.load_api_config()
+
+    if not viral_segments:
+        num_segments = args.segments
+        if not num_segments:
+            if args.skip_prompts:
+                print(i18n("No segments count provided and skip-prompts is ON. Using default 3."))
+                num_segments = 3
+            else:
+                num_segments = interactive_input_int("Enter the number of viral segments to create: ")
+
+        viral_mode = args.viral
+        if not args.viral and not args.themes:
+            if args.skip_prompts:
+                print(i18n("Viral mode not set, defaulting to True."))
+                viral_mode = True
+            else:
+                response = input(i18n("Do you want viral mode? (yes/no): ")).lower()
+                viral_mode = response in ['yes', 'y']
+        
+        themes = args.themes if args.themes else ""
+        if not viral_mode and not themes:
+            if not args.skip_prompts:
+                 themes = input(i18n("Enter themes (comma-separated, leave blank if viral mode is True): "))
+
+        # Duration Config
+        print(i18n("\nCurrent duration settings: {}s - {}s").format(args.min_duration, args.max_duration))
+        if not args.skip_prompts:
+            change_dur = input(i18n("Change duration? (y/n) [default: n]: ")).strip().lower()
+            if change_dur in ['y', 'yes']:
+                 try:
+                     min_d = input(i18n("Minimum duration [{}]: ").format(args.min_duration)).strip()
+                     if min_d: args.min_duration = int(min_d)
+                     
+                     max_d = input(i18n("Maximum duration [{}]: ").format(args.max_duration)).strip()
+                     if max_d: args.max_duration = int(max_d)
+                 except ValueError:
+                     print(i18n("Invalid number. Using previous values."))
+
+        # Seleção do Backend de IA
+        ai_backend = args.ai_backend
+        
+        # Try to load backend from config if not in args
+        if not ai_backend and api_config.get("selected_api"):
+            ai_backend = api_config.get("selected_api")
+            print(i18n("Using AI Backend from config: {}").format(ai_backend))
+
+        if not ai_backend:
+            if args.skip_prompts:
+                print(i18n("No AI backend selected, defaulting to Manual."))
+                ai_backend = "manual"
+            else:
+                print("\n" + i18n("Select AI Backend for Viral Analysis:"))
+                print(i18n("1. Gemini API (Best / Recommended)"))
+                print(i18n("2. G4F (Free / Experimental)"))
+                print(i18n("3. Local (GGUF via llama.cpp)"))
+                print(i18n("4. Manual (Copy/Paste Prompt)"))
+                choice = input(i18n("Choose (1-4): ")).strip()
+                
+                if choice == "1":
+                    ai_backend = "gemini"
+                elif choice == "2":
+                    ai_backend = "g4f"
+                elif choice == "3":
+                    ai_backend = "local"
+                    # Interactive model selection for local
+                    # List models
+                    models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+                    if not os.path.exists(models_dir): os.makedirs(models_dir)
+                    models = [f for f in os.listdir(models_dir) if f.endswith(".gguf")]
+                    
+                    if not models:
+                        print(i18n("\nNo .gguf models found in 'models' directory."))
+                        print(i18n("Please place a module file in: {}").format(models_dir))
+                        print(i18n("Falling back to Manual..."))
+                        ai_backend = "manual"
+                    else:
+                        print(i18n("\nAvailable Models:"))
+                        for idx, m in enumerate(models):
+                            print(f"{idx+1}. {m}")
+                        
+                        try:
+                            m_idx = int(input(i18n("Select Model (Number): "))) - 1
+                            if 0 <= m_idx < len(models):
+                                args.ai_model_name = models[m_idx] # Set global arg
+                            else:
+                                print(i18n("Invalid selection. Using first model."))
+                                args.ai_model_name = models[0]
+                        except:
+                             print(i18n("Invalid input. Using first model."))
+                             args.ai_model_name = models[0]
+                             
+                else:
+                    ai_backend = "manual"
+
+        api_key = args.api_key
+        if ai_backend == "openai-moderation" and not api_key:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("OPENAI_MODERATION_API_KEY", "").strip()
+            if not api_key and not args.skip_prompts:
+                print(i18n("OpenAI moderation key not found; set OPENAI_API_KEY or use --api-key."))
+        env_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if ai_backend == "gemini" and not api_key and env_api_key:
+            api_key = env_api_key
+            debug("Using Gemini API key from GEMINI_API_KEY environment variable.")
+        # Check config for API Key if using Gemini
+        if ai_backend == "gemini" and not api_key:
+            cfg_key = api_config.get("gemini", {}).get("api_key", "")
+            if cfg_key and cfg_key != "SUA_KEY_AQUI":
+                api_key = cfg_key
+        
+        if ai_backend == "gemini" and not api_key:
+             if args.skip_prompts:
+                 print(i18n("Gemini API key missing, but skip-prompts is ON. Might fail."))
+             else:
+                 print(i18n("Gemini API Key not found in api_config.json or arguments."))
+                 api_key = input(i18n("Enter your Gemini API Key: ")).strip()
+
+    if args.autopilot:
+        if ai_backend == "manual":
+            ai_backend = api_config.get("selected_api") or ("gemini" if os.getenv("GEMINI_API_KEY", "").strip() else "manual")
+        if ai_backend == "gemini" and not api_key:
+            api_key = os.getenv("GEMINI_API_KEY", "").strip() or api_config.get("gemini", {}).get("api_key", "")
+        if ai_backend == "openai-moderation" and not api_key:
+            api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("OPENAI_MODERATION_API_KEY", "").strip()
+        if ai_backend not in {"gemini", "g4f", "openai-moderation"}:
+            print("[autopilot] Gemini, G4F, or OpenAI moderation is required for contextual policy review.")
+            return 1
+        if ai_backend in {"gemini", "openai-moderation"} and not api_key:
+            print("[autopilot] The selected AI safety backend has no API key configured.")
+            return 1
+
+    if args.autopilot:
+        from scripts import autopilot
+        readiness = autopilot.check_readiness(args, ai_backend, api_key)
+        readiness_path = autopilot.write_report(project_folder, readiness)
+        for warning in readiness.get("warnings", []):
+            print("[autopilot] warning: {}".format(warning["detail"]))
+        if not readiness["ok"]:
+            print("[autopilot] prerequisites are not ready; no media processing started.")
+            for issue in readiness.get("issues", []):
+                print("[autopilot] ✗ {}".format(issue["detail"]))
+            if readiness_path:
+                print("[autopilot] readiness report: {}".format(readiness_path))
+            return 1
+
+    # Workflow & Face Config Inputs
+    workflow_choice = args.workflow
+    face_model = args.face_model
+    face_mode = args.face_mode
+
+    # If args weren't provided and we are not skipping prompts, ask user
+    # Note: argparse defaults are set, so they "are provided" effectively.
+    # To truly detect "not provided", request default=None in argparse. 
+    # But for "Simplified Mode", defaults are good.
+    # Advanced users use params.
+    # We will assume CLI defaults are what we want if skip_prompts is on.
+    
+    # Logic for detection intervals (Moved out of interactive block to support CLI/WebUI)
+    detection_intervals = parse_face_detect_interval(args.face_detect_interval)
+
+    if not args.burn_only and not args.skip_prompts:
+        # Interactive Face Config
+        print(i18n("\n--- Face Detection Settings ---"))
+        print(i18n("Current Face Model: {} | Mode: {}").format(face_model, face_mode))
+        
+        if detection_intervals:
+             print(i18n("Custom detection intervals: {}").format(detection_intervals))
+        else:
+             print(i18n("Using dynamic intervals: 1s for 2-face, ~0.16s for 1-face."))
+
+
+    # Pipeline Execution
+    try:
+        # 1. Download & Project Setup
+        print(f"DEBUG: Checking input_video state. input_video={input_video}")
+        
+        if not input_video:
+            if not url:
+                print(i18n("Error: No URL provided and no existing video selected."))
+                sys.exit(1)
+                
+            print(i18n("Starting download..."))
+            emit_progress("download", 5, "Download started")
+            download_subs = not args.skip_youtube_subs
+            # Download with an interactive cookies retry: when the video is
+            # private/age-restricted and the user runs interactively (not from
+            # the WebUI, which has no TTY), offer to retry with browser cookies.
+            _interactive_tty = False
+            try:
+                _interactive_tty = sys.stdin.isatty()
+            except Exception:
+                pass
+            _auth_retried = False
+            while True:
+                try:
+                    # v7.20: live-stream mode — when --live-wait is set and the
+                    # URL is a live/premiere (e.g. youtube.com/live/ID), wait
+                    # for the stream to end, then download the resulting VOD.
+                    if getattr(args, "live_wait", None):
+                        from scripts import download_live
+                        print(i18n("Live-stream mode: waiting for the stream to end before downloading..."))
+                        download_result = download_live.download_when_live_ends(
+                            url, base_root=args.virals if hasattr(args, "virals") and args.virals else "VIRALS",
+                            quality=args.video_quality,
+                            cookies_from_browser=args.cookies_from_browser,
+                            cookies_file=args.cookies,
+                            max_wait_seconds=float(args.live_wait) * 60.0,
+                            progress=lambda info: print("[live] {} — {}".format(
+                                info.get("status"), info.get("message"))))
+                    else:
+                        download_result = download_video.download(
+                            url, download_subs=download_subs, quality=args.video_quality,
+                            cookies_from_browser=args.cookies_from_browser,
+                            cookies_file=args.cookies,
+                            sponsorblock=getattr(args, "sponsorblock", None))
+                    break
+                except download_video.AuthNeededError:
+                    if (_interactive_tty and not args.skip_prompts
+                            and not args.cookies_from_browser and not args.cookies
+                            and not _auth_retried):
+                        _auth_retried = True
+                        print(i18n("\nThis video needs a logged-in YouTube account."))
+                        resp = input(i18n("Retry using your Chrome browser cookies? (yes/no): ")).strip().lower()
+                        if resp in ('y', 'yes'):
+                            args.cookies_from_browser = 'chrome'
+                            continue
+                    raise SystemExit(1) from None
+            
+            # Guard FIRST: a failed/empty download must never reach
+            # os.path.dirname(None) (this crashed on Windows — v6.3c).
+            if not download_result:
+                print(i18n("\n[ERROR] The video could not be downloaded. "
+                           "Check the URL, or use --cookies-from-browser for "
+                           "private / age-restricted videos."))
+                sys.exit(1)
+            if isinstance(download_result, tuple):
+                input_video, project_folder = download_result
+            else:
+                input_video = download_result
+                project_folder = os.path.dirname(input_video)
+
+            if not input_video or not os.path.exists(input_video):
+                print(i18n("\n[ERROR] The downloaded video file is missing. "
+                           "Check the URL, or use --cookies-from-browser for "
+                           "private / age-restricted videos."))
+                sys.exit(1)
+                
+            print(f"DEBUG: Download finished. input_video={input_video}, project_folder={project_folder}")
+            emit_progress("download", 15, "Download complete")
+            
+        else:
+            # Reuse the local source directly; never relocate it into VIRALS.
+            print("DEBUG: Using existing local video logic.")
+            project_folder = project_folder or os.path.dirname(input_video)
+            
+        print(f"Project Folder: {project_folder}")
+        record_project_state(
+            project_folder,
+            "processing",
+            args=args,
+            source=(
+                {"type": "youtube", "url": url}
+                if url
+                else {"type": "local", "path": os.path.abspath(input_video) if input_video and os.path.isfile(input_video) else None}
+            ),
+        )
+        
+        # Crash-safe resume tracker (Roadmap 4.2): completed stages are
+        # skipped when a previous run was interrupted.
+        tracker = checkpoint.StageTracker(project_folder, enabled=(args.checkpoint == "on"))
+        pending = tracker.resume_info()
+        if pending["pending"]:
+            debug("Checkpoint: stages pending → {}".format(", ".join(pending["pending"])))
+        
+        # 2. Transcribe
+        if workflow_choice == "3":
+            print(i18n("Workflow 3: Skipping Transcribe."))
+            # We assume transcription exists (SRT/JSON) or we won't need it for 'adjust_subtitles' if it uses 'subs/*.json' which are created by 'cut_segments'
+            # Actually 'adjust_subtitles' reads from 'project_folder/subs'.
+            # viral_segments = True # Removed to avoid overwritting dict loaded earlier
+        else:
+            print(i18n("Transcribing with model {}...").format(args.model))
+            device_info = describe_transcription_device(args.transcription_device)
+            device_label = "DEVICE|{}|{}|{}".format(device_info["actual"], device_info["requested"], device_info.get("name", ""))
+            print(device_label, flush=True)
+            emit_progress("transcribe", 22, device_info["message"])
+            # Se skip config, args.model é default
+            # GPU OOM guard (Roadmap 4.1) + checkpoint resume (Roadmap 4.2)
+            def _run_transcription_stage():
+                return tracker.run(
+                    "transcribe",
+                    oom_guard.transcribe_with_fallback,
+                    input_video, args.model,
+                    project_folder=project_folder,
+                    device=args.transcription_device)
+
+            _transcribe_result = _run_transcription_stage()
+            base_name = os.path.splitext(os.path.basename(input_video))[0]
+            if _transcribe_result is None:
+                # Stage was marked done in a previous run; validate and repair
+                # its artifacts before trusting the checkpoint.
+                srt_file = os.path.join(project_folder, base_name + ".srt")
+                tsv_file = os.path.join(project_folder, base_name + ".tsv")
+            else:
+                srt_file, tsv_file = _transcribe_result
+            json_file = os.path.join(project_folder, base_name + ".json")
+            repair_report = transcription_validation.repair_transcription_artifacts(
+                srt_file, tsv_file, json_file)
+            if repair_report.get("changed"):
+                print("[transcribe] Removed {} empty transcript entries from existing artifacts.".format(
+                    repair_report.get("total_removed", 0)), flush=True)
+            transcript_report = transcription_validation.validate_transcription(srt_file, tsv_file)
+
+            # A stale checkpoint must never make a corrupt transcript permanent.
+            # Clear its marker and retry once after removing all transcript
+            # artifacts; transcribe_video will then generate fresh outputs.
+            if not transcript_report.get("ok"):
+                print("[transcribe] artifacts failed validation; retrying transcription once.", flush=True)
+                checkpoint.clear(project_folder, "transcribe")
+                for stale_path in (srt_file, tsv_file, json_file,
+                                   os.path.join(project_folder, "transcription_cache.json")):
+                    try:
+                        if os.path.isfile(stale_path):
+                            os.remove(stale_path)
+                    except OSError as error:
+                        print("[transcribe] Could not remove stale artifact {}: {}".format(
+                            stale_path, error), flush=True)
+                _transcribe_result = _run_transcription_stage()
+                if _transcribe_result is None:
+                    checkpoint.clear(project_folder, "transcribe")
+                    raise RuntimeError("Transcription retry did not produce fresh artifacts")
+                srt_file, tsv_file = _transcribe_result
+                json_file = os.path.join(project_folder, base_name + ".json")
+                repair_report = transcription_validation.repair_transcription_artifacts(
+                    srt_file, tsv_file, json_file)
+                if repair_report.get("changed"):
+                    print("[transcribe] Removed {} empty transcript entries after retry.".format(
+                        repair_report.get("total_removed", 0)), flush=True)
+                transcript_report = transcription_validation.validate_transcription(srt_file, tsv_file)
+
+            if not transcript_report.get("ok"):
+                # Do not leave a successful checkpoint behind a failed output.
+                checkpoint.clear(project_folder, "transcribe")
+                raise RuntimeError("Transcription output validation failed: {}".format(
+                    "; ".join(transcript_report.get("errors", []))[:2000]))
+            emit_progress("transcribe", 65, "تفريغ الصوت")
+
+            # Normalize transcript artifact names for downstream stages.
+            # YouTube downloads are saved as input.mp4, so whisperx writers
+            # produce input.srt/input.tsv/input.json. Local/external videos
+            # keep their ORIGINAL basename (e.g. a long Arabic filename), so
+            # create_viral_segments / safety_filter would fail to find
+            # input.tsv/input.srt:
+            #   ValueError: Could not parse transcript from TSV or SRT.
+            # Copy the fresh artifacts to the canonical input.* names.
+            if base_name != "input":
+                for _ext in (".srt", ".tsv", ".json"):
+                    _src = os.path.join(project_folder, base_name + _ext)
+                    _dst = os.path.join(project_folder, "input" + _ext)
+                    if os.path.isfile(_src):
+                        try:
+                            shutil.copy2(_src, _dst)
+                            print("[transcribe] Copied transcript artifact to {} for downstream stages.".format(
+                                os.path.basename(_dst)))
+                        except OSError as _copy_err:
+                            print("[transcribe] Could not copy {} -> {}: {}".format(
+                                _src, _dst, _copy_err))
+
+        # 3. Create Viral Segments
+        if workflow_choice != "3":
+            # Se não carregamos 'viral_segments' lá em cima (ou se era download novo), checamos agora ou criamos
+            if not viral_segments:
+                # Checagem tardia para downloads novos que por acaso ja tenham json (Ex: URL repetida)
+                viral_segments_file_late = os.path.join(project_folder, "viral_segments.txt")
+                if os.path.exists(viral_segments_file_late) and not args.force_new_segments:
+                    print(i18n("Found existing viral segments file at {}").format(viral_segments_file_late))
+                    existing_count = None
+                    try:
+                        with open(viral_segments_file_late, 'r', encoding='utf-8') as f:
+                            existing_data = json.load(f)
+                        existing_count = len(existing_data.get("segments", [])) if isinstance(existing_data, dict) else None
+                    except Exception:
+                        existing_data = None
+                    if args.segments and existing_count and int(existing_count) != int(args.segments):
+                        print(i18n("Existing segments count ({}) differs from requested count ({}); generating fresh segments.").format(existing_count, args.segments))
+                    else:
+                        stale_reason = _segment_cache_staleness_reason(
+                            existing_data, input_video, project_folder, args)
+                        if stale_reason:
+                            _report_stale_segment_cache(stale_reason)
+                        elif args.skip_prompts:
+                            print(i18n("Skipping prompts enabled. Loading existing segments."))
+                            try:
+                                with open(viral_segments_file_late, 'r', encoding='utf-8') as f:
+                                    viral_segments = json.load(f)
+                            except Exception as e:
+                                print(i18n("Error loading existing JSON: {}. Proceeding to create new segments.").format(e))
+                        else:
+                            print(i18n("Loading existing viral segments found at {}").format(viral_segments_file_late))
+                            try:
+                                with open(viral_segments_file_late, 'r', encoding='utf-8') as f:
+                                    viral_segments = json.load(f)
+                            except Exception as e:
+                                print(i18n("Error loading existing JSON: {}.").format(e))
+                    
+                if not viral_segments:
+                    print(i18n("Creating viral segments using {}...").format(ai_backend.upper()))
+                    emit_progress("ai", 30, "تحليل AI")
+                    viral_segments = create_viral_segments.create(
+                        num_segments, 
+                        viral_mode, 
+                        themes, 
+                        args.min_duration, 
+                        args.max_duration,
+                        ai_mode=ai_backend,
+                        api_key=api_key,
+                        project_folder=project_folder,
+                        chunk_size_arg=args.chunk_size,
+                        model_name_arg=args.ai_model_name,
+                        title_language=args.title_language
+                    )
+                
+                emit_progress("ai", 55, "تحليل AI")
+                if not viral_segments or not viral_segments.get("segments"):
+                    print(i18n("Error: No viral segments were generated."))
+                    print(i18n("Possible reasons: API error, Model not found, or empty response."))
+                    print(i18n("Stopping execution."))
+                    sys.exit(1)
+                
+                # v7.31/v7.32: record which source video AND which settings
+                # produced these segments, so a later run with a different
+                # file or changed settings detects staleness instead of
+                # reusing old AI windows. (Every later dict() copy in the
+                # pipeline preserves this top-level key.)
+                if isinstance(viral_segments, dict) and input_video:
+                    _source_fp = create_viral_segments.source_video_fingerprint(input_video)
+                    if _source_fp:
+                        viral_segments.setdefault("source_meta", {})["source_video_fp"] = _source_fp
+                    viral_segments.setdefault("source_meta", {})["config_fp"] = _segment_settings_fingerprint(args)
+                save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+
+        # 3.5. Fix Raw Segments (missing timestamps)
+        if workflow_choice != "3" and viral_segments and "segments" in viral_segments:
+            segs = viral_segments.get("segments", [])
+            if segs and len(segs) > 0:
+                 # Check first segment for duration 0 but having start_time_ref or just check duration
+                 first = segs[0]
+                 # If duration is effectively 0 and we have a ref tag (or even if we dont, we cant cut 0s video)
+                 # We assume if duration is 0, it is raw.
+                 if first.get("duration", 0) == 0:
+                      print(i18n("Detected raw AI segments without timestamps (Duration 0). Running alignment..."))
+                      try:
+                          # Load transcript
+                          transcript = create_viral_segments.load_transcript(project_folder)
+                          # Process (Align)
+                          # Use None for output_count to keep all found segments
+                          viral_segments = create_viral_segments.process_segments(
+                              segs, 
+                              transcript, 
+                              args.min_duration, 
+                              args.max_duration, 
+                              output_count=None,
+                              project_folder=project_folder,
+                          )
+                          # process_segments returns a fresh dict: re-stamp the
+                          # source + settings fingerprints before persisting
+                          # (v7.31/v7.32).
+                          if isinstance(viral_segments, dict) and input_video:
+                              _source_fp = create_viral_segments.source_video_fingerprint(input_video)
+                              if _source_fp:
+                                  viral_segments.setdefault("source_meta", {})["source_video_fp"] = _source_fp
+                              viral_segments.setdefault("source_meta", {})["config_fp"] = _segment_settings_fingerprint(args)
+                              try:
+                                  _transcript_fp = create_viral_segments.transcript_fingerprint(transcript)
+                                  if _transcript_fp:
+                                      viral_segments.setdefault("source_meta", {})["transcript_fp"] = _transcript_fp
+                              except Exception:
+                                  pass
+                          save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+                          print(i18n("Segments aligned and saved."))
+                      except Exception as e:
+                          print(i18n("Failed to align raw segments: {}").format(e))
+                          # If alignment fails, it might crash later, but we tried. 
+
+        # 3.7–3.8. Safety Filter + AI policy review (extracted helper)
+        viral_segments = run_safety_stage(
+            viral_segments,
+            project_folder=project_folder,
+            args=args,
+            ai_backend=ai_backend,
+            api_key=api_key,
+            workflow_choice=workflow_choice,
+            safety_backend=getattr(args, "safety_backend", "auto"),
+        )
+
+        # Normalize any legacy or manually edited segment list before the
+        # provenance guard and cut stage. Titles are metadata; source windows
+        # determine clip identity, so duplicate windows are removed first.
+        if workflow_choice != "3" and viral_segments and "segments" in viral_segments:
+            before_dedup = len(viral_segments.get("segments", []))
+            deduped = create_viral_segments.deduplicate_segments(viral_segments.get("segments", []))
+            if len(deduped) != before_dedup:
+                viral_segments = dict(viral_segments)
+                viral_segments["segments"] = deduped
+                save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+                print(i18n("Removed {} duplicate source window(s) before cutting.").format(before_dedup - len(deduped)))
+
+        # Automatic provenance guard: remove source windows that were already
+        # published from the local registry before creating any new cuts.
+        viral_segments = run_content_guard_stage(
+            viral_segments, project_folder=project_folder,
+            workflow_choice=workflow_choice)
+
+        # Enforce the user's requested final count after safety filtering.
+        # AI selection intentionally asks for spare candidates; only safe,
+        # distinct clips are exported, never blocked clips.
+        requested_count = max(1, int(num_segments or args.segments or 1))
+        safe_segments = list((viral_segments or {}).get("segments", []))
+        if len(safe_segments) > requested_count:
+            # v7.31: export the top-N in the SAME editorial order the review
+            # table shows (candidate_rank from the diversity ranking, then
+            # selection_score). Sorting by the raw AI ``score`` here used to
+            # contradict every other stage of the pipeline.
+            viral_segments = dict(viral_segments)
+            viral_segments["segments"] = create_viral_segments.finalize_top_segments(
+                safe_segments, requested_count)
+            save_json.save_viral_segments(viral_segments, project_folder=project_folder, overwrite=True)
+            print(i18n("Final selection: exporting {} of {} safe candidates.").format(requested_count, len(safe_segments)))
+        elif len(safe_segments) < requested_count:
+            print(i18n("Warning: only {} safe, distinct segment(s) are available out of {} requested; blocked or duplicate candidates were not exported.").format(len(safe_segments), requested_count))
+
+        # 4. Cut Segments
+        # Se workflow for 3, pulamos corte
+        if workflow_choice == "3":
+            print(i18n("Workflow 3 (Subtitles Only): Skipping Cut and Edit."))
+            # Deduzir cuts folder apenas para log
+            cuts_folder = os.path.join(project_folder, "cuts")
+        else:
+            cuts_folder = os.path.join(project_folder, "cuts")
+            skip_cutting = False
+            
+            existing_cut_files = [
+                name for name in os.listdir(cuts_folder)
+                if name.endswith("_original_scale.mp4")
+            ] if os.path.isdir(cuts_folder) else []
+            expected_segments = list((viral_segments or {}).get("segments", []))
+            expected_cut_count = len(expected_segments)
+            cut_manifest_path = os.path.join(project_folder, "cuts_manifest.json")
+            current_cut_fingerprint = create_viral_segments.segments_manifest_fingerprint(expected_segments)
+            existing_cut_fingerprint = None
+            if os.path.isfile(cut_manifest_path):
+                try:
+                    with open(cut_manifest_path, "r", encoding="utf-8") as manifest_stream:
+                        existing_cut_fingerprint = json.load(manifest_stream).get("fingerprint")
+                except (OSError, ValueError, TypeError):
+                    existing_cut_fingerprint = None
+
+            if existing_cut_files:
+                print(i18n("\nExisting cuts found in: {}").format(cuts_folder))
+                if existing_cut_fingerprint != current_cut_fingerprint:
+                    print(i18n("Cut manifest differs or is missing; forcing a clean re-cut so old titles/windows cannot be reused."))
+                    cut_again_resp = 'yes'
+                elif expected_cut_count and len(existing_cut_files) != expected_cut_count:
+                    print(i18n("Existing cut count ({}) differs from current safe segments ({}); forcing a clean re-cut.").format(len(existing_cut_files), expected_cut_count))
+                    cut_again_resp = 'yes'
+                elif args.skip_prompts:
+                    cut_again_resp = 'no'
+                else:
+                    cut_again_resp = input(i18n("Cuts already exist. Cut again? (yes/no) [default: no]: ")).strip().lower()
+
+                # Default is no (skip) only when the existing set matches.
+                if cut_again_resp not in ['y', 'yes']:
+                    skip_cutting = True
+            
+            if skip_cutting:
+                print(i18n("Skipping Video Rendering (using existing cuts), but updating Subtitle JSONs..."))
+            else:
+                print(i18n("Cutting segments..."))
+            emit_progress("cut", 70, "Cutting segments")
+
+            tracker.run("cut", cut_segments.cut, viral_segments,
+                        project_folder=project_folder, skip_video=skip_cutting,
+                        workers=args.workers,
+                        source_video=input_video,
+                        force=not skip_cutting,
+                        scene_snap=getattr(args, "scene_snap", False))
+            if not skip_cutting:
+                manifest_tmp = cut_manifest_path + ".tmp"
+                with open(manifest_tmp, "w", encoding="utf-8") as manifest_stream:
+                    json.dump({
+                        "schema": 1,
+                        "fingerprint": current_cut_fingerprint,
+                        "segment_count": expected_cut_count,
+                    }, manifest_stream, ensure_ascii=False, indent=2)
+                os.replace(manifest_tmp, cut_manifest_path)
+            emit_progress("cut", 80, "Cutting segments")
+
+            # 4.5. Bleep censoring (mute violating words in audio + subtitles)
+            if args.safety_mode == "censor":
+                print(i18n("Censoring violating words (bleep mode)..."))
+                try:
+                    censor_map = censor_engine.censor_project(
+                        project_folder,
+                        viral_segments,
+                        min_severity=args.safety_min_severity,
+                        extra_terms_path=args.safety_extra_terms,
+                        i18n=i18n,
+                    )
+                    if not isinstance(censor_map, dict):
+                        raise RuntimeError("censoring returned an invalid result")
+                    censor_errors = censor_map.get("errors", [])
+                    if censor_map.get("error") or censor_errors:
+                        detail = censor_map.get("error") or censor_errors
+                        raise RuntimeError("censoring did not verify every flagged word: {}".format(detail))
+                except Exception as e:
+                    print(i18n("Censoring failed: {} — fail-closed; nothing will be published.").format(e))
+                    if getattr(args, "safety_fail_closed", "on") == "on":
+                        sys.exit(1)
+        
+        # 5. Workflow Check
+        if workflow_choice == "2":
+            print(i18n("Cut Only selected. Skipping Face Crop and Subtitles."))
+            record_project_state("{}".format(project_folder), "completed", args=args)
+            print(i18n(f"Process completed! Check your results in: {project_folder}"))
+            sys.exit(0)
+
+        # 5. Edit Video (Face Crop)
+        if workflow_choice != "3":
+            print(i18n("Editing video with {} (Mode: {})...").format(face_model, face_mode))
+            
+            # Parse dead zone safely
+            try:
+                dead_zone_val = float(args.face_dead_zone)
+            except:
+                dead_zone_val = 40.0
+                
+            emit_progress("edit", 85, "Editing video")
+            tracker.run("edit", edit_video.edit,
+                        project_folder=project_folder, 
+                        face_model=face_model, 
+                        face_mode=face_mode, 
+                        detection_period=detection_intervals,
+                        filter_threshold=args.face_filter_threshold,
+                        two_face_threshold=args.face_two_threshold,
+                        confidence_threshold=args.face_confidence_threshold,
+                        dead_zone=dead_zone_val,
+                        focus_active_speaker=args.focus_active_speaker,
+                        active_speaker_mar=args.active_speaker_mar,
+                        active_speaker_score_diff=args.active_speaker_score_diff,
+                        include_motion=args.include_motion,
+                        active_speaker_motion_deadzone=args.active_speaker_motion_threshold,
+                        active_speaker_motion_sensitivity=args.active_speaker_motion_sensitivity,
+                        active_speaker_decay=args.active_speaker_decay,
+                        segments_data=viral_segments.get("segments", []) if viral_segments else None,
+                        no_face_mode=args.no_face_mode,
+                        smoothing=float(getattr(args, "face_smoothing", 0.55)),
+                        headroom=float(getattr(args, "face_headroom", 0.12)),
+                        face_zoom=float(getattr(args, "face_zoom", 0.0)),
+                        scene_reset=(getattr(args, "crop_scene_reset", "on") != "off"),
+                        voice_face_link=(getattr(args, "voice_face_link", "off") == "on")
+            )
+
+
+        else:
+            print(i18n("Workflow 3: Skipping Face Crop."))
+            # Rename existing files if viral_segments available (since edit_video didn't run)
+            if viral_segments and "segments" in viral_segments:
+                 segments_data = viral_segments.get("segments", [])
+                 final_folder = os.path.join(project_folder, "final")
+                 subs_folder = os.path.join(project_folder, "subs")
+                 
+                 print(i18n("Renaming existing files with titles..."))
+                 for idx, segment in enumerate(segments_data):
+                     title = segment.get("title", f"Segment_{idx}")
+                     safe_title = "".join([c for c in title if c.isalnum() or c in " _-"]).strip()
+                     safe_title = safe_title.replace(" ", "_")[:60]
+                     
+                     new_base_name = f"{idx:03d}_{safe_title}"
+                     
+                     # 1. MP4
+                     old_mp4_name = f"final-output{idx:03d}_processed.mp4"
+                     old_mp4_path = os.path.join(final_folder, old_mp4_name)
+                     new_mp4_path = os.path.join(final_folder, f"{new_base_name}.mp4")
+                     if os.path.exists(old_mp4_path) and not os.path.exists(new_mp4_path):
+                         os.rename(old_mp4_path, new_mp4_path)
+                         print(f"Renamed (Workflow 3): {old_mp4_name} -> {new_base_name}.mp4")
+
+                     # 2. JSON Sub
+                     old_json_name = f"final-output{idx:03d}_processed.json"
+                     old_json_path = os.path.join(subs_folder, old_json_name)
+                     new_json_path = os.path.join(subs_folder, f"{new_base_name}_processed.json")
+                     if os.path.exists(old_json_path) and not os.path.exists(new_json_path):
+                         os.rename(old_json_path, new_json_path)
+                         print(f"Renamed (Workflow 3): {old_json_name} -> {new_base_name}_processed.json")
+                         
+                     # 3. Timeline
+                     old_tl_name = f"temp_video_no_audio_{idx}_timeline.json"
+                     old_tl_path = os.path.join(final_folder, old_tl_name)
+                     new_tl_path = os.path.join(final_folder, f"{new_base_name}_timeline.json")
+                     if os.path.exists(old_tl_path) and not os.path.exists(new_tl_path):
+                         os.rename(old_tl_path, new_tl_path)
+                         print(f"Renamed (Workflow 3): {old_tl_name} -> {new_base_name}_timeline.json")
+
+        # 5.5. Polish pass (Sprint 3: jump cuts / punch zoom / music / branding)
+        # Runs AFTER editing (final/) and BEFORE subtitle burning so the burned
+        # subs land on the polished video and get re-timed automatically.
+        if args.polish == "on":
+            print(i18n("Running polish pass (stages: {})...").format(args.polish_stages))
+            emit_progress("polish", 87, "تحسين المونتاج")
+            try:
+                polish_reports = polish.polish_project(
+                    project_folder,
+                    enable=[s for s in args.polish_stages.split(",") if s.strip()],
+                    keywords=args.zoom_keywords,
+                    music_path=args.music,
+                    music_volume=args.music_volume,
+                    logo_path=args.logo,
+                    watermark_position=args.watermark_position,
+                    watermark_size=max(0.05, min(0.30, float(args.watermark_size))),
+                    watermark_opacity=max(0.10, min(1.00, float(args.watermark_opacity))),
+                    intro=args.intro,
+                    outro=args.outro,
+                    zoom_keywords=args.zoom_keywords,
+                    punch_zoom_amount=1.18,
+                    broll_path=args.broll,
+                    broll_query=args.broll_query,
+                    broll_api_key=os.getenv("PEXELS_API_KEY"),
+                    broll_opacity=args.broll_opacity,
+                    visual_hook_max=args.visual_hook_max,
+                    visual_hook_accent=args.visual_hook_accent,
+                    sfx_dir=args.sfx_dir,
+                    sfx_volume=args.sfx_volume,
+                )
+                status_counts = {}
+                for report in polish_reports:
+                    quality = report.get("quality_status", "failed")
+                    status_counts[quality] = status_counts.get(quality, 0) + 1
+                enhanced_n = status_counts.get("enhanced", 0)
+                partial_n = status_counts.get("partial", 0)
+                fallback_n = status_counts.get("fallback", 0)
+                failed_n = status_counts.get("failed", 0)
+                print("Polish: enhanced={} partial={} fallback={} failed={} / {}".format(
+                    enhanced_n, partial_n, fallback_n, failed_n, len(polish_reports)))
+                if fallback_n or failed_n:
+                    print("⚠️ Professional polish is degraded for some clips; final_polished is not safe for automatic real upload.")
+            except Exception as e:
+                print(i18n("Polish pass failed (continuing with unpolished clips): {}").format(e))
+
+        # 6. Subtitles
+        burn_subtitles_option = True 
+        if burn_subtitles_option:
+            print(i18n("Processing subtitles..."))
+            emit_progress("subtitles", 90, "Rendering subtitles")
+            # transcribe_cuts removido: JSON de legenda já é gerado no corte
+            # transcribe_cuts.transcribe(project_folder=project_folder)
+            
+            # --- Translation Integration ---
+            if args.translate_target and args.translate_target.lower() != "none":
+                 print(i18n("Translating subtitles to: {}").format(args.translate_target))
+                 import asyncio
+                 try:
+                    asyncio.run(translate_json.translate_project_subs(project_folder, args.translate_target))
+                 except Exception as e:
+                    print(i18n("Translation failed: {}").format(e))
+            # -------------------------------
+
+            sub_config = get_subtitle_config(args.subtitle_config)
+            if args.caption_animation is not None:
+                sub_config["caption_animation"] = args.caption_animation
+            if args.auto_emoji:
+                sub_config["auto_emoji"] = True
+            
+            def _run_subtitles():
+                adjust_subtitles.adjust(project_folder=project_folder, **sub_config)
+                burn_subtitles.burn(project_folder=project_folder, prefer_hardware_acceleration=args.prefer_hardware_acceleration)
+
+            # Passa o dicionário desempacotado como argumentos, mais o project_folder
+            try:
+                emit_progress("subtitles", 95, "Rendering subtitles")
+                tracker.run("subtitles", _run_subtitles)
+            except FileNotFoundError as fnf_error:
+                print(i18n("\n[ERROR] Subtitle processing failed: {}").format(str(fnf_error)))
+                print(i18n("Tip: If you are using Workflow 3 (Subtitles Only), ensure the 'subs' folder exists and contains valid JSON files."))
+                sys.exit(1)
+            except Exception as e:
+                print(i18n("\n[ERROR] Unexpected error during subtitle processing: {}").format(str(e)))
+                raise e
+        else:
+            print(i18n("Subtitle burning skipped."))
+
+        # 6.4b. Output reframe (Roadmap "more framing formats", safe version):
+        #       convert the FINAL subtitled clips to the requested aspect ratio
+        #       in ONE ffmpeg pass. Runs after subtitle burning (the burned subs
+        #       are part of the deliverable) and before the risk scorecard (the
+        #       compliance report sees the true final file). 9:16 is a no-op.
+        if getattr(args, "output_aspect", None) and args.output_aspect != "9:16":
+            try:
+                from scripts import reframe
+                print("[reframe] Converting final clips to {} ...".format(args.output_aspect))
+                results = reframe.reframe_project(
+                    project_folder, args.output_aspect, args.reframe_mode)
+                ok_n = sum(1 for r in results if r.get("ok"))
+                print("[reframe] {}/{} clip(s) → {}".format(
+                    ok_n, len(results), args.output_aspect))
+            except Exception as e:
+                print("[reframe] failed (continuing with the original aspect): {}".format(e))
+
+        # 6.45. Audio QC — measure the actual rendered clips before compliance
+        # scoring and publishing. The report is advisory for local processing,
+        # while publish_panel blocks non-pass clips on real uploads.
+        if workflow_choice != "3" and args.audio_qc == "on":
+            print(i18n("Running Audio QC on rendered clips..."), flush=True)
+            emit_progress("audio_qc", 97, "فحص جودة الصوت")
+            try:
+                audio_report = tracker.run(
+                    "audio_qc",
+                    audio_qc.analyze_project,
+                    project_folder,
+                )
+                if audio_report is None:
+                    audio_report = audio_qc.load_report(project_folder)
+                if audio_report is None:
+                    checkpoint.clear(project_folder, "audio_qc")
+                    audio_report = tracker.run(
+                        "audio_qc", audio_qc.analyze_project, project_folder)
+                audio_summary = (audio_report or {}).get("summary", {})
+                audio_status = (audio_report or {}).get("status", "block")
+                print("[audio-qc] status={} pass={} review={} block={} / {}".format(
+                    audio_status, audio_summary.get("pass", 0),
+                    audio_summary.get("review", 0), audio_summary.get("block", 0),
+                    audio_summary.get("total", 0)), flush=True)
+                if audio_status != "pass" and args.audio_qc_gate == "block":
+                    raise RuntimeError(
+                        "Audio QC gate blocked the run: status={}".format(audio_status))
+            except Exception as e:
+                if args.audio_qc_gate == "block":
+                    raise
+                print(i18n("Audio QC failed (review required before real publishing): {}").format(e), flush=True)
+        elif args.checkpoint == "on":
+            # The optional check is explicitly skipped, so old projects do not
+            # remain permanently pending when the user chose audio_qc=off or
+            # the workflow does not render video files.
+            try:
+                checkpoint.mark_done(project_folder, "audio_qc")
+            except Exception as exc:
+                debug("Could not mark Audio QC skipped: {}".format(exc))
+
+        # 6.5. Risk Scorecard — per-clip compliance report (reused content /
+        #      monetization / visual) + optional publish gate
+        if args.risk_scorecard == "on" and viral_segments and "segments" in viral_segments:
+            try:
+                print(i18n("Running risk scorecard (per-clip compliance report)..."))
+                report = tracker.run(
+                    "scorecard",
+                    risk_scorecard.analyze_project,
+                    project_folder,
+                    viral_segments=viral_segments,
+                    i18n=i18n,
+                    auto_download_visual=args.auto_download_visual,
+                    visual_check=args.visual_check,
+                    visual_gate=args.visual_gate,
+                    visual_frames=args.visual_frames,
+                    visual_model_path=args.visual_model,
+                    provenance_gate=args.provenance_gate,
+                    ocr_check=args.ocr_check, ocr_gate=args.ocr_gate,
+                    ocr_frames=args.ocr_frames, ocr_lang=args.ocr_lang,
+                )
+                if report is None:
+                    report = risk_scorecard.analyze_project(
+                        project_folder, viral_segments=viral_segments, i18n=i18n,
+                        auto_download_visual=args.auto_download_visual,
+                        visual_check=args.visual_check,
+                        visual_gate=args.visual_gate,
+                        visual_frames=args.visual_frames,
+                        visual_model_path=args.visual_model,
+                        provenance_gate=args.provenance_gate,
+                        ocr_check=args.ocr_check, ocr_gate=args.ocr_gate,
+                        ocr_frames=args.ocr_frames, ocr_lang=args.ocr_lang)
+                summary = report.get("summary", {})
+                if summary.get("visual_unavailable"):
+                    print("[risk] ⚠️ Visual scan unavailable: no usable local ONNX model; "
+                          "the scorecard continued with text/reuse checks only.")
+                if summary.get("visual_gate_failed"):
+                    print("[risk] Visual safety scan is required but no usable local model is available. "
+                          "Install/download the model, or use --visual-check auto with --visual-gate warn.")
+                    sys.exit(1)
+                if summary.get("ocr_unavailable"):
+                    print("[risk] OCR scan unavailable: install Tesseract with Arabic and English language packs.")
+                if summary.get("ocr_gate_failed"):
+                    print("[risk] OCR safety scan is required but unavailable; refusing to continue.")
+                    sys.exit(1)
+                blocked = report.get("blocked", [])
+                provenance_summary = (report.get("summary") or {}).get("provenance") or {}
+                if provenance_summary.get("review"):
+                    print("[provenance] ⚠️ {} clip(s) need rights/transformation evidence; see provenance_report.json.".format(
+                        provenance_summary.get("review")))
+                if provenance_summary.get("blocked") and args.provenance_gate == "block":
+                    print("[provenance] ⛔ provenance gate blocked publishing; add rights_manifest.json and document commentary/voiceover/B-roll.")
+                    sys.exit(1)
+
+                if blocked:
+                    print(i18n("[risk] ⛔ BLOCKED FOR PUBLISH: {} clip(s) — remove or re-edit before uploading. Details in risk_scorecard.json / publish_blocklist.json").format(len(blocked)))
+                    # Strike-feedback loop (Roadmap 5.1): teach the tool the
+                    # patterns that got clips blocked, so future runs block
+                    # them earlier — the tool learns from your channel.
+                    try:
+                        from scripts import strike_feedback
+                        patterns = strike_feedback.extract_terms_from_project(project_folder)
+                        if patterns:
+                            print("[learn] {} pattern(s) behind the blocked clip(s): {}".format(
+                                len(patterns), ", ".join(p["term"] for p in patterns[:5])))
+                            if args.auto_learn_blocked:
+                                added = 0
+                                for p in patterns:
+                                    try:
+                                        strike_feedback.cmd_add(
+                                            p["term"], lang="auto", severity=p["severity"],
+                                            category="learned", reason="auto-learn from blocked project",
+                                            source="scorecard", project=project_folder)
+                                        added += 1
+                                    except Exception:
+                                        pass
+                                print("[learn] ✅ auto-learned {} term(s) into safety_terms.json — "
+                                      "next runs will block them earlier.".format(added))
+                            else:
+                                print("[learn] teach the tool from this: python -m scripts.strike_feedback "
+                                      "from-scorecard --project <project> --apply")
+                    except Exception as e:
+                        debug("strike-feedback hint failed: {}".format(e))
+                    if args.risk_gate == "block":
+                        print(i18n("[risk] gate mode 'block' — stopping the run because {} clip(s) failed the compliance gate.").format(len(blocked)))
+                        sys.exit(1)
+            except Exception as e:
+                print(i18n("Risk scorecard failed (skipped): {}").format(e))
+        # 6.55. Music fingerprint check (Roadmap 2.3) — Chromaprint/AcoustID.
+        #       Runs after rendering, before the upload gate, so that
+        #       music_fingerprint.json is available to gate_upload().
+        if args.music_check != "off" and viral_segments and "segments" in viral_segments:
+            try:
+                from scripts import music_fingerprint
+                want_run = args.music_check == "on" or music_fingerprint.fpcalc_available()
+                if want_run:
+                    print(i18n("Running music fingerprint check (Chromaprint/AcoustID)..."))
+                    local_db = None
+                    if args.music_local_db:
+                        if os.path.isdir(args.music_local_db):
+                            cache = os.path.join(os.path.expanduser("~"),
+                                                 ".viralcutter", "music_db.json")
+                            local_db = music_fingerprint.build_local_db(
+                                args.music_local_db, cache_path=cache)
+                        else:
+                            local_db = music_fingerprint.load_local_db(args.music_local_db)
+                    report = tracker.run(
+                        "music_check",
+                        music_fingerprint.analyze_project,
+                        project_folder,
+                        acoustid_key=args.acoustid_key,
+                        local_db=local_db,
+                        gate=args.music_gate,
+                    )
+                    if report is None:
+                        report = music_fingerprint.analyze_project(
+                            project_folder, acoustid_key=args.acoustid_key,
+                            local_db=local_db, gate=args.music_gate)
+                    s = report.get("summary", {})
+                    print(i18n("[music] {} clip(s) checked, {} matched, {} no_fpcalc, {} errors").format(
+                        s.get("checked", 0), s.get("matched", 0),
+                        s.get("no_fpcalc", 0), s.get("errors", 0)))
+                    for clip in report.get("clips", []):
+                        if clip.get("verdict") in ("acoustid_match", "local_match"):
+                            print(i18n("[music] 🎵⚠️ #{} {} — {}").format(
+                                clip.get("index", "?"),
+                                os.path.basename(clip.get("video", "")),
+                                clip.get("suggestion", "")))
+                    if s.get("matched", 0) and args.music_gate == "block":
+                        print(i18n("[music] gate mode 'block' — stopping because {} clip(s) matched known audio.").format(s["matched"]))
+                        sys.exit(1)
+                elif args.music_check == "auto":
+                    print(i18n("Music check skipped (auto): Chromaprint not installed — see docs to enable."))
+            except Exception as e:
+                print(i18n("Music fingerprint check failed (skipped): {}").format(e))
+
+
+        # 6.6. Metadata compliance gate (Roadmap 2.4) + upload-gate audit (2.2).
+        #      Merges a `metadata` axis into the scorecard, then audits every
+        #      clip through upload_gate (publish_blocklist + safety + metadata).
+        if args.metadata_gate != "off" and viral_segments and "segments" in viral_segments:
+            try:
+                print(i18n("Running metadata compliance + upload gate audit..."))
+                segs = viral_segments.get("segments", [])
+                scorecard_path = os.path.join(project_folder, risk_scorecard.SCORECARD_FILENAME)
+                sc = load_json_file(scorecard_path, default={})
+                meta_blocked = []
+                for entry in sc.get("segments", []):
+                    idx = entry.get("index")
+                    if idx is None or idx >= len(segs):
+                        continue
+                    seg = segs[idx]
+                    # v7.31: publish ships ``recommended_title`` (publish_panel),
+                    # so the metadata gate must vet THAT string, not the raw
+                    # LLM ``title`` that never reaches the platform.
+                    axis = metadata_compliance.metadata_axis(
+                        seg.get("recommended_title") or seg.get("title", ""),
+                        seg.get("caption", ""),
+                        seg.get("hashtags", []))
+                    entry["axes"]["metadata"] = axis
+                    if not axis["ok"]:
+                        meta_blocked.append(entry)
+                try:
+                    with open(scorecard_path, "w", encoding="utf-8") as f:
+                        json.dump(sc, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    debug("Could not save metadata axis into scorecard: {}".format(e))
+
+                allowed, blocked = upload_gate.audit_project(project_folder)
+                total_blocked = len(blocked) + len(meta_blocked)
+                if total_blocked:
+                    print(i18n("[gate] ⛔ {} clip(s) refused for publish by the safety gate").format(total_blocked))
+                    for entry in meta_blocked:
+                        axis = entry["axes"]["metadata"]
+                        print(i18n("[gate]   ✗ #{} '{}' — {}").format(
+                            entry.get("index"), entry.get("title"),
+                            metadata_compliance.summarize_metadata(axis)))
+                    if args.metadata_gate == "block":
+                        print(i18n("[gate] gate mode 'block' — stopping the run."))
+                        sys.exit(1)
+                else:
+                    print(i18n("[gate] ✔ all clips pass the publish gate"))
+            except Exception as e:
+                print(i18n("Metadata gate failed (skipped): {}").format(e))
+
+        # Organização Final (Opcional, pois agora já está tudo em project_folder)
+        # organize_output.organize(project_folder=project_folder)
+        
+        # --- Save Processing Configuration ---
+        try:
+            # Determine AI Model used
+            used_ai_model = args.ai_model_name
+            if not used_ai_model and ai_backend != "manual":
+                if ai_backend == "gemini":
+                    used_ai_model = api_config.get("gemini", {}).get("model", "default")
+                elif ai_backend == "g4f":
+                    used_ai_model = api_config.get("g4f", {}).get("model", "default")
+            
+            # Ensure sub_config exists
+            current_sub_config = sub_config if 'sub_config' in locals() else get_subtitle_config(args.subtitle_config)
+            
+            final_config = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "workflow": workflow_choice,
+                "ai_config": {
+                    "backend": ai_backend,
+                    "model_name": used_ai_model,
+                    "viral_mode": viral_mode,
+                    "themes": themes,
+                    "num_segments": num_segments,
+                    "chunk_size": args.chunk_size
+                },
+                "face_config": {
+                    "model": face_model,
+                    "mode": face_mode,
+                    "detect_interval": args.face_detect_interval,
+                    "filter_threshold": args.face_filter_threshold,
+                    "two_face_threshold": args.face_two_threshold,
+                    "confidence_threshold": args.face_confidence_threshold,
+                    "dead_zone": args.face_dead_zone,
+                    "focus_active_speaker": args.focus_active_speaker,
+                    "active_speaker_mar": args.active_speaker_mar,
+                    "active_speaker_score_diff": args.active_speaker_score_diff,
+                    "include_motion": args.include_motion
+                },
+                "video_config": {
+                    "min_duration": args.min_duration,
+                    "max_duration": args.max_duration,
+                    "whisper_model": args.model,
+                    "platform_template": args.platform
+                },
+                "subtitle_config": current_sub_config
+            }
+
+            config_save_path = os.path.join(project_folder, "process_config.json")
+            with open(config_save_path, "w", encoding="utf-8") as f:
+                json.dump(final_config, f, indent=4, ensure_ascii=False)
+            print(i18n("Configuration saved to: {}").format(config_save_path))
+            
+        except Exception as e:
+            print(i18n("Error saving configuration JSON: {}").format(e))
+        # -------------------------------------
+        media_report = {"outputs": [], "errors": []}
+        if workflow_choice != "3":
+            media_report = media_validation.validate_project_outputs(
+                project_folder,
+                require_outputs=True,
+                expected_aspect=getattr(args, "output_aspect", None),
+            )
+            if not media_report.get("ok"):
+                raise RuntimeError("Rendered output validation failed: {}".format(
+                    "; ".join(media_report.get("errors", []))[:2000]))
+
+        selected_count = len((viral_segments or {}).get("segments", []))
+        rendered_count = len(media_report.get("outputs", []))
+        delivery_manifest = {
+            "requested_count": requested_count,
+            "safe_selected_count": selected_count,
+            "rendered_count": rendered_count,
+            "safety_report": os.path.join(project_folder, "safety_report.json") if os.path.exists(os.path.join(project_folder, "safety_report.json")) else None,
+            "outputs": [entry.get("path") for entry in media_report.get("outputs", []) if entry.get("path")],
+            "status": "complete" if rendered_count >= selected_count else "incomplete",
+        }
+        try:
+            with open(os.path.join(project_folder, "delivery_manifest.json"), "w", encoding="utf-8") as handle:
+                json.dump(delivery_manifest, handle, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            debug("Could not save delivery manifest: {}".format(exc))
+        if rendered_count < selected_count and workflow_choice != "3":
+            print(i18n("Warning: rendered {} file(s) for {} selected segment(s); see delivery_manifest.json.").format(rendered_count, selected_count))
+        else:
+            print(i18n("Delivery audit: {} rendered file(s) for {} selected segment(s).").format(rendered_count, selected_count))
+        emit_progress("done", 100, "Completed")
+
+        try:
+            checkpoint.mark_done(project_folder, "done")
+        except Exception:
+            pass
+        cleanup_temp_files()
+        record_project_state(project_folder, "completed", args=args)
+        main._retried = False
+        print(i18n("Process completed! Check your results in: {}").format(project_folder))
+    except Exception as e:
+
+        dependency_error = bool(getattr(e, "dependency_error", False))
+        diagnostic_path = None
+        if dependency_error:
+            try:
+                from scripts.transcription_diagnostics import write_report
+                diagnostic_path = write_report(locals().get("project_folder"), e)
+            except Exception:
+                diagnostic_path = None
+        print(i18n("\nAn error occurred: {}").format(str(e)))
+        if dependency_error:
+            print("[OUSSAMA Cutter] تم إيقاف العملية بأمان بسبب مكوّن تفريغ غير جاهز.")
+            if diagnostic_path:
+                print("[OUSSAMA Cutter] تقرير التشخيص محفوظ في: {}".format(diagnostic_path))
+        # Privacy-respecting crash report (Roadmap 4.5) — local always, sent
+        # only when the user opts in via VIRALCUTTER_CRASH_REPORT=1.
+        try:
+            crash_report.report("pipeline", e,
+                                log_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "crash_report.log"))
+        except Exception:
+            pass
+        if not dependency_error:
+            import traceback
+            traceback.print_exc()
+        record_project_state(locals().get("project_folder"), "failed", error=e, args=locals().get("args"))
+        cleanup_temp_files()
+        # Do NOT retry on input/config errors (bad --chunk-size, malformed
+        # JSON, wrong types): re-running the whole pipeline cannot fix them
+        # and would re-download/re-transcribe for nothing.
+        if dependency_error or isinstance(e, (ValueError, TypeError)):
+            main._retried = False
+            sys.exit(1)
+        if not main._retried:
+            main._retried = True
+            print(i18n("Retrying after failure..."))
+            time.sleep(2)
+            return main()
+        main._retried = False
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

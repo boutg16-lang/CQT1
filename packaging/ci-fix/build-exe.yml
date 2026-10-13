@@ -1,0 +1,199 @@
+name: Build Windows EXE
+
+# The #1 adoption barrier: PyInstaller cannot cross-compile, so the Windows
+# .exe used to require a manual build on a Windows machine. This workflow
+# builds it on a GitHub Windows runner and attaches it to Releases — no local
+# Windows box needed anymore.
+#
+# Triggers:
+#   * push of a v* tag   → builds AND creates/updates a GitHub Release with
+#                          OUSSAMA-Cutter.exe + checksums.txt (fpcalc + ffmpeg
+#                          bundled inside)
+#   * manual dispatch    → builds the current branch and uploads the exe as a
+#                          workflow artifact (for testing) — no release created
+#
+# The exe ships with fpcalc.exe (music fingerprint check) and ffmpeg/ffprobe
+# (video processing) bundled, so it works out of the box on a clean Windows.
+#
+# Single source of truth for the binary name: `EXE_NAME` below must match
+# `name=` in packaging/viralcutter.spec. A future rebrand is therefore a
+# one-line change here (issue #25).
+#
+# Release assets, in order of importance for the auto-updater:
+#   * OUSSAMA-Cutter.exe — the binary
+#   * checksums.txt      — SHA-256 manifest; scripts/auto_updater.py is
+#                          fail-closed and REFUSES any release without it.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Must equal EXE(..., name=...) in packaging/viralcutter.spec
+  EXE_NAME: OUSSAMA-Cutter.exe
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt || echo "WARN: some optional deps failed to install on this runner"
+          pip install -r requirements-upload.txt || echo "WARN: upload stack incomplete"
+
+      - name: Verify spec and workflow agree on the binary name
+        shell: bash
+        run: |
+          # Cheap guard against exactly the v7.18 regression: the spec was
+          # renamed to OUSSAMA-Cutter while this workflow still looked for
+          # dist/ViralCutter.exe, so every build hung in the smoke test.
+          SPEC_NAME=$(python -c "
+          import re, pathlib
+          src = pathlib.Path('packaging/viralcutter.spec').read_text(encoding='utf-8')
+          marker = src.index('EXE(')
+          print(re.search(r'name\s*=\s*[\"\\']([^\"\\']+)[\"\\']', src[marker:]).group(1))
+          ")
+          echo "spec name:     $SPEC_NAME"
+          echo "workflow EXE_NAME: $EXE_NAME"
+          if [ "$SPEC_NAME.exe" != "$EXE_NAME" ]; then
+            echo "::error::EXE_NAME ($EXE_NAME) does not match packaging/viralcutter.spec (${SPEC_NAME}.exe)"
+            exit 1
+          fi
+
+      - name: Download fpcalc + ffmpeg for bundling
+        shell: bash
+        run: |
+          mkdir -p packaging/third_party
+          # Chromaprint fpcalc (music fingerprint check) — pinned release,
+          # see scripts/music_fingerprint.py (FPCalc_RELEASE).
+          curl -L -o fpcalc.zip \
+            "https://github.com/acoustid/chromaprint/releases/download/v1.5.1/chromaprint-fpcalc-1.5.1-windows-x86_64.zip"
+          unzip -o fpcalc.zip -d fpcalc_tmp
+          find fpcalc_tmp -type f -exec cp {} packaging/third_party/ \;
+          # Static ffmpeg/ffprobe (GPL) — video processing works out of the
+          # box, no separate install for the end user. GitHub-hosted build
+          # (BtbN) — reliable; gyan.dev rate-limits and returns 503.
+          curl -L -o ffmpeg.zip \
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          unzip -o ffmpeg.zip -d ffmpeg_tmp
+          find ffmpeg_tmp -name "ffmpeg.exe" -exec cp {} packaging/third_party/ \;
+          find ffmpeg_tmp -name "ffprobe.exe" -exec cp {} packaging/third_party/ \;
+          ls -lh packaging/third_party/
+
+      - name: Build exe with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller packaging/viralcutter.spec --noconfirm --clean
+          ls -lh dist/
+          if [ ! -f "dist/$EXE_NAME" ]; then
+            echo "::error::PyInstaller did not produce dist/$EXE_NAME"
+            ls -lh dist/ || true
+            exit 1
+          fi
+
+      - name: Smoke-test the exe (WebUI must boot)
+        shell: bash
+        run: |
+          # Launch the exe in WebUI mode and wait until http://127.0.0.1:7860
+          # answers 200. This catches frozen-bundle breakage (missing data
+          # files, missing hidden imports) BEFORE anything is released.
+          #
+          # Hardening (issue #25 — the old version silently burned the whole
+          # 300s job timeout with no diagnostics):
+          #   * fail immediately with a clear message when the exe is missing
+          #   * detect an early crash instead of polling a dead process
+          #   * bounded curl calls + an internal 240s deadline (< 300s step
+          #     timeout) so the log always gets printed
+          #   * a trap prints webui_smoke.log on EVERY exit path
+          EXE="dist/$EXE_NAME"
+          if [ ! -f "$EXE" ]; then
+            echo "::error::missing $EXE — nothing to smoke-test"
+            ls -lh dist/ || true
+            exit 1
+          fi
+
+          cleanup() {
+            local rc=$?
+            if [ -f webui_smoke.log ]; then
+              echo "----- webui_smoke.log (tail -80) -----"
+              tail -80 webui_smoke.log || true
+            else
+              echo "(no webui_smoke.log was produced)"
+            fi
+            kill "$EXE_PID" 2>/dev/null || true
+            wait "$EXE_PID" 2>/dev/null || true
+            return $rc
+          }
+
+          "$EXE" --webui > webui_smoke.log 2>&1 &
+          EXE_PID=$!
+          trap cleanup EXIT
+
+          DEADLINE=$((SECONDS + 240))
+          while [ "$SECONDS" -lt "$DEADLINE" ]; do
+            if ! kill -0 "$EXE_PID" 2>/dev/null; then
+              echo "::error::the exe exited before serving the WebUI — log follows"
+              exit 1
+            fi
+            CODE=$(curl -s --max-time 4 -o /dev/null -w "%{http_code}" http://127.0.0.1:7860/ 2>/dev/null || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "OK: WebUI responded HTTP 200 after $((SECONDS))s"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "::error::WebUI did not respond within 240s"
+          exit 1
+
+      - name: Generate checksums manifest
+        shell: bash
+        run: |
+          # scripts/auto_updater.py is fail-closed: it refuses to install an
+          # update from a release with no checksums.txt / SHA256SUMS asset.
+          # Emitting it here is what makes in-app updates actually work.
+          cd dist
+          sha256sum "$EXE_NAME" > checksums.txt
+          cat checksums.txt
+
+      # The Release comes BEFORE the artifact upload on purpose: artifact
+      # storage is a shared account quota (issue #26), and hitting it used to
+      # fail the job before the release step ever ran — a successful build
+      # then produced no downloadable release at all.
+      - name: Create / update GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: OUSSAMA Cutter ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/${{ env.EXE_NAME }}
+            dist/checksums.txt
+          generate_release_notes: true
+
+      - name: Upload exe as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: OUSSAMA-Cutter-win-x64
+          path: |
+            dist/${{ env.EXE_NAME }}
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 7

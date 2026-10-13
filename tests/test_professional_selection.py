@@ -1,0 +1,216 @@
+from scripts.create_viral_segments import (
+    _choose_recommended_title,
+    _rank_segments_with_diversity,
+    _selection_score,
+    deduplicate_segments,
+    process_segments,
+)
+
+
+def test_selection_score_is_bounded_and_explainable():
+    score, breakdown = _selection_score({
+        "score": 90,
+        "hook_strength": 80,
+        "narrative_completeness": 70,
+        "clarity_score": 85,
+        "novelty_score": 60,
+    })
+    assert 0 <= score <= 100
+    assert set(breakdown) == {"virality", "hook", "completeness", "clarity", "novelty", "title"}
+    assert breakdown["virality"] == 90
+
+
+def test_diversity_ranking_prefers_new_topic_after_first_pick():
+    segments = [
+        {"title": "A", "topic": "same", "angle": "story", "selection_score": 95},
+        {"title": "B", "topic": "same", "angle": "story", "selection_score": 94},
+        {"title": "C", "topic": "new", "angle": "lesson", "selection_score": 92},
+    ]
+    ranked = _rank_segments_with_diversity(segments, 3)
+    assert [item["title"] for item in ranked] == ["A", "C", "B"]
+    assert [item["candidate_rank"] for item in ranked] == [1, 2, 3]
+
+
+def test_process_segments_drops_same_window_with_different_titles():
+    transcript = [
+        {"start": 0.0, "end": 10.0, "text": "opening statement"},
+        {"start": 10.0, "end": 20.0, "text": "important conclusion"},
+        {"start": 20.0, "end": 30.0, "text": "later detail"},
+    ]
+    raw = [
+        {"title": "Hook A", "start_time_ref": "0s", "start_text": "opening statement",
+         "end_text": "important conclusion", "score": 95},
+        {"title": "Hook B", "start_time_ref": "0s", "start_text": "opening statement",
+         "end_text": "important conclusion", "score": 94},
+    ]
+    result = process_segments(raw, transcript, 5, 30)
+    assert len(result["segments"]) == 1
+    assert result["segments"][0]["title"] == "Hook A"
+
+
+def test_process_segments_respects_explicit_numeric_window():
+    transcript = [{"start": float(i), "end": float(i + 1), "text": f"word {i}"} for i in range(0, 61, 5)]
+    raw = [
+        {"title": "First", "start_time": 10, "end_time": 20, "score": 90},
+        {"title": "Second", "start_time": 40, "end_time": 50, "score": 80},
+    ]
+    result = process_segments(raw, transcript, 5, 30)
+    windows = {(round(item["start_time"]), round(item["end_time"])) for item in result["segments"]}
+    assert windows == {(10, 20), (40, 50)}
+
+
+def test_deduplicate_segments_keeps_highest_score_for_same_window():
+    segments = [
+        {"title": "strong", "start_time": 10, "end_time": 30, "score": 95},
+        {"title": "same footage", "start_time": 10.5, "end_time": 29.5, "score": 99},
+        {"title": "different", "start_time": 50, "end_time": 70, "score": 80},
+    ]
+    result = deduplicate_segments(segments)
+    assert len(result) == 2
+    assert {item["title"] for item in result} == {"same footage", "different"}
+
+
+def test_recommended_title_prefers_readable_candidate():
+    segment = {
+        "title": "THIS IS A VERY LONG TITLE THAT SHOULD NOT BE THE DEFAULT " * 2,
+        "alt_titles": ["كيف تغيّرت النتيجة في لحظة؟", "نتيجة مفاجئة"],
+    }
+    assert _choose_recommended_title(segment) == "كيف تغيّرت النتيجة في لحظة؟"
+
+
+def test_title_quality_penalizes_keyword_stuffing():
+    from scripts.create_viral_segments import _title_quality_score
+
+    stuffed = _title_quality_score("حرب حرب الكوكايين تطيح تطيح بصناع المحتوى")
+    clean = _title_quality_score("كيف تطيح حرب الكوكايين بصناع المحتوى؟")
+    assert stuffed < clean
+
+
+def test_selection_score_rewards_quality_titles():
+    base = {"score": 60, "hook_strength": 60, "narrative_completeness": 60,
+            "clarity_score": 60, "novelty_score": 60}
+    stuffed = dict(base, title_quality_score=30.0)
+    curious = dict(base, title_quality_score=85.0)
+    missing = dict(base)
+
+    stuffed_score, stuffed_breakdown = _selection_score(stuffed)
+    curious_score, curious_breakdown = _selection_score(curious)
+    missing_score, missing_breakdown = _selection_score(missing)
+
+    assert curious_score > missing_score > stuffed_score
+    assert missing_breakdown["title"] == 60.0
+    assert curious_breakdown["title"] == 85.0
+    assert "title" in stuffed_breakdown
+
+
+def test_verified_title_status_improves_selection_evidence():
+    from scripts import create_viral_segments as cvs
+
+    analysis = {
+        "first_sentence": "كيف تنجح في العمل؟",
+        "text": "كيف تنجح في العمل؟ هذه خطوات واضحة.",
+        "word_count": 8,
+        "unique_ratio": 0.9,
+        "complete": True,
+        "starts_mid_sentence": False,
+        "ends_mid_sentence": False,
+        "ends_with_terminal_punctuation": True,
+        "ends_incomplete": False,
+        "speech_coverage": 1.0,
+    }
+    base = {"score": 75, "duration": 8, "recommended_title": "خطوات النجاح"}
+    verified = dict(base, title_validation={"status": "verified"})
+    review = dict(base, title_validation={"status": "review"})
+    verified_factors = cvs._compute_factor_scores(verified, analysis, title_relevance_ratio=0.5)
+    review_factors = cvs._compute_factor_scores(review, analysis, title_relevance_ratio=0.5)
+    assert verified_factors["title_relevance"] > review_factors["title_relevance"]
+
+
+def test_selection_explanation_is_publish_readiness_aware():
+    from scripts import create_viral_segments as cvs
+
+    segment = {
+        "selection_score": 82.5,
+        "score_breakdown": {"hook_strength": 90, "title_relevance": 80,
+                            "repetition_penalty": 4},
+        "diversity_adjustment": 3.0,
+        "title_selection_status": "verified",
+        "title_validation": {"status": "verified"},
+    }
+    explanation = cvs._selection_explanation(segment)
+    assert explanation["rank_score"] == 82.5
+    assert explanation["top_factors"][0]["name"] == "hook_strength"
+    assert explanation["penalties"] == {"repetition_penalty": 4.0}
+    assert explanation["readiness"] == "publish_ready"
+
+
+def test_process_segments_aligns_paraphrased_start_text():
+    transcript = [
+        {"start": 0.0, "end": 9.0, "text": "welcome everyone to the show"},
+        {"start": 10.0, "end": 19.0, "text": "the secret ingredient is patience"},
+        {"start": 20.0, "end": 30.0, "text": "thanks for watching"},
+    ]
+    raw = [{
+        "title": "Patience", "start_time_ref": "0s",
+        "start_text": "secret ingredient patience",
+        "end_text": "thanks for watching", "score": 90,
+    }]
+    result = process_segments(raw, transcript, 5, 30)
+    assert result["segments"][0]["start_time"] == 10.0
+
+
+def test_recommended_title_prefers_content_related_candidate():
+    segment = {
+        "title": "لحظة صادمة لن تنساها",
+        "alt_titles": ["السر وراء نجاح القهوة التركية"],
+        "start_text": "لماذا نجاح القهوة التركية يتعلق بالصبر",
+        "end_text": "الصبر هو السر",
+        "caption": "",
+    }
+    assert _choose_recommended_title(segment) == "السر وراء نجاح القهوة التركية"
+
+
+def test_process_segments_clamps_malformed_ai_timestamps_to_transcript():
+    transcript = [
+        {"start": 0.0, "end": 8.0, "text": "opening"},
+        {"start": 9.0, "end": 20.0, "text": "complete thought"},
+    ]
+    result = process_segments([{
+        "title": "Out of range",
+        "start_time": 9999,
+        "end_time": 10000,
+        "score": 90,
+    }], transcript, 5, 30)
+    segment = result["segments"][0]
+    assert 0.0 <= segment["start_time"] < segment["end_time"] <= 20.0
+    assert 5.0 <= segment["duration"] <= 30.0
+
+
+def test_verified_title_status_beats_review_at_same_lexical_overlap():
+    from scripts.create_viral_segments import _title_validation_signal
+
+    verified, verified_status = _title_validation_signal(
+        {"title_validation": {"status": "verified"}}, 0.8)
+    review, review_status = _title_validation_signal(
+        {"title_validation": {"status": "review"}}, 0.8)
+    assert verified > review
+    assert verified_status == "verified"
+    assert review_status == "review"
+
+
+def test_selection_explanation_exposes_rank_factors_and_readiness():
+    from scripts.create_viral_segments import (
+        _selection_explanation,
+        _selection_readiness,
+    )
+
+    ready = {"selection_score": 88, "score_breakdown": {"hook_strength": 92,
+             "standalone_context": 85, "repetition_penalty": 4},
+             "title_validation": {"status": "verified"}}
+    assert _selection_readiness(ready) == "publish_ready"
+    explanation = _selection_explanation(ready)
+    assert explanation["top_factors"][0]["name"] == "hook_strength"
+    assert explanation["penalties"] == {"repetition_penalty": 4.0}
+    assert explanation["readiness"] == "publish_ready"
+    assert _selection_readiness({"requires_review": True}) == "review"
+    assert _selection_readiness({"title_validation": {"status": "rejected"}}) == "blocked"
