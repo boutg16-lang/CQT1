@@ -34,6 +34,8 @@ import shutil
 import subprocess
 import sys
 
+from scripts.gemini_models import DEFAULT_GEMINI_MODEL
+
 try:
     from app_brand import APP_NAME
 except Exception:
@@ -141,7 +143,7 @@ ASSETS = [
 
 API_CONFIG_TEMPLATE = {
     "selected_api": "gemini",
-    "gemini": {"api_key": "", "model": "gemini-2.5-flash-lite-preview-09-2025", "chunk_size": 20000},
+    "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL, "chunk_size": 20000},
     "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
 }
 

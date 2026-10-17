@@ -84,7 +84,7 @@ def test_save_then_load_roundtrip(tmp_path):
 def test_save_preserves_unrelated_fields(tmp_path):
     config = {
         "selected_api": "gemini",
-        "gemini": {"api_key": "", "model": "m-old", "chunk_size": 20000},
+        "gemini": {"api_key": "", "model": "gemini-2.5-flash", "chunk_size": 20000},
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
         "custom_future_field": {"keep": "me"},
     }
@@ -93,14 +93,14 @@ def test_save_preserves_unrelated_fields(tmp_path):
 
     ok, _ = settings_store.save_ui_settings(
         ai_backend="gemini", api_key="AIza_new_key_here_123",
-        ai_model="m-new", chunk_size=99999, base_dir=str(tmp_path))
+        ai_model="gemini-3.8-flash", chunk_size=99999, base_dir=str(tmp_path))
     assert ok
 
     with open(tmp_path / "api_config.json", encoding="utf-8") as f:
         saved = json.load(f)
     assert saved["custom_future_field"] == {"keep": "me"}
     assert saved["g4f"]["model"] == "gpt-4o-mini"
-    assert saved["gemini"]["model"] == "m-new"
+    assert saved["gemini"]["model"] == "gemini-3.8-flash"
     assert saved["gemini"]["api_key"] == "AIza_new_key_here_123"
 
 
@@ -108,13 +108,13 @@ def test_save_empty_key_keeps_existing(tmp_path):
     """Clearing the box mid-edit must NOT erase the stored key."""
     settings_store.save_ui_settings(
         ai_backend="gemini", api_key="AIza_keep_me_please_12345",
-        ai_model="m1", chunk_size=1, base_dir=str(tmp_path))
+        ai_model="gemini-2.5-flash", chunk_size=1, base_dir=str(tmp_path))
     settings_store.save_ui_settings(
-        ai_backend="gemini", api_key="", ai_model="m2",
+        ai_backend="gemini", api_key="", ai_model="gemini-3.8-flash",
         chunk_size=2, base_dir=str(tmp_path))
     loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
     assert loaded["api_key"] == "AIza_keep_me_please_12345"
-    assert loaded["ai_model"] == "m2"
+    assert loaded["ai_model"] == "gemini-3.8-flash"
 
 
 def test_save_does_not_persist_env_key(tmp_path, monkeypatch):
@@ -122,7 +122,7 @@ def test_save_does_not_persist_env_key(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "AIza_env_key_0123456789")
     ok, _ = settings_store.save_ui_settings(
         ai_backend="gemini", api_key="AIza_env_key_0123456789",
-        ai_model="m", chunk_size=1, base_dir=str(tmp_path))
+        ai_model="gemini-2.5-flash", chunk_size=1, base_dir=str(tmp_path))
     assert ok
     with open(tmp_path / "api_config.json", encoding="utf-8") as f:
         saved = json.load(f)

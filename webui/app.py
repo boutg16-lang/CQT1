@@ -64,6 +64,11 @@ else:
 sys.path.append(WORKING_DIR)
 
 from i18n.i18n import DEFAULT_LANGUAGE, I18nAuto
+from scripts.gemini_models import (
+    DEFAULT_GEMINI_MODEL,
+    GEMINI_MODELS,
+    resolve_gemini_model,
+)
 
 i18n = I18nAuto(DEFAULT_LANGUAGE)
 
@@ -214,14 +219,6 @@ def watermark_preview_html(logo_path="", position="bottom-right", size_fraction=
 
 
 # --- AI model lists (were referenced but never defined — fixed in v6.1) ---
-GEMINI_MODELS = [
-    "gemini-2.5-flash-lite-preview-09-2025",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-pro",
-]
 G4F_MODELS = [
     "gpt-4o-mini",
     "gpt-4o",
@@ -229,8 +226,6 @@ G4F_MODELS = [
     "gpt-3.5-turbo",
     "claude-3-haiku",
     "llama-3.1-8b",
-    "gemini-1.5-flash",
-    "gemini-pro",
     "mistral-7b",
     "mixtral-8x7b",
 ]
@@ -439,7 +434,8 @@ def settings_status_text(api_key=None, api_keys=None, key_mode=None):
 def _model_choices_for(backend, saved_model):
     """Model dropdown choices/value per backend, keeping the saved model."""
     if backend == "gemini":
-        choices, default = list(GEMINI_MODELS), GEMINI_MODELS[1]
+        choices, default = list(GEMINI_MODELS), DEFAULT_GEMINI_MODEL
+        saved_model = resolve_gemini_model(saved_model)
         model_visible, refresh_visible, api_visible = True, False, True
     elif backend == "g4f":
         choices, default = list(G4F_MODELS), G4F_MODELS[5]
@@ -525,7 +521,7 @@ def test_api_connection(backend, key1, key2, key3, key_mode, model):
     else:
         selected = keys[0] if keys else ""
     ok, msg = settings_store.test_gemini_connection(
-        selected, model if model in GEMINI_MODELS else "gemini-2.5-flash")
+        selected, model if model in GEMINI_MODELS else DEFAULT_GEMINI_MODEL)
     if ok:
         return "✅ " + i18n("Connection OK — the selected key works.")
     return "❌ " + i18n("Connection failed:") + " " + str(msg)[:300]
@@ -1444,7 +1440,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         test_key_btn = gr.Button("🔌 " + i18n("Test Connection"), variant="secondary", size="sm", scale=1)
                         settings_hint = gr.Markdown("💡 " + i18n("Add up to 3 keys. Auto rotate switches after quota or key errors; keys are masked in the status."), scale=3)
                     with gr.Row():
-                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=GEMINI_MODELS[1], allow_custom_value=True, visible=True, scale=5)
+                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=DEFAULT_GEMINI_MODEL, allow_custom_value=False, visible=True, scale=5)
                         refresh_models_btn = gr.Button("🔄", size="sm", visible=False, scale=0, min_width=50)
                         chunk_size_input = gr.Number(label=i18n("Chunk Size"), value=70000, precision=0, scale=2)
 
@@ -1452,8 +1448,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         show_api = (backend == "gemini")
                         show_refresh = (backend == "local")
                         if backend == "gemini":
-                            new_choices = GEMINI_MODELS
-                            new_val = GEMINI_MODELS[1]
+                            new_choices = list(GEMINI_MODELS)
+                            new_val = DEFAULT_GEMINI_MODEL
                             new_chunk = 70000
                         elif backend == "g4f":
                             new_choices = G4F_MODELS

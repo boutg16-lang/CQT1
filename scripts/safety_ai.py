@@ -22,6 +22,8 @@ import os
 import re
 import urllib.request
 
+from scripts.gemini_models import DEFAULT_GEMINI_MODEL
+
 AI_CAPABLE_BACKENDS = {"gemini", "g4f", "openai-moderation"}
 OPENAI_MODERATION_CATEGORIES = (
     "hate",
@@ -235,7 +237,7 @@ def review_segments(clips, ai_backend, api_key=None, model_name=None):
         if ai_backend == "gemini":
             response = create_viral_segments.call_gemini(
                 prompt, api_key,
-                model_name=model_name or "gemini-2.5-flash-lite-preview-09-2025")
+                model_name=model_name or DEFAULT_GEMINI_MODEL)
             verdicts = parse_review_response(response)
         elif ai_backend == "g4f":
             response = create_viral_segments.call_g4f(
