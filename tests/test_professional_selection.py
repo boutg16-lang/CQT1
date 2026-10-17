@@ -32,7 +32,7 @@ def test_model_virality_score_is_capped_and_missing_factors_are_neutral():
     assert score == 55.0
 
 
-def test_editorial_evidence_outweighs_viral_self_score_even_with_override():
+def test_editorial_evidence_beats_high_raw_score_even_with_override():
     model_hype = {"score": 100, "hook_strength": 0, "narrative_completeness": 0,
                   "clarity_score": 0, "novelty_score": 0, "title_quality_score": 0}
     grounded_quality = {"score": 10, "hook_strength": 90, "narrative_completeness": 90,
