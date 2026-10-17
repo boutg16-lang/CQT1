@@ -1,7 +1,13 @@
+import logging
 import os
 import re
 import shutil
 import subprocess
+
+from i18n.i18n import I18nAuto
+from scripts.ffmpeg_toolchain import FFMPEG_BROKEN_GUIDANCE, resolve_toolchain
+
+logger = logging.getLogger(__name__)
 
 # yt-dlp is a hard requirement for downloading, but NOT for importing this
 # module: helpers like _friendly_download_error / sanitize_filename must stay
@@ -11,9 +17,6 @@ try:
     import yt_dlp
 except ImportError:  # pragma: no cover - depends on environment
     yt_dlp = None
-
-from i18n.i18n import I18nAuto
-from scripts.ffmpeg_toolchain import FFMPEG_BROKEN_GUIDANCE, resolve_toolchain
 
 i18n = I18nAuto()
 
@@ -108,14 +111,15 @@ def sanitize_filename(name):
 
 
 def progress_hook(d):
-    if d['status'] == 'downloading':
+    status = d.get("status")
+    if status == "downloading":
         try:
-            p = d.get('_percent_str', '').replace('%', '')
+            p = str(d.get("_percent_str", "")).replace("%", "")
             print(f"[download] {p}% - {d.get('_eta_str', 'N/A')} remaining", flush=True)
-        except:
-            pass
-    elif d['status'] == 'finished':
-        print(f"[download] Download concluído: {d['filename']}", flush=True)
+        except (OSError, UnicodeError, ValueError) as exc:
+            logger.debug("Could not print download progress (%s).", type(exc).__name__)
+    elif status == "finished":
+        print(f"[download] Download concluído: {d.get('filename', 'unknown file')}", flush=True)
 
 
 def _runtime_options():
@@ -197,8 +201,9 @@ def _adopt_downloaded_video(project_folder, output_path_base, final_video_path):
         if proc.returncode == 0 and valid(final_video_path):
             try:
                 os.remove(source)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning("Could not remove normalized source file %s (%s).",
+                               os.path.basename(source), type(exc).__name__)
             print(i18n("Normalized downloaded video: {} -> {}").format(source, final_video_path))
             return final_video_path
     except OSError as error:
@@ -289,16 +294,18 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
             print(i18n("Existing file found but seems corrupted/empty. Downloading again..."))
             try:
                 os.remove(final_video_path)
-            except:
-                pass
+            except OSError as exc:
+                logger.warning("Could not remove stale video file %s (%s).",
+                               os.path.basename(final_video_path), type(exc).__name__)
 
     # Limpeza de temp
     temp_path = f"{output_path_base}.temp.mp4"
     if os.path.exists(temp_path):
         try:
             os.remove(temp_path)
-        except:
-            pass
+        except OSError as exc:
+            logger.warning("Could not remove stale download temporary %s (%s).",
+                           os.path.basename(temp_path), type(exc).__name__)
 
     # Mapeamento de Qualidade
     quality_map = {
@@ -529,8 +536,9 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                         print(i18n("Subtitle converted and cleaned: {}").format(new_name.encode('ascii', 'replace').decode('ascii')))
                     try:
                         os.remove(best_sub)
-                    except:
-                        pass
+                    except OSError as exc:
+                        logger.warning("Could not remove converted subtitle %s (%s).",
+                                       os.path.basename(best_sub), type(exc).__name__)
 
                 except Exception as e_conv:
                     print(i18n("Failed to convert VTT: {}. Keeping original.").format(e_conv))
@@ -539,8 +547,9 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                     if os.path.exists(new_name_fallback) and new_name_fallback != best_sub:
                         try:
                             os.remove(new_name_fallback)
-                        except:
-                            pass
+                        except OSError as exc:
+                            logger.warning("Could not replace fallback subtitle %s (%s).",
+                                           os.path.basename(new_name_fallback), type(exc).__name__)
                     os.rename(best_sub, new_name_fallback)
 
             else:
@@ -548,8 +557,9 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                 if os.path.exists(new_name) and new_name != best_sub:
                     try:
                         os.remove(new_name)
-                    except:
-                        pass
+                    except OSError as exc:
+                        logger.warning("Could not replace subtitle %s (%s).",
+                                       os.path.basename(new_name), type(exc).__name__)
                 os.rename(best_sub, new_name)
                 try:
                     print(i18n("SRT subtitle renamed to: {}").format(new_name))
@@ -560,8 +570,9 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
             for extra in potential_subs[1:]:
                 try:
                     os.remove(extra)
-                except:
-                    pass
+                except OSError as exc:
+                    logger.warning("Could not remove extra subtitle %s (%s).",
+                                   os.path.basename(extra), type(exc).__name__)
 
     except Exception as e_ren:
         print(i18n("Error processing subtitles: {}").format(e_ren))

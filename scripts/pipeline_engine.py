@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 STATES = {"pending", "running", "retrying", "success", "failed", "cancelled"}
 
@@ -59,8 +62,8 @@ def _json_safe(value):
     try:
         json.dumps(value)
         return value
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        logger.debug("Pipeline stage result needs JSON fallback (%s).", type(exc).__name__)
     try:
         return json.loads(json.dumps(value, default=str, skipkeys=True))
     except (TypeError, ValueError):
@@ -75,12 +78,19 @@ class PipelineEngine:
         self.state = self._load()
 
     def _load(self):
+        empty_state = {"stages": {}, "updated": None}
         try:
             with open(self.state_path, "r", encoding="utf-8") as f:
-                d = json.load(f)
-            return d if isinstance(d, dict) else {"stages": {}, "updated": None}
-        except Exception:
-            return {"stages": {}, "updated": None}
+                state = json.load(f)
+            if isinstance(state, dict):
+                return state
+            logger.warning("Pipeline state is not a JSON object; starting with empty state.")
+        except FileNotFoundError:
+            return empty_state
+        except (OSError, UnicodeError, ValueError, TypeError) as exc:
+            logger.warning("Could not load pipeline state (%s); starting with empty state.",
+                           type(exc).__name__)
+        return empty_state
 
     def register(self, name, action, deps=None, validator=None, retries=0):
         if name in self.stages:
@@ -98,8 +108,11 @@ class PipelineEngine:
             os.replace(tmp, self.state_path)
         finally:
             if os.path.exists(tmp):
-                try: os.remove(tmp)
-                except OSError: pass
+                try:
+                    os.remove(tmp)
+                except OSError as exc:
+                    logger.debug("Could not remove temporary pipeline state (%s).",
+                                 type(exc).__name__)
 
     def order(self):
         visiting, visited, out = set(), set(), []

@@ -51,6 +51,16 @@ def test_pipeline_dependencies_and_persistence(tmp_path):
     assert result["b"] == 2
     assert json.loads(p.read_text())["stages"]["b"]["status"] == "success"
 
+
+def test_pipeline_corrupt_state_is_logged_and_reset(tmp_path, caplog):
+    path = tmp_path / "run.json"
+    path.write_text("{broken", encoding="utf-8")
+
+    engine = PipelineEngine(path)
+
+    assert engine.state == {"stages": {}, "updated": None}
+    assert any("Could not load pipeline state" in record.message for record in caplog.records)
+
 def test_pipeline_cycle_detection(tmp_path):
     e = PipelineEngine(tmp_path / "run.json")
     e.register("a", lambda c,r: 1, deps=["b"])

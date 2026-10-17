@@ -46,3 +46,18 @@ def test_insights_reported_when_metrics_missing(tmp_path, monkeypatch):
     assert report["published_count"] == 1
     assert report["with_metrics"] == 0
     assert report["insights"]
+
+
+
+def test_corrupt_scorecard_logs_and_keeps_published_history(tmp_path, caplog):
+    (tmp_path / "risk_scorecard.json").write_text("{broken", encoding="utf-8")
+    _history(tmp_path, [{
+        "video_id": "abc", "status": "uploaded", "video": "clip_001.mp4",
+        "title": "T", "platform": "youtube",
+    }])
+
+    published = performance_loop._published_videos(str(tmp_path))
+
+    assert len(published) == 1
+    assert any("Could not read risk scorecard" in record.message
+               for record in caplog.records)
