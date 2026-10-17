@@ -20,6 +20,32 @@ def test_selection_score_is_bounded_and_explainable():
     assert breakdown["virality"] == 90
 
 
+def test_model_virality_score_is_capped_and_missing_factors_are_neutral():
+    from scripts.performance_weights import DEFAULT_WEIGHTS, MAX_VIRALITY_WEIGHT
+
+    score, breakdown = _selection_score({"score": 100})
+
+    assert MAX_VIRALITY_WEIGHT == 0.10
+    assert DEFAULT_WEIGHTS["virality"] == MAX_VIRALITY_WEIGHT
+    assert breakdown["hook"] == 50.0
+    assert breakdown["title"] == 50.0
+    assert score == 55.0
+
+
+def test_editorial_evidence_outweighs_viral_self_score_even_with_override():
+    model_hype = {"score": 100, "hook_strength": 0, "narrative_completeness": 0,
+                  "clarity_score": 0, "novelty_score": 0, "title_quality_score": 0}
+    grounded_quality = {"score": 10, "hook_strength": 90, "narrative_completeness": 90,
+                        "clarity_score": 90, "novelty_score": 90, "title_quality_score": 90}
+    override = {"virality": 1.0, "hook": 0.0, "completeness": 0.0,
+                "clarity": 0.0, "novelty": 0.0, "title": 0.0}
+
+    hype_score, _ = _selection_score(model_hype, override)
+    quality_score, _ = _selection_score(grounded_quality, override)
+
+    assert quality_score > hype_score
+
+
 def test_diversity_ranking_prefers_new_topic_after_first_pick():
     segments = [
         {"title": "A", "topic": "same", "angle": "story", "selection_score": 95},
@@ -98,9 +124,40 @@ def test_selection_score_rewards_quality_titles():
     missing_score, missing_breakdown = _selection_score(missing)
 
     assert curious_score > missing_score > stuffed_score
-    assert missing_breakdown["title"] == 60.0
+    assert missing_breakdown["title"] == 50.0
     assert curious_breakdown["title"] == 85.0
     assert "title" in stuffed_breakdown
+
+
+def test_virality_is_capped_and_missing_factors_use_neutral_values():
+    score, breakdown = _selection_score({"score": 100})
+
+    assert score == 55.0
+    assert breakdown == {
+        "virality": 100.0,
+        "hook": 50.0,
+        "completeness": 50.0,
+        "clarity": 50.0,
+        "novelty": 50.0,
+        "title": 50.0,
+    }
+    calibrated_score, _ = _selection_score(
+        {"score": 100},
+        weights={"virality": 0.8, "hook": 0.1, "completeness": 0.1,
+                  "clarity": 0.0, "novelty": 0.0, "title": 0.0},
+    )
+    assert calibrated_score == 55.0
+
+
+def test_editorial_quality_beats_a_high_raw_virality_estimate():
+    high_virality = {"score": 100, "hook_strength": 10,
+                     "narrative_completeness": 10, "clarity_score": 10,
+                     "novelty_score": 10, "title_quality_score": 10}
+    strong_editorial = {"score": 20, "hook_strength": 90,
+                        "narrative_completeness": 90, "clarity_score": 90,
+                        "novelty_score": 90, "title_quality_score": 90}
+
+    assert _selection_score(strong_editorial)[0] > _selection_score(high_virality)[0]
 
 
 def test_verified_title_status_improves_selection_evidence():
@@ -214,3 +271,38 @@ def test_selection_explanation_exposes_rank_factors_and_readiness():
     assert explanation["readiness"] == "publish_ready"
     assert _selection_readiness({"requires_review": True}) == "review"
     assert _selection_readiness({"title_validation": {"status": "rejected"}}) == "blocked"
+
+def test_raw_virality_score_does_not_fill_missing_active_factors():
+    from scripts import create_viral_segments as cvs
+
+    analysis = {
+        "first_sentence": "كيف تنجح في العمل؟",
+        "text": "كيف تنجح في العمل؟",
+        "word_count": 5,
+        "unique_ratio": 1.0,
+        "complete": True,
+        "starts_mid_sentence": False,
+        "ends_mid_sentence": False,
+        "ends_with_terminal_punctuation": True,
+        "ends_incomplete": False,
+        "speech_coverage": 1.0,
+    }
+    low = cvs._compute_factor_scores({"score": 10, "duration": 5}, analysis)
+    high = cvs._compute_factor_scores({"score": 100, "duration": 5}, analysis)
+    low_invalid = cvs._compute_factor_scores({
+        "score": 10, "duration": 5, "hook_strength": "invalid",
+        "narrative_completeness": "invalid", "clarity_score": "invalid",
+    }, analysis)
+    high_invalid = cvs._compute_factor_scores({
+        "score": 100, "duration": 5, "hook_strength": "invalid",
+        "narrative_completeness": "invalid", "clarity_score": "invalid",
+    }, analysis)
+
+    assert low == high
+    assert low_invalid == high_invalid
+
+
+def test_non_finite_factor_scores_fall_back_to_neutral():
+    from scripts import clip_scoring
+
+    assert clip_scoring.compute_final_score({"hook_strength": float("nan")}) == 80.0

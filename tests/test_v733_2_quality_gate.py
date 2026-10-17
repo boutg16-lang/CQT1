@@ -40,8 +40,7 @@ def test_gate_drops_genuinely_weak_candidate():
 
 
 def test_gate_keeps_quality_missing_candidates():
-    # No genuine self-evaluation shipped → components are unverified copies
-    # of the virality score; gating them would be guessing.
+    # No genuine self-evaluation shipped → gating absent evidence would be guessing.
     unverified = _candidate("NoEval", None, None, None)
     unverified["quality_missing"] = True
     kept, dropped = cvs.apply_quality_gate([unverified], _config())

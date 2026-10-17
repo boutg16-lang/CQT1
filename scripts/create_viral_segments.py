@@ -1,12 +1,18 @@
 import ast
 import difflib
 import hashlib
-import io
+import importlib
 import json
+import logging
+import math
 import os
 import re
 import sys
 import time
+
+from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
+
+logger = logging.getLogger(__name__)
 
 try:
     from scripts import performance_weights
@@ -39,26 +45,11 @@ try:
 except Exception:
     _editor_review_module = None
 
-# Configura stdout para evitar erros de encoding no Windows (substitui caracteres inválidos por ?)
-# Aplicado apenas no Windows — em Linux/macOS (e no CI/pytest) o stdout nativo já é UTF-8
-# e substituí-lo quebraria o capture do pytest.
-if sys.platform == "win32" and sys.stdout and hasattr(sys.stdout, 'buffer'):
-    try:
-        # Mantém encoding original mas ignora erros (substitui por ?)
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding=sys.stdout.encoding or 'utf-8', errors='replace', line_buffering=True)
-    except:
-        pass
-
 # Tenta importar bibliotecas de IA opcionalmente
 # Gemini SDK support: legacy `google.generativeai` (pip install
 # google-generativeai) OR the new `google.genai` (pip install google-genai).
 # v6.4: previously only the legacy import existed while requirements.txt listed
 # the new package → runtime ImportError. Now either library works.
-# importlib.import_module is used instead of `import google.X` so a module
-# already present in sys.modules resolves even when the parent `google`
-# namespace package is not installed (keeps tests/hermetic envs working).
-import importlib
-
 try:
     # Prefer the maintained unified SDK. The legacy package is only used when
     # google-genai is unavailable, which avoids its deprecation warning on
@@ -120,8 +111,13 @@ def clean_json_response(response_text):
                 fallback = _extract_segments_json(normalized)
                 if fallback["segments"]:
                     return fallback
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Fallback decoding of the model response failed: %s", type(exc).__name__)
+    if not result["segments"]:
+        logger.warning(
+            "Unable to parse a segment list from the model response (%d characters).",
+            len(response_text),
+        )
     return result
 
 
@@ -169,8 +165,8 @@ def _extract_segments_json(response_text):
                 obj, _ = decoder.raw_decode(candidate_text)
                 if 'segments' in obj and isinstance(obj['segments'], list):
                     return obj
-            except:
-                pass
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.debug("Model response was not a complete JSON object: %s", type(exc).__name__)
             
             # Tentativa B: ast.literal_eval
             try:
@@ -204,8 +200,8 @@ def _extract_segments_json(response_text):
                     obj = ast.literal_eval(clean_cand)
                     if 'segments' in obj and isinstance(obj['segments'], list):
                         return obj
-            except:
-                pass
+            except (ValueError, TypeError, SyntaxError) as exc:
+                logger.debug("Model response was not a Python-literal object: %s", type(exc).__name__)
 
     # 2b. Recovery: dict-shaped "segments" value (numeric-key object).
     # Some models return {"segments": {"0": {...}, "1": {...}}} — or nest
@@ -229,16 +225,16 @@ def _extract_segments_json(response_text):
                 if all(re.fullmatch(r"[0-9]+", str(key)) for key in keys):
                     keys.sort(key=int)
                 return {"segments": [obj[key] for key in keys]}
-    except Exception:
-        pass
+    except (TypeError, ValueError, RecursionError) as exc:
+        logger.debug("Could not recover a model segments object: %s", type(exc).__name__)
 
     # 3. Fallback: Extração bruta de markdown
     try:
         match = re.search(r"```json(.*?)```", response_text, re.DOTALL)
         if match:
             return json.loads(match.group(1))
-    except:
-        pass
+    except json.JSONDecodeError as exc:
+        logger.debug("Model response markdown JSON was invalid: %s", type(exc).__name__)
         
     # 4. LAST RESORT: Fragment Parser (Para JSON truncado/incompleto)
     # Procura por "segments": [ e tenta parsear item por item
@@ -271,8 +267,8 @@ def _extract_segments_json(response_text):
             if found_segments:
                 print(f"[INFO] Recuperado {len(found_segments)} segmentos de JSON truncado.")
                 return {"segments": found_segments}
-    except:
-        pass
+    except (TypeError, ValueError, re.error) as exc:
+        logger.warning("Fragment recovery for the model response failed: %s", type(exc).__name__)
 
     return {"segments": []}
 
@@ -351,7 +347,7 @@ def _ordered_gemini_keys(keys):
     return keys[start:] + keys[:start]
 
 
-def call_gemini(prompt, api_key, model_name='gemini-2.5-flash-lite-preview-09-2025'):
+def call_gemini(prompt, api_key, model_name=DEFAULT_GEMINI_MODEL):
     if not HAS_GEMINI:
         raise ImportError(
             "Gemini SDK is not installed. Install one of:\n"
@@ -385,6 +381,14 @@ def call_gemini(prompt, api_key, model_name='gemini-2.5-flash-lite-preview-09-20
                     print(f"[429] Quota exceeded. Waiting {wait_time:.2f}s before retry {attempt+1}/{max_retries}...", flush=True)
                     time.sleep(wait_time)
                     continue
+                lower_error = error_str.lower()
+                if "404" in error_str and any(marker in lower_error for marker in
+                                              ("not_found", "not found", "not supported",
+                                               "not available", "retired", "shut down")):
+                    raise RuntimeError(
+                        "Gemini model {!r} is unavailable (HTTP 404). Choose a supported model in "
+                        "WebUI settings or set gemini.model in api_config.json; current default: {}."
+                        .format(model_name, DEFAULT_GEMINI_MODEL)) from e
                 if _is_key_error(error_str):
                     if key_index < len(keys) - 1:
                         print("[Gemini] Invalid key; switching to the next configured key.", flush=True)
@@ -434,7 +438,8 @@ def call_g4f(prompt, model_name="gpt-4o-mini"):
 
             try:
                 return json.dumps(response, ensure_ascii=False)
-            except:
+            except (TypeError, ValueError) as exc:
+                logger.debug("G4F response is not JSON-serializable: %s", type(exc).__name__)
                 return str(response)
             
         except Exception as e:
@@ -541,8 +546,11 @@ def load_transcript(project_folder):
 
 def _bounded_score(value, default=0.0):
     try:
-        return max(0.0, min(100.0, float(value)))
-    except (TypeError, ValueError):
+        score = float(value)
+        if not math.isfinite(score):
+            return float(default)
+        return max(0.0, min(100.0, score))
+    except (TypeError, ValueError, OverflowError):
         return float(default)
 
 
@@ -638,7 +646,7 @@ def _text_similarity(target, source):
     return max(ratio, overlap)
 
 
-def _window_text_from_transcript(transcript_segments, start_time, end_time):
+def _window_text_from_transcript(transcript_segments, start_time, end_time, words=None):
     """The real words spoken inside ``[start_time, end_time)``.
 
     Joins (space-separated) the text of every transcript line whose span
@@ -660,6 +668,22 @@ def _window_text_from_transcript(transcript_segments, start_time, end_time):
     except (TypeError, ValueError):
         return ""
     overlapping = []
+    if words:
+        overlapping_words = []
+        for word in words:
+            if not isinstance(word, dict):
+                continue
+            try:
+                word_start = float(word.get("start"))
+                word_end = float(word.get("end"))
+            except (TypeError, ValueError):
+                continue
+            if word_start < window_end and word_end > window_start:
+                text = str(word.get("word") or word.get("text") or "").strip()
+                if text:
+                    overlapping_words.append(text)
+        if overlapping_words:
+            return _normalized_match_text(" ".join(overlapping_words))
     for line in transcript_segments:
         if not isinstance(line, dict):
             continue
@@ -820,9 +844,8 @@ def apply_quality_gate(segments, config=None) -> tuple[list, list]:
 
     Returns ``(kept, dropped)`` where each dropped entry carries
     ``{title, index, reasons: [..]}``. Segments flagged ``quality_missing``
-    (the AI shipped no self-evaluation, so the components are unverified
-    copies of the virality score) always survive: gating them would be
-    guessing, not quality control.
+    (no reliable component scores were produced) always survive: gating them
+    would be guessing, not quality control.
     """
     config = config if config is not None else quality_gate_config()
     if not config.get("enabled"):
@@ -843,7 +866,11 @@ def apply_quality_gate(segments, config=None) -> tuple[list, list]:
                 continue  # nothing shipped for this axis → not gated
             try:
                 value = float(raw)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
+                reasons.append("{} invalid (not numeric)".format(component))
+                continue
+            if not math.isfinite(value):
+                reasons.append("{} invalid (non-finite)".format(component))
                 continue
             if value < float(floor):
                 label = {"hook_strength": "hook", "narrative_completeness": "narrative",
@@ -858,30 +885,46 @@ def apply_quality_gate(segments, config=None) -> tuple[list, list]:
 
 
 def _selection_score(segment, weights=None):
-    """Compute a transparent editorial score without hiding the AI score.
-
-    The original ``score`` remains untouched. This second score rewards a
-    strong hook, narrative completeness, clarity, novelty and title quality,
-    while keeping the model's virality estimate as the largest component.
-    ``weights`` may come from performance_weights.load_weights to nudge
-    components based on measured YouTube outcomes. A missing title score
-    falls back to the virality estimate so candidates without titles are
-    neither rewarded nor punished.
-    """
+    """Compute a normalized editorial score with a capped model self-score."""
+    if not isinstance(segment, dict):
+        segment = {}
     if isinstance(weights, dict) and isinstance(weights.get("weights"), dict):
         weights = weights["weights"]
-    weights = weights or {"virality": 0.40, "hook": 0.20, "completeness": 0.20,
-                          "clarity": 0.10, "novelty": 0.05, "title": 0.05}
+    defaults = getattr(performance_weights, "DEFAULT_WEIGHTS", {
+        "virality": 0.10, "hook": 0.20, "completeness": 0.20,
+        "clarity": 0.15, "novelty": 0.15, "title": 0.20,
+    })
+    supplied = weights if isinstance(weights, dict) and weights else defaults
+    components = ("virality", "hook", "completeness", "clarity", "novelty", "title")
+    raw_weights = {}
+    for name in components:
+        try:
+            raw_weights[name] = max(0.0, min(1.0, float(supplied.get(name, defaults[name]))))
+        except (TypeError, ValueError):
+            raw_weights[name] = float(defaults[name])
+    max_virality_weight = getattr(performance_weights, "MAX_VIRALITY_WEIGHT", 0.10)
+    virality_weight = min(raw_weights["virality"], max_virality_weight)
+    editorial_total = sum(raw_weights[name] for name in components if name != "virality")
+    if editorial_total <= 0.0:
+        raw_weights = dict(defaults)
+        editorial_total = sum(raw_weights[name] for name in components if name != "virality")
+    weights = {"virality": virality_weight}
+    weights.update({
+        name: raw_weights[name] * (1.0 - virality_weight) / editorial_total
+        for name in components if name != "virality"
+    })
+
+    neutral = getattr(performance_weights, "LEGACY_NEUTRAL_SCORE", 50.0)
     virality = _bounded_score(segment.get("score"), 0)
-    hook = _bounded_score(segment.get("hook_strength"), virality)
-    completeness = _bounded_score(segment.get("narrative_completeness"), virality)
-    clarity = _bounded_score(segment.get("clarity_score"), virality)
-    novelty = _bounded_score(segment.get("novelty_score"), virality)
-    title = _bounded_score(segment.get("title_quality_score"), virality)
-    value = (weights.get("virality", 0.40) * virality + weights.get("hook", 0.20) * hook
-             + weights.get("completeness", 0.20) * completeness
-             + weights.get("clarity", 0.10) * clarity + weights.get("novelty", 0.05) * novelty
-             + weights.get("title", 0.05) * title)
+    hook = _bounded_score(segment.get("hook_strength"), neutral)
+    completeness = _bounded_score(segment.get("narrative_completeness"), neutral)
+    clarity = _bounded_score(segment.get("clarity_score"), neutral)
+    novelty = _bounded_score(segment.get("novelty_score"), neutral)
+    title = _bounded_score(segment.get("title_quality_score"), neutral)
+    value = (weights["virality"] * virality + weights["hook"] * hook
+             + weights["completeness"] * completeness
+             + weights["clarity"] * clarity + weights["novelty"] * novelty
+             + weights["title"] * title)
     return round(max(0.0, min(100.0, value)), 1), {
         "virality": round(virality, 1),
         "hook": round(hook, 1),
@@ -1014,8 +1057,8 @@ def _parse_segment_time(value, default=0.0):
     if match:
         try:
             return max(0.0, float(match.group(1)))
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError, OverflowError):
+            return float(default)
     return float(default)
 
 
@@ -1131,7 +1174,7 @@ def segment_cache_staleness_reason(
 # fingerprint so changing the selection schema, the scoring weights or the
 # prompt template invalidates previously saved results instead of silently
 # reusing them.
-SEGMENTS_SCHEMA_VERSION = "2.0"
+SEGMENTS_SCHEMA_VERSION = "2.1"
 
 
 def prompt_version_fingerprint():
@@ -1149,7 +1192,8 @@ def prompt_version_fingerprint():
         if os.path.exists(prompt_path):
             with open(prompt_path, "r", encoding="utf-8") as handle:
                 template = handle.read()
-    except Exception:
+    except (OSError, UnicodeError) as exc:
+        logger.warning("Could not read prompt.txt for cache fingerprinting: %s", type(exc).__name__)
         template = ""
     scoring_version = getattr(clip_scoring, "SCORING_VERSION", "legacy") if clip_scoring else "legacy"
     title_schema = getattr(title_factual, "TITLE_VALIDATION_SCHEMA_VERSION", "legacy") if title_factual else "legacy"
@@ -1164,7 +1208,8 @@ def selection_weights_fingerprint():
         return "legacy"
     try:
         return clip_scoring.weights_fingerprint()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not fingerprint selection weights: %s", type(exc).__name__)
         return "legacy"
 
 
@@ -1202,7 +1247,8 @@ def _load_word_timings(project_folder):
         return []
     try:
         return transcript_window.load_word_timings(project_folder)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not load WhisperX word timings: %s", type(exc).__name__)
         return []
 
 
@@ -1388,7 +1434,7 @@ def _speech_blocks(transcript_segments):
     return blocks
 
 
-def snap_segment_boundaries(start_time, end_time, transcript_segments):
+def snap_segment_boundaries(start_time, end_time, transcript_segments, words=None):
     """Snap BOTH cut points to speech-block edges so cuts never split a word.
 
     * Start → the beginning of the speech block containing it (never jumps
@@ -1406,7 +1452,15 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments):
     end_time = max(start_time + 0.1, float(end_time))
     if not transcript_segments:
         return start_time, end_time
-    blocks = _speech_blocks(transcript_segments)
+    blocks = []
+    if words and transcript_window is not None:
+        try:
+            units = transcript_window.split_sentence_units(transcript_segments, words=words)
+            blocks = [(float(unit["start"]), float(unit["end"])) for unit in units]
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Could not snap using word timings: %s", type(exc).__name__)
+    if not blocks:
+        blocks = _speech_blocks(transcript_segments)
     if not blocks:
         return start_time, end_time
 
@@ -1588,8 +1642,9 @@ def _contextually_connected(base_text, added_text, max_gap=1.5, gap=None):
         try:
             if float(gap) <= float(max_gap):
                 return True
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError, OverflowError) as exc:
+            logger.debug("Ignoring malformed transcript gap (%s); using text overlap.",
+                         type(exc).__name__)
     base_tokens = {token for token in _normalized_match_text(base_text).split()
                    if len(token) >= 3}
     added_tokens = {token for token in _normalized_match_text(added_text).split()
@@ -1802,12 +1857,9 @@ def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_rel
     """
     if clip_scoring is None:
         return {}
-    virality = _bounded_score(segment_entry.get("score"), 0.0)
 
-    # Per-component genuineness: a component the AI actually shipped (not
-    # None) is used as-is even when other components are missing; only truly
-    # missing ones fall back to the deterministic window heuristics. (The
-    # all-or-nothing ``quality_missing`` flag stays for gate/UI compat.)
+    # Missing or malformed model scores use deterministic evidence; they
+    # never inherit the raw virality field.
     def _genuine(key, fallback):
         value = segment_entry.get(key)
         if value is None:
@@ -1821,7 +1873,8 @@ def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_rel
     factors = {
         "hook_strength": _genuine(
             "hook_strength",
-            clip_scoring.hook_strength_heuristic(first_sentence, fallback=virality)),
+            clip_scoring.hook_strength_heuristic(
+                first_sentence, fallback=clip_scoring.NEUTRAL_SCORE)),
         "standalone_context": clip_scoring.standalone_context_score(analysis),
         "emotional_value": clip_scoring.emotional_value_heuristic(window_text),
         "information_density": clip_scoring.information_density_score(
@@ -1841,11 +1894,15 @@ def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_rel
     if segment_entry.get("narrative_completeness") is not None:
         factors["narrative_completeness"] = round(
             0.6 * factors["narrative_completeness"]
-            + 0.4 * _bounded_score(segment_entry.get("narrative_completeness"), virality), 1)
+            + 0.4 * _bounded_score(
+                segment_entry.get("narrative_completeness"),
+                factors["narrative_completeness"]), 1)
     if segment_entry.get("clarity_score") is not None:
         factors["standalone_context"] = round(
             0.6 * factors["standalone_context"]
-            + 0.4 * _bounded_score(segment_entry.get("clarity_score"), virality), 1)
+            + 0.4 * _bounded_score(
+                segment_entry.get("clarity_score"),
+                factors["standalone_context"]), 1)
     return factors
 
 
@@ -1974,15 +2031,9 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # segment-level fallback path is used unchanged.
     word_timings = _load_word_timings(project_folder)
     
-    # Sort segments by score (descending). Scores arrive as ints, floats OR
-    # numeric strings depending on the AI backend — a single non-int value
-    # used to kill the whole sort silently (bare except around int()).
-    def _sort_score(item):
-        try:
-            return float(item.get('score', 0) or 0)
-        except (TypeError, ValueError):
-            return 0.0
-    all_segments.sort(key=_sort_score, reverse=True)
+    # Use the capped, explainable score before transcript alignment so raw
+    # model virality estimates cannot decide which duplicate survives.
+    all_segments.sort(key=lambda item: _selection_score(item)[0], reverse=True)
 
     # --- POST-PROCESSING: Match Text to Timestamps ---
     # An empty transcript has no timestamps to align against: no candidate
@@ -2171,7 +2222,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 refinement_notes.append(extension_note)
             if snap_to_boundaries:
                 snapped_start, snapped_end = snap_segment_boundaries(
-                    final_start_time, final_end_time, transcript_segments)
+                    final_start_time, final_end_time, transcript_segments, words=word_timings)
                 if snapped_start >= 0 and (snapped_end - snapped_start) >= tempo_minimo:
                     if (snapped_end - snapped_start) <= tempo_maximo:
                         if (snapped_start, snapped_end) != (final_start_time, final_end_time):
@@ -2230,7 +2281,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # their window words are the real ones. When the LLM already
             # shipped an explicit recommended_title it is kept verbatim.
             window_text = _window_text_from_transcript(
-                transcript_segments, final_start_time, final_end_time)
+                transcript_segments, final_start_time, final_end_time, words=word_timings)
             recommended = seg.get('recommended_title') or _choose_recommended_title(seg, window_text=window_text)
             segment_entry = {
                 "title": seg.get('title', 'Viral Segment'),
@@ -2287,7 +2338,8 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # --- v7.40: exact-window analysis, validation, factual titles ---
             if transcript_window is not None:
                 analysis = transcript_window.analyze_window(
-                    transcript_segments, final_start_time, final_end_time)
+                    transcript_segments, final_start_time, final_end_time,
+                    words=word_timings)
             else:
                 analysis = {"text": window_text, "word_count": len(window_text.split()),
                             "speech_coverage": 1.0, "complete": True}
@@ -2545,8 +2597,8 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         for seg in validated_segments:
             try:
                 seg["opening_analysis"] = _hook_analyzer.analyze_segment_opening(seg)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Opening-hook analysis failed: %s", type(exc).__name__)
             if not _autotrim:
                 continue
             try:
@@ -2829,7 +2881,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
             "api_key": "",
             "api_keys": [],
             "key_mode": "auto",
-            "model": "gemini-2.5-flash-lite-preview-09-2025",
+            "model": DEFAULT_GEMINI_MODEL,
             "chunk_size": 15000
         },
         "g4f": {
@@ -2856,8 +2908,12 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
     if ai_mode == "gemini":
         cfg_chunk = config["gemini"].get("chunk_size", 15000)
         current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
-        cfg_model = config["gemini"].get("model", "gemini-2.5-flash-lite-preview-09-2025")
-        model_name = model_name_arg if model_name_arg else cfg_model
+        cfg_model = config["gemini"].get("model", DEFAULT_GEMINI_MODEL)
+        requested_model = model_name_arg if model_name_arg else cfg_model
+        model_name = resolve_gemini_model(requested_model)
+        if str(requested_model or "").strip() != model_name:
+            print("[WARN] Unsupported Gemini model {!r}; using {}. Update the model in settings."
+                  .format(requested_model, model_name))
         env_raw = os.getenv("VIRALCUTTER_GEMINI_KEYS", "").strip()
         env_keys = []
         if env_raw:
@@ -3076,8 +3132,9 @@ OUTPUT JSON ONLY:
                     try:
                         rest = sys.stdin.read() 
                         response_text += rest
-                    except:
-                        pass
+                    except (OSError, UnicodeError) as exc:
+                        logger.warning("Could not read the remainder of manual model input: %s",
+                                       type(exc).__name__)
 
         elif ai_mode == "gemini":
             print(f"Enviando chunk {i+1} para o Gemini (Model: {model_name})...")

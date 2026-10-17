@@ -18,6 +18,7 @@ and reproducible without an LLM.
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 
 from scripts import arabic_text
 from scripts.title_text import detect_text_script, fit_publish_title
@@ -57,9 +58,43 @@ _CLICKBAIT_PATTERNS = [
 _CLICKBAIT_RE = re.compile("|".join(_CLICKBAIT_PATTERNS), re.IGNORECASE)
 
 _LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{2,}")
-_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+_NUMBER_RE = re.compile(r"(?<!\w)\d+(?:[,٬]\d{3})*(?:[.٫]\d+)?")
 
 PUBLISH_TITLE_LIMIT = 100
+
+_ARABIC_NUMBER_WORD_VALUES = {}
+for _value, _forms in {
+    0: ("صفر",),
+    1: ("واحد", "واحدة", "أحد", "إحدى"),
+    2: ("اثنان", "اثنين", "اثنتان", "اثنتين", "ثنتان", "ثنتين"),
+    3: ("ثلاثة", "ثلاث"),
+    4: ("أربعة", "أربع"),
+    5: ("خمسة", "خمس"),
+    6: ("ستة", "ست"),
+    7: ("سبعة", "سبع"),
+    8: ("ثمانية", "ثمان", "ثماني"),
+    9: ("تسعة", "تسع"),
+    10: ("عشرة", "عشر"),
+    11: ("أحد عشر", "إحدى عشرة", "احدى عشر"),
+    12: ("اثنا عشر", "اثني عشر", "اثنتا عشرة", "اثنتي عشرة"),
+    20: ("عشرون", "عشرين"),
+    30: ("ثلاثون", "ثلاثين"),
+    40: ("أربعون", "أربعين"),
+    50: ("خمسون", "خمسين"),
+    60: ("ستون", "ستين"),
+    70: ("سبعون", "سبعين"),
+    80: ("ثمانون", "ثمانين"),
+    90: ("تسعون", "تسعين"),
+    100: ("مئة", "مائة"),
+    1000: ("ألف", "آلاف"),
+}.items():
+    for _form in _forms:
+        _ARABIC_NUMBER_WORD_VALUES[arabic_text.normalized_match_text(_form)] = _value
+
+_ARABIC_SMALL_NUMBERS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
+                         if 1 <= value <= 9}
+_ARABIC_TENS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
+                if 20 <= value <= 90 and value % 10 == 0}
 
 
 def _content_tokens(text):
@@ -78,13 +113,74 @@ def contains_clickbait_pattern(title):
     return bool(_CLICKBAIT_RE.search(str(title or "")))
 
 
+def _canonical_number(value):
+    cleaned = str(value).replace(",", "").replace("٬", "").replace("٫", ".")
+    try:
+        return format(Decimal(cleaned).normalize(), "f")
+    except InvalidOperation:
+        return cleaned
+
+
+def _arabic_number_words(text):
+    tokens = arabic_text.normalized_match_text(str(text or "")).split()
+    normalized = []
+    for token in tokens:
+        if token.startswith("و") and token[1:] in _ARABIC_NUMBER_WORD_VALUES:
+            normalized.append(token[1:])
+        else:
+            normalized.append(token)
+
+    values = set()
+    index = 0
+    while index < len(normalized):
+        if normalized[index] == "و" and index + 1 < len(normalized):
+            index += 1
+            continue
+        first = None
+        phrase_length = 0
+        for length in (2, 1):
+            phrase = " ".join(normalized[index:index + length])
+            if phrase in _ARABIC_NUMBER_WORD_VALUES:
+                first = _ARABIC_NUMBER_WORD_VALUES[phrase]
+                phrase_length = length
+                break
+        if first is None:
+            index += 1
+            continue
+
+        next_index = index + phrase_length
+        if next_index < len(normalized) and normalized[next_index] == "و":
+            next_index += 1
+        second = (_ARABIC_NUMBER_WORD_VALUES.get(normalized[next_index])
+                  if next_index < len(normalized) else None)
+        if second == 10 and first in _ARABIC_SMALL_NUMBERS:
+            values.add(str(first + 10))
+            index = next_index + 1
+        elif second in _ARABIC_TENS and first in _ARABIC_SMALL_NUMBERS:
+            values.add(str(first + second))
+            index = next_index + 1
+        elif first in _ARABIC_TENS and second in _ARABIC_SMALL_NUMBERS:
+            values.add(str(first + second))
+            index = next_index + 1
+        else:
+            values.add(str(first))
+            index += phrase_length
+    return values
+
+
+def _number_mentions(text):
+    normalized = arabic_text.normalize_digits(str(text or ""))
+    digits = {_canonical_number(match.group(0)) for match in _NUMBER_RE.finditer(normalized)}
+    return digits | _arabic_number_words(text)
+
+
 def title_numbers(title):
-    """All numbers in the title, digits normalized (Arabic-Indic → ASCII)."""
-    return set(_NUMBER_RE.findall(arabic_text.normalize_digits(str(title or ""))))
+    """Numbers in digits or common Arabic number words, normalized to values."""
+    return _number_mentions(title)
 
 
 def _text_numbers(text):
-    return set(_NUMBER_RE.findall(arabic_text.normalize_digits(str(text or ""))))
+    return _number_mentions(text)
 
 
 def _latin_tokens(text):
@@ -359,7 +455,7 @@ def detect_content_language(window_text):
 # لغوي. التحقق حتمي وقابل للاختبار، وخطاف ``llm_entailment`` اختياري: إن أعاد
 # False يُرفض العنوان، وإن غاب أو فشل نعود إلى النتيجة الحتمية بلا استثناءات.
 
-TITLE_VALIDATION_SCHEMA_VERSION = "1.0"
+TITLE_VALIDATION_SCHEMA_VERSION = "1.1"
 
 # Factual thresholds on the 0-100 ``factual_accuracy_score`` scale.
 MIN_VERIFY_FACTUAL = 60.0   # >= this + no unsupported facts → "verified"
@@ -391,24 +487,28 @@ _CLAIM_MARKERS = (
     "free", "in a week", "in a day", "times more",
 )
 
-# Amount / currency / period markers (normalized forms compare like words).
-# عملات ومبالغ ومدد زمنية — وجودها في العنوان دون نص المقطع ادّعاء غير مدعوم.
-_AMOUNT_MARKERS = (
-    "ريال", "ريالات", "دولار", "دولارات", "درهم", "دينار", "جنيه", "يورو",
-    "سنة", "سنوات", "عام", "أعوام", "شهر", "أشهر", "شهور",
-    "أسبوع", "أسابيع", "يوم", "أيام",
-    "years", "year", "months", "month", "weeks", "week", "days", "day",
-    "$", "€", "%",
-)
+_ALL_CLAIM_MARKERS = tuple(dict.fromkeys(_CLAIM_MARKERS))
 
-_ALL_CLAIM_MARKERS = tuple(dict.fromkeys(_CLAIM_MARKERS + _AMOUNT_MARKERS))
-
-# "\d سنة" / "3 years" style date-amount phrases.
-_DATE_UNIT_RE = re.compile(
-    r"\d+\s*(?:years?|months?|weeks?|days?"
-    r"|سنة|سنوات|عام|أعوام|شهر|أشهر|شهور|أسبوع|أسابيع|يوم|أيام)",
-    re.IGNORECASE,
-)
+_UNIT_GROUPS = {
+    "currency_sar": ("ريال", "ريالات", "ريالاً", "ريالًا", "sar"),
+    "currency_usd": ("دولار", "دولارات", "دولاراً", "دولارًا", "$", "usd", "us dollars"),
+    "currency_aed": ("درهم", "دراهم", "درهماً", "درهمًا", "aed"),
+    "currency_dzd": ("دينار", "دنانير", "ديناراً", "دينارًا", "dzd"),
+    "currency_gbp": ("جنيه", "جنيهات", "gbp", "pound", "pounds", "£"),
+    "currency_eur": ("يورو", "euros", "euro", "€"),
+    "mass_kg": ("كيلوغرام", "كيلوغرامات", "كيلو", "كغ", "kg", "kgs", "kilogram", "kilograms"),
+    "mass_g": ("غرام", "غرامات", "جرام", "جرامات", "g", "gram", "grams"),
+    "mass_ton": ("طن", "أطنان", "ton", "tons", "tonne", "tonnes"),
+    "volume_l": ("لتر", "لترات", "ليتر", "ليترات", "l", "liter", "liters", "litre", "litres"),
+    "volume_ml": ("مل", "ملليلتر", "مليلتر", "ml", "milliliter", "milliliters", "millilitre", "millilitres"),
+    "length_km": ("كيلومتر", "كيلومترات", "كم", "km", "kilometer", "kilometers", "kilometre", "kilometres"),
+    "length_m": ("متر", "أمتار", "meter", "meters", "metre", "metres", "m"),
+    "duration_year": ("سنة", "سنوات", "عام", "أعوام", "year", "years"),
+    "duration_month": ("شهر", "أشهر", "شهور", "month", "months"),
+    "duration_week": ("أسبوع", "أسابيع", "week", "weeks"),
+    "duration_day": ("يوم", "أيام", "day", "days"),
+    "percent": ("٪", "%", "percent", "percentage", "نسبة مئوية"),
+}
 
 # Whole-source-video scope framing. Only a problem when the clip is a small
 # part of the source (clip_ratio < 0.5) and the window itself does not frame
@@ -461,24 +561,28 @@ def unsupported_claims(title, window_text):
     seen_norm = set()
     for marker in _ALL_CLAIM_MARKERS:
         norm_marker = _normalized_for_match(marker)
-        if not norm_marker:
-            # Symbol marker (dollar / euro / percent): punctuation is
-            # stripped by the matcher, so fall back to a raw glyph comparison.
-            if marker in title_raw and marker not in window_raw:
-                unsupported.append(marker)
-            continue
         if norm_marker in seen_norm:
-            continue  # e.g. "وفّر"/"وفر" and "مجانًا"/"مجانا" collapse
+            continue
         seen_norm.add(norm_marker)
         if (_contains_phrase(norm_title, norm_marker)
                 and not _contains_phrase(norm_window, norm_marker)):
             unsupported.append(marker)
 
-    for match in _DATE_UNIT_RE.finditer(arabic_text.normalize_digits(title_raw)):
-        phrase = match.group(0).strip()
-        norm_phrase = arabic_text.normalized_match_text(phrase)
-        if norm_phrase and not _contains_phrase(norm_window, norm_phrase):
-            unsupported.append(phrase)
+    for variants in _UNIT_GROUPS.values():
+        title_units = [
+            variant for variant in variants
+            if (_contains_phrase(norm_title, _normalized_for_match(variant))
+                if _normalized_for_match(variant) else variant in title_raw)
+        ]
+        if not title_units:
+            continue
+        window_has_group = any(
+            (_contains_phrase(norm_window, _normalized_for_match(variant))
+             if _normalized_for_match(variant) else variant in window_raw)
+            for variant in variants
+        )
+        if not window_has_group:
+            unsupported.append(title_units[0])
 
     return sorted(set(unsupported))
 

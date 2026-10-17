@@ -15,14 +15,19 @@ channel's own data proved winning instead of generic editorial taste.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 INSIGHTS_NAME = "performance_insights.json"
 DEFAULT_WEIGHTS = {
-    "virality": 0.40, "hook": 0.20, "completeness": 0.20,
-    "clarity": 0.10, "novelty": 0.05, "title": 0.05,
+    "virality": 0.10, "hook": 0.20, "completeness": 0.20,
+    "clarity": 0.15, "novelty": 0.15, "title": 0.20,
 }
+LEGACY_NEUTRAL_SCORE = 50.0
+MAX_VIRALITY_WEIGHT = 0.10
 MAX_SHIFT = 0.10
 MIN_SAMPLES = 3
 
@@ -115,7 +120,11 @@ def _load(project_folder: str) -> dict[str, Any]:
         with open(path, "r", encoding="utf-8") as handle:
             value = json.load(handle)
         return value if isinstance(value, dict) else {}
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        logger.warning("Could not read performance insights (%s); using default weights.",
+                       type(exc).__name__)
         return {}
 
 
