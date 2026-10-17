@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 
@@ -30,6 +31,8 @@ from scripts.transcription_diagnostics import (
     TranscriptionUnavailableError,
     build_error_message,
 )
+
+logger = logging.getLogger(__name__)
 
 i18n = I18nAuto()
 
@@ -79,8 +82,8 @@ def _log_memory_state(label=""):
             free_v, total_v = torch.cuda.mem_get_info()
             print("[memory] {} available VRAM: {:.2f} GiB / {:.1f} GiB".format(
                 label, free_v / 2**30, total_v / 2**30), flush=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Memory state inspection failed (%s).", type(exc).__name__)
 
 
 def _release_cuda_memory(model=None, delete_model=False):
@@ -91,17 +94,14 @@ def _release_cuda_memory(model=None, delete_model=False):
     """
     gc.collect()
     if delete_model and model is not None:
-        try:
-            del model
-        except Exception:
-            pass
+        del model
         gc.collect()
     if torch is not None:
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("CUDA cache cleanup failed (%s).", type(exc).__name__)
 
 
 def _transcribe_via_fallback(input_file, model_name, project_folder,
@@ -125,8 +125,8 @@ def _transcribe_via_fallback(input_file, model_name, project_folder,
     try:
         _save_transcription_cache(cache_path, input_file, model_name,
                                   srt_file, tsv_file, json_file, device=device)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Could not save transcription cache (%s).", type(exc).__name__)
     print("[transcribe] faster-whisper fallback finished: {} / {}".format(
         srt_file, tsv_file), flush=True)
     return srt_file, tsv_file
@@ -284,8 +284,8 @@ def apply_safe_globals_hack():
         if not hasattr(torchaudio, 'list_audio_backends'):
             torchaudio.list_audio_backends = lambda: []
             print("Aplicado monkeypatch em torchaudio.list_audio_backends para PyTorch >= 2.4.")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("torchaudio compatibility check unavailable (%s).", type(exc).__name__)
 
 def parse_srt(srt_path):
     """

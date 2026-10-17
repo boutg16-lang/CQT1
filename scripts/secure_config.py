@@ -24,9 +24,14 @@ the merged config dict the rest of the app already expects).
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
+
+from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
+
+logger = logging.getLogger(__name__)
 
 SECURE_CONFIG = "api_config.secure.json"
 LEGACY_CONFIG = "api_config.json"
@@ -165,7 +170,9 @@ def _legacy_keys(base_dir=None):
         gemini = data.get("gemini") or {}
         values = gemini.get("api_keys") or [gemini.get("api_key", "")]
         return [key for key in _clean_keys(values) if key not in ("SUA_KEY_AQUI", "YOUR_KEY_HERE")]
-    except Exception:
+    except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("Could not load legacy Gemini configuration (%s); trying the next source.",
+                       type(exc).__name__)
         return []
 
 
@@ -176,8 +183,9 @@ def _env_keys():
             parsed = json.loads(raw)
             if isinstance(parsed, list):
                 return _clean_keys(parsed)
-        except Exception:
-            pass
+        except (TypeError, ValueError) as exc:
+            logger.debug("Gemini key list is not JSON (%s); trying delimited parsing.",
+                         type(exc).__name__)
         return _clean_keys(re.split(r"[,;\n]+", raw))
     for env in ("VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"):
         val = os.getenv(env, "").strip()
@@ -214,7 +222,7 @@ def load_api_config(base_dir=None):
     path = legacy_config_path(base_dir)
     config = {
         "selected_api": "gemini",
-        "gemini": {"api_key": "", "model": "gemini-2.5-flash-lite-preview-09-2025",
+        "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL,
                    "chunk_size": 20000},
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
     }
@@ -229,8 +237,13 @@ def load_api_config(base_dir=None):
                         config["gemini"].update(loaded["gemini"])
                     if isinstance(loaded.get("g4f"), dict):
                         config["g4f"].update(loaded["g4f"])
-        except Exception:
-            pass
+        except (OSError, UnicodeError, ValueError, TypeError) as exc:
+            logger.warning("Could not read api_config.json (%s); using defaults.", type(exc).__name__)
+    requested_model = config["gemini"].get("model")
+    config["gemini"]["model"] = resolve_gemini_model(requested_model)
+    if requested_model and config["gemini"]["model"] != str(requested_model).strip():
+        print("[WARN] Unsupported Gemini model {!r}; using {}. Update api_config.json."
+              .format(requested_model, config["gemini"]["model"]))
     keys = resolve_api_keys(base_dir)
     config["gemini"]["api_keys"] = keys
     config["gemini"]["api_key"] = keys[0] if keys else ""

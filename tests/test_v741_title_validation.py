@@ -29,7 +29,7 @@ def _analysis(text=WINDOW):
 # ---------------------------------------------------------------------------
 
 def test_schema_constants_are_pinned():
-    assert tf.TITLE_VALIDATION_SCHEMA_VERSION == "1.0"
+    assert tf.TITLE_VALIDATION_SCHEMA_VERSION == "1.1"
     assert tf.MIN_VERIFY_FACTUAL == 60.0
     assert tf.MIN_REVIEW_FACTUAL == 45.0
 

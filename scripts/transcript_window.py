@@ -25,10 +25,15 @@ Pure stdlib, no I/O except ``load_word_timings`` — fully unit-testable.
 from __future__ import annotations
 
 import json
+import logging
+import math
 import os
 import re
+from bisect import bisect_left
 
 from scripts import arabic_text
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Linguistic tables
@@ -43,13 +48,14 @@ _TERMINAL_RE = re.compile(r"[.!?؟…]+\s*[\"'»)】]*\s*$")
 # far too common to flag as substrings (most Arabic sentences begin with them).
 START_CONNECTORS_AR = {
     "لكن", "ولكن", "لكنه", "لكنها", "لكنني", "لكننا",
-    "لذلك", "لذا", "ولذلك",
+    "لذلك", "لذا", "ولذلك", "لهذا", "ولهذا",
     "لأن", "لان", "ولأن", "ولان",
     "وهذا", "وهذه", "وذلك", "وهو", "وهي", "وهم",
     "فهو", "فهي", "فهذا", "فهذه",
     "ثم", "فإذا", "فاذا", "فإن", "فان",
     "إذن", "اذن", "أيضا", "ايضا", "كذلك", "أيضاً",
     "غير", "حيث", "بينما", "عندما", "لما", "لمّا",
+    "بصح", "باسكو", "دونك",
 }
 
 # English filler/conjunction openers that make weak hooks.
@@ -88,6 +94,16 @@ UNRESOLVED_OPENERS_EN = {"he", "she", "it", "they", "this", "that", "these", "th
 # sentence boundary when punctuation is missing (Whisper often drops Arabic
 # punctuation entirely).
 SENTENCE_PAUSE_SECONDS = 0.60
+
+# Shorter pauses before a discourse connector can mark a sentence boundary.
+CONNECTOR_PAUSE_SECONDS = 0.18
+
+# Strong clause openers used when one unpunctuated ASR block has no word times.
+_SENTENCE_CONNECTORS_AR = {
+    "لكن", "ولكن", "لذلك", "لذا", "لهذا", "لأن", "لان", "ثم", "بصح",
+    "باسكو", "دونك", "بل", "مع ذلك", "في المقابل", "على العكس",
+    "من جهة أخرى", "ومن جهة أخرى",
+}
 
 # How far (seconds) connector-start repair may walk back to include the
 # antecedent sentence.
@@ -146,24 +162,41 @@ def load_word_timings(project_folder):
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning(
+            "Could not read WhisperX word timings from input.json (%s); using segment timings.",
+            type(exc).__name__,
+        )
+        return []
+    if not isinstance(data, dict):
+        logger.warning("WhisperX input.json has no object at its root; using segment timings.")
         return []
     words = []
+    malformed = 0
     for segment in (data.get("segments") or []):
         if not isinstance(segment, dict):
+            malformed += 1
             continue
         for word in (segment.get("words") or []):
             if not isinstance(word, dict):
+                malformed += 1
                 continue
             try:
                 w_start = float(word.get("start"))
                 w_end = float(word.get("end"))
             except (TypeError, ValueError):
+                malformed += 1
                 continue
             text = str(word.get("word") or word.get("text") or "").strip()
-            if not text:
+            if not text or not math.isfinite(w_start) or not math.isfinite(w_end) or w_end < w_start:
+                malformed += 1
                 continue
             words.append({"start": w_start, "end": w_end, "word": text})
+    if malformed:
+        logger.warning(
+            "Ignored %d malformed word timing record(s) from WhisperX input.json.",
+            malformed,
+        )
     words.sort(key=lambda item: item["start"])
     return words
 
@@ -172,44 +205,252 @@ def load_word_timings(project_folder):
 # Sentence units
 # ---------------------------------------------------------------------------
 
-def split_sentence_units(transcript_segments):
-    """Group transcript lines into sentence units.
-
-    A unit ends when the text carries terminal punctuation OR a pause of at
-    least ``SENTENCE_PAUSE_SECONDS`` separates it from the next line (covers
-    unpunctuated Arabic ASR output). Returns a list of
-    ``{"start", "end", "text"}`` in chronological order.
-    """
-    lines = []
-    for seg in (transcript_segments or []):
-        if not isinstance(seg, dict):
+def _timed_word_events(transcript_segments, words=None):
+    candidates = words
+    if candidates is None:
+        candidates = []
+        for segment in transcript_segments or []:
+            if isinstance(segment, dict):
+                candidates.extend(segment.get("words") or [])
+    events = []
+    for item in candidates or []:
+        if not isinstance(item, dict):
             continue
         try:
-            start = float(seg.get("start", 0.0) or 0.0)
-            end = float(seg.get("end", start) or start)
+            start = float(item.get("start"))
+            end = float(item.get("end"))
         except (TypeError, ValueError):
             continue
-        text = str(seg.get("text", "") or "").strip()
-        if not text:
+        text = str(item.get("word") or item.get("text") or "").strip()
+        if not text or not math.isfinite(start) or not math.isfinite(end) or end < start:
             continue
-        lines.append({"start": start, "end": max(start, end), "text": text})
+        events.append({"start": start, "end": end, "text": text})
+    events.sort(key=lambda item: (item["start"], item["end"]))
+    return events
+
+
+def _line_has_word_timing(line, word_events, word_starts):
+    index = bisect_left(word_starts, line["start"])
+    if index and word_events[index - 1]["end"] > line["start"]:
+        return True
+    return index < len(word_events) and word_events[index]["start"] < line["end"]
+
+
+def _estimated_sentence_events(line):
+    pieces = _split_sentence_pieces(line["text"])
+    counts = [max(1, len(piece.split())) for piece, _ in pieces]
+    total = sum(counts) or 1
+    duration = line["end"] - line["start"]
+    elapsed = 0
+    events = []
+    for (piece, connector_boundary), count in zip(pieces, counts, strict=True):
+        piece_start = line["start"] + duration * elapsed / total
+        elapsed += count
+        piece_end = line["start"] + duration * elapsed / total
+        events.append({
+            "start": piece_start,
+            "end": piece_end,
+            "text": piece,
+            "connector_boundary": connector_boundary,
+        })
+    return events
+
+
+def _normalized_tokens(text):
+    return [arabic_text.normalized_match_text(token)
+            for token in str(text or "").split()
+            if arabic_text.normalized_match_text(token)]
+
+
+def _starts_with_connector(text):
+    tokens = _normalized_tokens(text)
+    if not tokens:
+        return False
+    if tokens[0] in {arabic_text.normalized_match_text(word)
+                     for word in START_CONNECTORS_AR}:
+        return True
+    for phrase in _SENTENCE_CONNECTORS_AR:
+        phrase_tokens = _normalized_tokens(phrase)
+        if phrase_tokens and tokens[:len(phrase_tokens)] == phrase_tokens:
+            return True
+    return bool(tokens[0].lower() in START_CONNECTORS_EN)
+
+
+def _split_connector_phrases(text):
+    text = str(text or "")
+    raw_tokens = text.split()
+    normalized = [_normalized_tokens(token) for token in raw_tokens]
+    tokens = [parts[0] if parts else "" for parts in normalized]
+    offsets = []
+    cursor = 0
+    for token in raw_tokens:
+        start = text.find(token, cursor)
+        offsets.append(start)
+        cursor = start + len(token)
+
+    boundaries = []
+    for index in range(3, len(tokens) - 1):
+        for phrase in sorted(_SENTENCE_CONNECTORS_AR, key=len, reverse=True):
+            phrase_tokens = _normalized_tokens(phrase)
+            if (phrase_tokens and tokens[index:index + len(phrase_tokens)] == phrase_tokens
+                    and len(tokens) - index - len(phrase_tokens) >= 2):
+                boundaries.append(offsets[index])
+                break
+    if not boundaries:
+        return [(text.strip(), False)]
+
+    pieces = []
+    cursor = 0
+    for boundary in boundaries:
+        piece = text[cursor:boundary].strip()
+        if piece:
+            pieces.append((piece, cursor != 0))
+        cursor = boundary
+    tail = text[cursor:].strip()
+    if tail:
+        pieces.append((tail, cursor != 0))
+    return pieces
+
+
+def _split_sentence_pieces(text):
+    text = str(text or "").strip()
+    if not text:
+        return []
+    terminal = set(".!?؟…")
+    closers = set("\\\"'»)】")
+    sentences = []
+    cursor = 0
+    index = 0
+    while index < len(text):
+        if text[index] not in terminal:
+            index += 1
+            continue
+        if (text[index] == "." and index > 0 and index + 1 < len(text)
+                and text[index - 1].isdigit() and text[index + 1].isdigit()):
+            index += 1
+            continue
+        end = index + 1
+        while end < len(text) and text[end] in terminal | closers:
+            end += 1
+        if end == len(text) or text[end].isspace():
+            sentence = text[cursor:end].strip()
+            if sentence:
+                sentences.append(sentence)
+            cursor = end
+            index = end
+        else:
+            index += 1
+    tail = text[cursor:].strip()
+    if tail:
+        sentences.append(tail)
+    result = []
+    for sentence in sentences or [text]:
+        result.extend(_split_connector_phrases(sentence))
+    return result
+
+
+def _group_sentence_events(events):
+    if not events:
+        return []
+    units = []
+    current = None
+    for index, event in enumerate(events):
+        if current is None:
+            current = dict(event)
+            continue
+        gap = event["start"] - current["end"]
+        context_words = len(current["text"].split())
+        preview = " ".join(item["text"] for item in events[index:index + 3])
+        connector_pause = (gap >= CONNECTOR_PAUSE_SECONDS
+                           and context_words >= 3
+                           and _starts_with_connector(preview))
+        split_before = bool(event.get("connector_boundary"))
+        if (_TERMINAL_RE.search(current["text"])
+                or gap >= SENTENCE_PAUSE_SECONDS
+                or connector_pause
+                or split_before):
+            units.append({key: current[key] for key in ("start", "end", "text")})
+            current = dict(event)
+        else:
+            current["end"] = max(current["end"], event["end"])
+            current["text"] = (current["text"] + " " + event["text"]).strip()
+    if current is not None:
+        units.append({key: current[key] for key in ("start", "end", "text")})
+    return units
+
+
+def _line_has_word_timing(line, word_events, word_starts):
+    index = bisect_left(word_starts, line["start"])
+    if index and word_events[index - 1]["end"] > line["start"]:
+        index -= 1
+    return (index < len(word_events)
+            and word_events[index]["start"] < line["end"]
+            and word_events[index]["end"] > line["start"])
+
+
+def _estimated_sentence_events(line):
+    pieces = _split_sentence_pieces(line["text"])
+    counts = [max(1, len(piece.split())) for piece, _ in pieces]
+    total = sum(counts) or 1
+    elapsed = 0
+    duration = line["end"] - line["start"]
+    events = []
+    for (piece, connector_boundary), count in zip(pieces, counts, strict=True):
+        piece_start = line["start"] + duration * elapsed / total
+        elapsed += count
+        piece_end = line["start"] + duration * elapsed / total
+        events.append({
+            "start": piece_start,
+            "end": piece_end,
+            "text": piece,
+            "connector_boundary": connector_boundary,
+        })
+    return events
+
+
+def split_sentence_units(transcript_segments, words=None):
+    """Group ASR text into sentence-like units using words, pauses and clauses.
+
+    Word timings (including WhisperX ``input.json`` words) are authoritative
+    when supplied. Without them, punctuation and recognizable Arabic/English
+    discourse connectors split even a single long ASR block; timestamps for
+    multiple sentences inside one block are estimated by word count.
+    """
+    lines = []
+    for segment in transcript_segments or []:
+        if not isinstance(segment, dict):
+            continue
+        try:
+            start = float(segment.get("start", 0.0) or 0.0)
+            end = float(segment.get("end", start) or start)
+        except (TypeError, ValueError):
+            continue
+        text = str(segment.get("text", "") or "").strip()
+        if text:
+            lines.append({"start": start, "end": max(start, end), "text": text})
     lines.sort(key=lambda item: item["start"])
     if not lines:
         return []
 
-    units = []
-    cur = dict(lines[0])
-    for nxt in lines[1:]:
-        ends_terminal = bool(_TERMINAL_RE.search(cur["text"]))
-        long_pause = (nxt["start"] - cur["end"]) >= SENTENCE_PAUSE_SECONDS
-        if ends_terminal or long_pause:
-            units.append(cur)
-            cur = dict(nxt)
-        else:
-            cur["end"] = max(cur["end"], nxt["end"])
-            cur["text"] = (cur["text"] + " " + nxt["text"]).strip()
-    units.append(cur)
-    return units
+    word_events = _timed_word_events(transcript_segments, words)
+    word_starts = [event["start"] for event in word_events]
+    events = []
+    seen_word_indexes = set()
+    for line in lines:
+        if not word_events or not _line_has_word_timing(line, word_events, word_starts):
+            events.extend(_estimated_sentence_events(line))
+            continue
+        index = bisect_left(word_starts, line["start"])
+        if index and word_events[index - 1]["end"] > line["start"]:
+            index -= 1
+        while index < len(word_events) and word_events[index]["start"] < line["end"]:
+            event = word_events[index]
+            if event["end"] > line["start"] and index not in seen_word_indexes:
+                events.append(event)
+                seen_word_indexes.add(index)
+            index += 1
+    events.sort(key=lambda item: (item["start"], item["end"]))
+    return _group_sentence_events(events)
 
 
 def _first_word(text):
@@ -231,7 +472,7 @@ def _words_normalized(text):
 # Window analysis
 # ---------------------------------------------------------------------------
 
-def analyze_window(transcript_segments, start_time, end_time, context_span=12.0):
+def analyze_window(transcript_segments, start_time, end_time, context_span=12.0, *, words=None):
     """Analyze the exact transcript content inside ``[start_time, end_time]``.
 
     Returns a plain dict (JSON-serializable) with the raw window text, the
@@ -285,28 +526,46 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0)
         return result
 
     inside = [line for line in lines if line["start"] < end_time and line["end"] > start_time]
-    before = [line for line in lines
-              if line["end"] <= start_time and line["end"] > start_time - context_span]
-    after = [line for line in lines
-             if line["start"] >= end_time and line["start"] < end_time + context_span]
-
-    text = " ".join(line["text"] for line in inside).strip()
+    word_events = _timed_word_events(transcript_segments, words)
+    inside_words = [word for word in word_events
+                    if word["start"] < end_time and word["end"] > start_time]
+    if inside_words:
+        before_words = [word for word in word_events
+                        if word["end"] <= start_time
+                        and word["end"] > start_time - context_span]
+        after_words = [word for word in word_events
+                       if word["start"] >= end_time
+                       and word["start"] < end_time + context_span]
+        text = " ".join(word["text"] for word in inside_words).strip()
+        result["before_text"] = " ".join(word["text"] for word in before_words).strip()
+        result["after_text"] = " ".join(word["text"] for word in after_words).strip()
+        speech_items = inside_words
+    else:
+        before = [line for line in lines
+                  if line["end"] <= start_time and line["end"] > start_time - context_span]
+        after = [line for line in lines
+                 if line["start"] >= end_time and line["start"] < end_time + context_span]
+        text = " ".join(line["text"] for line in inside).strip()
+        result["before_text"] = " ".join(line["text"] for line in before).strip()
+        result["after_text"] = " ".join(line["text"] for line in after).strip()
+        speech_items = inside
     result["text"] = text
-    result["before_text"] = " ".join(line["text"] for line in before).strip()
-    result["after_text"] = " ".join(line["text"] for line in after).strip()
 
-    words = _words_normalized(text)
-    result["word_count"] = len(words)
-    result["unique_ratio"] = (len(set(words)) / len(words)) if words else 0.0
+    normalized_words = _words_normalized(text)
+    result["word_count"] = len(normalized_words)
+    result["unique_ratio"] = (
+        len(set(normalized_words)) / len(normalized_words) if normalized_words else 0.0)
 
-    if inside:
-        result["leading_silence"] = round(max(0.0, inside[0]["start"] - start_time), 3)
-        result["trailing_silence"] = round(max(0.0, end_time - inside[-1]["end"]), 3)
+    if speech_items:
+        result["leading_silence"] = round(
+            max(0.0, speech_items[0]["start"] - start_time), 3)
+        result["trailing_silence"] = round(
+            max(0.0, end_time - speech_items[-1]["end"]), 3)
         speech = 0.0
         cursor = start_time
-        for line in inside:
-            seg_start = max(line["start"], start_time, cursor)
-            seg_end = min(line["end"], end_time)
+        for item in speech_items:
+            seg_start = max(item["start"], start_time, cursor)
+            seg_end = min(item["end"], end_time)
             if seg_end > seg_start:
                 speech += seg_end - seg_start
                 cursor = max(cursor, seg_end)
@@ -315,7 +574,7 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0)
         result["silence_ratio"] = round(1.0 - result["speech_coverage"], 3)
 
     # Sentence-level view (for first/last sentence + mid-sentence detection).
-    units = split_sentence_units(lines)
+    units = split_sentence_units(lines, words=word_events if inside_words else None)
     inside_units = [u for u in units if u["start"] < end_time and u["end"] > start_time]
     if inside_units:
         result["first_sentence"] = inside_units[0]["text"]
@@ -329,8 +588,7 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0)
     if text:
         first = _first_word(text)
         last = _last_word(text)
-        result["starts_with_connector"] = (
-            first in START_CONNECTORS_AR or first.lower() in START_CONNECTORS_EN)
+        result["starts_with_connector"] = _starts_with_connector(text)
         result["opens_with_unresolved_reference"] = (
             first in UNRESOLVED_OPENERS_AR or first.lower() in UNRESOLVED_OPENERS_EN)
         result["ends_incomplete"] = (
@@ -381,7 +639,7 @@ def snap_edges_to_words(start_time, end_time, words):
 
 
 def repair_connector_start(start_time, end_time, transcript_segments,
-                           analysis, max_duration, transcript_start=0.0):
+                           analysis, max_duration, transcript_start=0.0, words=None):
     """Walk the cut start back when the clip opens with a dangling connector.
 
     Only when: the first word is an Arabic/English connector AND the previous
@@ -390,7 +648,7 @@ def repair_connector_start(start_time, end_time, transcript_segments,
     """
     if not analysis.get("starts_with_connector"):
         return start_time, None
-    units = split_sentence_units(transcript_segments)
+    units = split_sentence_units(transcript_segments, words=words)
     previous = None
     for unit in units:
         if unit["end"] <= start_time + 0.05:
@@ -410,7 +668,7 @@ def repair_connector_start(start_time, end_time, transcript_segments,
 
 
 def repair_dangling_end(start_time, end_time, transcript_segments, analysis,
-                        max_duration, transcript_end=None):
+                        max_duration, transcript_end=None, words=None):
     """Extend the cut end when it finishes on a preposition/conjunction.
 
     Extends to the end of the current sentence unit, bounded by
@@ -418,7 +676,7 @@ def repair_dangling_end(start_time, end_time, transcript_segments, analysis,
     """
     if not analysis.get("ends_incomplete"):
         return end_time, None
-    units = split_sentence_units(transcript_segments)
+    units = split_sentence_units(transcript_segments, words=words)
     current = None
     for unit in units:
         if unit["start"] < end_time and unit["end"] >= end_time - 0.05:
@@ -457,19 +715,21 @@ def refine_boundaries(start_time, end_time, transcript_segments, *,
                 notes.append("word_boundary_snap")
                 start_time, end_time = w_start, w_end
 
-        analysis = analyze_window(transcript_segments, start_time, end_time)
+        analysis = analyze_window(
+            transcript_segments, start_time, end_time, words=words)
 
         new_start, note = repair_connector_start(
             start_time, end_time, transcript_segments, analysis,
-            max_duration, transcript_start=transcript_start)
+            max_duration, transcript_start=transcript_start, words=words)
         if note:
             start_time = new_start
             notes.append(note)
-            analysis = analyze_window(transcript_segments, start_time, end_time)
+            analysis = analyze_window(
+                transcript_segments, start_time, end_time, words=words)
 
         new_end, note = repair_dangling_end(
             start_time, end_time, transcript_segments, analysis,
-            max_duration, transcript_end=transcript_end)
+            max_duration, transcript_end=transcript_end, words=words)
         if note:
             end_time = new_end
             notes.append(note)
@@ -497,7 +757,9 @@ def refine_boundaries(start_time, end_time, transcript_segments, *,
         if end_time <= start_time + 0.1:
             return original[0], original[1], notes + ["refinement_reverted_empty"]
         return round(start_time, 3), round(end_time, 3), notes
-    except Exception:
+    except Exception as exc:
+        logger.warning("Boundary refinement failed; restoring original window: %s", exc,
+                       exc_info=True)
         return original[0], original[1], notes + ["refinement_error_reverted"]
 
 

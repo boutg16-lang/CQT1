@@ -337,11 +337,11 @@ def test_factual_title_scores_high():
 
 def test_hallucinated_number_is_detected():
     window = "الخطوة الأولى هي اختيار مهارة واحدة وإتقانها"
-    title = "خمس خطوات لإتقان مهارة واحدة"   # "خمس" ok, but digit below is not
-    unsupported = title_factual.hallucinated_facts(title, window)
-    assert unsupported == []
-    unsupported_digit = title_factual.hallucinated_facts("5 خطوات لإتقان مهارة", window)
-    assert "5" in unsupported_digit
+    assert "5" in title_factual.hallucinated_facts(
+        "خمس خطوات لإتقان مهارة واحدة", window)
+    assert "5" in title_factual.hallucinated_facts("5 خطوات لإتقان مهارة", window)
+    assert title_factual.hallucinated_facts(
+        "خمس خطوات واضحة", "خمس خطوات واضحة لإتقان مهارة") == []
 
 
 def test_hallucinated_name_is_detected():
@@ -745,6 +745,27 @@ def test_weights_env_override(monkeypatch):
     assert weights["hook_strength"] == 0.5
     assert "bogus_key" not in weights
     assert weights["standalone_context"] == 0.14  # untouched default
+
+
+def test_invalid_weight_override_is_logged_and_uses_defaults(monkeypatch, caplog):
+    monkeypatch.setenv("VIRALCUTTER_SELECTION_WEIGHTS", "{invalid")
+
+    assert clip_scoring.load_selection_weights() == clip_scoring.DEFAULT_SELECTION_WEIGHTS
+    assert any("Invalid VIRALCUTTER_SELECTION_WEIGHTS JSON" in record.message
+               for record in caplog.records)
+
+
+def test_llm_reported_factors_cannot_dominate_even_with_weight_override():
+    weights = dict.fromkeys(clip_scoring.DEFAULT_SELECTION_WEIGHTS, 0.0)
+    weights["hook_strength"] = 1.0
+    weights["standalone_context"] = 1.0
+    weights["narrative_completeness"] = 1.0
+    factors = dict.fromkeys(clip_scoring.DEFAULT_SELECTION_WEIGHTS, 0.0)
+    factors["hook_strength"] = 100.0
+    factors["standalone_context"] = 100.0
+    factors["narrative_completeness"] = 100.0
+
+    assert clip_scoring.compute_final_score(factors, weights) == 35.0
 
 
 def test_score_breakdown_contains_all_twelve_factors():

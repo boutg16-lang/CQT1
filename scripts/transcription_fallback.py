@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 _MODEL_ALIASES = {
     "large-v3-turbo": "turbo",
@@ -55,8 +58,11 @@ def _resolve_device(device: str) -> Tuple[str, str]:
 
         if bool(torch.cuda.is_available()):
             return "cuda", os.getenv("VIRALCUTTER_FASTER_WHISPER_COMPUTE_TYPE", "float16")
-    except Exception:
-        pass
+    except ImportError as exc:
+        logger.debug("Torch is unavailable for CUDA probing (%s); using CPU.",
+                     type(exc).__name__)
+    except Exception as exc:
+        logger.warning("CUDA probe failed (%s); using CPU.", type(exc).__name__)
     return "cpu", os.getenv("VIRALCUTTER_FASTER_WHISPER_COMPUTE_TYPE", "int8")
 
 

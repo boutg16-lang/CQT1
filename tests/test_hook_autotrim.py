@@ -89,7 +89,8 @@ def test_autotrim_removes_filler_prefix(tmp_path, monkeypatch):
     first = result["segments"][0]
     assert first["hook_trimmed_from"] == 11.0
     assert first["start_time"] == 12.0
-    assert first["duration"] == 28.0
+    assert first["end_time"] == 39.5
+    assert first["duration"] == 27.5
     assert first["opening_analysis"]["auto_trimmed"] is True
     # the refreshed opening is no longer filler-led
     assert first["opening_analysis"]["opens_with_filler"] is False
@@ -99,9 +100,16 @@ def test_autotrim_removes_filler_prefix(tmp_path, monkeypatch):
 
 def test_autotrim_respects_min_duration(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_HOOK_AUTOTRIM", "1")
-    # window 11-40 with a long filler run ending at 28.0: trimming to the
-    # content word would leave less than the 15s minimum → skip the trim
-    timings = _timed(["يعني", "طيب"]) + [{"start": 28.0, "end": 28.4, "word": "المحتوى"}]
+    # The first non-filler word begins at 26.0, leaving less than the 15s
+    # minimum; later words keep the fixture's WhisperX coverage realistic.
+    tail_words = ["المحتوى", "يتطلب", "استمرار", "وتخطيط", "واضح", "للعمل",
+                  "خطوة", "بخطوة", "حتى", "تكتمل", "الفكرة", "وتصل",
+                  "للنتيجة", "التي", "يريدها", "كل", "صانع", "محتوى",
+                  "في", "هذا", "المجال", "دون", "تسرع", "أو", "توقف."]
+    timings = _timed(["يعني", "طيب"]) + [
+        {"start": 26.0 + index * 0.5, "end": 26.45 + index * 0.5, "word": word}
+        for index, word in enumerate(tail_words)
+    ]
     monkeypatch.setattr(cvs, "_load_word_timings", lambda folder: timings)
     result = cvs.process_segments(
         _raw(), _transcript(), 15, 90, project_folder=str(tmp_path))

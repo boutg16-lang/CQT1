@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import re
 import statistics
 import tempfile
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 HISTORY_NAME = "publish_history.jsonl"
 REPORT_NAME = "performance_insights.json"
@@ -73,8 +76,11 @@ def _published_videos(project_folder: str) -> list[dict[str, Any]]:
         for entry in scorecard.get("segments", []) or []:
             if isinstance(entry, dict):
                 segments[entry.get("index")] = entry
-    except Exception:
-        pass
+    except FileNotFoundError:
+        logger.debug("No risk scorecard is available for performance enrichment.")
+    except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("Could not read risk scorecard (%s); using publish history only.",
+                       type(exc).__name__)
     published = []
     for event in _read_history(project_folder):
         video_id = event.get("video_id")

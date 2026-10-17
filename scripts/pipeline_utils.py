@@ -15,10 +15,13 @@ that MUST NOT change:
 
 import atexit
 import json
+import logging
 import os
 
 BASE_VERBOSE = os.getenv("VIRALCUTTER_VERBOSE", "").strip().lower() in {"1", "true", "yes", "on"}
 RUNTIME_VERBOSE = BASE_VERBOSE
+
+logger = logging.getLogger(__name__)
 
 
 def set_verbose(flag):
@@ -35,8 +38,8 @@ def debug(message):
 def emit_progress(stage, percent, message):
     try:
         print(f"PROGRESS|{stage}|{int(percent)}|{message}", flush=True)
-    except Exception:
-        pass
+    except (OSError, UnicodeError, ValueError) as exc:
+        logger.debug("Progress event could not be written (%s).", type(exc).__name__)
 
 
 #
@@ -49,8 +52,9 @@ def cleanup_temp_files():
     try:
         if os.path.exists(TEMP_SUBTITLE_CONFIG):
             os.remove(TEMP_SUBTITLE_CONFIG)
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.warning("Could not remove temporary subtitle settings (%s).",
+                       type(exc).__name__)
 
 
 atexit.register(cleanup_temp_files)

@@ -55,6 +55,8 @@ The transcript below is a continuous text stream with embedded **Time Tags** lik
     -   The title must describe THE SELECTED CLIP, not the entire source video. Judge every title against the exact words spoken between the clip's own start and end — never against the rest of this transcript.
     -   Do not mention any fact, person, number, result, or claim that is not explicitly present in the clip's own transcript.
     -   Do not invent conclusions, outcomes, prices, statistics, names, or "before/after" results. If the clip does not state it, the title must not claim it.
+    -   Check every digit, Arabic number word, date, amount, and measurement against the exact clip window; Arabic-Indic and Western digits can represent the same number, but different units are different claims.
+    -   A quantity is valid only when both its value and unit match the clip (for example, `5 كغ` is not `5 لترات`). Never convert an unstated number word or unit into a precise claim.
     -   Do not choose a clip only because it contains a popular keyword; the clip must stand on its own as a complete moment.
     -   NEVER use empty clickbait such as "لن تصدق ما حدث", "هذه المعلومة ستغير حياتك", "سر خطير", "الجميع مخطئون", "اكتشاف صادم" (or the English equivalents) unless the clip's own words literally support that claim.
     -   If the context is insufficient or ambiguous, prefer a conservative descriptive title and LOWER the editorial scores — reject the clip instead of guessing.
@@ -63,6 +65,7 @@ The transcript below is a continuous text stream with embedded **Time Tags** lik
 9.  **BOUNDARIES (BEGIN AND END CLEANLY):**
     -   The clip must begin at a natural word or sentence boundary and end only after the idea is complete.
     -   Never start with an isolated conjunction (لكن، لذلك، لأن، وهذا، فهو، ثم، فإذا، ولكن / "so", "and then", "but") unless the sentence is fully understandable alone — prefer starting one sentence earlier.
+    -   For Algerian Darija, treat clause-opening words such as بصح، دونك، علاش، and واش as possible sentence boundaries when the timing and meaning support a split; preserve the speaker's dialect in the clip text and title.
     -   Never end on a preposition, a conjunction, or an unfinished clause — extend to the end of the sentence instead.
     -   Do not guess timestamps when the (XXs) tags already give you a reliable anchor.
 

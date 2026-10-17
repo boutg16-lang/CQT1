@@ -363,3 +363,8 @@ def test_process_segments_keeps_explicit_recommended_title_verbatim():
                 recommended_title="editorial pick")]
     result = process_segments(raw, _HALLUCINATION_TRANSCRIPT, 5, 30)
     assert result["segments"][0]["recommended_title"] == "editorial pick"
+def test_clean_json_response_logs_malformed_payload_without_echoing_it(caplog):
+    payload = 'private transcript fragment: no valid segments'
+    assert clean_json_response(payload) == {"segments": []}
+    assert any("Unable to parse a segment list" in record.message for record in caplog.records)
+    assert all(payload not in record.message for record in caplog.records)

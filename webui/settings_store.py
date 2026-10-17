@@ -24,6 +24,7 @@ import tempfile
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
 from scripts.secure_config import legacy_config_path, load_api_config
 
 # Local UI-preferences file (user-machine state, NOT tracked by git).
@@ -96,7 +97,7 @@ def _defaults():
             "api_key": "",
             "api_keys": [],
             "key_mode": "auto",
-            "model": "gemini-2.5-flash-lite-preview-09-2025",
+            "model": DEFAULT_GEMINI_MODEL,
             "chunk_size": 20000,
         },
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
@@ -149,6 +150,8 @@ def load_ui_settings(base_dir=None):
     if not isinstance(backend_cfg, dict):
         backend_cfg = {}
     model = backend_cfg.get("model") or gemini.get("model") or ""
+    if backend == "gemini":
+        model = resolve_gemini_model(model)
     default_chunk = 20000 if backend == "gemini" else 2000
     chunk = _coerce_chunk(backend_cfg.get("chunk_size"), default_chunk)
 
@@ -217,7 +220,13 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
 
     if ai_model:
         section = config["gemini"] if backend == "gemini" else config["g4f"]
-        section["model"] = ai_model
+        if backend == "gemini":
+            supported_model = resolve_gemini_model(ai_model)
+            if supported_model != str(ai_model).strip():
+                return False, "Gemini model is unavailable; choose one of the listed models."
+            section["model"] = supported_model
+        else:
+            section["model"] = ai_model
     if chunk_size is not None:
         section = config["gemini"] if backend == "gemini" else config["g4f"]
         default_chunk = 20000 if backend == "gemini" else 2000
@@ -288,7 +297,7 @@ def _rest_test_gemini(api_key, timeout=10):
         return False, str(e)
 
 
-def test_gemini_connection(api_key, model_name="gemini-2.5-flash", timeout=10):
+def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10):
     """Validate a Gemini API key. Returns (ok, message).
 
     Uses the installed Google SDK when available, otherwise the REST

@@ -40,7 +40,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 | الملف | الغرض |
 |---|---|
 | `app_version.py` | مصدر رقم الإصدار الوحيد. |
-| `FINAL_REPORT_AR.md` | التقرير الشامل للمشروع. |
+| `docs/FINAL_REPORT_AR.md` | التقرير الشامل للمشروع. |
 | `docs/WINDOWS_SETUP_FIX_AR.md` | إصلاحات Windows وD وCUDA وWhisperX. |
 | `safety_report.json` | تقرير فحص كل مقطع. |
 | `delivery_manifest.json` | العدد المطلوب والآمن والمصدّر ومسارات النتائج. |

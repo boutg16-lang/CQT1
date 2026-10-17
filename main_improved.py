@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 
@@ -585,7 +586,28 @@ def run_content_guard_stage(viral_segments, *, project_folder, workflow_choice):
     return viral_segments
 
 
+def _configure_windows_stdout():
+    if sys.platform != "win32" or sys.stdout is None:
+        return
+    stream = sys.stdout
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+        return
+    except (AttributeError, OSError, ValueError):
+        if not hasattr(stream, "buffer"):
+            return
+    try:
+        sys.stdout = io.TextIOWrapper(
+            stream.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+    except (AttributeError, OSError, ValueError) as exc:
+        try:
+            sys.stderr.write("[WARN] Windows stdout encoding remains unchanged: {}\n".format(exc))
+        except (OSError, ValueError):
+            return
+
+
 def main():
+    _configure_windows_stdout()
     if not hasattr(main, "_retried"):
         main._retried = False
     # Double-click UX: no arguments at all → open the WebUI (GUI), not the
