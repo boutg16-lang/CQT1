@@ -52,7 +52,7 @@ def test_version_and_alias_stay_in_sync():
 # Each README advertises the running version in a human-language line.
 # (marker text -> file). A stale line is how 7.26.0 survived six releases.
 README_VERSION_MARKERS = {
-    "README.md": "Versão Atual",
+    "README.md": "Current Version",
     "README_en.md": "Current Version",
     "README_ar.md": "الإصدار الحالي",
 }

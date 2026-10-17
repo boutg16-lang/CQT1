@@ -1,5 +1,13 @@
 # OUSSAMA Cutter 7.52.0-pro candidate
 
+## Selection, title, and model reliability — 2026-10-17
+
+- Arabic sentence segmentation now uses WhisperX word timings when available and recognizes MSA/Algerian-Darija clause connectors. Factual title checks compare digits, Arabic number words, and measurement units against the exact clip window.
+- Raw LLM virality is capped at 10% of pre-sort ranking; the model-influenced hook/context/narrative factors are capped at 35% of the final score, including under weight overrides. The internal scoring schema is `7.52.2`; the app release stays `7.52.0-pro`. See `docs/SELECTION_SCORE_CALIBRATION.md`.
+- Gemini text models now share one current allowlist and default across CLI, WebUI, preflight, and safety review. Retired saved IDs migrate with a warning; HTTP 404 model errors explain how to recover.
+- Importing the segment pipeline no longer replaces `sys.stdout`; Windows encoding setup runs only at CLI startup. Malformed model JSON and broken WhisperX word timings now produce diagnostics without echoing transcript text.
+- Rebuilt the root README as a language index, moved dated/legacy notes into `docs/`, and kept one identical `FINAL_REPORT_AR.md` copy. Application version remains 7.52.0-pro. No CI workflow or security gate was changed; the safety-review model default requires CODEOWNERS review.
+
 ## Local browser pairing reliability — 2026-10-07
 
 - The local browser tester identifies CAT through a loopback health marker, verifies the exact CAT page title for compatibility, and discovers the actual WebUI port in the launcher’s `7860–7879` range. The resolved URL is shown before pairing; a failed check does not consume the one-time pairing code.
@@ -172,7 +180,7 @@ WhisperX وTorch وGPU اختيارية لأنها تعتمد على نظام ا
 
 ### التحقق النهائي
 - نجحت جميع اختبارات الوحدة والتكامل (`pytest`).
-- تم تحديث التوثيق العربي الشامل في `FINAL_REPORT_AR.md`.
+- تم تحديث التوثيق العربي الشامل في `docs/FINAL_REPORT_AR.md`.
 - تم إصلاح خلل في واجهة Gradio عند التعامل مع المشاريع الفارغة.
 
 ## ViralCutter 7.3.0-pro — Production Reports & Render Reliability — 15 أغسطس 2026
