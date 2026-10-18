@@ -10,3 +10,5 @@ Choose the guide for your language:
 - [العربية](README_ar.md)
 
 Development and contribution notes: [README_DEV.md](README_DEV.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Live-stream safety guide: [StreamGuard (Arabic)](docs/STREAM_GUARD_AR.md).
