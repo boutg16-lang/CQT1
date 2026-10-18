@@ -105,3 +105,6 @@ windows_diagnostics.json
 keys/*.key
 !keys/*.pub
 .browser-bridge-state/
+stream_reports/
+# Synthetic StreamGuard fixture; downloaded captions remain ignored.
+!tests/fixtures/stream_ar.srt

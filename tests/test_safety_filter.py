@@ -240,3 +240,18 @@ class TestApplySafetyFilter:
     def test_no_segments_key(self, tmp_path):
         project, _ = self._make_project(tmp_path)
         assert sf.apply_safety_filter({"foo": 1}, project, mode="block") == {"foo": 1}
+
+def test_custom_terms_can_use_cached_policy_without_sync(monkeypatch, tmp_path):
+    from scripts import policy_lexicon
+
+    calls = []
+    monkeypatch.setattr(
+        policy_lexicon,
+        "load_terms",
+        lambda project_folder=None, sync=True: calls.append((project_folder, sync)) or [],
+    )
+
+    result = sf.load_custom_terms(project_folder=str(tmp_path), sync=False)
+
+    assert calls == [(str(tmp_path), False)]
+    assert result == {"extra_terms": [], "allow_terms": []}

@@ -1,5 +1,10 @@
 # OUSSAMA Cutter 7.52.0-pro candidate
 
+## StreamGuard — 2026-10-18
+
+- Added an optional Arabic livestream review CLI for local transcript/chat files and completed YouTube streams. It writes escaped HTML/Markdown reports plus atomic risk/safe-window JSON; applying reviewed windows is explicit and preserves a non-overwriting backup.
+- Windows CI runs the synthetic StreamGuard suite with the live-status calls mocked, so the job does not need downloader installs or network access. No upload, censor, content, or risk-score gate was changed; the owner review remains required for the safety-filter integration and workflow change. See `docs/STREAM_GUARD_AR.md`.
+
 ## Selection, title, and model reliability — 2026-10-17
 
 - Arabic sentence segmentation now uses WhisperX word timings when available and recognizes MSA/Algerian-Darija clause connectors. Factual title checks compare digits, Arabic number words, and measurement units against the exact clip window.

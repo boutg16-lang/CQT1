@@ -47,6 +47,7 @@ oussama-cutter-report = "scripts.project_report:main"
 oussama-cutter-audio-qc = "scripts.audio_qc:main"
 oussama-cutter-otio = "scripts.otio_export:main"
 oussama-cutter-quality-benchmark = "scripts.quality_benchmark:main"
+oussama-cutter-stream-guard = "scripts.stream_guard.cli:main"
 # Compatibility aliases for existing installations and scripts.
 viralcutter = "main_improved:main"
 viralcutter-webui = "webui.app:_launch"
@@ -54,6 +55,7 @@ viralcutter-report = "scripts.project_report:main"
 viralcutter-audio-qc = "scripts.audio_qc:main"
 viralcutter-otio = "scripts.otio_export:main"
 viralcutter-quality-benchmark = "scripts.quality_benchmark:main"
+viralcutter-stream-guard = "scripts.stream_guard.cli:main"
 
 [project.optional-dependencies]
 transcribe = [
@@ -86,7 +88,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["main_improved", "app_version", "app_brand"]
-packages = ["scripts", "webui", "i18n"]
+packages = ["scripts", "scripts.stream_guard", "webui", "i18n"]
 
 [tool.ruff]
 target-version = "py310"

@@ -765,9 +765,12 @@ def load_remote_terms(base_dir=None):
         return []
 
 
-def load_custom_terms(project_folder=None, extra_path=None):
-    """Load user-provided terms from safety_terms.json (repo root, project
-    folder, or an explicit path). Never raises.
+def load_custom_terms(project_folder=None, extra_path=None, sync=True, include_policy=True):
+    """Load user-provided terms from safety_terms.json and policy lexicon.
+
+    ``sync=False`` keeps local scans offline while using the cached policy DB.
+    ``include_policy=False`` skips database loading when callers load an existing
+    policy cache separately.
 
     Returns ``{"extra_terms": [...], "allow_terms": [...]}``:
       * ``extra_terms`` — additional terms to BLOCK
@@ -796,13 +799,14 @@ def load_custom_terms(project_folder=None, extra_path=None):
                 result["allow_terms"].extend(data.get("allow_terms", []))
         except Exception as e:
             print(f"[safety] Could not read custom terms from {path}: {e}")
-    try:
-        from scripts import policy_lexicon
-        result["extra_terms"].extend(policy_lexicon.load_terms(project_folder, sync=True))
-    except Exception as exc:
-        # Do not silently drop supplementary block terms: a broken lexicon must
-        # be visible so the operator can fix it.
-        print("[safety] policy lexicon unavailable, extra terms skipped: {}".format(exc))
+    if include_policy:
+        try:
+            from scripts import policy_lexicon
+            result["extra_terms"].extend(policy_lexicon.load_terms(project_folder, sync=sync))
+        except Exception as exc:
+            # Do not silently drop supplementary block terms: a broken lexicon must
+            # be visible so the operator can fix it.
+            print("[safety] policy lexicon unavailable, extra terms skipped: {}".format(exc))
     return result
 
 
