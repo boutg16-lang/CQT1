@@ -1308,8 +1308,10 @@ def host_media_file(video_path, timeout=300):
     Caveats (documented honestly):
       * Hosted copies are anonymous and temporary — they may be removed later,
         but the Instagram post keeps the video regardless.
-      * For sensitive content, host on your own server instead and pass
-        --video-url / IG_VIDEO_URL (or IG_HOST_DISABLE=1 to force that path).
+      * Auto-hosting is disabled by default. Set IG_ALLOW_AUTO_HOST=1 only
+        after explicitly accepting that the clip will be sent to a public
+        third-party host. For sensitive content, pass --video-url /
+        IG_VIDEO_URL and keep auto-hosting disabled.
 
     Returns the https URL. Raises RuntimeError with a readable message.
     """
@@ -1639,11 +1641,10 @@ class InstagramUploader(_BaseUploader):
       * Two-step publish: POST /{ig-user-id}/media (media_type=REELS) →
         creation_id, then POST /{ig-user-id}/media_publish.
       * The API requires a **public HTTPS video_url** for the clip (there is
-        no raw-file upload endpoint for IG Reels). ViralCutter closes that
-        gap automatically: with no --video-url / IG_VIDEO_URL, the local clip
-        is uploaded to a free anonymous host (catbox.moe, 0x0.st fallback)
-        and the resulting URL is used. Set IG_HOST_DISABLE=1 to force the
-        manual path (host on your own server, pass --video-url).
+        no raw-file upload endpoint for IG Reels). Auto-hosting to a free
+        anonymous host is deliberately disabled by default. Set
+        IG_ALLOW_AUTO_HOST=1 only with explicit consent, or host the clip
+        yourself and pass --video-url / IG_VIDEO_URL.
       * The account must be a Business/Creator account linked to a Facebook
         Page, and the Facebook app needs the `instagram_content_publish` and
         `pages_show_list` permissions.
@@ -1718,21 +1719,27 @@ class InstagramUploader(_BaseUploader):
 
         video_url = self.video_url or os.getenv("IG_VIDEO_URL", "")
         if not video_url:
-            if os.getenv("IG_HOST_DISABLE", "").lower() in ("1", "true", "yes"):
+            auto_host_allowed = os.getenv("IG_ALLOW_AUTO_HOST", "").lower() in (
+                "1", "true", "yes", "on"
+            )
+            if (not auto_host_allowed or
+                    os.getenv("IG_HOST_DISABLE", "").lower() in ("1", "true", "yes")):
                 raise RuntimeError(
                     "Instagram Graph API requires a PUBLIC https video_url for "
                     "the clip (no raw-file upload exists for IG Reels). Host "
-                    "the clip and pass --video-url or set IG_VIDEO_URL "
-                    "(IG_HOST_DISABLE=1 disabled auto-hosting).")
+                    "the clip and pass --video-url or set IG_VIDEO_URL. "
+                    "Anonymous auto-hosting is disabled by default; set "
+                    "IG_ALLOW_AUTO_HOST=1 only with explicit consent.")
             if not os.path.exists(video_path):
                 raise FileNotFoundError("video not found: {}".format(video_path))
-            print("[instagram] no IG_VIDEO_URL — auto-hosting the clip on a "
+            print("[instagram] no IG_VIDEO_URL — explicitly enabled auto-hosting "
+                  "the clip on a "
                   "free anonymous host (catbox.moe, 0x0.st fallback)…")
             video_url = host_media_file(video_path)
             print("[instagram] hosted → {}".format(video_url))
             print("[instagram] note: the hosted copy is temporary; the post "
-                  "keeps the video. Set IG_VIDEO_URL or IG_HOST_DISABLE=1 to "
-                  "control hosting yourself.")
+                  "keeps the video. Set IG_VIDEO_URL and remove "
+                  "IG_ALLOW_AUTO_HOST=1 to control hosting yourself.")
 
         caption_text = (title or "").strip()
         if caption:
@@ -1841,10 +1848,10 @@ def check_platform_setup(platform):
             "ok": None,
             "item": "Video URL source",
             "detail": ("IG_VIDEO_URL is set — Graph API will use it." if url
-                       else "not set — ViralCutter will AUTO-HOST the clip on "
-                       "a free anonymous host (catbox.moe / 0x0.st) at upload "
-                       "time. Set IG_VIDEO_URL or IG_HOST_DISABLE=1 to host "
-                       "yourself.")})
+                       else "not set — upload will be BLOCKED by default. Set "
+                       "IG_VIDEO_URL for a URL you control, or explicitly set "
+                       "IG_ALLOW_AUTO_HOST=1 to accept public third-party "
+                       "hosting." )})
     else:
         checks.append({"ok": False, "item": "unknown platform",
                        "detail": platform})

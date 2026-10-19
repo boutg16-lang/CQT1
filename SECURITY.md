@@ -8,7 +8,7 @@ Known network-enabled paths include:
 
 - **Cloud AI and contextual safety review:** send the prompt and relevant transcript/title text to the selected provider; these code paths send text, not the source video. Local models keep this request on-device when their endpoint is local.
 - **Microsoft Edge TTS:** sends subtitle text to Microsoft and is disabled unless network use is explicitly enabled with `VIRALCUTTER_TTS_ALLOW_NETWORK=1`.
-- **Publishing:** sends the rendered clip and its title/caption/hashtags to the selected platform. Instagram may temporarily host the clip on a public file host when no `IG_VIDEO_URL` is supplied; set `IG_HOST_DISABLE=1` and provide your own URL to prevent that fallback.
+- **Publishing:** sends the rendered clip and its title/caption/hashtags to the selected platform. Instagram requires a public URL for Reels. The app refuses anonymous public hosting by default; provide your own `IG_VIDEO_URL`, or explicitly set `IG_ALLOW_AUTO_HOST=1` to opt in to temporary hosting on catbox/0x0.st. `IG_HOST_DISABLE=1` remains a defensive override.
 - **Pexels B-roll:** sends the search query to Pexels and downloads the selected stock footage when configured.
 - **Updates and analytics:** update/word-list checks contact their configured providers; the optional read-only channel analytics feature calls Google APIs.
 

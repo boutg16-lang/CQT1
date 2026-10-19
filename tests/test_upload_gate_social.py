@@ -251,14 +251,14 @@ class TestSetupCheck:
         assert by_item["Content Posting API approval"]["ok"] is None
         assert "days/weeks" in by_item["Content Posting API approval"]["detail"]
 
-    def test_instagram_reports_auto_host_default(self, tmp_path, monkeypatch):
+    def test_instagram_reports_auto_host_requires_opt_in(self, tmp_path, monkeypatch):
         monkeypatch.setenv("IG_ACCESS_TOKEN", "T")
         monkeypatch.setenv("IG_USER_ID", "7")
         monkeypatch.delenv("IG_VIDEO_URL", raising=False)
         checks = ug.check_platform_setup("instagram")
         by_item = {c["item"]: c for c in checks}
         assert by_item["Instagram access token"]["ok"] is True
-        assert "AUTO-HOST" in by_item["Video URL source"]["detail"]
+        assert "BLOCKED" in by_item["Video URL source"]["detail"]
 
     def test_unknown_platform(self):
         checks = ug.check_platform_setup("nope")
@@ -366,6 +366,7 @@ class TestInstagramUploader:
         monkeypatch.setenv("IG_ACCESS_TOKEN", "IGTOK")
         monkeypatch.setenv("IG_USER_ID", "12345")
         monkeypatch.delenv("IG_VIDEO_URL", raising=False)
+        monkeypatch.setenv("IG_ALLOW_AUTO_HOST", "1")
         monkeypatch.setattr(ug, "host_media_file",
                             lambda p, timeout=300: "https://catbox.moe/auto1.mp4")
         uploader = _disable_publish_gate(ug.InstagramUploader(str(tmp_path), dry_run=False))
@@ -388,10 +389,22 @@ class TestInstagramUploader:
         monkeypatch.setenv("IG_USER_ID", "12345")
         monkeypatch.delenv("IG_VIDEO_URL", raising=False)
         monkeypatch.setenv("IG_HOST_DISABLE", "1")
+        monkeypatch.delenv("IG_ALLOW_AUTO_HOST", raising=False)
         uploader = _disable_publish_gate(ug.InstagramUploader(str(tmp_path), dry_run=False))
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"x")
         with pytest.raises(RuntimeError, match="(?i)IG_HOST_DISABLE|public https"):
+            uploader.upload(str(video), "T", "C", [], index=0)
+
+    def test_auto_host_requires_explicit_opt_in(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("IG_ACCESS_TOKEN", "IGTOK")
+        monkeypatch.setenv("IG_USER_ID", "12345")
+        monkeypatch.delenv("IG_VIDEO_URL", raising=False)
+        monkeypatch.delenv("IG_ALLOW_AUTO_HOST", raising=False)
+        uploader = _disable_publish_gate(ug.InstagramUploader(str(tmp_path), dry_run=False))
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"x")
+        with pytest.raises(RuntimeError, match="IG_ALLOW_AUTO_HOST|disabled by default"):
             uploader.upload(str(video), "T", "C", [], index=0)
 
     def test_two_step_publish(self, tmp_path, monkeypatch):
