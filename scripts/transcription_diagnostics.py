@@ -115,7 +115,7 @@ def build_error_message(
         lines.extend([
             "Transformers 5.14–5.15 يحتاج Hugging Face Hub 1.x؛ Gradio 6.22 يرفع الحد الأدنى إلى 1.16.0. خفض Hub إلى 0.36.2 يزيل واجهة is_offline_mode التي يستوردها Transformers 5.",
             "اختبر استيراد Transformers وWhisperX نفسيهما؛ لا تغيّر إصدار Torch CUDA إذا كان torch.cuda.is_available() يُرجع True.",
-            "نفّذ من مجلد المشروع: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade \\\"transformers>=5.14.1,<5.16\\\" \\\"huggingface-hub>=1.16.0,<2.0\\\" \\\"tokenizers>=0.22.2,<0.23.1\\\" \\\"numpy<2\\\"",
+            "نفّذ من مجلد المشروع: uv pip install --python ./.venv/Scripts/python.exe --upgrade 'transformers>=5.14.1,<5.16' 'huggingface-hub>=1.16.0,<2.0' 'tokenizers>=0.22.2,<0.23.1' 'numpy<2'",
             "Gradio 6.22 يتطلب huggingface-hub>=1.16.0,<2.0؛ لذلك يثبت المشروع الحد الأدنى 1.16.0.",
         ])
     if "tokenizers" in combined_error:

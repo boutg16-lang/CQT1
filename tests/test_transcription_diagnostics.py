@@ -55,6 +55,8 @@ def test_huggingface_conflict_message_is_actionable():
     assert "Gradio 6.22" in message
     assert "tokenizers>=0.22.2,<0.23.1" in message
     assert "لا تغيّر إصدار Torch CUDA" in message
+    assert "uv pip install --python ./.venv/Scripts/python.exe" in message
+    assert "'huggingface-hub>=1.16.0,<2.0'" in message
 
 
 def test_repair_installs_transformers_5_compatibility_range(monkeypatch):

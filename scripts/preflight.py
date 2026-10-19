@@ -110,7 +110,7 @@ PINNED_RULES = [
     ("tokenizers", "tokenizers<0.23.1",
      "install tokenizers 0.22.2, the newest available version below 0.23.1"),
     ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
-     "Transformers 5 requires huggingface-hub>=1.16.0,<2.0"),
+     "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
 ]
 
 # --------------------------------------------------------------------------

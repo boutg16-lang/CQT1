@@ -254,12 +254,12 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14
 ثم تحقق من الاستيراد:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import huggingface_hub, transformers, tokenizers, gradio, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('gradio:', gradio.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
+.\.venv\Scripts\python.exe -c "from huggingface_hub import is_offline_mode; import huggingface_hub, transformers, tokenizers, gradio, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('gradio:', gradio.__version__); print('is_offline_mode: READY'); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
 ```
 
 يجب أن يعمل `import whisperx`، وأن تكون Transformers ضمن 5.14.1–أقل من 5.16، وHub ضمن 1.16–أقل من 2؛ ويجب أن تبقى `CUDA: True` إذا كانت تعمل قبل الإصلاح. لا تستخدم `pip` داخل هذه البيئة إذا ظهر `No module named pip`؛ استخدم `uv pip --python` كما في الأمر أعلاه.
 
-**مهم:** فشل `from huggingface_hub import is_offline_mode` متوقع في المجموعة المختلطة التي ظهرت لديك (Transformers 5.14 مع Hub 0.36.2): Hub 0.x لا يصدّر الرمز الذي يستورده Transformers 5. أصلح Hub إلى 1.x، ثم اختبر استيراد Transformers وWhisperX نفسيهما بالأمر أعلاه؛ لا تعتبر السطر المنفرد دليلاً على سلامة بقية WhisperX. وللتأكد من بيانات الاعتماد المثبتة، نفّذ `uv pip check --python .\\.venv\\Scripts\\python.exe`؛ تحذيرا WhisperX 3.2 حول CTranslate2 وfaster-whisper مستقلان عن خطأ Hub، ولا تغيّر Torch CUDA العامل لإخفائهما.
+**مهم:** `from huggingface_hub import is_offline_mode` سيفشل مع Hub 0.36.2 لأن هذا الإصدار لا يصدّر الرمز. لذلك لا تستخدمه للتحقق قبل الإصلاح؛ بعد تثبيت Hub 1.16+ يختبره الأمر أعلاه، إلى جانب استيراد Transformers وWhisperX نفسيهما. وللتأكد من بيانات الاعتماد المثبتة، نفّذ `uv pip check --python .\\.venv\\Scripts\\python.exe`؛ تحذيرا WhisperX 3.2 حول CTranslate2 وfaster-whisper مستقلان عن خطأ Hub، ولا تغيّر Torch CUDA العامل لإخفائهما.
 
 
 ## إصلاح تعارض tokenizers مع WhisperX

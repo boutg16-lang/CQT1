@@ -678,5 +678,6 @@
     "The CAT page at {url} is unreachable ({reason}). Start OUSSAMA Cutter, wait for its WebUI, then use the exact local URL shown in your browser.": "تعذر الوصول إلى واجهة CAT على {url} ({reason}). شغّل OUSSAMA Cutter وانتظر ظهور الواجهة، ثم استخدم العنوان المحلي الظاهر في المتصفح.",
     "The pairing code has not been used.": "لم يُستخدم رمز الاقتران.",
     "Local page unavailable": "الواجهة المحلية غير متاحة",
-    "Checking the local CAT page before pairing…": "جارٍ فحص واجهة CAT المحلية قبل الاقتران…"
+    "Checking the local CAT page before pairing…": "جارٍ فحص واجهة CAT المحلية قبل الاقتران…",
+    "WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.": "تعارض في تبعيات WhisperX: تتطلب مجموعة التفريغ المدعومة إصدار Hugging Face Hub من 1.16.0 إلى أقل من 2.0. أعد تثبيت تبعيات المشروع ثم أعد تشغيل التطبيق."
 }

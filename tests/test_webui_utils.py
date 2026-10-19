@@ -211,11 +211,21 @@ class TestErrorSummarizer:
 
 
 
-def test_huggingface_conflict_hint_outranks_age_hint():
+def test_huggingface_is_offline_mode_error_hint_outranks_age_hint():
     from webui.utils import summarize_error
     _, _, hint = summarize_error(
-        "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0\n"
+        "ImportError: cannot import name 'is_offline_mode' from 'huggingface_hub'\n"
         "Age-restricted video — use your browser cookies"
     )
-    assert "huggingface-hub" in hint
-    assert "<1.0" in hint
+    assert "1.16.0" in hint
+    assert "WhisperX" in hint
+    assert "cookies" not in hint.lower()
+
+
+def test_huggingface_conflict_hint_recommends_supported_hub_range():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0"
+    )
+    assert "1.16.0" in hint
+    assert "2.0" in hint
