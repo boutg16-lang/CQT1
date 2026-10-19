@@ -105,25 +105,12 @@ DIST_TO_MODULE = {
 PINNED_RULES = [
     # (dist, violated_if, fix_note)
     ("numpy", "numpy<2", "whisperx/pyannote break on NumPy 2.x - installing numpy==1.26.4"),
-    # transformers (the 4.x / <=5.14 line this project pins, via
-    # huggingface-hub<1.0) requires tokenizers>=0.22.0,<=0.23.0, and
-    # tokenizers 0.23.0 was never released on PyPI (the jump went 0.22.2 ->
-    # 0.23.1). tokenizers 0.23.1 makes transformers fail its import check:
-    #   ImportError: tokenizers>=0.22.0,<=0.23.0 is required ... but found
-    #   tokenizers==0.23.1
-    # so cap below 0.23.1 (resolves to the known-good 0.22.2).
+    ("transformers", "transformers>=5.14.1,<5.16",
+     "keep Transformers on the Hub 1.x-compatible release line"),
     ("tokenizers", "tokenizers<0.23.1",
-     "transformers<=5.14 caps tokenizers at 0.23.0 and 0.23.0 does not exist - installing tokenizers==0.22.2"),
-    # transformers 4.x (the line forced by the huggingface-hub<1.0 pin in
-    # requirements-transcribe.txt / install_dependencies.bat) refuses to
-    # import with huggingface-hub>=1.0:
-    #   ImportError: huggingface-hub>=0.34.0,<1.0 is required ... but found
-    #   huggingface-hub==1.29.0
-    # A partial upgrade that bumps huggingface-hub alone produces this. Note:
-    # transformers 5.14+/5.16 (the uv.lock world) legitimately needs hub>=1.5,
-    # so the cap is only enforced below 5.16 (see check_pin).
-    ("huggingface-hub", "huggingface-hub<1.0",
-     "transformers 4.x requires huggingface-hub<1.0 - installing huggingface-hub>=0.34.0,<1.0"),
+     "install tokenizers 0.22.2, the newest available version below 0.23.1"),
+    ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
+     "Transformers 5 requires huggingface-hub>=1.16.0,<2.0"),
 ]
 
 # --------------------------------------------------------------------------
@@ -337,7 +324,8 @@ def check_pin(dist, rule, note=None):
     if spec is None:
         return None  # missing -> handled by check_dependency
     try:
-        import packaging.version as _pv  # may not exist before core install
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import parse as parse_version
     except Exception:
         return None
     if note is None:
@@ -347,30 +335,9 @@ def check_pin(dist, rule, note=None):
                 break
         note = note or "version pin %s violated" % rule
     try:
-        installed = _pv.parse(_version(dist))
-        if "<" not in rule:
-            return None
-        if dist == "tokenizers":
-            # Only relevant while the installed transformers is the pre-5.16
-            # line (the huggingface-hub<1.0 world). transformers>=5.16
-            # *requires* tokenizers>=0.23.1, so never pin tokenizers down in
-            # that world.
-            if not _dist_installed("transformers"):
-                return None
-            tver = _version("transformers")
-            if tver != "?" and _pv.parse(tver) >= _pv.parse("5.16"):
-                return None
-        if dist == "huggingface-hub":
-            # transformers 5.x (including 5.14/5.16 — the uv.lock world)
-            # requires huggingface-hub>=1.5, so only pin hub <1.0 while the
-            # installed transformers is the 4.x line.
-            if not _dist_installed("transformers"):
-                return None
-            tver = _version("transformers")
-            if tver != "?" and _pv.parse(tver) >= _pv.parse("5.0"):
-                return None
-        boundary = _pv.parse(rule.split("<", 1)[1])
-        if installed >= boundary:
+        installed = parse_version(_version(dist))
+        constraint = rule[len(dist):].strip()
+        if constraint and not SpecifierSet(constraint).contains(installed, prereleases=True):
             return {"name": dist, "status": FAIL,
                     "detail": "version %s violates %s - %s" % (_version(dist), rule, note)}
     except Exception:
@@ -528,30 +495,60 @@ def fix_tokenizers_pin(dry_run=False):
     return False, "could not downgrade tokenizers (exit %s)" % (proc.returncode if proc else "?")
 
 
+def fix_transformers_pin(dry_run=False):
+    """Keep Transformers aligned with the supported Hugging Face Hub 1.x stack."""
+    spec = _iu.find_spec("transformers")
+    if spec is None:
+        return True, "transformers not installed - nothing to pin"
+    try:
+        import packaging.version as _pv
+        v = _version("transformers")
+        if v != "?" and _pv.parse("5.14.1") <= _pv.parse(v) < _pv.parse("5.16"):
+            return True, "transformers %s OK (>=5.14.1,<5.16)" % v
+    except Exception:
+        return True, "cannot read transformers version"
+    if dry_run:
+        return False, "would reinstall the compatible Transformers 5.x stack (currently %s)" % v
+    if _is_frozen():
+        return False, "cannot reinstall transformers inside the packaged exe"
+    proc = _run_pip([
+        "--force-reinstall", "--no-cache-dir",
+        "transformers>=5.14.1,<5.16",
+        "huggingface-hub>=1.16.0,<2.0",
+        "tokenizers>=0.22.2,<0.23.1",
+        "numpy<2",
+    ])
+    if proc is not None and proc.returncode == 0:
+        return True, "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack"
+    return False, "could not install compatible Transformers stack (exit %s)" % (proc.returncode if proc else "?")
+
+
 def fix_hub_pin(dry_run=False):
-    """transformers 4.x refuses to import with huggingface-hub>=1.0 (a partial
-    upgrade that bumped hub alone leaves this broken state). Force the hub back
-    below 1.0 WITH its own dependencies (hub is not a leaf package)."""
+    """Restore the Hub 1.x range required by the Transformers 5.x stack."""
     spec = _iu.find_spec("huggingface_hub")
     if spec is None:
         return True, "huggingface-hub not installed - nothing to pin"
     try:
         import packaging.version as _pv
         v = _version("huggingface-hub")
-        if v != "?" and _pv.parse(v) < _pv.parse("1.0"):
-            return True, "huggingface-hub %s OK (<1.0)" % v
+        if v != "?" and _pv.parse("1.16.0") <= _pv.parse(v) < _pv.parse("2.0"):
+            return True, "huggingface-hub %s OK (>=1.16.0,<2.0)" % v
     except Exception:
         return True, "cannot read huggingface-hub version"
     if dry_run:
-        return False, "would downgrade huggingface-hub (currently %s)" % v
+        return False, "would reinstall the compatible Transformers 5.x / Hub 1.x stack (Hub currently %s)" % v
     if _is_frozen():
         return False, "cannot reinstall huggingface-hub inside the packaged exe"
-    # NOT --no-deps: hub has runtime dependencies (httpx, filelock, fsspec...)
-    # and uv may need to re-align transformers' own constraint.
-    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "huggingface-hub>=0.34.0,<1.0"])
+    proc = _run_pip([
+        "--force-reinstall", "--no-cache-dir",
+        "transformers>=5.14.1,<5.16",
+        "huggingface-hub>=1.16.0,<2.0",
+        "tokenizers>=0.22.2,<0.23.1",
+        "numpy<2",
+    ])
     if proc is not None and proc.returncode == 0:
-        return True, "pinned huggingface-hub to <1.0"
-    return False, "could not downgrade huggingface-hub (exit %s)" % (proc.returncode if proc else "?")
+        return True, "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack"
+    return False, "could not install compatible Hub stack (exit %s)" % (proc.returncode if proc else "?")
 
 
 def ensure_dirs():
@@ -670,12 +667,14 @@ def repair(mode, checks, ensure_upload=False):
         ok, detail = install_requirements(req_file, dry_run=False)
         fixed.append({"name": "stack " + label, "status": OK if ok else FAIL, "detail": detail})
 
-    # 3) version pins (numpy<2, tokenizers<0.23.1, huggingface-hub<1.0)
+    # 3) version pins for the transcription stack and NumPy.
     for dist, rule, note in PINNED_RULES:
         pin = check_pin(dist, rule, note)
         if pin:
             if dist == "numpy":
                 ok, detail = fix_numpy_pin()
+            elif dist == "transformers":
+                ok, detail = fix_transformers_pin()
             elif dist == "tokenizers":
                 ok, detail = fix_tokenizers_pin()
             elif dist == "huggingface-hub":

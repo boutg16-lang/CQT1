@@ -113,8 +113,10 @@ def build_error_message(
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
     if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
         lines.extend([
-            "يوجد تعارض بين Transformers وhuggingface-hub داخل بيئة التفريغ.",
-            "نفّذ من مجلد المشروع: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade \\\"huggingface-hub>=0.34.0,<1.0\\\"",
+            "Transformers 5.14–5.15 يحتاج Hugging Face Hub 1.x؛ Gradio 6.22 يرفع الحد الأدنى إلى 1.16.0. خفض Hub إلى 0.36.2 يزيل واجهة is_offline_mode التي يستوردها Transformers 5.",
+            "اختبر استيراد Transformers وWhisperX نفسيهما؛ لا تغيّر إصدار Torch CUDA إذا كان torch.cuda.is_available() يُرجع True.",
+            "نفّذ من مجلد المشروع: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade \\\"transformers>=5.14.1,<5.16\\\" \\\"huggingface-hub>=1.16.0,<2.0\\\" \\\"tokenizers>=0.22.2,<0.23.1\\\" \\\"numpy<2\\\"",
+            "Gradio 6.22 يتطلب huggingface-hub>=1.16.0,<2.0؛ لذلك يثبت المشروع الحد الأدنى 1.16.0.",
         ])
     if "tokenizers" in combined_error:
         lines.extend([
@@ -221,21 +223,35 @@ def repair(mode: str = "cpu", base_dir: Optional[str] = None) -> Dict[str, Any]:
         "https://download.pytorch.org/whl/cu124"
         if mode == "gpu" else "https://download.pytorch.org/whl/cpu"
     )
-    steps = [
-        _run_install(_pip_command(["--upgrade", "pip"])),
-        _run_install(_pip_command([
-            "--upgrade", "torch", "torchaudio", "--index-url", index_url,
-        ])),
-        _run_install(_pip_command([
-            "--upgrade", "whisperx", "huggingface-hub>=0.34.0,<1.0",
-            "tokenizers>=0.22.0,<0.23.1", "numpy<2",
-        ])),
-    ]
-    if mode == "gpu":
-        # WhisperX may resolve a CPU torch wheel from PyPI. Restore CUDA last.
+    steps = []
+    torch_ready = bool(
+        report.get("packages", {}).get("torch", {}).get("ok")
+        and report.get("packages", {}).get("torchaudio", {}).get("ok")
+    )
+    cuda_ready = bool(report.get("torch_runtime", {}).get("cuda_available"))
+    if not torch_ready or (mode == "gpu" and not cuda_ready):
         steps.append(_run_install(_pip_command([
-            "--upgrade", "--force-reinstall", "torch", "torchaudio", "--index-url", index_url,
+            "--upgrade", "torch==2.6.0", "torchvision==0.21.0",
+            "torchaudio==2.6.0", "--index-url", index_url,
         ])))
+    else:
+        steps.append({"ok": True, "command": [], "returncode": 0,
+                      "error": "", "output": "Existing Torch installation preserved."})
+    stack = [
+        "transformers>=5.14.1,<5.16",
+        "huggingface-hub>=1.16.0,<2.0",
+        "tokenizers>=0.22.2,<0.23.1",
+        "numpy<2",
+    ]
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+        try:
+            version("whisperx")
+        except PackageNotFoundError:
+            stack.insert(0, "whisperx")
+    except Exception:
+        stack.insert(0, "whisperx")
+    steps.append(_run_install(_pip_command(["--upgrade"] + stack)))
     final = diagnose(base_dir=base_dir)
     ok = bool(final["ready"] and (mode != "gpu" or final["gpu_ready"]))
     return {

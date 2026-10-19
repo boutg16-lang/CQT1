@@ -2,14 +2,14 @@
 
 ## الحالة التي لديك
 
-المشروع موجود في `D:\SS`، والقرص C ممتلئ تقريباً. لذلك لا يكفي أن يكون المشروع على D، لأن Windows وuv قد يستخدمان `%TEMP%` و`%LOCALAPPDATA%\uv\cache` على C أثناء فك ضغط الحزم.
+المشروع موجود في `D:\OS`، والقرص C ممتلئ تقريباً. لذلك لا يكفي أن يكون المشروع على D، لأن Windows وuv قد يستخدمان `%TEMP%` و`%LOCALAPPDATA%\uv\cache` على C أثناء فك ضغط الحزم.
 
 ## الحل الموصى به
 
 أضفت مشغلين PowerShell ينقلان ملفات التثبيت المؤقتة وكاش uv إلى D:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup_on_d.ps1 -Mode Light -CleanUvCache
 ```
@@ -42,7 +42,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 يمكن أيضاً تشغيل:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 .\install_dependencies.bat
 .\run_webui.bat
 ```
@@ -70,7 +70,7 @@ Test-Path .\.venv\Scripts\python.exe
 من مجلد المشروع على القرص D نفّذ وضع CPU الكامل:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup_on_d.ps1 -Mode Full -Transcription cpu
 .\run_webui_on_d.ps1
@@ -132,7 +132,7 @@ python .\main_improved.py --local-video "D:\Videos\recording.mp4" --skip-prompts
 بعد استبدال الملف، شغّله من مجلد المشروع:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 .\run_webui.bat
 ```
 
@@ -143,7 +143,7 @@ cd D:\SS
 ظهور `System ready` مع تحذيرات `torch` و`torchaudio` و`whisperx` أمر متوقع في **Lightweight mode**؛ هذا الوضع يشغّل WebUI والمونتاج الأساسي لكنه لا يثبت حزمة التفريغ الثقيلة تلقائياً. لذلك يجب تنفيذ التثبيت التالي مرة واحدة قبل معالجة فيديو جديد يحتاج تفريغاً صوتياً:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup_on_d.ps1 -Mode Full -Transcription cpu -CleanUvCache
 ```
@@ -188,7 +188,7 @@ python .\main_improved.py --local-video "D:\Videos\recording.mp4" --transcriptio
 إذا عرضت الواجهة `Torch 2.8.0+cpu` فهذا يعني أن WhisperX يعمل على المعالج حتى لو كان الجهاز يحتوي على RTX 3060. أغلق WebUI ثم نفّذ من PowerShell داخل مجلد المشروع:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\setup_on_d.ps1 -Mode Gpu -Transcription gpu -CleanUvCache
 ```
@@ -219,11 +219,11 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 بعد تحديث الملفات، أغلق WebUI ثم شغّل:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 .\run_webui.bat
 ```
 
-يجب أن يظهر `numpy 1.26.4`، مع بقاء `torch 2.6.0+cu124` و`torchaudio 2.6.0+cu124` و`whisperx 3.8.6` جاهزة. تحذيرات `google-auth-oauthlib` و`pyacoustid` اختيارية ولا تمنع التفريغ أو استخدام RTX 3060.
+يجب أن يظهر `numpy 1.26.4` وأن تبقى نسخة Torch CUDA المثبتة. لا تعتمد على عبارة `whisperx 3.8.6` القديمة في هذا الدليل: هذه النسخة تتطلب NumPy 2.1 وTorch 2.8، وهما خارج قيود مجموعة التفريغ الحالية. استخدم أمر الاستيراد في قسم Hugging Face للتأكد من الحزم التي ثبتها مشروعك فعلياً.
 
 
 ## إصلاح رسالة `No module named pip`
@@ -233,7 +233,7 @@ cd D:\SS
 في هذه الحالة استخدم النسخة المحدثة من المشروع، لأن `preflight` و`transcription_diagnostics --repair` أصبحا يستخدمان `uv pip --python .venv\Scripts\python.exe` تلقائياً عند غياب pip. ويمكن تنفيذ الإصلاح المباشر بهذه الصيغة:
 
 ```powershell
-cd D:\SS
+cd D:\OS
 uv pip install --python .\.venv\Scripts\python.exe --force-reinstall --no-cache numpy==1.26.4
 ```
 
@@ -242,24 +242,24 @@ uv pip install --python .\.venv\Scripts\python.exe --force-reinstall --no-cache 
 
 ## إصلاح تعارض huggingface-hub مع WhisperX
 
-إذا ظهر الخطأ `huggingface-hub>=0.34.0,<1.0 is required ... but found huggingface-hub==1.27.0`، فهذا تعارض إصدارات داخل طبقة Transformers وليس مشكلة CUDA أو RTX 3060. الإصدار الجديد يثبت القيد `huggingface-hub>=0.34.0,<1.0` بعد WhisperX، ويستخدم `uv pip` تلقائياً إذا لم يوجد pip داخل venv.
+إذا ظهر `cannot import name 'is_offline_mode' from 'huggingface_hub'` أثناء استيراد Transformers/WhisperX، فغالباً خُفّض Hub وحده إلى 0.x بينما بقي Transformers 5.14.1. هذا المشروع يعتمد مجموعة 5.x/1.x: `transformers>=5.14.1,<5.16` و`huggingface-hub>=1.16.0,<2.0` و`tokenizers>=0.22.2,<0.23.1`. Hub 0.36.2 لا يوفّر الواجهة التي يستوردها Transformers 5. Gradio 6.22 يتطلب Hub 1.16 أو أحدث؛ لا تخفّض Hub منفرداً.
 
 للإصلاح الفوري من PowerShell:
 
 ```powershell
-cd D:\SS
-uv pip install --python .\.venv\Scripts\python.exe --upgrade "huggingface-hub>=0.34.0,<1.0"
+cd D:\OS
+uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "numpy<2"
 ```
 
 ثم تحقق من الاستيراد:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import huggingface_hub, transformers, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
+.\.venv\Scripts\python.exe -c "import huggingface_hub, transformers, tokenizers, gradio, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('gradio:', gradio.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
 ```
 
-يجب أن يكون إصدار `huggingface-hub` أقل من 1.0، وأن تبقى `CUDA: True`. لا تستخدم `pip` داخل هذه البيئة إذا ظهر `No module named pip`؛ استخدم `uv pip --python` كما في الأمر أعلاه. رسالة الفيديو المقيد عمرياً منفصلة، وتعالج عبر كوكيز المتصفح بعد نجاح توافق الحزم.
+يجب أن يعمل `import whisperx`، وأن تكون Transformers ضمن 5.14.1–أقل من 5.16، وHub ضمن 1.16–أقل من 2؛ ويجب أن تبقى `CUDA: True` إذا كانت تعمل قبل الإصلاح. لا تستخدم `pip` داخل هذه البيئة إذا ظهر `No module named pip`؛ استخدم `uv pip --python` كما في الأمر أعلاه.
 
-**ملاحظة عن الترتيب:** إذا ظهر بعد هذا الإصلاح خطأ `tokenizers` أيضاً، فبيئة التفريغ كانت قد حصلت على ترقيتين جزئيتين — نفّذ أيضاً قسم «إصلاح تعارض tokenizers» أدناه. إعادة التثبيت الكاملة عبر `--repair` من `transcription_diagnostics` تثبّت القيدين معاً تلقائياً. (إصدار `huggingface-hub 1.29.0` أو أحدث لا يتعارض مع مستخدمي مسار `uv sync`/`uv.lock` لأن `transformers 5.14+` يتطلب hub>=1.5 — القيد `<1.0` خاص بمسار التثبيت الكلاسيكي الذي يستخدمه هذا الدليل.)
+**مهم:** فشل `from huggingface_hub import is_offline_mode` متوقع في المجموعة المختلطة التي ظهرت لديك (Transformers 5.14 مع Hub 0.36.2): Hub 0.x لا يصدّر الرمز الذي يستورده Transformers 5. أصلح Hub إلى 1.x، ثم اختبر استيراد Transformers وWhisperX نفسيهما بالأمر أعلاه؛ لا تعتبر السطر المنفرد دليلاً على سلامة بقية WhisperX. وللتأكد من بيانات الاعتماد المثبتة، نفّذ `uv pip check --python .\\.venv\\Scripts\\python.exe`؛ تحذيرا WhisperX 3.2 حول CTranslate2 وfaster-whisper مستقلان عن خطأ Hub، ولا تغيّر Torch CUDA العامل لإخفائهما.
 
 
 ## إصلاح تعارض tokenizers مع WhisperX
@@ -271,15 +271,15 @@ ImportError: tokenizers>=0.22.0,<=0.23.0 is required for a normal functioning
 of this module, but found tokenizers==0.23.1.
 ```
 
-فهذا تعارض إصدارات جديد داخل طبقة Transformers. الـ `transformers` المثبت (خط الإصدارات 4.x أو 5.14 وما دون — المرتبط بقيد `huggingface-hub<1.0` في هذا المشروع) يقبل `tokenizers` حتى 0.23.0 فقط، لكن البيئة حصلت على `tokenizers 0.23.1` أثناء ترقية جزئية.
+فهذا يعني أن البيئة خرجت عن المجموعة التي يدعمها المشروع: `transformers>=5.14.1,<5.16` مع `tokenizers>=0.22.2,<0.23.1`. أبقِ Hub ضمن `>=1.16.0,<2.0`، ولا تصلح tokenizers وحدها إذا كان Hub أقدم من 1.16.
 
 **ملاحظة مهمة:** `tokenizers 0.23.0` غير موجود على PyPI أصلاً — الإصدارات قفزت من `0.22.2` إلى `0.23.1`. لذلك الإصدار الصحيح المتوافق مع هذا المشروع هو `0.22.2`، وليس 0.23.0.
 
 للإصلاح الفوري من PowerShell:
 
 ```powershell
-cd D:\SS
-uv pip install --python .\.venv\Scripts\python.exe --upgrade "tokenizers>=0.22.0,<0.23.1"
+cd D:\OS
+uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "numpy<2"
 ```
 
 ثم تحقق من الاستيراد:
@@ -288,7 +288,7 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "tokenizers>=0.22.0
 .\.venv\Scripts\python.exe -c "import huggingface_hub, transformers, tokenizers, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
 ```
 
-يجب أن يكون إصدار `tokenizers` هو `0.22.2`، وأن تبقى `CUDA: True`. النسخ المحدثة من `requirements-transcribe.txt` و`install_dependencies.bat` تثبت هذا القيد تلقائياً (`tokenizers>=0.22.0,<0.23.1`) حتى لا يتكرر التعارض بعد إعادة التثبيت.
+يجب أن يكون إصدار `tokenizers` هو `0.22.2`، وTransformers ضمن `>=5.14.1,<5.16`، وHub ضمن `>=1.16.0,<2.0`، وأن تبقى `CUDA: True`. ملفات `requirements-transcribe.txt` و`install_dependencies.bat` و`pyproject.toml` تفرض هذه الحدود معاً حتى لا يعود التعارض.
 
 
 ## خطأ "Could not parse transcript from TSV or SRT" بعد اكتمال التفريغ
@@ -309,7 +309,7 @@ Continuando com transcrição bruta.
 رسالة "could not be found" مضلّلة — المشكلة ليست الشبكة بل إصدار Torch. الإصلاح (نفس خط cu124 المعتمد في المشروع):
 
 ```powershell
-cd D:\SS
+cd D:\OS
 uv pip install --python .\.venv\Scripts\python.exe torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 ```
 
@@ -320,8 +320,8 @@ uv pip install --python .\.venv\Scripts\python.exe torch==2.6.0 torchvision==0.2
 الفيديوهات المحمّلة من YouTube تُحفظ باسم `input.mp4` فتخرج ملفات التفريغ `input.srt/input.tsv`. أما الفيديو المحلي (أو المرفوع من جهازك) فيحتفظ باسمه الأصلي (مثلاً اسم عربي طويل)، فتخرج الملفات باسمه وتفشل مرحلة المقاطع لأنها تبحث عن `input.tsv/input.srt`. النسخ المحدثة من المشروع تنسخ الملفات تلقائياً إلى `input.*`، ولمشروع قديم مكسور نفّذ يدوياً من مجلد المشروع:
 
 ```powershell
-Get-ChildItem "D:\SS\VIRALS\<اسم المشروع>\*.srt" | Where-Object { $_.Name -ne "input.srt" } | Select-Object -First 1 | Copy-Item -Destination "input.srt" -Force
-Get-ChildItem "D:\SS\VIRALS\<اسم المشروع>\*.tsv" | Where-Object { $_.Name -ne "input.tsv" } | Select-Object -First 1 | Copy-Item -Destination "input.tsv" -Force
+Get-ChildItem "D:\OS\VIRALS\<اسم المشروع>\*.srt" | Where-Object { $_.Name -ne "input.srt" } | Select-Object -First 1 | Copy-Item -Destination "input.srt" -Force
+Get-ChildItem "D:\OS\VIRALS\<اسم المشروع>\*.tsv" | Where-Object { $_.Name -ne "input.tsv" } | Select-Object -First 1 | Copy-Item -Destination "input.tsv" -Force
 ```
 
 ثم أعد تشغيل المعالجة على نفس المشروع. بعد تطبيق الإصلاحين أعد المحاولة: ستعمل المحاذاة (كلمات بتوقيتات دقيقة) وتكتمل المقاطع.
