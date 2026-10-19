@@ -91,7 +91,7 @@ def test_transcribe_fails_closed_when_both_backends_are_unavailable(monkeypatch,
         transcribe_video.transcribe(
             str(input_file), project_folder=str(tmp_path), device="cpu"
         )
-    assert "requirements-transcribe-fallback.txt" in str(error.value)
+    assert "faster_whisper is not installed" in str(error.value)
 
 
 def test_transcription_backend_can_be_forced(monkeypatch):
