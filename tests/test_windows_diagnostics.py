@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from scripts.windows_diagnostics import _telegram_check, collect, render
+from scripts.windows_diagnostics import (
+    _telegram_check,
+    _version_range_check,
+    collect,
+    render,
+)
 
 
 def test_windows_diagnostics_is_json_serializable(tmp_path):
@@ -39,3 +44,23 @@ def test_windows_telegram_check_is_optional_and_secret_free():
     assert result["critical"] is False
     assert "2 allowlisted" in result["detail"]
     assert token not in result["detail"]
+
+
+def test_windows_diagnostics_accepts_supported_huggingface_hub():
+    result = _version_range_check("huggingface-hub", "1.33.0", "1.16.0", "2.0")
+    assert result["status"] == "ok"
+
+
+def test_windows_diagnostics_rejects_transformers_4_after_hub_only_downgrade():
+    result = _version_range_check("Transformers", "4.57.6", "5.14.1", "5.16")
+    assert result["status"] == "warn"
+    assert "5.14.1" in result["detail"]
+
+def test_windows_diagnostics_rejects_huggingface_hub_0_x():
+    result = _version_range_check("huggingface-hub", "0.36.2", "1.16.0", "2.0")
+    assert result["status"] == "warn"
+    assert "1.16.0" in result["detail"]
+
+def test_windows_diagnostics_rejects_invalid_huggingface_version():
+    result = _version_range_check("huggingface-hub", "not-a-version", "1.16.0", "2.0")
+    assert result["status"] == "warn"

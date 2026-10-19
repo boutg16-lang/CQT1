@@ -678,5 +678,6 @@
     "The CAT page at {url} is unreachable ({reason}). Start OUSSAMA Cutter, wait for its WebUI, then use the exact local URL shown in your browser.": "{url} adresindeki CAT sayfasına ulaşılamıyor ({reason}). OUSSAMA Cutter'ı başlatın, WebUI'nin açılmasını bekleyin ve tarayıcıda görünen tam yerel URL'yi kullanın.",
     "The pairing code has not been used.": "Eşleştirme kodu kullanılmadı.",
     "Local page unavailable": "Yerel sayfa kullanılamıyor",
-    "Checking the local CAT page before pairing…": "Eşleştirmeden önce yerel CAT sayfası kontrol ediliyor…"
+    "Checking the local CAT page before pairing…": "Eşleştirmeden önce yerel CAT sayfası kontrol ediliyor…",
+    "WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.": "WhisperX bağımlılık çakışması: desteklenen transkripsiyon paketi Hugging Face Hub >=1.16.0,<2.0 gerektirir. Proje bağımlılıklarını geri yükleyip uygulamayı yeniden başlatın."
 }

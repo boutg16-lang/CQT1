@@ -4,7 +4,7 @@
 # (or let install_linux.sh / install_macos.sh do it for you)
 #
 # GPU (recommended): first install a CUDA build of torch, e.g.:
-#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 # then this file (whisperx will reuse that torch):
 #   pip install -r requirements-transcribe.txt
 #
@@ -17,9 +17,10 @@
 whisperx
 torch
 torchaudio
-huggingface-hub>=0.36.2,<1.0
+transformers>=5.14.1,<5.16
+huggingface-hub>=1.16.0,<2.0
 
-# transformers (the 4.x / <=5.14 line required by huggingface-hub<1.0 above)
+# Keep Transformers 5 aligned with the Hugging Face Hub 1.x API used by the locked stack.
 # caps tokenizers at <=0.23.0 — and tokenizers 0.23.0 was never released on
 # PyPI (the jump went 0.22.2 -> 0.23.1). tokenizers 0.23.1 breaks the
 # transformers import check:

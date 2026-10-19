@@ -61,6 +61,38 @@ def _import_probe(module_name: str, distribution: str | None = None) -> tuple[bo
         return False, "%s: %s" % (type(exc).__name__, str(exc)[:240])
 
 
+def _version_range_check(name: str, installed: str, minimum: str, maximum: str) -> dict[str, Any]:
+    from packaging.version import InvalidVersion, Version
+
+    if not installed or installed == "?":
+        return _check(name, WARN, "version could not be determined")
+    try:
+        current = Version(installed)
+        lower = Version(minimum)
+        upper = Version(maximum)
+    except InvalidVersion:
+        return _check(name, WARN, "invalid version metadata: %s" % installed)
+    if lower <= current < upper:
+        return _check(name, OK, "%s (supported: >=%s,<%s)" % (installed, minimum, maximum))
+    return _check(name, WARN, "%s — requires >=%s,<%s" % (installed, minimum, maximum))
+
+
+def _huggingface_stack_checks() -> list[dict[str, Any]]:
+    checks = []
+    supported = (
+        ("transformers", "Transformers", "transformers", "5.14.1", "5.16.0"),
+        ("huggingface_hub", "huggingface-hub", "huggingface-hub", "1.16.0", "2.0.0"),
+        ("tokenizers", "tokenizers", "tokenizers", "0.22.2", "0.23.1"),
+    )
+    for module_name, label, distribution, minimum, maximum in supported:
+        imported, detail = _import_probe(module_name, distribution)
+        if imported:
+            checks.append(_version_range_check(label, detail, minimum, maximum))
+        else:
+            checks.append(_check(label, WARN, detail))
+    return checks
+
+
 def _free_mb(path: str | os.PathLike[str]) -> int | None:
     try:
         return int(shutil.disk_usage(str(path)).free // (1024 * 1024))
@@ -133,8 +165,7 @@ def _torch_checks() -> list[dict[str, Any]]:
         for module_name, label, dist in (("torchaudio", "Torchaudio", "torchaudio"), ("whisperx", "WhisperX", "whisperx"), ("faster_whisper", "Faster-whisper fallback", "faster-whisper")):
             imported, info = _import_probe(module_name, dist)
             checks.append(_check(label, OK if imported else WARN, info))
-        imported, info = _import_probe("huggingface_hub", "huggingface-hub")
-        checks.append(_check("huggingface-hub", OK if imported else WARN, info))
+        checks.extend(_huggingface_stack_checks())
         return checks
 
     try:
@@ -164,31 +195,7 @@ def _torch_checks() -> list[dict[str, Any]]:
     for module_name, label, dist in (("torchaudio", "Torchaudio", "torchaudio"), ("whisperx", "WhisperX", "whisperx"), ("faster_whisper", "Faster-whisper fallback", "faster-whisper")):
         imported, info = _import_probe(module_name, dist)
         checks.append(_check(label, OK if imported else WARN, info))
-    try:
-        imported, info = _import_probe("huggingface_hub", "huggingface-hub")
-        if imported:
-            major = int(info.split(".", 1)[0]) if info[:1].isdigit() else 0
-            checks.append(_check("huggingface-hub", OK if major < 1 else WARN, info if major < 1 else "%s — WhisperX requires <1.0" % info))
-        else:
-            checks.append(_check("huggingface-hub", WARN, info))
-    except Exception as exc:
-        checks.append(_check("huggingface-hub", WARN, str(exc)))
-    try:
-        imported, info = _import_probe("tokenizers", "tokenizers")
-        if imported:
-            try:
-                bad = tuple(int(x) for x in info.split(".")[:3]) >= (0, 23, 1)
-            except Exception:
-                bad = False
-            checks.append(_check(
-                "tokenizers",
-                WARN if bad else OK,
-                info if not bad else
-                "%s — WhisperX/transformers requires <0.23.1 (0.23.0 was never released; install 0.22.2)" % info))
-        else:
-            checks.append(_check("tokenizers", WARN, info))
-    except Exception as exc:
-        checks.append(_check("tokenizers", WARN, str(exc)))
+    checks.extend(_huggingface_stack_checks())
     return checks
 
 

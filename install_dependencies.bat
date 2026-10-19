@@ -110,16 +110,8 @@ goto CHECK_FFMPEG
 :INSTALL_WHISPERX
 echo.
 echo [4/6] Installing optional WhisperX stack...
-uv pip install --python "%PYTHON%" --no-cache whisperx
-if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
-uv pip install --python "%PYTHON%" --no-cache "huggingface-hub>=0.34.0,<1.0"
-if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
-rem tokenizers 0.23.1 breaks the transformers import check because
-rem transformers caps at 0.23.0 and 0.23.0 was never released on PyPI.
-rem Pin below 0.23.1 to keep the known-good 0.22.2.
-uv pip install --python "%PYTHON%" --no-cache "tokenizers>=0.22.0,<0.23.1"
-if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
-uv pip install --python "%PYTHON%" --no-cache "numpy<2"
+rem Install the compatible Transformers/Hub/tokenizers family in one resolver pass.
+uv pip install --python "%PYTHON%" --no-cache --upgrade whisperx "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "numpy<2"
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
 if /I "%GPU_MODE%"=="cuda" goto RESTORE_CUDA_TORCH
 goto VERIFY_TRANSCRIPTION
@@ -130,10 +122,15 @@ uv pip install --python "%PYTHON%" --no-cache --reinstall torch==2.6.0 torchvisi
 if errorlevel 1 goto TRANSCRIPTION_TORCH_FAILED
 
 :VERIFY_TRANSCRIPTION
-"%PYTHON%" -c "import torch, torchaudio, whisperx; raise SystemExit(0 if (torch.version.cuda and torch.cuda.is_available()) else 1)" >nul 2>&1
-if errorlevel 1 if /I "%GPU_MODE%"=="cuda" goto GPU_VERIFY_FAILED
-"%PYTHON%" -c "import torch, torchaudio, whisperx" >nul 2>&1
+"%PYTHON%" -c "import torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; from packaging.version import Version; ok = Version('5.14.1') <= Version(transformers.__version__) < Version('5.16') and Version('1.16.0') <= Version(huggingface_hub.__version__) < Version('2') and Version('0.22.2') <= Version(tokenizers.__version__) < Version('0.23.1'); raise SystemExit(0 if ok else 1)" >nul 2>&1
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
+if /I "%GPU_MODE%"=="cuda" goto VERIFY_GPU
+if "%INSTALL_FALLBACK%"=="1" goto INSTALL_FASTER_FALLBACK
+goto CHECK_FFMPEG
+
+:VERIFY_GPU
+"%PYTHON%" -c "import torch; raise SystemExit(0 if (torch.version.cuda and torch.cuda.is_available()) else 1)" >nul 2>&1
+if errorlevel 1 goto GPU_VERIFY_FAILED
 if "%INSTALL_FALLBACK%"=="1" goto INSTALL_FASTER_FALLBACK
 goto CHECK_FFMPEG
 
@@ -236,7 +233,7 @@ exit /b 1
 
 :DISK_FAILED
 echo [ERROR] At least 8 GB free space is required on the project drive.
-echo Delete temporary files or move D:\SS to a drive with more space.
+echo Delete temporary files or move the project folder to a drive with more space.
 goto FAILED
 :VENV_FAILED
 echo [ERROR] Could not create a Python 3.12 virtual environment.

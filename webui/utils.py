@@ -169,8 +169,9 @@ def _html_escape(text):
 
 KNOWN_ERROR_HINTS = [
     # --- Transcription dependency conflicts must outrank generic YouTube hints ---
-    ("huggingface-hub", i18n("WhisperX dependency conflict: install huggingface-hub>=0.34.0,<1.0 with uv pip, then restart the app")),
-    ("huggingface_hub", i18n("WhisperX dependency conflict: install huggingface-hub>=0.34.0,<1.0 with uv pip, then restart the app")),
+    ("cannot import name 'is_offline_mode' from 'huggingface_hub'", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
+    ("huggingface-hub", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
+    ("huggingface_hub", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
     ("tokenizers", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
     ("0.23.1", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
     # --- Gemini API errors first: common when keys expire or quota ends (v6.9) ---

@@ -12,3 +12,5 @@ Choose the guide for your language:
 Development and contribution notes: [README_DEV.md](README_DEV.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 
 Live-stream safety guide: [StreamGuard (Arabic)](docs/STREAM_GUARD_AR.md).
+
+Windows transcription setup and WhisperX troubleshooting: [setup guide (Arabic)](docs/WINDOWS_SETUP_FIX_AR.md).

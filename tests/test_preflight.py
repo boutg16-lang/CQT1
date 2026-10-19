@@ -136,6 +136,98 @@ def test_check_pin_numpy_violation(monkeypatch):
     assert r is not None and r["status"] == preflight.FAIL
 
 
+def test_check_pin_transformers_supported_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "5.14.1")
+    assert preflight.check_pin("transformers", "transformers>=5.14.1,<5.16") is None
+
+
+def test_check_pin_transformers_outside_supported_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "4.57.6")
+    result = preflight.check_pin("transformers", "transformers>=5.14.1,<5.16")
+    assert result is not None and result["status"] == preflight.FAIL
+
+
+def test_fix_transformers_pin_repairs_related_huggingface_packages(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    calls = []
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "4.57.6")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+
+    ok, _ = preflight.fix_transformers_pin()
+
+    assert ok
+    assert "transformers>=5.14.1,<5.16" in calls[0]
+    assert "huggingface-hub>=1.16.0,<2.0" in calls[0]
+    assert "tokenizers>=0.22.2,<0.23.1" in calls[0]
+    assert "numpy<2" in calls[0]
+
+
+def test_check_pin_hub_accepts_compatible_one_x_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "1.27.0")
+    assert preflight.check_pin("huggingface-hub", "huggingface-hub>=1.16.0,<2.0") is None
+
+
+def test_check_pin_hub_rejects_version_below_gradio_minimum(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "1.5.0")
+    result = preflight.check_pin("huggingface-hub", "huggingface-hub>=1.16.0,<2.0")
+    assert result is not None and result["status"] == preflight.FAIL
+
+
+def test_check_pin_hub_flags_incompatible_zero_x_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "0.36.2")
+    result = preflight.check_pin("huggingface-hub", "huggingface-hub>=1.16.0,<2.0")
+    assert result is not None and result["status"] == preflight.FAIL
+
+
+def test_fix_hub_pin_restores_compatible_transformers_stack(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    calls = []
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "0.36.2")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+
+    ok, _ = preflight.fix_hub_pin()
+
+    assert ok
+    assert "transformers>=5.14.1,<5.16" in calls[0]
+    assert "huggingface-hub>=1.16.0,<2.0" in calls[0]
+    assert "tokenizers>=0.22.2,<0.23.1" in calls[0]
+    assert "numpy<2" in calls[0]
+
+
 def test_check_pin_tokenizers_ok(monkeypatch):
     # tokenizers below 0.23.1 (0.23.0 was never released; 0.22.2 is the
     # known-good version for transformers<=5.14) must pass regardless of env.
@@ -166,63 +258,18 @@ def test_check_pin_tokenizers_violation(monkeypatch):
     assert "0.23.1" in r["detail"]
 
 
-def test_check_pin_tokenizers_skipped_on_transformers_5_16(monkeypatch):
-    # transformers>=5.16 REQUIRES tokenizers>=0.23.1, so the cap must not
-    # fire in that world.
+def test_check_pin_tokenizers_violation_on_transformers_5(monkeypatch):
     class FakeSpec:
         pass
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
 
     def fake_version(dist):
-        return {"tokenizers": "0.23.1", "transformers": "5.16.1"}.get(dist, "?")
+        return {"tokenizers": "0.23.1", "transformers": "5.14.1"}.get(dist, "?")
 
     monkeypatch.setattr(preflight._pkg_meta, "version", fake_version)
-    assert preflight.check_pin("tokenizers", "tokenizers<0.23.1") is None
-
-
-def test_check_pin_hub_ok(monkeypatch):
-    # huggingface-hub<1.0 with transformers on the 4.x line must pass.
-    class FakeSpec:
-        pass
-
-    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(
-        preflight._pkg_meta, "version",
-        lambda d: "0.36.2" if d == "huggingface-hub" else "4.56.0")
-    assert preflight.check_pin("huggingface-hub", "huggingface-hub<1.0") is None
-
-
-def test_check_pin_hub_violation(monkeypatch):
-    # huggingface-hub 1.29.0 with transformers 4.x breaks the import check
-    # ("huggingface-hub>=0.34.0,<1.0 is required ... found 1.29.0") -> FAIL.
-    class FakeSpec:
-        pass
-
-    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-
-    def fake_version(dist):
-        return {"huggingface-hub": "1.29.0", "transformers": "4.56.0"}.get(dist, "?")
-
-    monkeypatch.setattr(preflight._pkg_meta, "version", fake_version)
-    r = preflight.check_pin("huggingface-hub", "huggingface-hub<1.0")
-    assert r is not None and r["status"] == preflight.FAIL
-    assert "1.29.0" in r["detail"]
-
-
-def test_check_pin_hub_skipped_on_transformers_5_16(monkeypatch):
-    # transformers 5.14+/5.16 (the uv.lock world) requires huggingface-hub>=1.5,
-    # so hub>=1.0 must NOT be flagged there.
-    class FakeSpec:
-        pass
-
-    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-
-    def fake_version(dist):
-        return {"huggingface-hub": "1.29.0", "transformers": "5.14.1"}.get(dist, "?")
-
-    monkeypatch.setattr(preflight._pkg_meta, "version", fake_version)
-    assert preflight.check_pin("huggingface-hub", "huggingface-hub<1.0") is None
+    result = preflight.check_pin("tokenizers", "tokenizers<0.23.1")
+    assert result is not None and result["status"] == preflight.FAIL
 
 
 # --------------------------------------------------------------------------

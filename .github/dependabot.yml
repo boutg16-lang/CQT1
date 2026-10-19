@@ -20,18 +20,17 @@ updates:
     #     see requirements.txt / requirements-transcribe.txt.
     #   * onnxruntime<1.24 — 1.24+ drops Python 3.10 wheels while the project
     #     supports 3.10–3.12; see pyproject.toml.
-    #   * huggingface-hub<1.0 — required by the classic WhisperX install path;
-    #     see requirements-transcribe.txt / docs/WINDOWS_SETUP_FIX_AR.md.
-    #   * tokenizers<0.23.1 — transformers (4.x / <=5.14 line) caps tokenizers
-    #     at <=0.23.0 and 0.23.0 was never released on PyPI; 0.23.1+ breaks the
-    #     transformers import check. See requirements-transcribe.txt.
+    #   * huggingface-hub<2.0 — project floor is 1.16.0 for the current
+    #     Transformers/Gradio stack; see requirements-transcribe.txt.
+    #   * tokenizers<0.23.1 — Transformers 5.14–5.15 accepts <=0.23.0, and
+    #     0.23.0 was never released on PyPI. See requirements-transcribe.txt.
     ignore:
       - dependency-name: "numpy"
         versions: [">=2"]
       - dependency-name: "onnxruntime"
         versions: [">=1.24"]
       - dependency-name: "huggingface-hub"
-        versions: [">=1.0"]
+        versions: [">=2.0"]
       - dependency-name: "tokenizers"
         versions: [">=0.23.1"]
 
