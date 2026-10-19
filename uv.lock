@@ -2470,7 +2470,7 @@ requires-dist = [
     { name = "tqdm" },
     { name = "transformers", marker = "extra == 'transcribe'", specifier = ">=5.14.1,<5.16" },
     { name = "uvicorn" },
-    { name = "whisperx", marker = "extra == 'transcribe'" },
+    { name = "whisperx", marker = "extra == 'transcribe'", specifier = "==3.3.1" },
     { name = "yt-dlp", extras = ["default"] },
 ]
 provides-extras = ["transcribe", "upload", "otio", "dev"]

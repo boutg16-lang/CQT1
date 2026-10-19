@@ -56,6 +56,28 @@ def test_windows_diagnostics_rejects_transformers_4_after_hub_only_downgrade():
     assert result["status"] == "warn"
     assert "5.14.1" in result["detail"]
 
+
+def test_windows_diagnostics_flags_whisperx_3_2_outside_locked_stack(monkeypatch):
+    import scripts.windows_diagnostics as diagnostics
+
+    versions = {
+        "whisperx": "3.2.0",
+        "transformers": "5.15.1",
+        "huggingface_hub": "1.33.0",
+        "tokenizers": "0.22.2",
+    }
+    monkeypatch.setattr(
+        diagnostics,
+        "_import_probe",
+        lambda module_name, distribution=None: (True, versions[module_name]),
+    )
+
+    checks = diagnostics._huggingface_stack_checks()
+
+    whisperx = next(item for item in checks if item["name"] == "WhisperX version")
+    assert whisperx["status"] == "warn"
+    assert "3.3.1" in whisperx["detail"]
+
 def test_windows_diagnostics_rejects_huggingface_hub_0_x():
     result = _version_range_check("huggingface-hub", "0.36.2", "1.16.0", "2.0")
     assert result["status"] == "warn"
