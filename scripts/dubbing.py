@@ -190,6 +190,7 @@ def dub_clip(clip_path: str, subs_json: str, out_path: str, *,
     placed: List[Dict[str, Any]] = []
     failed: List[Dict[str, Any]] = []
     warnings: List[str] = []
+    audio_tmp: Optional[str] = None
 
     try:
         for item in segments:
@@ -219,8 +220,13 @@ def dub_clip(clip_path: str, subs_json: str, out_path: str, *,
                     "synthetic_voice": True, "disclosure_required": True}
 
         # ---- build the filter graph -------------------------------------
+        # Render the dubbed audio separately before muxing it with the video.
+        # A direct copy-video + filtered-audio mux can finish when the video
+        # demuxer reaches EOF, truncating delayed/apadded audio to the first
+        # frame (notably with fast local WAV providers).
         parts: List[str] = []
         labels: List[str] = []
+        input_offset = 1 if mode == "mix" else 0
         for offset, entry in enumerate(placed):
             label = "d{}".format(offset)
             chain = []
@@ -228,7 +234,8 @@ def dub_clip(clip_path: str, subs_json: str, out_path: str, *,
                 chain.append(entry["atempo"])
             delay_ms = int(round(float(entry["start"]) * 1000))
             chain.append("adelay={}:all=1".format(delay_ms))
-            parts.append("[{}:a]{}[{}]".format(offset + 1, ",".join(chain), label))
+            parts.append("[{}:a]{}[{}]".format(
+                offset + input_offset, ",".join(chain), label))
             labels.append("[{}]".format(label))
         # Reset timestamps after delaying and mixing.  Without this, FFmpeg can
         # emit the padded audio with timestamps that move backwards; AAC then
@@ -245,23 +252,38 @@ def dub_clip(clip_path: str, subs_json: str, out_path: str, *,
         else:
             audio_label = "[dub]"
 
-        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-               "-i", clip_path]
+        audio_tmp = os.path.join(work, "dubbed_audio.wav")
+        audio_cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
+        if mode == "mix":
+            audio_cmd += ["-i", clip_path]
         for entry in placed:
-            cmd += ["-i", entry["audio"]]
-        cmd += [
+            audio_cmd += ["-i", entry["audio"]]
+        audio_cmd += [
             "-filter_complex", ";".join(parts),
-            "-map", "0:v:0", "-map", audio_label,
-            "-c:v", "copy",
-            "-c:a", "aac", "-b:a", "160k",
-            "-movflags", "+faststart",
+            "-map", audio_label, "-c:a", "pcm_s16le",
         ]
+        if duration > 0:
+            audio_cmd += ["-t", "{:.3f}".format(duration)]
+        audio_cmd.append(audio_tmp)
+
+        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+               "-i", clip_path, "-i", audio_tmp,
+               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+               "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"]
         if duration > 0:
             cmd += ["-t", "{:.3f}".format(duration)]
         tmp_out = out_path + ".tmp.mp4"
         cmd.append(tmp_out)
 
         try:
+            audio_proc = _run(audio_cmd, timeout=timeout * 10)
+            if (audio_proc.returncode != 0 or not os.path.isfile(audio_tmp)
+                    or os.path.getsize(audio_tmp) == 0):
+                return {"ok": False,
+                        "error": "ffmpeg audio render failed: {}".format(
+                            (audio_proc.stderr or audio_proc.stdout)[-400:]),
+                        "failures": failed, "plan": plan,
+                        "synthetic_voice": True, "disclosure_required": True}
             proc = _run(cmd, timeout=timeout * 10)
         except Exception as exc:
             return {"ok": False, "error": "ffmpeg failed: {}".format(exc),
@@ -313,12 +335,19 @@ def dub_clip(clip_path: str, subs_json: str, out_path: str, *,
             "warnings": warnings,
             "mean_volume_db": measured,
             "offsets": [{"index": e["index"], "start": e["start"]} for e in placed],
-            "command": cmd,          # kept for auditing/tests
+            "command": audio_cmd + ["&&"] + cmd,  # kept for auditing/tests
+            "audio_command": audio_cmd,
+            "mux_command": cmd,
             "synthetic_voice": True,
             "disclosure_required": True,
             "error": None,
         }
     finally:
+        if audio_tmp and os.path.exists(audio_tmp):
+            try:
+                os.remove(audio_tmp)
+            except OSError:
+                pass
         if not keep_work:
             shutil.rmtree(work, ignore_errors=True)
 

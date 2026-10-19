@@ -133,6 +133,17 @@ def test_file_provider_consumes_files_in_order_then_exhausts(tmp_path):
     assert "already used" in third["error"]
 
 
+def test_file_provider_preserves_source_extension(tmp_path):
+    folder = tmp_path / "voices"
+    _voice(str(folder), [1.0])
+    result = tts_providers.synthesize(
+        "a", str(tmp_path / "segment.mp3"), provider="file", voice=str(folder)
+    )
+    assert result["ok"] is True
+    assert result["path"].endswith(".wav")
+    assert os.path.isfile(result["path"])
+
+
 # ---------------------------------------------------------------------------
 # atempo fitting (the maths that keeps the dub on the timeline)
 # ---------------------------------------------------------------------------
