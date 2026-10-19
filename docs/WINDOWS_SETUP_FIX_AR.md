@@ -290,6 +290,27 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14
 
 يجب أن يكون إصدار `tokenizers` هو `0.22.2`، وTransformers ضمن `>=5.14.1,<5.16`، وHub ضمن `>=1.16.0,<2.0`، وأن تبقى `CUDA: True`. ملفات `requirements-transcribe.txt` و`install_dependencies.bat` و`pyproject.toml` تفرض هذه الحدود معاً حتى لا يعود التعارض.
 
+## إصلاح `No module named 'pkg_resources'` مع WhisperX
+
+هذا الخطأ يعني أن تبعية من WhisperX تحتاج وحدة `pkg_resources`، بينما setuptools `82` وما بعده لم يعد يضمّنها. لا تعِد تثبيت Torch ولا تخفّض نسخة CUDA؛ أُضيف إلى ملفات تثبيت التفريغ القيد `setuptools>=70,<82`، ويكتشف التشخيص أيضاً غياب الوحدة أو نسخة setuptools غير المتوافقة.
+
+من جذر المشروع في PowerShell، أصلح مجموعة التفريغ مع إبقاء Torch CUDA العامل:
+
+```powershell
+cd D:\OS
+.\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --repair gpu
+```
+
+بعد اكتمال الإصلاح، افحص الحالة والاستيراد:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --json
+.\.venv\Scripts\python.exe -c "import pkg_resources, torch, whisperx, setuptools; print('WhisperX: READY'); print('setuptools:', setuptools.__version__); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+```
+
+يجب أن يستورد WhisperX و`pkg_resources` بلا خطأ، وأن يبقى `CUDA: True`. إذا استمر الفشل، أرسل `transcription_diagnostic.json` المحدّث وسجل أمر الإصلاح؛ لا تثبّت `faster-whisper` كبديل عشوائي قبل معرفة سبب فشل المسار الأساسي.
+
+
 
 ## خطأ "Could not parse transcript from TSV or SRT" بعد اكتمال التفريغ
 

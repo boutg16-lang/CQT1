@@ -12,7 +12,8 @@ def test_diagnostics_is_json_serializable():
     assert isinstance(report["packages"], dict)
     assert set(report["packages"]) == {
         "torch", "torchaudio", "whisperx", "transformers",
-        "huggingface_hub", "tokenizers", "faster_whisper",
+        "huggingface_hub", "tokenizers", "setuptools",
+        "pkg_resources", "faster_whisper",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
 
@@ -62,6 +63,8 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
         "transformers": "4.57.6",
         "huggingface_hub": "0.36.2",
         "tokenizers": "0.22.2",
+        "setuptools": "81.0.0",
+        "pkg_resources": "installed",
         "faster_whisper": "1.2.1",
     }
     monkeypatch.setattr(
@@ -95,6 +98,60 @@ def test_huggingface_conflict_message_is_actionable():
     assert "لا تغيّر إصدار Torch CUDA" in message
     assert "uv pip install --python ./.venv/Scripts/python.exe" in message
     assert "-r requirements-transcribe.txt" in message
+
+
+def test_missing_pkg_resources_blocks_whisperx_backend(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    versions = {
+        "torch": "2.6.0+cu124",
+        "torchaudio": "2.6.0+cu124",
+        "whisperx": "3.3.1",
+        "transformers": "5.14.1",
+        "huggingface_hub": "1.16.0",
+        "tokenizers": "0.22.2",
+        "setuptools": "81.0.0",
+        "faster_whisper": "1.2.1",
+    }
+
+    def probe(name):
+        if name == "pkg_resources":
+            return {"module": name, "ok": False, "version": "", "error": "No module named 'pkg_resources'"}
+        return {"module": name, "ok": True, "version": versions[name], "error": ""}
+
+    monkeypatch.setattr(diagnostics, "_probe", probe)
+    monkeypatch.setattr(
+        diagnostics,
+        "_torch_runtime",
+        lambda: {"cuda_available": True, "cuda_version": "12.4"},
+    )
+
+    report = diagnostics.diagnose(".")
+
+    assert report["primary_ready"] is False
+    assert report["fallback_ready"] is True
+    assert "pkg_resources" in report["missing"]
+    assert report["backend"] == "faster-whisper"
+
+
+def test_pkg_resources_error_recommends_supported_setuptools_repair(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose",
+        lambda base_dir=None: {
+            "missing": ["pkg_resources"],
+            "incompatible": [],
+            "fallback_ready": False,
+            "torch_runtime": {"cuda_available": True},
+        },
+    )
+    message = build_error_message("No module named 'pkg_resources'", base_dir=".")
+    assert "setuptools>=70,<82" in message
+    assert "setuptools 82" in message
+    assert "--repair gpu" in message
+    assert "--repair-fallback" not in message
 
 
 def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
@@ -186,6 +243,10 @@ def test_transcription_install_manifests_pin_the_locked_stack():
         assert "transformers>=5.14.1,<5.16" in text
         assert "huggingface-hub>=1.16.0,<2.0" in text
         assert "tokenizers>=0.22.2,<0.23.1" in text
+        assert "setuptools>=70,<82" in text
         if manifest.name == "install_dependencies.bat":
             install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
+            assert '"setuptools>=70,<82"' in install_line
+            assert "import pkg_resources" in text
+            assert "Version('70')" in text and "Version('82')" in text
             assert "--upgrade" not in install_line

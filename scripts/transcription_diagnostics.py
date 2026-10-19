@@ -32,6 +32,7 @@ SUPPORTED_TRANSCRIPTION_VERSIONS = {
     "transformers": ("5.14.1", "5.16.0"),
     "huggingface_hub": ("1.16.0", "2.0.0"),
     "tokenizers": ("0.22.2", "0.23.1"),
+    "setuptools": ("70.0.0", "82.0.0"),
 }
 
 
@@ -98,7 +99,8 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         name: _probe(name)
         for name in (
             "torch", "torchaudio", "whisperx", "transformers",
-            "huggingface_hub", "tokenizers", "faster_whisper",
+            "huggingface_hub", "tokenizers", "setuptools",
+            "pkg_resources", "faster_whisper",
         )
     }
     incompatible = [
@@ -106,7 +108,10 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         if probes[name]["ok"] and not _version_supported(probes[name]["version"], minimum, maximum)
     ]
     primary_ready = bool(
-        all(probes[name]["ok"] for name in ("torch", "torchaudio", *SUPPORTED_TRANSCRIPTION_VERSIONS))
+        all(
+            probes[name]["ok"]
+            for name in ("torch", "torchaudio", *SUPPORTED_TRANSCRIPTION_VERSIONS, "pkg_resources")
+        )
         and not incompatible
     )
     fallback_ready = bool(probes["faster_whisper"]["ok"])
@@ -152,6 +157,19 @@ def build_error_message(
     if whisperx_error:
         lines.append("تفاصيل WhisperX: {}".format(whisperx_error))
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
+    pkg_resources_issue = (
+        "pkg_resources" in combined_error
+        or "pkg_resources" in report["missing"]
+        or "setuptools" in report["missing"]
+        or "setuptools" in report["incompatible"]
+    )
+    if pkg_resources_issue:
+        repair_mode = "gpu" if report.get("torch_runtime", {}).get("cuda_available") else "cpu"
+        lines.extend([
+            "سبب الفشل: WhisperX يعتمد على pkg_resources، وقد أزال setuptools 82 هذا المكوّن.",
+            "المجموعة المتوافقة تثبّت setuptools>=70,<82. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
+            "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
+        ])
     if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
         lines.extend([
             "إصدار Hugging Face Hub 0.36.2 لا يصدّر is_offline_mode؛ مجموعة المشروع تتطلب whisperx==3.3.1 وTransformers 5.14–5.15 وHub 1.16+ وtokenizers 0.22.2.",
@@ -166,7 +184,7 @@ def build_error_message(
         ])
     if report.get("fallback_ready"):
         lines.append("يتوفر faster-whisper كمسار احتياطي مستقل؛ شغّل OUSSAMA مجدداً بعد تثبيته لاستخدامه تلقائياً.")
-    else:
+    elif not pkg_resources_issue:
         lines.extend([
             "لتجنب توقف التفريغ عند تعطل WhisperX، ثبّت المسار الاختياري faster-whisper من requirements-transcribe-fallback.txt.",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair-fallback",
