@@ -3470,6 +3470,26 @@ def _resolve_webui_host():
     return host
 
 
+def _validate_webui_exposure(host, auth=None, *, public_share=False):
+    """Reject network/public exposure unless HTTP auth is configured.
+
+    The WebUI can serve local project output and trigger processing actions;
+    a warning is not sufficient protection when a user accidentally binds it
+    to a LAN address or creates a public Gradio share link.
+    """
+    loopback = host in ("127.0.0.1", "::1", "localhost")
+    if (not loopback or public_share) and not auth:
+        if public_share:
+            raise RuntimeError(
+                "Public WebUI sharing requires VIRALCUTTER_WEBUI_USER and "
+                "VIRALCUTTER_WEBUI_PASSWORD."
+            )
+        raise RuntimeError(
+            "Binding the WebUI outside loopback requires "
+            "VIRALCUTTER_WEBUI_USER and VIRALCUTTER_WEBUI_PASSWORD."
+        )
+
+
 def _allowed_dirs():
     """Static dirs Gradio may serve — VIRALS only by default.
 
@@ -3507,10 +3527,16 @@ def _launch(argv=None):
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode")
+    parser.add_argument(
+        "--colab-public", action="store_true",
+        help="Create a public Colab share link (requires WebUI credentials)",
+    )
     parser.add_argument("--preflight", choices=["auto", "check", "off"], default="auto",
                         help="Environment check before boot: 'auto' (default) checks everything "
                              "and auto-installs missing core dependencies, 'off' skips it.")
     args = parser.parse_args(argv)
+    if args.colab_public and not args.colab:
+        parser.error("--colab-public requires --colab")
 
     # v7.18: continuous safety-data refresh. A daemon thread keeps the
     # hate-speech blocklist and the YouTube policy-watch feed fresh for as
@@ -3566,7 +3592,14 @@ def _launch(argv=None):
     _start_telegram_control()
 
     if args.colab:
-        print("Running in Colab mode. Generating public link with Static Mounts...")
+        auth = _webui_auth()
+        _validate_webui_exposure(
+            "127.0.0.1", auth, public_share=args.colab_public
+        )
+        if args.colab_public:
+            print("Running in Colab public mode with authenticated Static Mounts...")
+        else:
+            print("Running in Colab local mode; no public share link will be created.")
         library.set_url_mode("fastapi")
         allowed_dirs = _allowed_dirs()
         try:
@@ -3574,8 +3607,9 @@ def _launch(argv=None):
         except AttributeError:
             pass
         app, local_url, share_url = demo.queue().launch(
-            share=True,
+            share=args.colab_public,
             allowed_paths=allowed_dirs,
+            auth=auth,
             prevent_thread_lock=True,
             **_launch_theme_kwargs
         )
@@ -3635,13 +3669,16 @@ def _launch(argv=None):
 
         if is_windows:
             print("Running in Windows environment (using Gradio launch for convenience).")
+            webui_host = _resolve_webui_host()
+            webui_auth = _webui_auth()
+            _validate_webui_exposure(webui_host, webui_auth)
             app, local_url, share_url = demo.queue().launch(
                 share=False,
                 allowed_paths=allowed_dirs,
                 inbrowser=True,
-                server_name=_resolve_webui_host(),
+                server_name=webui_host,
                 server_port=webui_port,
-                auth=_webui_auth(),
+                auth=webui_auth,
                 prevent_thread_lock=True,
                 **_launch_theme_kwargs
             )
@@ -3651,6 +3688,7 @@ def _launch(argv=None):
             print("Running in Linux/Container environment (using Uvicorn for stability).")
             app = FastAPI()
             _auth = _webui_auth()
+            _validate_webui_exposure(_resolve_webui_host(), _auth)
             if _auth:
                 import base64 as _b64
 

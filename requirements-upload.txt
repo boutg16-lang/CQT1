@@ -15,8 +15,10 @@
 # TikTok / Instagram uploaders are implemented in upload_gate.py with
 # real OAuth + the official APIs (stdlib transport, no extra pip deps).
 #   - TikTok: requires an app APPROVED for Content Posting API (video.publish).
-#   - Instagram: requires IG_ACCESS_TOKEN + IG_USER_ID; the clip is
-#     auto-hosted to a public URL (catbox/0x0.st) unless IG_VIDEO_URL is set.
+#   - Instagram: requires IG_ACCESS_TOKEN + IG_USER_ID and a public
+#     IG_VIDEO_URL you control. Anonymous auto-hosting is disabled by default;
+#     set IG_ALLOW_AUTO_HOST=1 only after explicitly accepting catbox/0x0.st
+#     hosting. IG_HOST_DISABLE=1 remains a defensive override.
 # Diagnose any platform with: python -m scripts.upload_gate --check <platform>
 
 google-api-python-client
