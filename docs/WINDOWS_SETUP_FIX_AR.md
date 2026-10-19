@@ -242,24 +242,24 @@ uv pip install --python .\.venv\Scripts\python.exe --force-reinstall --no-cache 
 
 ## إصلاح تعارض huggingface-hub مع WhisperX
 
-إذا ظهر `cannot import name 'is_offline_mode' from 'huggingface_hub'` أثناء استيراد Transformers/WhisperX، فغالباً خُفّض Hub وحده إلى 0.x بينما بقي Transformers 5.14.1. هذا المشروع يعتمد مجموعة 5.x/1.x: `transformers>=5.14.1,<5.16` و`huggingface-hub>=1.16.0,<2.0` و`tokenizers>=0.22.2,<0.23.1`. Hub 0.36.2 لا يوفّر الواجهة التي يستوردها Transformers 5. Gradio 6.22 يتطلب Hub 1.16 أو أحدث؛ لا تخفّض Hub منفرداً.
+إذا ظهر `cannot import name 'is_offline_mode' from 'huggingface_hub'`، فالبيئة لا تطابق مجموعة المشروع: WhisperX `3.3.1` وTransformers `5.14.1–5.15.x` وHub `1.16+` وtokenizers `0.22.2`. Hub `0.36.2` لا يصدّر الرمز. كذلك WhisperX `3.2.0` لا يطابق هذه المجموعة ويثبّت `faster-whisper==1.0.0` و`ctranslate2==4.4.0`؛ ملف المتطلبات سيعيد ضبط حزم التفريغ كلها. لا تخفّض Hub أو Transformers منفرداً.
 
 للإصلاح الفوري من PowerShell:
 
 ```powershell
 cd D:\OS
-uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "numpy<2"
+uv pip install --python .\.venv\Scripts\python.exe -r requirements-transcribe.txt
 ```
 
 ثم تحقق من الاستيراد:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "from huggingface_hub import is_offline_mode; import huggingface_hub, transformers, tokenizers, gradio, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('gradio:', gradio.__version__); print('is_offline_mode: READY'); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
+.\.venv\Scripts\python.exe -c "import torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; print('WhisperX: READY'); print('Transformers:', transformers.__version__); print('Hub:', huggingface_hub.__version__); print('Tokenizers:', tokenizers.__version__); print('CUDA:', torch.cuda.is_available())"
 ```
 
-يجب أن يعمل `import whisperx`، وأن تكون Transformers ضمن 5.14.1–أقل من 5.16، وHub ضمن 1.16–أقل من 2؛ ويجب أن تبقى `CUDA: True` إذا كانت تعمل قبل الإصلاح. لا تستخدم `pip` داخل هذه البيئة إذا ظهر `No module named pip`؛ استخدم `uv pip --python` كما في الأمر أعلاه.
+يجب أن يظهر `WhisperX: READY`، وأن تكون Transformers ضمن 5.14.1–أقل من 5.16 وHub ضمن 1.16–أقل من 2. أمرك السابق بدأ باستيراد `is_offline_mode` مباشرةً؛ لذلك توقف عند Hub 0.36.2 قبل تنفيذ `import whisperx`، ولم يختبر WhisperX. التثبيت من ملف المتطلبات ينسق WhisperX 3.3.1 واعتمادياته، ولا يستبدل Torch العامل.
 
-**مهم:** `from huggingface_hub import is_offline_mode` سيفشل مع Hub 0.36.2 لأن هذا الإصدار لا يصدّر الرمز. لذلك لا تستخدمه للتحقق قبل الإصلاح؛ بعد تثبيت Hub 1.16+ يختبره الأمر أعلاه، إلى جانب استيراد Transformers وWhisperX نفسيهما. وللتأكد من بيانات الاعتماد المثبتة، نفّذ `uv pip check --python .\\.venv\\Scripts\\python.exe`؛ تحذيرا WhisperX 3.2 حول CTranslate2 وfaster-whisper مستقلان عن خطأ Hub، ولا تغيّر Torch CUDA العامل لإخفائهما.
+**مهم:** لا تستورد `is_offline_mode` يدوياً في اختبار منفصل؛ الأمر السابق توقف عند هذا السطر قبل تنفيذ `import whisperx`. بعد الإصلاح، استيراد WhisperX وTransformers مباشرةً هو الاختبار الصحيح. وللتأكد من بيانات الاعتماد المثبتة، نفّذ `uv pip check --python ./.venv/Scripts/python.exe`؛ الإصدار المقفول 3.3.1 يعيد اختيار `faster-whisper==1.1.0` و`ctranslate2<4.5.0`؛ لا تعد تثبيت Torch إذا ظل فحص CUDA ناجحاً.
 
 
 ## إصلاح تعارض tokenizers مع WhisperX

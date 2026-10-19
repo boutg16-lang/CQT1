@@ -80,6 +80,7 @@ def _version_range_check(name: str, installed: str, minimum: str, maximum: str) 
 def _huggingface_stack_checks() -> list[dict[str, Any]]:
     checks = []
     supported = (
+        ("whisperx", "WhisperX version", "whisperx", "3.3.1", "3.3.2"),
         ("transformers", "Transformers", "transformers", "5.14.1", "5.16.0"),
         ("huggingface_hub", "huggingface-hub", "huggingface-hub", "1.16.0", "2.0.0"),
         ("tokenizers", "tokenizers", "tokenizers", "0.22.2", "0.23.1"),
