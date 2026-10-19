@@ -7,4 +7,4 @@
 #
 # The `file` provider needs nothing: point it at a folder of your own
 # recordings instead.
-edge-tts>=7.2.8
+edge-tts>=7.3.1
