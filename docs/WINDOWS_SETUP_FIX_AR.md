@@ -310,7 +310,11 @@ cd D:\OS
 
 يجب أن يستورد WhisperX و`pkg_resources` بلا خطأ، وأن يبقى `CUDA: True`. إذا استمر الفشل، أرسل `transcription_diagnostic.json` المحدّث وسجل أمر الإصلاح؛ لا تثبّت `faster-whisper` كبديل عشوائي قبل معرفة سبب فشل المسار الأساسي.
 
+## إصلاح تعارض `weights_only=None` عند تحميل VAD
 
+إذا توقف تحميل WhisperX داخل `pyannote.audio` أو `lightning_fabric` برسالة `safe_load() got multiple values for keyword argument 'weights_only'`، فبعض إصدارات Lightning ترسل `weights_only=None` صراحةً. كان غلاف الأمان يضيف `weights_only=True` مع إبقاء قيمة `None`، فيُرفض الاستدعاء قبل تحميل النموذج.
+
+تحديث المشروع يصلح ذلك بتعامل `None` كإعداد غير محدد واستخدام التحميل الآمن `weights_only=True`. لا حاجة إلى إعادة تثبيت Torch/WhisperX، ولا تضبط `VIRALCUTTER_ALLOW_UNSAFE_LOAD=1` لهذا الخطأ؛ تجاوز الحماية لا يعالج سبب تكرار الوسيط.
 
 ## خطأ "Could not parse transcript from TSV or SRT" بعد اكتمال التفريغ
 

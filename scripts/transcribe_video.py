@@ -258,11 +258,13 @@ def apply_safe_globals_hack():
         original_load = torch.load
 
         def safe_load(*args, **kwargs):
-            # Respect an explicit weights_only decision made by the caller.
+            # Preserve explicit choices; Lightning may pass None as its default.
             if kwargs.get("weights_only") is not None:
                 return original_load(*args, **kwargs)
+            safe_kwargs = dict(kwargs)
+            safe_kwargs["weights_only"] = True
             try:
-                return original_load(*args, weights_only=True, **kwargs)
+                return original_load(*args, **safe_kwargs)
             except Exception as safe_err:
                 if not allow_unsafe:
                     raise RuntimeError(
@@ -273,7 +275,9 @@ def apply_safe_globals_hack():
                 print("WARNING: weights_only=True failed ({!r}); retrying with "
                       "weights_only=False (VIRALCUTTER_ALLOW_UNSAFE_LOAD=1)."
                       .format(safe_err))
-                return original_load(*args, weights_only=False, **kwargs)
+                unsafe_kwargs = dict(safe_kwargs)
+                unsafe_kwargs["weights_only"] = False
+                return original_load(*args, **unsafe_kwargs)
 
         torch.load = safe_load
     except Exception as e:
