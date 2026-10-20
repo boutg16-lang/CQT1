@@ -679,5 +679,7 @@
     "The pairing code has not been used.": "لم يُستخدم رمز الاقتران.",
     "Local page unavailable": "الواجهة المحلية غير متاحة",
     "Checking the local CAT page before pairing…": "جارٍ فحص واجهة CAT المحلية قبل الاقتران…",
+    "YouTube download was interrupted; retrying in {} seconds (attempt {}/{}).": "انقطع تنزيل YouTube مؤقتاً؛ ستتم إعادة المحاولة بعد {} ثانية (المحاولة {}/{}).",
+    "\n[ERROR] The video transfer kept failing after resumable retries. Retry this project on a stable connection; yt-dlp will resume its partial download. Choose 720p or 480p if the connection is slow.": "\n[ERROR] استمر انقطاع نقل الفيديو بعد محاولات الاستئناف. أعد تشغيل التنزيل للمشروع نفسه عند استقرار الاتصال؛ سيستأنف yt-dlp الملف الجزئي. اختر 720p أو 480p إذا كان الاتصال بطيئاً.",
     "WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.": "تعارض في تبعيات WhisperX: تتطلب مجموعة التفريغ المدعومة إصدار Hugging Face Hub من 1.16.0 إلى أقل من 2.0. أعد تثبيت تبعيات المشروع ثم أعد تشغيل التطبيق."
 }
