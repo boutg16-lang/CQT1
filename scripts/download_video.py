@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 
 from i18n.i18n import I18nAuto
 from scripts.ffmpeg_toolchain import FFMPEG_BROKEN_GUIDANCE, resolve_toolchain
@@ -19,6 +20,9 @@ except ImportError:  # pragma: no cover - depends on environment
     yt_dlp = None
 
 i18n = I18nAuto()
+
+_DOWNLOAD_TRANSPORT_RETRIES = 2
+_DOWNLOAD_RETRY_BASE_SECONDS = 2
 
 
 def _require_yt_dlp():
@@ -70,6 +74,8 @@ def _friendly_download_error(e, url=""):
                 + "  " + FFMPEG_BROKEN_GUIDANCE)
     if "unable to download video subtitles" in low or "429" in low:
         return None  # handled by the retry-without-subs branch
+    if _is_transient_download_error(msg):
+        return i18n("\n[ERROR] The video transfer kept failing after resumable retries. Retry this project on a stable connection; yt-dlp will resume its partial download. Choose 720p or 480p if the connection is slow.")
     if "403" in msg or "forbidden" in low:
         return (i18n("\n[ERROR] YouTube blocked the download (HTTP 403).\n"
                      "Fixes (try in order):\n"
@@ -218,6 +224,41 @@ def _is_http_block(error_text):
     return "403" in low or "forbidden" in low or "429" in low or "http error" in low
 
 
+def _is_transient_download_error(error_text):
+    low = str(error_text or "").lower()
+    if "bytes read" in low and "more expected" in low:
+        return True
+    markers = (
+        "incomplete read",
+        "incompleteread",
+        "content too short",
+        "connection reset",
+        "connection aborted",
+        "connection broken",
+        "remote end closed connection",
+        "server closed the connection",
+        "read timed out",
+        "timed out",
+        "unexpected eof",
+    )
+    return any(marker in low for marker in markers)
+
+
+def _run_download_with_retries(run_download, options, sleep=None):
+    sleeper = sleep or time.sleep
+    for retry_index in range(_DOWNLOAD_TRANSPORT_RETRIES + 1):
+        try:
+            return run_download(options)
+        except Exception as exc:
+            if (not _is_transient_download_error(exc)
+                    or retry_index >= _DOWNLOAD_TRANSPORT_RETRIES):
+                raise
+            delay = _DOWNLOAD_RETRY_BASE_SECONDS * (2 ** retry_index)
+            print(i18n("YouTube download was interrupted; retrying in {} seconds (attempt {}/{}).")
+                  .format(delay, retry_index + 1, _DOWNLOAD_TRANSPORT_RETRIES))
+            sleeper(delay)
+
+
 def _format_attempts(selected_format):
     """Return deterministic format/player fallbacks for YouTube HTTP blocks."""
     formats = [selected_format]
@@ -320,6 +361,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
     ydl_opts = {
         'format': selected_format,
         'overwrites': True,
+        'continuedl': True,
         'outtmpl': output_path_base,
         'postprocessor_args': [
             '-movflags', 'faststart'
@@ -388,7 +430,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
         try:
             if attempt_index > 1:
                 print(i18n("Retrying YouTube video with fallback {} (format/player)...").format(attempt_index))
-            _run_download(attempt_opts)
+            _run_download_with_retries(_run_download, attempt_opts)
             ydl_opts = attempt_opts
             video_downloaded = True
             break
