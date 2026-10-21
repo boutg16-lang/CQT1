@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
+from importlib import metadata
 from typing import Any, Dict, Optional
 
 
@@ -26,15 +27,39 @@ class TranscriptionUnavailableError(ImportError):
 APP_NAME = "OUSSAMA Cutter"
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIN_FREE_MB = 4096
+SUPPORTED_TRANSCRIPTION_VERSIONS = {
+    "whisperx": ("3.3.1", "3.3.2"),
+    "transformers": ("5.14.1", "5.16.0"),
+    "huggingface_hub": ("1.16.0", "2.0.0"),
+    "tokenizers": ("0.22.2", "0.23.1"),
+    "setuptools": ("70.0.0", "82.0.0"),
+}
+
+
+def _version_supported(installed: str, minimum: str, maximum: str) -> bool:
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        current = Version(installed)
+        return Version(minimum) <= current < Version(maximum)
+    except InvalidVersion:
+        return False
+
 
 
 def _probe(module_name: str) -> Dict[str, Any]:
     try:
         module = importlib.import_module(module_name)
+        version = getattr(module, "__version__", None)
+        if version is None:
+            try:
+                version = metadata.version(module_name.replace("_", "-"))
+            except metadata.PackageNotFoundError:
+                version = "installed"
         return {
             "module": module_name,
             "ok": True,
-            "version": str(getattr(module, "__version__", "installed")),
+            "version": str(version),
             "error": "",
         }
     except Exception as exc:  # optional stack: report, never crash diagnostics
@@ -70,8 +95,25 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         free_mb = shutil.disk_usage(base_dir).free // (1024 * 1024)
     except Exception:
         free_mb = None
-    probes = {name: _probe(name) for name in ("torch", "torchaudio", "whisperx", "transformers", "tokenizers", "faster_whisper")}
-    primary_ready = bool(probes["torch"]["ok"] and probes["torchaudio"]["ok"] and probes["whisperx"]["ok"])
+    probes = {
+        name: _probe(name)
+        for name in (
+            "torch", "torchaudio", "whisperx", "transformers",
+            "huggingface_hub", "tokenizers", "setuptools",
+            "pkg_resources", "faster_whisper",
+        )
+    }
+    incompatible = [
+        name for name, (minimum, maximum) in SUPPORTED_TRANSCRIPTION_VERSIONS.items()
+        if probes[name]["ok"] and not _version_supported(probes[name]["version"], minimum, maximum)
+    ]
+    primary_ready = bool(
+        all(
+            probes[name]["ok"]
+            for name in ("torch", "torchaudio", *SUPPORTED_TRANSCRIPTION_VERSIONS, "pkg_resources")
+        )
+        and not incompatible
+    )
     fallback_ready = bool(probes["faster_whisper"]["ok"])
     missing = [name for name, result in probes.items() if not result["ok"]]
     torch_runtime = _torch_runtime()
@@ -89,6 +131,7 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         "backend": "whisperx" if primary_ready else ("faster-whisper" if fallback_ready else "none"),
         "gpu_ready": bool((primary_ready or fallback_ready) and torch_runtime["cuda_available"] and torch_runtime["cuda_version"]),
         "missing": missing,
+        "incompatible": incompatible,
         "packages": probes,
         "torch_runtime": torch_runtime,
         "checked_at": datetime.now(timezone.utc).isoformat(),
@@ -106,17 +149,32 @@ def build_error_message(
     if report["missing"]:
         lines.append("المكوّنات الناقصة أو التي فشل استيرادها: {}.".format(
             ", ".join(report["missing"])))
+    if report.get("incompatible"):
+        lines.append("إصدارات خارج النطاق المدعوم: {}.".format(
+            ", ".join(report["incompatible"])))
     if torch_error:
         lines.append("تفاصيل Torch: {}".format(torch_error))
     if whisperx_error:
         lines.append("تفاصيل WhisperX: {}".format(whisperx_error))
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
+    pkg_resources_issue = (
+        "pkg_resources" in combined_error
+        or "pkg_resources" in report["missing"]
+        or "setuptools" in report["missing"]
+        or "setuptools" in report["incompatible"]
+    )
+    if pkg_resources_issue:
+        repair_mode = "gpu" if report.get("torch_runtime", {}).get("cuda_available") else "cpu"
+        lines.extend([
+            "سبب الفشل: WhisperX يعتمد على pkg_resources، وقد أزال setuptools 82 هذا المكوّن.",
+            "المجموعة المتوافقة تثبّت setuptools>=70,<82. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
+            "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
+        ])
     if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
         lines.extend([
-            "Transformers 5.14–5.15 يحتاج Hugging Face Hub 1.x؛ Gradio 6.22 يرفع الحد الأدنى إلى 1.16.0. خفض Hub إلى 0.36.2 يزيل واجهة is_offline_mode التي يستوردها Transformers 5.",
-            "اختبر استيراد Transformers وWhisperX نفسيهما؛ لا تغيّر إصدار Torch CUDA إذا كان torch.cuda.is_available() يُرجع True.",
-            "نفّذ من مجلد المشروع: uv pip install --python ./.venv/Scripts/python.exe --upgrade 'transformers>=5.14.1,<5.16' 'huggingface-hub>=1.16.0,<2.0' 'tokenizers>=0.22.2,<0.23.1' 'numpy<2'",
-            "Gradio 6.22 يتطلب huggingface-hub>=1.16.0,<2.0؛ لذلك يثبت المشروع الحد الأدنى 1.16.0.",
+            "إصدار Hugging Face Hub 0.36.2 لا يصدّر is_offline_mode؛ مجموعة المشروع تتطلب whisperx==3.3.1 وTransformers 5.14–5.15 وHub 1.16+ وtokenizers 0.22.2.",
+            "لا تبدأ الاختبار باستيراد is_offline_mode يدوياً؛ قد يتوقف قبل import whisperx. اختبر WhisperX وTransformers مباشرةً، ولا تغيّر إصدار Torch CUDA إذا كان يعمل.",
+            "نفّذ من مجلد المشروع: uv pip install --python ./.venv/Scripts/python.exe -r requirements-transcribe.txt",
         ])
     if "tokenizers" in combined_error:
         lines.extend([
@@ -126,7 +184,7 @@ def build_error_message(
         ])
     if report.get("fallback_ready"):
         lines.append("يتوفر faster-whisper كمسار احتياطي مستقل؛ شغّل OUSSAMA مجدداً بعد تثبيته لاستخدامه تلقائياً.")
-    else:
+    elif not pkg_resources_issue:
         lines.extend([
             "لتجنب توقف التفريغ عند تعطل WhisperX، ثبّت المسار الاختياري faster-whisper من requirements-transcribe-fallback.txt.",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair-fallback",
@@ -219,6 +277,15 @@ def repair(mode: str = "cpu", base_dir: Optional[str] = None) -> Dict[str, Any]:
             "diagnostic": report,
             "steps": [],
         }
+    requirement_file = os.path.join(APP_ROOT, "requirements-transcribe.txt")
+    if not os.path.isfile(requirement_file):
+        return {
+            "ok": False,
+            "mode": mode,
+            "error": "requirements-transcribe.txt is missing",
+            "diagnostic": report,
+            "steps": [],
+        }
     index_url = (
         "https://download.pytorch.org/whl/cu124"
         if mode == "gpu" else "https://download.pytorch.org/whl/cpu"
@@ -237,29 +304,23 @@ def repair(mode: str = "cpu", base_dir: Optional[str] = None) -> Dict[str, Any]:
     else:
         steps.append({"ok": True, "command": [], "returncode": 0,
                       "error": "", "output": "Existing Torch installation preserved."})
-    stack = [
-        "transformers>=5.14.1,<5.16",
-        "huggingface-hub>=1.16.0,<2.0",
-        "tokenizers>=0.22.2,<0.23.1",
-        "numpy<2",
-    ]
-    try:
-        from importlib.metadata import PackageNotFoundError, version
-        try:
-            version("whisperx")
-        except PackageNotFoundError:
-            stack.insert(0, "whisperx")
-    except Exception:
-        stack.insert(0, "whisperx")
-    steps.append(_run_install(_pip_command(["--upgrade"] + stack)))
+    steps.append(_run_install(_pip_command(["-r", requirement_file])))
     final = diagnose(base_dir=base_dir)
-    ok = bool(final["ready"] and (mode != "gpu" or final["gpu_ready"]))
+    primary_ready = bool(final.get("primary_ready"))
+    gpu_ready = bool(final.get("gpu_ready"))
+    ok = primary_ready and (mode != "gpu" or gpu_ready)
+    if ok:
+        error = ""
+    elif primary_ready and mode == "gpu":
+        error = "Torch CUDA أو تعريف NVIDIA غير جاهز؛ تحقق من torch.version.cuda وtorch.cuda.is_available()."
+    else:
+        error = build_error_message(base_dir=base_dir)
     return {
         "ok": ok,
         "mode": mode,
         "diagnostic": final,
         "steps": steps,
-        "error": "" if ok else (build_error_message(base_dir=base_dir) if not final["ready"] else "Torch CUDA أو تعريف NVIDIA غير جاهز؛ تحقق من torch.version.cuda وtorch.cuda.is_available()."),
+        "error": error,
     }
 
 

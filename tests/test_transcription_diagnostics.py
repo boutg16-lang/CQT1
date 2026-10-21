@@ -1,5 +1,6 @@
 from scripts.transcription_diagnostics import (
     TranscriptionUnavailableError,
+    _version_supported,
     build_error_message,
     diagnose,
 )
@@ -11,7 +12,8 @@ def test_diagnostics_is_json_serializable():
     assert isinstance(report["packages"], dict)
     assert set(report["packages"]) == {
         "torch", "torchaudio", "whisperx", "transformers",
-        "tokenizers", "faster_whisper",
+        "huggingface_hub", "tokenizers", "setuptools",
+        "pkg_resources", "faster_whisper",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
 
@@ -44,19 +46,112 @@ def test_dependency_error_is_marked_for_no_retry():
     assert error.dependency_error is True
 
 
+def test_supported_transcription_versions_reject_user_reported_mix():
+    assert not _version_supported("3.2.0", "3.3.1", "3.3.2")
+    assert not _version_supported("4.57.6", "5.14.1", "5.16.0")
+    assert not _version_supported("0.36.2", "1.16.0", "2.0.0")
+    assert _version_supported("3.3.1", "3.3.1", "3.3.2")
+
+
+def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    versions = {
+        "torch": "2.6.0+cu124",
+        "torchaudio": "2.6.0+cu124",
+        "whisperx": "3.2.0",
+        "transformers": "4.57.6",
+        "huggingface_hub": "0.36.2",
+        "tokenizers": "0.22.2",
+        "setuptools": "81.0.0",
+        "pkg_resources": "installed",
+        "faster_whisper": "1.2.1",
+    }
+    monkeypatch.setattr(
+        diagnostics,
+        "_probe",
+        lambda name: {"module": name, "ok": True, "version": versions[name], "error": ""},
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "_torch_runtime",
+        lambda: {"cuda_available": True, "cuda_version": "12.4"},
+    )
+
+    report = diagnostics.diagnose(".")
+
+    assert report["primary_ready"] is False
+    assert report["fallback_ready"] is True
+    assert report["ready"] is True
+    assert report["backend"] == "faster-whisper"
+    assert report["incompatible"] == ["whisperx", "transformers", "huggingface_hub"]
+
+
 def test_huggingface_conflict_message_is_actionable():
     message = build_error_message(
         "cannot import name 'is_offline_mode' from 'huggingface_hub'",
         base_dir=".",
     )
     assert "Transformers 5.14–5.15" in message
-    assert "transformers>=5.14.1,<5.16" in message
-    assert "huggingface-hub>=1.16.0,<2.0" in message
-    assert "Gradio 6.22" in message
-    assert "tokenizers>=0.22.2,<0.23.1" in message
+    assert "whisperx==3.3.1" in message
+    assert "لا تبدأ الاختبار باستيراد is_offline_mode يدوياً" in message
     assert "لا تغيّر إصدار Torch CUDA" in message
     assert "uv pip install --python ./.venv/Scripts/python.exe" in message
-    assert "'huggingface-hub>=1.16.0,<2.0'" in message
+    assert "-r requirements-transcribe.txt" in message
+
+
+def test_missing_pkg_resources_blocks_whisperx_backend(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    versions = {
+        "torch": "2.6.0+cu124",
+        "torchaudio": "2.6.0+cu124",
+        "whisperx": "3.3.1",
+        "transformers": "5.14.1",
+        "huggingface_hub": "1.16.0",
+        "tokenizers": "0.22.2",
+        "setuptools": "81.0.0",
+        "faster_whisper": "1.2.1",
+    }
+
+    def probe(name):
+        if name == "pkg_resources":
+            return {"module": name, "ok": False, "version": "", "error": "No module named 'pkg_resources'"}
+        return {"module": name, "ok": True, "version": versions[name], "error": ""}
+
+    monkeypatch.setattr(diagnostics, "_probe", probe)
+    monkeypatch.setattr(
+        diagnostics,
+        "_torch_runtime",
+        lambda: {"cuda_available": True, "cuda_version": "12.4"},
+    )
+
+    report = diagnostics.diagnose(".")
+
+    assert report["primary_ready"] is False
+    assert report["fallback_ready"] is True
+    assert "pkg_resources" in report["missing"]
+    assert report["backend"] == "faster-whisper"
+
+
+def test_pkg_resources_error_recommends_supported_setuptools_repair(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose",
+        lambda base_dir=None: {
+            "missing": ["pkg_resources"],
+            "incompatible": [],
+            "fallback_ready": False,
+            "torch_runtime": {"cuda_available": True},
+        },
+    )
+    message = build_error_message("No module named 'pkg_resources'", base_dir=".")
+    assert "setuptools>=70,<82" in message
+    assert "setuptools 82" in message
+    assert "--repair gpu" in message
+    assert "--repair-fallback" not in message
 
 
 def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
@@ -64,7 +159,7 @@ def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
 
     reports = [
         {"free_disk_mb": 5000},
-        {"ready": True, "gpu_ready": False},
+        {"ready": True, "primary_ready": True, "gpu_ready": False},
     ]
     commands = []
     monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: reports.pop(0))
@@ -77,13 +172,10 @@ def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
     result = diagnostics.repair("cpu")
 
     assert result["ok"] is True
-    assert any(
-        "transformers>=5.14.1,<5.16" in command
-        and "huggingface-hub>=1.16.0,<2.0" in command
-        and "tokenizers>=0.22.2,<0.23.1" in command
-        and "numpy<2" in command
-        for command in commands
-    )
+    assert "-r" in commands[-1]
+    assert commands[-1][-1].endswith("requirements-transcribe.txt")
+    assert "--upgrade" not in commands[-1]
+    assert "torch==2.6.0" not in commands[-1]
 
 
 def test_gpu_repair_preserves_working_cuda_torch(monkeypatch):
@@ -95,7 +187,7 @@ def test_gpu_repair_preserves_working_cuda_torch(monkeypatch):
             "packages": {"torch": {"ok": True}, "torchaudio": {"ok": True}},
             "torch_runtime": {"cuda_available": True},
         },
-        {"ready": True, "gpu_ready": True},
+        {"ready": True, "primary_ready": True, "gpu_ready": True},
     ]
     commands = []
     monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: reports.pop(0))
@@ -105,17 +197,38 @@ def test_gpu_repair_preserves_working_cuda_torch(monkeypatch):
         lambda command, timeout=1800: commands.append(command) or {"ok": True},
     )
 
-    monkeypatch.setattr("importlib.metadata.version", lambda name: "3.2.0")
     result = diagnostics.repair("gpu")
 
     assert result["ok"] is True
     assert len(commands) == 1
     assert "torch==2.6.0" not in commands[0]
-    assert "huggingface-hub>=1.16.0,<2.0" in commands[0]
-    assert "whisperx" not in commands[0]
+    assert "-r" in commands[0]
+    assert commands[0][-1].endswith("requirements-transcribe.txt")
+    assert "--upgrade" not in commands[0]
 
 
-def test_transcription_install_manifests_use_the_locked_hub_one_x_stack():
+def test_repair_does_not_report_fallback_as_a_whisperx_repair(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+
+    reports = [
+        {
+            "free_disk_mb": 5000,
+            "packages": {"torch": {"ok": True}, "torchaudio": {"ok": True}},
+            "torch_runtime": {"cuda_available": False},
+        },
+        {"ready": True, "primary_ready": False, "fallback_ready": True, "gpu_ready": False},
+    ]
+    monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: reports.pop(0))
+    monkeypatch.setattr(diagnostics, "_run_install", lambda *args, **kwargs: {"ok": True})
+    monkeypatch.setattr(diagnostics, "build_error_message", lambda base_dir=None: "WhisperX stack still incompatible")
+
+    result = diagnostics.repair("cpu")
+
+    assert result["ok"] is False
+    assert result["error"] == "WhisperX stack still incompatible"
+
+
+def test_transcription_install_manifests_pin_the_locked_stack():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
@@ -126,5 +239,14 @@ def test_transcription_install_manifests_use_the_locked_hub_one_x_stack():
     )
     for manifest in manifests:
         text = manifest.read_text(encoding="utf-8")
+        assert "whisperx==3.3.1" in text
         assert "transformers>=5.14.1,<5.16" in text
         assert "huggingface-hub>=1.16.0,<2.0" in text
+        assert "tokenizers>=0.22.2,<0.23.1" in text
+        assert "setuptools>=70,<82" in text
+        if manifest.name == "install_dependencies.bat":
+            install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
+            assert '"setuptools>=70,<82"' in install_line
+            assert "import pkg_resources" in text
+            assert "Version('70')" in text and "Version('82')" in text
+            assert "--upgrade" not in install_line

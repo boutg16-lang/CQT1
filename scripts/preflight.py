@@ -111,6 +111,8 @@ PINNED_RULES = [
      "install tokenizers 0.22.2, the newest available version below 0.23.1"),
     ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
      "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
+    ("setuptools", "setuptools>=70,<82",
+     "WhisperX dependencies import pkg_resources, removed in setuptools 82"),
 ]
 
 # --------------------------------------------------------------------------
@@ -551,6 +553,28 @@ def fix_hub_pin(dry_run=False):
     return False, "could not install compatible Hub stack (exit %s)" % (proc.returncode if proc else "?")
 
 
+def fix_setuptools_pin(dry_run=False):
+    """Keep pkg_resources available for WhisperX's current dependencies."""
+    spec = _iu.find_spec("setuptools")
+    if spec is None:
+        return True, "setuptools not installed - transcription stack will install the supported range"
+    try:
+        from packaging.version import Version
+        v = _version("setuptools")
+        if v != "?" and Version("70") <= Version(v) < Version("82"):
+            return True, "setuptools %s OK (>=70,<82)" % v
+    except Exception:
+        return True, "cannot read setuptools version"
+    if dry_run:
+        return False, "would restore setuptools>=70,<82 for pkg_resources compatibility"
+    if _is_frozen():
+        return False, "cannot reinstall setuptools inside the packaged exe"
+    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "setuptools>=70,<82"])
+    if proc is not None and proc.returncode == 0:
+        return True, "installed setuptools>=70,<82 for pkg_resources compatibility"
+    return False, "could not restore compatible setuptools (exit %s)" % (proc.returncode if proc else "?")
+
+
 def ensure_dirs():
     """Create the folders the app expects. Returns list of (label, ok, detail)."""
     out = []
@@ -679,6 +703,8 @@ def repair(mode, checks, ensure_upload=False):
                 ok, detail = fix_tokenizers_pin()
             elif dist == "huggingface-hub":
                 ok, detail = fix_hub_pin()
+            elif dist == "setuptools":
+                ok, detail = fix_setuptools_pin()
             else:
                 continue
             fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})

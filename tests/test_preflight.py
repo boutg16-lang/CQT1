@@ -136,6 +136,49 @@ def test_check_pin_numpy_violation(monkeypatch):
     assert r is not None and r["status"] == preflight.FAIL
 
 
+def test_check_pin_setuptools_accepts_pkg_resources_compatible_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    assert any(
+        dist == "setuptools" and rule == "setuptools>=70,<82"
+        for dist, rule, _note in preflight.PINNED_RULES
+    )
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "81.0.0")
+    assert preflight.check_pin("setuptools", "setuptools>=70,<82") is None
+
+
+def test_check_pin_setuptools_rejects_removed_pkg_resources_release(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "82.0.0")
+    result = preflight.check_pin("setuptools", "setuptools>=70,<82")
+    assert result is not None and result["status"] == preflight.FAIL
+
+
+def test_fix_setuptools_pin_restores_pkg_resources_compatibility(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    calls = []
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "84.0.0")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+
+    ok, detail = preflight.fix_setuptools_pin()
+
+    assert ok
+    assert "setuptools>=70,<82" in calls[0]
+    assert "pkg_resources" in detail
+
+
 def test_check_pin_transformers_supported_range(monkeypatch):
     class FakeSpec:
         pass
