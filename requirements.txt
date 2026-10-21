@@ -6,7 +6,7 @@ ffmpeg-python
 mediapipe
 google-genai
 insightface
-gradio
+gradio>=6.7,<7
 opencv-python
 psutil
 fastapi
@@ -20,9 +20,9 @@ requests>=2.31,<3
 #   - visual content check (Roadmap 2.1): pip install onnxruntime
 #   - real API-key encryption (Roadmap 4.4): pip install cryptography
 #   - auto-update builds: pip install pyinstaller  (see packaging/)
-onnxruntime
+onnxruntime<1.24  # 1.24+ drops Python 3.10 wheels (matches pyproject.toml)
 cryptography
 
 # v7.23: thumbnail generator (Pillow) + scene detection (PySceneDetect, BSD-3)
-Pillow
+Pillow==12.3.0  # Gradio 6.x currently requires Pillow<13; see CI exception expiry.
 scenedetect

@@ -44,7 +44,7 @@ except Exception:
 OK, WARN, FAIL = "ok", "warn", "fail"
 ICONS = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
 
-MIN_PYTHON = (3, 9)
+MIN_PYTHON = (3, 10)
 MIN_PYTHON_RECOMMENDED = (3, 10)
 # The project pins NumPy <2 for WhisperX/pyannote compatibility. NumPy 1.26
 # wheels support Python through 3.12; fail early on 3.13+ instead of letting
