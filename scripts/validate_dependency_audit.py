@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-EXPIRES = date(2026, 11, 20)
+EXPIRES = date(2026, 11, 4)
 PILLOW_VERSION = "12.3.0"
 ALLOWED_IDS = {
     "CVE-2026-112895",
@@ -20,6 +20,22 @@ ALLOWED_IDS = {
     "CVE-2026-112395",
     "CVE-2026-112404",
     "CVE-2026-112899",
+    "CVE-2026-112402",
+    "CVE-2026-112900",
+    "CVE-2026-112893",
+    "CVE-2026-112392",
+    "CVE-2026-112891",
+    "CVE-2026-112405",
+    "CVE-2026-112390",
+    "CVE-2026-112401",
+    "CVE-2026-112901",
+    "CVE-2026-112391",
+    "CVE-2026-112894",
+    "CVE-2026-112406",
+    "CVE-2026-112399",
+    "CVE-2026-112892",
+    "CVE-2026-112393",
+    "CVE-2026-112396",
 }
 
 
