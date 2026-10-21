@@ -27,14 +27,44 @@ jobs:
           cache: pip
       - name: Install ffmpeg (real-video smoke tests)
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Upgrade pip installer
+        run: python -m pip install --upgrade pip
       - name: Install test dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Ruff lint
         run: ruff check .
+      - name: Enforce Pillow audit exception expiry
+        run: |
+          expires=2026-11-20
+          today="$(date -u +%F)"
+          if [[ "$today" > "$expires" || "$today" == "$expires" ]]; then
+            echo "The temporary Pillow audit exception expired on $expires; remove or renew it after reviewing the dependency constraints."
+            exit 1
+          fi
       - name: Audit dependencies
-        run: pip-audit --progress-spinner off --format json --output pip-audit-${{ matrix.python-version }}.json
+        run: >-
+          pip-audit --progress-spinner off
+          --ignore-vuln CVE-2026-112895
+          --ignore-vuln CVE-2026-112400
+          --ignore-vuln CVE-2026-112397
+          --ignore-vuln CVE-2026-112896
+          --ignore-vuln CVE-2026-112897
+          --ignore-vuln CVE-2026-112395
+          --ignore-vuln CVE-2026-112404
+          --ignore-vuln CVE-2026-112899
+          --format json --output pip-audit-${{ matrix.python-version }}.json
       - name: Generate SBOM
-        run: pip-audit --progress-spinner off --format cyclonedx-json --output sbom-${{ matrix.python-version }}.json
+        run: >-
+          pip-audit --progress-spinner off
+          --ignore-vuln CVE-2026-112895
+          --ignore-vuln CVE-2026-112400
+          --ignore-vuln CVE-2026-112397
+          --ignore-vuln CVE-2026-112896
+          --ignore-vuln CVE-2026-112897
+          --ignore-vuln CVE-2026-112395
+          --ignore-vuln CVE-2026-112404
+          --ignore-vuln CVE-2026-112899
+          --format cyclonedx-json --output sbom-${{ matrix.python-version }}.json
       - name: Audit dependency licenses
         run: pip-licenses --fail-on="GPL;AGPL" --format=markdown --output-file=licenses-${{ matrix.python-version }}.md
       - name: Build package
