@@ -1,4 +1,5 @@
 import sys
+import typing
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -82,3 +83,19 @@ def test_safe_load_does_not_retry_unsafely_without_opt_in(monkeypatch):
     with pytest.raises(RuntimeError, match="VIRALCUTTER_ALLOW_UNSAFE_LOAD=1"):
         safe_load("model.ckpt", weights_only=None)
     assert calls == [{"weights_only": True}]
+
+
+def test_typing_any_is_registered_as_safe_global(monkeypatch):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    registered = []
+    serialization = SimpleNamespace(
+        add_safe_globals=lambda values: registered.extend(values)
+    )
+    fake_torch = SimpleNamespace(load=lambda *args, **kwargs: "loaded", serialization=serialization)
+    monkeypatch.setattr(transcribe_video, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
+    monkeypatch.setitem(sys.modules, "torchaudio", ModuleType("torchaudio"))
+
+    transcribe_video.apply_safe_globals_hack()
+
+    assert typing.Any in registered
