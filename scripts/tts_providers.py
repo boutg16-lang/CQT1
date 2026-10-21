@@ -175,8 +175,14 @@ def _file(text: str, out_path: str, *, voice: Optional[str] = None,
     for path in candidates:
         if os.path.basename(path) not in used:
             os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
-            shutil.copyfile(path, out_path)
+            # ``dub_clip`` uses a provider-neutral temporary name. Preserve
+            # the selected file's suffix so FFmpeg's demuxer sees WAV/MP3/etc.
+            # correctly; copying a WAV to ``*.mp3`` can produce a valid-looking
+            # but truncated/silent mux when video is present.
+            source_suffix = os.path.splitext(path)[1].lower() or ".wav"
+            normalized_path = os.path.splitext(out_path)[0] + source_suffix
+            shutil.copyfile(path, normalized_path)
             with open(used_marker, "a", encoding="utf-8") as handle:
                 handle.write(os.path.basename(path) + "\n")
-            return _result(out_path, "file", os.path.basename(path), False)
+            return _result(normalized_path, "file", os.path.basename(path), False)
     return _failure("file", "all files in {} are already used".format(folder))
