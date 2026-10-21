@@ -239,15 +239,23 @@ def apply_safe_globals_hack():
     while remaining a documented escape hatch for genuinely legacy models.
     """
     try:
-        import omegaconf
-        if hasattr(torch.serialization, 'add_safe_globals'):
-            torch.serialization.add_safe_globals([
+        from typing import Any
+
+        safe_globals = [Any]
+        try:
+            import omegaconf
+            safe_globals.extend([
                 omegaconf.listconfig.ListConfig,
                 omegaconf.dictconfig.DictConfig,
                 omegaconf.base.ContainerMetadata,
                 omegaconf.base.Node,
             ])
-            print("Registrados safe globals do Omegaconf.")
+        except (ImportError, AttributeError):
+            pass
+
+        if hasattr(torch.serialization, 'add_safe_globals'):
+            torch.serialization.add_safe_globals(safe_globals)
+            print("Registrados safe globals do typing e Omegaconf.")
     except Exception as e:
         print(f"Aviso ao registrar safe globals: {e}")
 

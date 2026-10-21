@@ -316,6 +316,8 @@ cd D:\OS
 
 تحديث المشروع يصلح ذلك بتعامل `None` كإعداد غير محدد واستخدام التحميل الآمن `weights_only=True`. لا حاجة إلى إعادة تثبيت Torch/WhisperX، ولا تضبط `VIRALCUTTER_ALLOW_UNSAFE_LOAD=1` لهذا الخطأ؛ تجاوز الحماية لا يعالج سبب تكرار الوسيط.
 
+إذا ظهر بدلاً منه `Unsupported global: GLOBAL typing.Any` داخل تحميل VAD، حدّث المشروع إلى الإصلاح الذي يضيف `typing.Any` تحديداً إلى قائمة PyTorch الآمنة. يبقى التحميل على `weights_only=True`؛ لا تفعّل `VIRALCUTTER_ALLOW_UNSAFE_LOAD` لهذا الخطأ.
+
 ## خطأ "Could not parse transcript from TSV or SRT" بعد اكتمال التفريغ
 
 إذا أكمل التفريغ (`Processamento concluído...`) ثم توقف عند مرحلة إنشاء المقاطع بهذا الخطأ، فالسبب أحد أمرين (أو كلاهما):
