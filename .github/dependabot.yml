@@ -33,6 +33,12 @@ updates:
         versions: [">=2.0"]
       - dependency-name: "tokenizers"
         versions: [">=0.23.1"]
+      # These packages form one tested transcription compatibility contract.
+      # A one-file Dependabot bump is unsafe because the same versions are
+      # mirrored in installers, diagnostics, preflight, and regression tests.
+      - dependency-name: "whisperx"
+      - dependency-name: "transformers"
+      - dependency-name: "setuptools"
 
   # GitHub Actions used in .github/workflows/
   - package-ecosystem: "github-actions"
