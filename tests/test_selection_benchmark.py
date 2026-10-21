@@ -37,6 +37,23 @@ def test_evaluate_respects_k_limit():
     assert sb.evaluate(gold, outputs, k=3)["gold_recalled"] == 1
 
 
+def test_evaluate_zero_k_means_no_outputs():
+    metrics = sb.evaluate([(100, 130)], [(100, 130)], k=0)
+    assert metrics["k"] == 0
+    assert metrics["gold_recalled"] == 0
+    assert metrics["recall_at_k"] == 0.0
+
+
+@pytest.mark.parametrize("start,end", [(float("nan"), 1), (0, float("inf")), (-float("inf"), 1)])
+def test_fixture_rejects_non_finite_windows(start, end):
+    fixture = {
+        "transcript": [{"start": start, "end": end, "text": "x"}],
+        "candidates": [{"start_time": 0, "end_time": 1}],
+        "gold": [{"start": 0, "end": 1}],
+    }
+    assert any("transcript[0]" in issue for issue in sb.validate_fixture(fixture))
+
+
 def test_evaluate_empty_gold_is_safe():
     assert sb.evaluate([], [(0, 10)])["recall_at_k"] is None
 

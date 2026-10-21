@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import tempfile
@@ -63,7 +64,11 @@ def evaluate(gold: Sequence[Tuple[float, float]],
              k: Optional[int] = None,
              min_coverage: float = GOLD_COVERAGE) -> Dict[str, Any]:
     """Recall@k over gold windows, plus per-gold diagnostics."""
-    limit = int(k) if k else len(outputs)
+    limit = len(outputs) if k is None else int(k)
+    if limit < 0:
+        raise ValueError("k must be zero or greater")
+    if not math.isfinite(float(min_coverage)) or not 0.0 <= float(min_coverage) <= 1.0:
+        raise ValueError("min_coverage must be between 0 and 1")
     top = list(outputs)[: max(0, limit)]
     details = []
     hits = 0
@@ -103,7 +108,7 @@ def _window(entry: Any, keys: Sequence[str]) -> Optional[Tuple[float, float]]:
         end = float(entry.get(keys[1]))
     except (TypeError, ValueError):
         return None
-    if end <= start:
+    if not math.isfinite(start) or not math.isfinite(end) or end <= start:
         return None
     return (start, end)
 
@@ -285,11 +290,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     source.add_argument("--demo", action="store_true",
                         help="run the built-in synthetic fixture")
     parser.add_argument("-k", type=int, default=None,
-                        help="top-k outputs to recall within (default: all outputs)")
+                        help="top-k outputs to recall within (0 means no outputs; default: all outputs)")
     parser.add_argument("--min-duration", type=float, default=DEFAULT_MIN_DURATION)
     parser.add_argument("--max-duration", type=float, default=DEFAULT_MAX_DURATION)
     parser.add_argument("--output", metavar="JSON", help="write the report to a file")
     args = parser.parse_args(argv)
+    if args.k is not None and args.k < 0:
+        parser.error("-k must be zero or greater")
 
     fixture = demo_fixture() if args.demo else load_fixture(args.fixture)
     report = run_benchmark(fixture, k=args.k,
