@@ -59,7 +59,7 @@ viralcutter-stream-guard = "scripts.stream_guard.cli:main"
 
 [project.optional-dependencies]
 transcribe = [
-    "whisperx==3.3.1",
+    "whisperx==3.8.6",
     "setuptools>=70,<82",
     "torch",
     "torchaudio",
