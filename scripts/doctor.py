@@ -16,7 +16,7 @@ OK, WARN, FAIL = "ok", "warn", "fail"
 
 ICONS = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
 
-MIN_PYTHON = (3, 9)
+MIN_PYTHON = (3, 10)
 MAX_PYTHON = (3, 12)
 
 # (module, critical?) — critical failures break the core pipeline

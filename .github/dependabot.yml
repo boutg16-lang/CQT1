@@ -18,8 +18,8 @@ updates:
     # updates that violate them:
     #   * numpy<2 — whisperx/pyannote break on NumPy 2.x (np.NaN removed);
     #     see requirements.txt / requirements-transcribe.txt.
-    #   * onnxruntime<1.24 — 1.24+ drops Python 3.10 wheels while the project
-    #     supports 3.10–3.12; see pyproject.toml.
+    #   * onnxruntime<1.24 — retained for the supported WhisperX/ONNX stack;
+    #     see pyproject.toml.
     #   * huggingface-hub<2.0 — project floor is 1.16.0 for the current
     #     Transformers/Gradio stack; see requirements-transcribe.txt.
     #   * tokenizers<0.23.1 — Transformers 5.14–5.15 accepts <=0.23.0, and
