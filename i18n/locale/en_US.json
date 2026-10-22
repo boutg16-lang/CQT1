@@ -400,7 +400,7 @@
     "Off": "Off",
     "Bleep violating words (keep clip)": "Bleep violating words (keep clip)",
     "Extra AI review (catches contextual violations)": "Extra AI review (catches contextual violations)",
-    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).",
+    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Sends surviving clips to Gemini, G4F, or OpenAI Moderation. In block/censor mode, processing stops if contextual review is unavailable.",
     "Running AI safety review...": "Running AI safety review...",
     "AI review: {} segment(s) flagged by AI policy review.": "AI review: {} segment(s) flagged by AI policy review.",
     "[safety-ai]   ✗ '{}' — {}": "[safety-ai]   ✗ '{}' — {}",

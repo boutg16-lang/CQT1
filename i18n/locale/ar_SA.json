@@ -453,7 +453,7 @@
     "Select options or preset to preview": "اختر الخيارات أو الإعداد المسبق للمعاينة",
     "Selection restored from backup.": "تمت الاستعادة من النسخة الاحتياطية.",
     "Selection score": "درجة الاختيار",
-    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "يرسل المقاطع الناجية للذكاء الاصطناعي لفحص ثانٍ للسياسة (Gemini/G4F فقط).",
+    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "يرسل المقاطع الناجية إلى Gemini أو G4F أو OpenAI Moderation. في وضعي الحظر والكتم، يتوقف العمل إذا تعذرت المراجعة السياقية.",
     "Sensitive (Catch All)": "حساس (يلتقط الكل)",
     "Settings saved": "تم حفظ الإعدادات",
     "Settings saved automatically": "تم حفظ الإعدادات تلقائياً",

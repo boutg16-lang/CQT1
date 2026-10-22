@@ -453,7 +453,7 @@
     "Select options or preset to preview": "Önizleme için seçenekleri veya ön ayarı seçin",
     "Selection restored from backup.": "Seçim yedekten geri yüklendi.",
     "Selection score": "Seçim puanı",
-    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Kalan klipleri ikinci bir politika kontrolü için AI'a gönderir (sadece Gemini/G4F).",
+    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Kalan klipleri Gemini, G4F veya OpenAI Moderation ile inceler. Block/censor modlarında bağlamsal inceleme kullanılamıyorsa işlem durur.",
     "Sensitive (Catch All)": "Hassas (Tümünü Yakala)",
     "Settings saved": "Ayarlar kaydedildi",
     "Settings saved automatically": "Ayarlar otomatik kaydedildi",

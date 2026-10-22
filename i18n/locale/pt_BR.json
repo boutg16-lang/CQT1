@@ -453,7 +453,7 @@
     "Select options or preset to preview": "Selecione opções ou predefinição para visualizar",
     "Selection restored from backup.": "Seleção restaurada do backup.",
     "Selection score": "Pontuação de seleção",
-    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Envia os clipes sobreviventes à IA para uma segunda verificação de política (somente Gemini/G4F).",
+    "Sends surviving clips to the AI for a second policy check (Gemini/G4F only).": "Envia os clipes restantes ao Gemini, G4F ou OpenAI Moderation. Nos modos block/censor, o processamento para se a revisão contextual estiver indisponível.",
     "Sensitive (Catch All)": "Sensível (Pega Tudo)",
     "Settings saved": "Configurações salvas",
     "Settings saved automatically": "Configurações salvas automaticamente",

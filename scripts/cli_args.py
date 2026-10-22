@@ -80,7 +80,7 @@ def build_parser():
     parser.add_argument("--autopilot", action="store_true",
                         help="Run the end-to-end safety autopilot: AI review, OCR, visual checks, provenance, audio QC, metadata, and hard publish gates.")
     parser.add_argument("--safety-fail-closed", choices=["on", "off"], default="on",
-                        help="Refuse to continue when an enabled safety check errors (default: on)")
+                        help="Refuse to continue when an enabled safety check errors or contextual review is unavailable in block/censor mode (default: on)")
     parser.add_argument("--safety-autoupdate", choices=["on", "off"], default="on",
                         help="Auto-update the hate-speech word list from GitHub once a day (offline-safe). Default: on")
     parser.add_argument("--risk-scorecard", choices=["on", "off"], default="on",
