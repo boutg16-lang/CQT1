@@ -245,16 +245,30 @@ def test_safety_stage_unchanged_filter_does_not_resave(cli, tmp_path, monkeypatc
     assert out is segs
 
 
-def test_safety_stage_records_unavailable_contextual_review(cli, tmp_path, monkeypatch):
+def test_safety_stage_fails_closed_when_contextual_review_is_unavailable(cli, tmp_path, monkeypatch):
     segs = _segments("clean transcript")
     monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data)
-    cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                         args=_safety_args(safety_ai="on"), ai_backend="local",
-                         api_key=None, safety_backend="local", workflow_choice="1")
+    with pytest.raises(SystemExit) as exc:
+        cli.run_safety_stage(segs, project_folder=str(tmp_path),
+                             args=_safety_args(safety_ai="on"), ai_backend="local",
+                             api_key=None, safety_backend="local", workflow_choice="1")
+    assert exc.value.code == 1
     report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
     assert report["ai_review_requested"] is True
     assert report["ai_review_status"] == "unavailable"
     assert report["ai_reviewed_clips"][0]["index"] == 0
+
+
+def test_safety_stage_allows_unavailable_review_in_flag_mode(cli, tmp_path, monkeypatch):
+    segs = _segments("clean transcript")
+    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data)
+    result = cli.run_safety_stage(
+        segs, project_folder=str(tmp_path),
+        args=_safety_args(safety_mode="flag", safety_ai="on"),
+        ai_backend="local", api_key=None, safety_backend="local", workflow_choice="1")
+    assert result is segs
+    report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
+    assert report["ai_review_status"] == "unavailable"
 
 
 def test_safety_stage_fails_closed_on_incomplete_contextual_review(cli, tmp_path, monkeypatch):

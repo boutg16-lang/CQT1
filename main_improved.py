@@ -522,6 +522,9 @@ def run_safety_stage(viral_segments, *, project_folder, args, ai_backend, api_ke
                 project_folder, requested=True, status="unavailable",
                 backend=review_backend, reviewed_clips=clips, flagged=[])
             debug("AI safety review unavailable for backend '{}'.".format(review_backend))
+            if getattr(args, "safety_fail_closed", "on") == "on" and args.safety_mode in ("block", "censor"):
+                print(i18n("AI safety review failed; fail-closed policy refuses to continue."))
+                sys.exit(1)
 
     if args.safety_mode in ("block", "censor") and not viral_segments.get("segments"):
         print(i18n("Error: All segments were blocked by the safety filter (hate speech / policy violations)."))
