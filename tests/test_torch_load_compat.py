@@ -98,4 +98,4 @@ def test_typing_any_is_registered_as_safe_global(monkeypatch):
 
     transcribe_video.apply_safe_globals_hack()
 
-    assert typing.Any in registered
+    assert (typing.Any, "typing.Any") in registered
