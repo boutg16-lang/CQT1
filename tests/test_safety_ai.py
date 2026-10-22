@@ -24,6 +24,14 @@ class TestPrompt:
         assert "CLIP 0" in prompt and "CLIP 1" in prompt
         assert "نص أول" in prompt and "نص ثان" in prompt
 
+    def test_prompt_explicitly_covers_arabic_dialects_and_code_switching(self):
+        prompt = safety_ai.build_review_prompt([
+            {"index": 0, "title": "", "text": "واش راك"},
+        ])
+        assert "Algerian Darija" in prompt
+        assert "Arabic-French code-switching" in prompt
+        assert "neutral mention of a group's identity" in prompt
+
     def test_long_text_truncated(self):
         clips = [{"index": 0, "title": "x", "text": "a" * 5000}]
         prompt = safety_ai.build_review_prompt(clips)
