@@ -241,7 +241,7 @@ def apply_safe_globals_hack():
     try:
         from typing import Any
 
-        safe_globals = [Any]
+        safe_globals = [(Any, "typing.Any")]
         try:
             import omegaconf
             safe_globals.extend([
