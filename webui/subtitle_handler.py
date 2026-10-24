@@ -1,9 +1,12 @@
 
+import logging
 import os
 import re
 import subprocess
 
 import gradio as gr
+
+logger = logging.getLogger(__name__)
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKING_DIR = os.path.dirname(CURRENT_DIR) # ViralCutter root
@@ -420,7 +423,8 @@ def render_preview_video(font, size, color, highlight, outline, outline_thick, s
         try:
             with open("debug_preview.log", "a") as f:
                 f.write(f"PREVIEW INPUT: '{h}'\n")
-        except: pass
+        except OSError as exc:
+            logger.debug("Could not append subtitle preview input to debug log: %s", exc)
         
         if not h: return "&H00FFFFFF&"
         
@@ -440,7 +444,8 @@ def render_preview_video(font, size, color, highlight, outline, outline_thick, s
                      g = max(0, min(255, g))
                      b = max(0, min(255, b))
                      return f"&H00{b:02X}{g:02X}{r:02X}&".upper()
-            except: pass
+            except (TypeError, ValueError):
+                logger.debug("Could not parse RGB subtitle color %r", h)
             
         if len(hex_clean) == 3:
             hex_clean = "".join([c*2 for c in hex_clean])
@@ -537,8 +542,10 @@ def render_preview_video(font, size, color, highlight, outline, outline_thick, s
                     if f.startswith("preview_render_") and f.endswith(".mp4") and f != os.path.basename(cache_bust_path):
                         try:
                             os.remove(os.path.join(preview_dir, f))
-                        except: pass
-            except: pass
+                        except OSError as exc:
+                            logger.debug("Could not remove stale preview %s: %s", f, exc)
+            except OSError as exc:
+                logger.debug("Could not enumerate preview directory %s: %s", preview_dir, exc)
             
             return gr.update(value=cache_bust_path, autoplay=True)
             
