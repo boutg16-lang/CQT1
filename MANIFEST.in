@@ -1,1 +1,2 @@
+recursive-include scripts/export_xml_lib *.py
 global-exclude *.py[cod]
