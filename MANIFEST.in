@@ -1,2 +1,7 @@
+include app_assets.py
+include prompt.txt safety_blocklist.json safety_terms.example.json
+include requirements.txt requirements-transcribe.txt requirements-transcribe-fallback.txt requirements-upload.txt requirements-dubbing.txt
+recursive-include fonts *.ttf OFL.txt
+recursive-include i18n/locale *.json
 recursive-include scripts/export_xml_lib *.py
 global-exclude *.py[cod]

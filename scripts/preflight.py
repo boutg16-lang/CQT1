@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 
+from app_assets import RUNTIME_ASSETS
 from scripts.gemini_models import DEFAULT_GEMINI_MODEL
 
 try:
@@ -118,17 +119,7 @@ PINNED_RULES = [
 # --------------------------------------------------------------------------
 # Asset catalogue (files that must ship with the repo/app)
 # --------------------------------------------------------------------------
-ASSETS = [
-    "fonts/Montserrat-Regular.ttf",
-    "fonts/Montserrat-Bold.ttf",
-    "fonts/Montserrat-ExtraBold.ttf",
-    "safety_blocklist.json",
-    "safety_terms.example.json",
-    "i18n/locale/en_US.json",
-    "i18n/locale/ar_SA.json",
-    "i18n/locale/pt_BR.json",
-    "i18n/locale/tr_TR.json",
-]
+ASSETS = list(RUNTIME_ASSETS)
 
 API_CONFIG_TEMPLATE = {
     "selected_api": "gemini",
