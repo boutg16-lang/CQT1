@@ -33,6 +33,12 @@ echo ""
 echo "== Optional stacks =="
 read -r -p "Install full transcription stack (whisperx + torch, needed for the complete pipeline, ~2 GB)? [y/N] " full_yn
 if [[ "$full_yn" =~ ^[Yy]$ ]]; then
+    read -r -p "Use NVIDIA CUDA 12.6 for transcription? [y/N] " gpu_yn
+    if [[ "$gpu_yn" =~ ^[Yy]$ ]]; then
+        pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+    else
+        pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+    fi
     pip install -r requirements-transcribe.txt
 fi
 read -r -p "Install direct-upload stack (YouTube OAuth uploader)? [y/N] " up_yn

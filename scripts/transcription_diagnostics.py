@@ -32,7 +32,7 @@ SUPPORTED_TRANSCRIPTION_VERSIONS = {
     "transformers": ("5.14.1", "5.16.0"),
     "huggingface_hub": ("1.16.0", "2.0.0"),
     "tokenizers": ("0.22.2", "0.23.1"),
-    "setuptools": ("70.0.0", "82.0.0"),
+    "setuptools": ("81.0.0", "82.0.0"),
 }
 
 
@@ -167,7 +167,7 @@ def build_error_message(
         repair_mode = "gpu" if report.get("torch_runtime", {}).get("cuda_available") else "cpu"
         lines.extend([
             "سبب الفشل: WhisperX يعتمد على pkg_resources، وقد أزال setuptools 82 هذا المكوّن.",
-            "المجموعة المتوافقة تثبّت setuptools>=70,<82. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
+            "المجموعة المتوافقة تثبّت setuptools>=81.0.0,<82. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
         ])
     if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
@@ -287,7 +287,7 @@ def repair(mode: str = "cpu", base_dir: Optional[str] = None) -> Dict[str, Any]:
             "steps": [],
         }
     index_url = (
-        "https://download.pytorch.org/whl/cu124"
+        "https://download.pytorch.org/whl/cu126"
         if mode == "gpu" else "https://download.pytorch.org/whl/cpu"
     )
     steps = []
@@ -298,8 +298,8 @@ def repair(mode: str = "cpu", base_dir: Optional[str] = None) -> Dict[str, Any]:
     cuda_ready = bool(report.get("torch_runtime", {}).get("cuda_available"))
     if not torch_ready or (mode == "gpu" and not cuda_ready):
         steps.append(_run_install(_pip_command([
-            "--upgrade", "torch==2.6.0", "torchvision==0.21.0",
-            "torchaudio==2.6.0", "--index-url", index_url,
+            "--upgrade", "torch==2.8.0", "torchvision==0.23.0",
+            "torchaudio==2.8.0", "--index-url", index_url,
         ])))
     else:
         steps.append({"ok": True, "command": [], "returncode": 0,
