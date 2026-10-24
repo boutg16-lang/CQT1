@@ -82,6 +82,7 @@ DIST_TO_MODULE = {
     "google-api-python-client": "googleapiclient",
     "google-auth-oauthlib": "google_auth_oauthlib",
     "google-auth-httplib2": "google_auth_httplib2",
+    "opentelemetry-api": "opentelemetry",
     "pyacoustid": "pyacoustid",
     "Pillow": "PIL",
     "PyYAML": "yaml",
@@ -112,7 +113,7 @@ PINNED_RULES = [
      "install tokenizers 0.22.2, the newest available version below 0.23.1"),
     ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
      "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
-    ("setuptools", "setuptools>=70,<82",
+    ("setuptools", "setuptools>=81.0.0,<82",
      "WhisperX dependencies import pkg_resources, removed in setuptools 82"),
 ]
 
@@ -552,17 +553,17 @@ def fix_setuptools_pin(dry_run=False):
     try:
         from packaging.version import Version
         v = _version("setuptools")
-        if v != "?" and Version("70") <= Version(v) < Version("82"):
-            return True, "setuptools %s OK (>=70,<82)" % v
+        if v != "?" and Version("81.0.0") <= Version(v) < Version("82.0.0"):
+            return True, "setuptools %s OK (>=81.0.0,<82)" % v
     except Exception:
         return True, "cannot read setuptools version"
     if dry_run:
-        return False, "would restore setuptools>=70,<82 for pkg_resources compatibility"
+        return False, "would restore setuptools>=81.0.0,<82 for pkg_resources compatibility"
     if _is_frozen():
         return False, "cannot reinstall setuptools inside the packaged exe"
-    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "setuptools>=70,<82"])
+    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "setuptools>=81.0.0,<82"])
     if proc is not None and proc.returncode == 0:
-        return True, "installed setuptools>=70,<82 for pkg_resources compatibility"
+        return True, "installed setuptools>=81.0.0,<82 for pkg_resources compatibility"
     return False, "could not restore compatible setuptools (exit %s)" % (proc.returncode if proc else "?")
 
 

@@ -102,7 +102,11 @@ winget install Gyan.FFmpeg                 # أو نزّل من gyan.dev
 py -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-pip install -r requirements-transcribe.txt # WhisperX + Torch (GPU: ثبّت Torch CUDA أولاً)
+# NVIDIA CUDA 12.6:
+pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+# CPU (without NVIDIA CUDA):
+# pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements-transcribe.txt
 # اختياري: مسار مستقل عند تعطل WhisperX أو تعارض Hugging Face
 pip install -r requirements-transcribe-fallback.txt
 $env:GEMINI_API_KEY="مفتاحك-هنا"
@@ -133,7 +137,7 @@ run_webui.bat
 
 > ✅ **للعمل الكامل (يوتيوب → مقطع فيروسي) تحتاج الخطوات التالية**:
 > 1. `pip install -r requirements.txt`
-> 2. `pip install -r requirements-transcribe.txt`  ← المسار الأساسي (WhisperX + Torch، يُفضّل GPU)
+> 2. ثبّت زوج Torch/Torchaudio المناسب (CUDA 12.6 لـ NVIDIA أو CPU)، ثم نفّذ `pip install -r requirements-transcribe.txt`؛ يثبت المثبّت `install_dependencies.bat` الزوج الصحيح تلقائياً على Windows.
 > 3. عند تعطل المسار الأساسي: `pip install -r requirements-transcribe-fallback.txt`  ← faster-whisper مستقل
 > 4. ضع مفتاح Gemini: `export GEMINI_API_KEY=...`  (أو `python -m scripts.secure_config --set KEY --passphrase ...`)
 >

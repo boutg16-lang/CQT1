@@ -61,11 +61,14 @@ viralcutter-stream-guard = "scripts.stream_guard.cli:main"
 [project.optional-dependencies]
 transcribe = [
     "whisperx==3.3.1",
-    "setuptools>=70,<82",
-    "torch",
-    "torchaudio",
+    "setuptools>=81.0.0,<82",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
     "transformers>=5.14.1,<5.16",
     "huggingface-hub>=1.16.0,<2.0",
+    "lightning>=2.6.6",
+    "pytorch-lightning>=2.6.6",
+    "nltk>=3.10.4",
     "tokenizers>=0.22.2,<0.23.1",
     "numpy<2",
 ]
@@ -73,6 +76,8 @@ upload = [
     "google-api-python-client",
     "google-auth-oauthlib",
     "google-auth-httplib2",
+    "oauthlib>=4.0.0",
+    "opentelemetry-api>=1.45.1",
     "pyacoustid",
 ]
 otio = [
