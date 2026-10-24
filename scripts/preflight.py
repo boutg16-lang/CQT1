@@ -24,6 +24,7 @@ The same module is imported by main_improved.py / webui/app.py through
 run_preflight(mode) — see the integration notes there.
 """
 import argparse
+import datetime
 import importlib
 import importlib.metadata as _pkg_meta
 import importlib.util as _iu
@@ -52,6 +53,7 @@ MIN_PYTHON_RECOMMENDED = (3, 10)
 # pip attempt a source build that requires MSVC.
 MAX_PYTHON = (3, 12)
 MIN_FREE_DISK_MB = 1024  # transcription + ffmpeg temp files need headroom
+SAFETY_BLOCKLIST_MAX_AGE_DAYS = 14
 
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -372,6 +374,62 @@ def check_assets():
     return {"name": "Packaged assets", "status": OK, "detail": "%d files present" % len(ASSETS)}
 
 
+def check_safety_blocklist_freshness(base_dir=None, today=None):
+    base_dir = base_dir or APP_ROOT
+    today = today or datetime.datetime.now(datetime.timezone.utc).date()
+    candidates = []
+
+    try:
+        from scripts.safety_updater import load_cached_pack, validate_pack
+    except Exception:
+        load_cached_pack = None
+        validate_pack = None
+
+    if validate_pack:
+        try:
+            with open(os.path.join(base_dir, "safety_blocklist.json"), "r", encoding="utf-8") as f:
+                bundled = validate_pack(json.load(f))
+            if bundled:
+                candidates.append(("bundled list", bundled))
+        except Exception:
+            pass
+        try:
+            cached = load_cached_pack(base_dir)
+            if cached:
+                candidates.append(("downloaded cache", cached))
+        except Exception:
+            pass
+
+    dated = []
+    for source, pack in candidates:
+        try:
+            updated = datetime.date.fromisoformat(str(pack.get("updated", ""))[:10])
+        except (TypeError, ValueError):
+            continue
+        try:
+            version = int(pack.get("version", 0))
+        except (TypeError, ValueError):
+            version = 0
+        dated.append((updated, version, source))
+
+    if not dated:
+        return {"name": "Safety blocklist freshness", "status": WARN,
+                "detail": "could not verify the list update date; review the safety pack manually"}
+
+    updated, version, source = max(dated, key=lambda item: (item[0], item[1]))
+    age_days = (today - updated).days
+    detail = "v{} from {} last updated {} ({} days ago)".format(
+        version or "unknown", source, updated.isoformat(), age_days)
+    if age_days < 0:
+        return {"name": "Safety blocklist freshness", "status": WARN,
+                "detail": detail + "; update date is in the future, check the system clock"}
+    if age_days > SAFETY_BLOCKLIST_MAX_AGE_DAYS:
+        return {"name": "Safety blocklist freshness", "status": WARN,
+                "detail": detail + "; older than the {}-day review interval".format(
+                    SAFETY_BLOCKLIST_MAX_AGE_DAYS)}
+    return {"name": "Safety blocklist freshness", "status": OK, "detail": detail}
+
+
 def check_models_dir():
     path = os.path.join(APP_ROOT, "models")
     if os.path.isdir(path):
@@ -611,7 +669,8 @@ def collect_checks():
         checks.append(bundled)
     checks += [check_disk_space(_app_dir()),
                check_writable(_app_dir(), "Working dir writable")]
-    checks += [check_api_config(), check_assets(), check_models_dir(), check_telegram_config()]
+    checks += [check_api_config(), check_assets(), check_safety_blocklist_freshness(),
+               check_models_dir(), check_telegram_config()]
 
     # dependency checks per requirements file
     for req_file, (_label, _optional, _hint) in REQ_FILES.items():
