@@ -1,6 +1,10 @@
 from datetime import date
 
-from scripts.validate_dependency_audit import ALLOWED_IDS, validate_report
+from scripts.validate_dependency_audit import (
+    ALLOWED_IDS,
+    FILELOCK_ALLOWED_IDS,
+    validate_report,
+)
 
 
 def _report(name="Pillow", version="12.3.0", vuln_ids=None):
@@ -17,12 +21,26 @@ def _report(name="Pillow", version="12.3.0", vuln_ids=None):
 
 
 def test_accepts_only_listed_pillow_advisories_before_expiry():
-    assert len(ALLOWED_IDS) == 24
+    assert len(ALLOWED_IDS) == 37
     assert validate_report(_report(), date(2026, 11, 3)) == []
 
 
 def test_rejects_same_advisory_on_another_package():
     errors = validate_report(_report(name="other-package"), date(2026, 11, 3))
+    assert any("Unapproved vulnerability" in error for error in errors)
+
+
+def test_accepts_scoped_filelock_exception_for_python_310():
+    assert len(FILELOCK_ALLOWED_IDS) == 6
+    assert validate_report(
+        _report("filelock", "4.1.0", FILELOCK_ALLOWED_IDS), date(2026, 11, 3)
+    ) == []
+
+
+def test_rejects_filelock_exception_for_another_version():
+    errors = validate_report(
+        _report("filelock", "4.2.4", FILELOCK_ALLOWED_IDS), date(2026, 11, 3)
+    )
     assert any("Unapproved vulnerability" in error for error in errors)
 
 

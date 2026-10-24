@@ -1,4 +1,4 @@
-"""Validate the temporary, package-scoped Pillow audit exception."""
+"""Validate the temporary, package-scoped dependency audit exceptions."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Any
 
 EXPIRES = date(2026, 11, 4)
 PILLOW_VERSION = "12.3.0"
+FILELOCK_VERSION = "4.1.0"
 ALLOWED_IDS = {
     "CVE-2026-112895",
     "CVE-2026-112400",
@@ -36,6 +37,27 @@ ALLOWED_IDS = {
     "CVE-2026-112892",
     "CVE-2026-112393",
     "CVE-2026-112396",
+    "CVE-2026-96638",
+    "CVE-2026-96641",
+    "CVE-2026-96640",
+    "CVE-2026-96642",
+    "CVE-2026-96639",
+    "CVE-2026-96643",
+    "CVE-2026-96637",
+    "CVE-2026-96644",
+    "CVE-2026-96778",
+    "CVE-2026-96636",
+    "GHSA-78g4-xqwv-q3g8",
+    "CVE-2026-114501",
+    "CVE-2026-112398",
+}
+FILELOCK_ALLOWED_IDS = {
+    "CVE-2026-112906",
+    "CVE-2026-112940",
+    "CVE-2026-112914",
+    "CVE-2026-112913",
+    "CVE-2026-112937",
+    "CVE-2026-112907",
 }
 
 
@@ -64,12 +86,18 @@ def validate_report(report: dict[str, Any], today: date | None = None) -> list[s
             vuln_id = vulnerability.get("id")
             name = str(dependency.get("name", "")).casefold().replace("_", "-")
             version = str(dependency.get("version", ""))
-            if (
-                name != "pillow"
-                or version != PILLOW_VERSION
-                or not isinstance(vuln_id, str)
-                or vuln_id not in ALLOWED_IDS
-            ):
+            allowed = (
+                name == "pillow"
+                and version == PILLOW_VERSION
+                and isinstance(vuln_id, str)
+                and vuln_id in ALLOWED_IDS
+            ) or (
+                name == "filelock"
+                and version == FILELOCK_VERSION
+                and isinstance(vuln_id, str)
+                and vuln_id in FILELOCK_ALLOWED_IDS
+            )
+            if not allowed:
                 errors.append(
                     f"Unapproved vulnerability: {name or '<unknown>'} {version or '<unknown>'} {vuln_id or '<unknown>'}."
                 )
