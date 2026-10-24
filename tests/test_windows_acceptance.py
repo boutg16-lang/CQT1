@@ -166,9 +166,19 @@ def test_gpu_transcription_fails_when_model_load_raises(monkeypatch, tmp_path):
 # CLI behaviour
 # ---------------------------------------------------------------------------
 
+def _stub_main_runtime(monkeypatch):
+    monkeypatch.setattr(
+        wa,
+        "check_ffmpeg",
+        lambda: wa._check("FFmpeg toolchain", wa.OK, "stubbed", critical=True),
+    )
+    monkeypatch.setattr(wa, "run_core_pipeline", lambda _work_dir: [])
+
+
 def test_main_warn_exit_code_without_gpu(monkeypatch, tmp_path):
     # No torch available in this environment → warning, exit code 2.
     monkeypatch.setitem(sys.modules, "torch", None)
+    _stub_main_runtime(monkeypatch)
     rc = wa.main(["--json", str(tmp_path / "out.json")])
     assert rc in (0, 2)
     report = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
@@ -176,7 +186,8 @@ def test_main_warn_exit_code_without_gpu(monkeypatch, tmp_path):
     assert report["summary"]["critical_fail"] == 0
 
 
-def test_main_missing_clip_is_a_critical_fail(tmp_path, capsys):
+def test_main_missing_clip_is_a_critical_fail(monkeypatch, tmp_path, capsys):
+    _stub_main_runtime(monkeypatch)
     rc = wa.main(["--clip", str(tmp_path / "does_not_exist.mp4")])
     assert rc == 1
     out = capsys.readouterr().out
