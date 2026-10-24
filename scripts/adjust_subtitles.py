@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 RTL_LANGS = {"ar", "he", "fa", "ur"}
 
@@ -90,7 +93,8 @@ def generate_ass_from_file(input_path, output_path, project_folder,
         try:
              with open(renamed_timeline_path, "r") as tf:
                  timeline_data = json.load(tf)
-        except: pass
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load renamed subtitle timeline %s: %s", renamed_timeline_path, exc)
     
     # Check for Index (outputXXX or XXX_Title)
     match_output = re.search(r"output(\d+)", filename)
@@ -108,7 +112,8 @@ def generate_ass_from_file(input_path, output_path, project_folder,
              try:
                  with open(csv_timeline, "r") as tf:
                      timeline_data = json.load(tf)
-             except: pass
+             except (OSError, json.JSONDecodeError) as exc:
+                 logger.warning("Could not load fallback subtitle timeline %s: %s", csv_timeline, exc)
 
     # 3. Load JSON
     try:
