@@ -20,7 +20,7 @@ def test_windows_diagnostics_is_json_serializable(tmp_path):
 def test_windows_diagnostics_contains_runtime_checks(tmp_path):
     report = collect(tmp_path)
     names = {item["name"] for item in report["checks"]}
-    assert {"Python", "Project root", "Project drive space", "Torch", "WhisperX", "Faster-whisper fallback", "setuptools", "pkg_resources", "google-auth-oauthlib"} <= names
+    assert {"Python", "Project root", "Project drive space", "Torch", "WhisperX", "Faster-whisper fallback", "setuptools", "google-auth-oauthlib"} <= names
     text = render(report)
     assert "OUSSAMA Cutter Windows diagnostics" in text
     assert "Summary:" in text
@@ -65,7 +65,7 @@ def test_windows_diagnostics_flags_whisperx_3_2_outside_locked_stack(monkeypatch
         "transformers": "5.15.1",
         "huggingface_hub": "1.33.0",
         "tokenizers": "0.22.2",
-        "setuptools": "81.0.0",
+        "setuptools": "84.2.1",
     }
     monkeypatch.setattr(
         diagnostics,
@@ -89,13 +89,13 @@ def test_windows_diagnostics_rejects_invalid_huggingface_version():
     assert result["status"] == "warn"
 
 
-def test_windows_diagnostics_flags_setuptools_82_without_pkg_resources():
-    result = _version_range_check("setuptools", "82.0.0", "70.0.0", "82.0.0")
+def test_windows_diagnostics_flags_vulnerable_setuptools():
+    result = _version_range_check("setuptools", "81.0.0", "84.1.0", "85.0.0")
     assert result["status"] == "warn"
-    assert "82.0.0" in result["detail"]
+    assert "84.1.0" in result["detail"]
 
 
-def test_windows_diagnostics_warns_when_pkg_resources_is_missing(monkeypatch):
+def test_windows_diagnostics_does_not_require_pkg_resources(monkeypatch):
     import scripts.windows_diagnostics as diagnostics
 
     versions = {
@@ -103,16 +103,16 @@ def test_windows_diagnostics_warns_when_pkg_resources_is_missing(monkeypatch):
         "transformers": "5.15.1",
         "huggingface_hub": "1.33.0",
         "tokenizers": "0.22.2",
-        "setuptools": "81.0.0",
+        "setuptools": "84.2.1",
     }
+    probed = []
 
     def probe(module_name, distribution=None):
-        if module_name == "pkg_resources":
-            return False, "ModuleNotFoundError: No module named 'pkg_resources'"
+        probed.append(module_name)
         return True, versions[module_name]
 
     monkeypatch.setattr(diagnostics, "_import_probe", probe)
     checks = diagnostics._huggingface_stack_checks()
-    pkg_resources = next(item for item in checks if item["name"] == "pkg_resources")
-    assert pkg_resources["status"] == "warn"
-    assert "No module named 'pkg_resources'" in pkg_resources["detail"]
+
+    assert "pkg_resources" not in probed
+    assert all(item["status"] == "ok" for item in checks)

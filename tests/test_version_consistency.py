@@ -144,7 +144,7 @@ def test_transcription_dependency_floors_match_project_and_requirements():
         "lightning": "2.6.6",
         "pytorch-lightning": "2.6.6",
         "nltk": "3.10.4",
-        "setuptools": "81.0.0",
+        "setuptools": "84.1.0",
     }
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
     locked_versions = dict(re.findall(r'(?ms)^\[\[package\]\]\nname = "([^"]+)"\nversion = "([^"]+)"', lock))

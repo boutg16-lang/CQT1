@@ -290,9 +290,9 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14
 
 يجب أن يكون إصدار `tokenizers` هو `0.22.2`، وTransformers ضمن `>=5.14.1,<5.16`، وHub ضمن `>=1.16.0,<2.0`، وأن تبقى `CUDA: True`. ملفات `requirements-transcribe.txt` و`install_dependencies.bat` و`pyproject.toml` تفرض هذه الحدود معاً حتى لا يعود التعارض.
 
-## إصلاح `No module named 'pkg_resources'` مع WhisperX
+## استخدام setuptools الآمن مع WhisperX
 
-هذا الخطأ يعني أن تبعية من WhisperX تحتاج وحدة `pkg_resources`، بينما setuptools `82` وما بعده لم يعد يضمّنها. لا تعِد تثبيت Torch ولا تخفّض نسخة CUDA؛ أُضيف إلى ملفات تثبيت التفريغ القيد `setuptools>=81.0.0,<82`، ويكتشف التشخيص أيضاً غياب الوحدة أو نسخة setuptools غير المتوافقة.
+أظهر اختبار الاستيراد الفعلي أن WhisperX `3.3.1` وPyTorch `2.8.0` يعملان مع setuptools `84.2.1` من دون `pkg_resources`. لم يعد المشروع يفرض setuptools `81.x`؛ فهذا الإصدار يتضمن ثغرات معروفة، بينما تثبّت الملفات الحالية النطاق الآمن `>=84.1.0,<85`.
 
 من جذر المشروع في PowerShell، أصلح مجموعة التفريغ مع إبقاء Torch CUDA العامل:
 
@@ -305,10 +305,10 @@ cd D:\OS
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --json
-.\.venv\Scripts\python.exe -c "import pkg_resources, torch, whisperx, setuptools; print('WhisperX: READY'); print('setuptools:', setuptools.__version__); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+.\.venv\Scripts\python.exe -c "import torch, torchaudio, whisperx, transformers, setuptools; print('WhisperX: READY'); print('setuptools:', setuptools.__version__); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 ```
 
-يجب أن يستورد WhisperX و`pkg_resources` بلا خطأ، وأن يبقى `CUDA: True`. إذا استمر الفشل، أرسل `transcription_diagnostic.json` المحدّث وسجل أمر الإصلاح؛ لا تثبّت `faster-whisper` كبديل عشوائي قبل معرفة سبب فشل المسار الأساسي.
+لا تثبّت setuptools `81.x` لإصلاح خطأ `pkg_resources`؛ إذا ظهر ذلك الخطأ، فهناك تبعية قديمة ويجب إصلاح المجموعة عبر التشخيص بدلاً من الرجوع إلى إصدار ضعيف. إذا استمر الفشل، أرسل `transcription_diagnostic.json` المحدّث وسجل أمر الإصلاح.
 
 ## إصلاح تعارض `weights_only=None` عند تحميل VAD
 

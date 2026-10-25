@@ -12,8 +12,7 @@ def test_diagnostics_is_json_serializable():
     assert isinstance(report["packages"], dict)
     assert set(report["packages"]) == {
         "torch", "torchaudio", "whisperx", "transformers",
-        "huggingface_hub", "tokenizers", "setuptools",
-        "pkg_resources", "faster_whisper",
+        "huggingface_hub", "tokenizers", "setuptools", "faster_whisper",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
 
@@ -63,8 +62,7 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
         "transformers": "4.57.6",
         "huggingface_hub": "0.36.2",
         "tokenizers": "0.22.2",
-        "setuptools": "81.0.0",
-        "pkg_resources": "installed",
+        "setuptools": "84.2.1",
         "faster_whisper": "1.2.1",
     }
     monkeypatch.setattr(
@@ -100,7 +98,7 @@ def test_huggingface_conflict_message_is_actionable():
     assert "-r requirements-transcribe.txt" in message
 
 
-def test_missing_pkg_resources_blocks_whisperx_backend(monkeypatch):
+def test_pkg_resources_is_not_required_for_whisperx_backend(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
     versions = {
@@ -110,16 +108,15 @@ def test_missing_pkg_resources_blocks_whisperx_backend(monkeypatch):
         "transformers": "5.14.1",
         "huggingface_hub": "1.16.0",
         "tokenizers": "0.22.2",
-        "setuptools": "81.0.0",
+        "setuptools": "84.2.1",
         "faster_whisper": "1.2.1",
     }
 
-    def probe(name):
-        if name == "pkg_resources":
-            return {"module": name, "ok": False, "version": "", "error": "No module named 'pkg_resources'"}
-        return {"module": name, "ok": True, "version": versions[name], "error": ""}
-
-    monkeypatch.setattr(diagnostics, "_probe", probe)
+    monkeypatch.setattr(
+        diagnostics,
+        "_probe",
+        lambda name: {"module": name, "ok": True, "version": versions[name], "error": ""},
+    )
     monkeypatch.setattr(
         diagnostics,
         "_torch_runtime",
@@ -128,32 +125,28 @@ def test_missing_pkg_resources_blocks_whisperx_backend(monkeypatch):
 
     report = diagnostics.diagnose(".")
 
-    assert report["primary_ready"] is False
-    assert report["fallback_ready"] is True
-    assert "pkg_resources" in report["missing"]
-    assert report["backend"] == "faster-whisper"
+    assert "pkg_resources" not in report["packages"]
+    assert report["primary_ready"] is True
+    assert report["backend"] == "whisperx"
 
 
-def test_pkg_resources_error_recommends_supported_setuptools_repair(monkeypatch):
+def test_pkg_resources_error_never_recommends_vulnerable_setuptools(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
     monkeypatch.setattr(
         diagnostics,
         "diagnose",
         lambda base_dir=None: {
-            "missing": ["pkg_resources"],
+            "missing": [],
             "incompatible": [],
             "fallback_ready": False,
             "torch_runtime": {"cuda_available": True},
         },
     )
     message = build_error_message("No module named 'pkg_resources'", base_dir=".")
-    assert "setuptools>=81.0.0,<82" in message
-    assert "setuptools 82" in message
+    assert "لا تخفّض setuptools إلى 81.x" in message
+    assert "setuptools>=81.0.0,<82" not in message
     assert "--repair gpu" in message
-    assert "--repair-fallback" not in message
-
-
 def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
@@ -278,10 +271,10 @@ def test_transcription_install_manifests_pin_the_locked_stack():
         assert "transformers>=5.14.1,<5.16" in text
         assert "huggingface-hub>=1.16.0,<2.0" in text
         assert "tokenizers>=0.22.2,<0.23.1" in text
-        assert "setuptools>=81.0.0,<82" in text
+        assert "setuptools>=84.1.0,<85" in text
         if manifest.name == "install_dependencies.bat":
             install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
-            assert '"setuptools>=81.0.0,<82"' in install_line
-            assert "import pkg_resources" in text
-            assert "Version('81.0.0')" in text and "Version('82.0.0')" in text
+            assert '"setuptools>=84.1.0,<85"' in install_line
+            assert "import pkg_resources" not in text
+            assert "Version('84.1.0')" in text and "Version('85.0.0')" in text
             assert "--upgrade" not in install_line

@@ -41,9 +41,22 @@ def test_export_writes_matching_pack(tmp_path, monkeypatch):
     pack = json.loads(out.read_text(encoding="utf-8"))
     assert pack["version"] == 99
     assert pack["source"] == "ViralCutter built-in blocklist"
-    # updated must be a real ISO date (clients parse it for staleness).
     datetime.date.fromisoformat(pack["updated"])
+    datetime.date.fromisoformat(pack["reviewed_at"])
     assert len(pack["terms"]) == len(safety_filter.BLOCKLIST)
+    assert _pack_terms(pack) == _expected_terms()
+
+
+def test_export_separates_review_date_from_content_update_date(tmp_path, monkeypatch):
+    out = tmp_path / "pack.json"
+    _run(
+        monkeypatch, "--version", "7", "--updated", "2026-09-27",
+        "--reviewed-at", "2026-10-25", "--out", str(out))
+
+    pack = json.loads(out.read_text(encoding="utf-8"))
+    assert pack["version"] == 7
+    assert pack["updated"] == "2026-09-27"
+    assert pack["reviewed_at"] == "2026-10-25"
     assert _pack_terms(pack) == _expected_terms()
 
 

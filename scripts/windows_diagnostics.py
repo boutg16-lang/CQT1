@@ -84,7 +84,7 @@ def _huggingface_stack_checks() -> list[dict[str, Any]]:
         ("transformers", "Transformers", "transformers", "5.14.1", "5.16.0"),
         ("huggingface_hub", "huggingface-hub", "huggingface-hub", "1.16.0", "2.0.0"),
         ("tokenizers", "tokenizers", "tokenizers", "0.22.2", "0.23.1"),
-        ("setuptools", "setuptools", "setuptools", "70.0.0", "82.0.0"),
+        ("setuptools", "setuptools", "setuptools", "84.1.0", "85.0.0"),
     )
     for module_name, label, distribution, minimum, maximum in supported:
         imported, detail = _import_probe(module_name, distribution)
@@ -92,8 +92,6 @@ def _huggingface_stack_checks() -> list[dict[str, Any]]:
             checks.append(_version_range_check(label, detail, minimum, maximum))
         else:
             checks.append(_check(label, WARN, detail))
-    imported, detail = _import_probe("pkg_resources", "setuptools")
-    checks.append(_check("pkg_resources", OK if imported else WARN, detail))
     return checks
 
 

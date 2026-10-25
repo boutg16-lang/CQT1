@@ -26,9 +26,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", type=int, required=True,
                         help="Pack version (bump on every change)")
+    parser.add_argument("--updated", default=None,
+                        help="Content update date in YYYY-MM-DD format (default: today)")
+    parser.add_argument("--reviewed-at", default=None,
+                        help="Human review date in YYYY-MM-DD format (default: today)")
     parser.add_argument("--out", default=None,
                         help="Output path (default: repo root safety_blocklist.json)")
     args = parser.parse_args()
+
+    import datetime
+
+    today = datetime.date.today().isoformat()
+    updated = args.updated or today
+    reviewed_at = args.reviewed_at or today
+    for name, value in (("--updated", updated), ("--reviewed-at", reviewed_at)):
+        try:
+            datetime.date.fromisoformat(value)
+        except ValueError:
+            parser.error("{} must be YYYY-MM-DD".format(name))
 
     terms = [
         {"term": term, "lang": lang, "severity": severity, "category": category}
@@ -37,7 +52,8 @@ def main():
 
     pack = {
         "version": args.version,
-        "updated": __import__("datetime").date.today().isoformat(),
+        "updated": updated,
+        "reviewed_at": reviewed_at,
         "source": "ViralCutter built-in blocklist",
         "terms": terms,
     }

@@ -115,8 +115,8 @@ PINNED_RULES = [
      "install tokenizers 0.22.2, the newest available version below 0.23.1"),
     ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
      "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
-    ("setuptools", "setuptools>=81.0.0,<82",
-     "WhisperX dependencies import pkg_resources, removed in setuptools 82"),
+    ("setuptools", "setuptools>=84.1.0,<85",
+     "avoid vulnerable setuptools releases while retaining the tested transcription stack"),
 ]
 
 # --------------------------------------------------------------------------
@@ -403,26 +403,36 @@ def check_safety_blocklist_freshness(base_dir=None, today=None):
     dated = []
     for source, pack in candidates:
         try:
-            updated = datetime.date.fromisoformat(str(pack.get("updated", ""))[:10])
-        except (TypeError, ValueError):
-            continue
-        try:
             version = int(pack.get("version", 0))
         except (TypeError, ValueError):
             version = 0
-        dated.append((updated, version, source))
+        try:
+            content_updated = datetime.date.fromisoformat(
+                str(pack.get("updated", ""))[:10])
+        except (TypeError, ValueError):
+            content_updated = None
+        review_value = pack.get("reviewed_at") or pack.get("updated", "")
+        try:
+            reviewed = datetime.date.fromisoformat(str(review_value)[:10])
+        except (TypeError, ValueError):
+            continue
+        dated.append((version, reviewed, content_updated, source))
 
     if not dated:
         return {"name": "Safety blocklist freshness", "status": WARN,
-                "detail": "could not verify the list update date; review the safety pack manually"}
+                "detail": "could not verify the list review date; review the safety pack manually"}
 
-    updated, version, source = max(dated, key=lambda item: (item[0], item[1]))
-    age_days = (today - updated).days
-    detail = "v{} from {} last updated {} ({} days ago)".format(
-        version or "unknown", source, updated.isoformat(), age_days)
+    latest_version = max(item[0] for item in dated)
+    current = max((item for item in dated if item[0] == latest_version),
+                  key=lambda item: item[1])
+    version, reviewed, content_updated, source = current
+    age_days = (today - reviewed).days
+    content_date = content_updated.isoformat() if content_updated else "unknown"
+    detail = "v{} from {} last reviewed {} ({} days ago; content last updated {})".format(
+        version or "unknown", source, reviewed.isoformat(), age_days, content_date)
     if age_days < 0:
         return {"name": "Safety blocklist freshness", "status": WARN,
-                "detail": detail + "; update date is in the future, check the system clock"}
+                "detail": detail + "; review date is in the future, check the system clock"}
     if age_days > SAFETY_BLOCKLIST_MAX_AGE_DAYS:
         return {"name": "Safety blocklist freshness", "status": WARN,
                 "detail": detail + "; older than the {}-day review interval".format(
@@ -604,25 +614,25 @@ def fix_hub_pin(dry_run=False):
 
 
 def fix_setuptools_pin(dry_run=False):
-    """Keep pkg_resources available for WhisperX's current dependencies."""
+    """Keep the transcription environment on a patched setuptools release."""
     spec = _iu.find_spec("setuptools")
     if spec is None:
-        return True, "setuptools not installed - transcription stack will install the supported range"
+        return True, "setuptools not installed - the transcription stack installs its supported range"
     try:
         from packaging.version import Version
         v = _version("setuptools")
-        if v != "?" and Version("81.0.0") <= Version(v) < Version("82.0.0"):
-            return True, "setuptools %s OK (>=81.0.0,<82)" % v
+        if v != "?" and Version("84.1.0") <= Version(v) < Version("85.0.0"):
+            return True, "setuptools %s OK (>=84.1.0,<85)" % v
     except Exception:
         return True, "cannot read setuptools version"
     if dry_run:
-        return False, "would restore setuptools>=81.0.0,<82 for pkg_resources compatibility"
+        return False, "would install patched setuptools>=84.1.0,<85"
     if _is_frozen():
         return False, "cannot reinstall setuptools inside the packaged exe"
-    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "setuptools>=81.0.0,<82"])
+    proc = _run_pip(["--upgrade", "--no-cache-dir", "setuptools>=84.1.0,<85"])
     if proc is not None and proc.returncode == 0:
-        return True, "installed setuptools>=81.0.0,<82 for pkg_resources compatibility"
-    return False, "could not restore compatible setuptools (exit %s)" % (proc.returncode if proc else "?")
+        return True, "installed patched setuptools>=84.1.0,<85"
+    return False, "could not install patched setuptools (exit %s)" % (proc.returncode if proc else "?")
 
 
 def ensure_dirs():

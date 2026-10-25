@@ -427,6 +427,58 @@ BLOCKLIST = [
     ("muerte a los", "es", "high", "violence_threat"),
     ("morte aos", "pt", "high", "violence_threat"),
     ("vatan haini", "tr", "medium", "hate_slur"),
+    ("vatan haini", "tr", "medium", "hate_slur"),
+    # ------------------------------------------------------------------ v7.43 (pack v7)
+    # Terms from continued community strike reports (2026-10 review).
+    # EN — documented ethnic / identity slurs not yet covered. Token-based
+    # matching keeps "raccoon" clear of "coon"; bare "homo" / "dyke" are
+    # deliberately omitted (scientific / geographic legitimate use).
+    ("gook", "en", "high", "hate_slur"),
+    ("wog", "en", "high", "hate_slur"),
+    ("polack", "en", "high", "hate_slur"),
+    ("zipperhead", "en", "high", "hate_slur"),
+    ("coon", "en", "high", "hate_slur"),
+    ("shemale", "en", "high", "hate_slur"),
+    ("camel jockey", "en", "high", "hate_slur"),
+    ("cocksucker", "en", "high", "profanity"),
+    # EN — violence calls and xeno-harassment phrases.
+    ("lynch them", "en", "high", "violence_threat"),
+    ("murder them", "en", "high", "violence_threat"),
+    ("rape them", "en", "high", "violence_threat"),
+    ("go back to where you came from", "en", "medium", "harassment"),
+    # FR — strong profanity abbreviations and racist qualifiers.
+    ("fdp", "fr", "high", "profanity"),
+    ("ntm", "fr", "high", "profanity"),
+    ("nique ta mère", "fr", "high", "profanity"),
+    ("enculé", "fr", "high", "profanity"),
+    ("sale arabe", "fr", "high", "hate_slur"),
+    ("sale juif", "fr", "high", "hate_slur"),
+    ("sale noir", "fr", "high", "hate_slur"),
+    ("tu vas mourir", "fr", "high", "violence_threat"),
+    ("bâtard", "fr", "medium", "harassment"),
+    # ES — death wishes and common demeaning terms.
+    ("zorra", "es", "high", "profanity"),  # literal "vixen" is rare in transcripts
+    ("cabrón", "es", "medium", "harassment"),
+    ("mátate", "es", "high", "violence_threat"),
+    ("que te mueras", "es", "high", "violence_threat"),
+    ("vete a tu país", "es", "medium", "harassment"),
+    # PT — profanity and violence calls (bare "puto" skipped: means "kid" in PT-PT).
+    ("puta que pariu", "pt", "high", "profanity"),
+    ("viadinho", "pt", "high", "hate_slur"),
+    ("mate todos", "pt", "high", "violence_threat"),
+    ("morram", "pt", "high", "violence_threat"),
+    # TR — strong profanity and ableist insult.
+    ("siktir", "tr", "high", "profanity"),
+    ("şerefsiz", "tr", "medium", "harassment"),
+    ("gerizekalı", "tr", "high", "hate_slur"),
+    # AR — incitement, dialect slurs, and missing strong forms.
+    ("اقتلوا", "ar", "high", "violence_threat"),
+    ("نذبحهم", "ar", "high", "violence_threat"),
+    ("قطع الرقاب", "ar", "high", "violence_threat"),
+    ("سحاقية", "ar", "high", "profanity"),
+    ("زوعة", "ar", "high", "hate_slur"),  # Maghrebi anti-gay slur
+    ("طيز", "ar", "medium", "profanity"),
+    ("عقبيلك", "ar", "medium", "harassment"),  # Levantine death-wish curse
 ]
 
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3}

@@ -32,7 +32,7 @@ SUPPORTED_TRANSCRIPTION_VERSIONS = {
     "transformers": ("5.14.1", "5.16.0"),
     "huggingface_hub": ("1.16.0", "2.0.0"),
     "tokenizers": ("0.22.2", "0.23.1"),
-    "setuptools": ("81.0.0", "82.0.0"),
+    "setuptools": ("84.1.0", "85.0.0"),
 }
 
 
@@ -100,7 +100,7 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         for name in (
             "torch", "torchaudio", "whisperx", "transformers",
             "huggingface_hub", "tokenizers", "setuptools",
-            "pkg_resources", "faster_whisper",
+            "faster_whisper",
         )
     }
     incompatible = [
@@ -110,7 +110,7 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
     primary_ready = bool(
         all(
             probes[name]["ok"]
-            for name in ("torch", "torchaudio", *SUPPORTED_TRANSCRIPTION_VERSIONS, "pkg_resources")
+            for name in ("torch", "torchaudio", *SUPPORTED_TRANSCRIPTION_VERSIONS)
         )
         and not incompatible
     )
@@ -157,17 +157,23 @@ def build_error_message(
     if whisperx_error:
         lines.append("تفاصيل WhisperX: {}".format(whisperx_error))
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
-    pkg_resources_issue = (
-        "pkg_resources" in combined_error
-        or "pkg_resources" in report["missing"]
-        or "setuptools" in report["missing"]
+    legacy_pkg_resources_error = "pkg_resources" in combined_error
+    setuptools_issue = (
+        "setuptools" in report["missing"]
         or "setuptools" in report["incompatible"]
     )
-    if pkg_resources_issue:
+    if legacy_pkg_resources_error:
         repair_mode = "gpu" if report.get("torch_runtime", {}).get("cuda_available") else "cpu"
         lines.extend([
-            "سبب الفشل: WhisperX يعتمد على pkg_resources، وقد أزال setuptools 82 هذا المكوّن.",
-            "المجموعة المتوافقة تثبّت setuptools>=81.0.0,<82. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
+            "خطأ pkg_resources يشير إلى تبعية قديمة غير متوافقة؛ لا تخفّض setuptools إلى 81.x لأن هذا الخط يعاني من ثغرات معروفة.",
+            "أعد تثبيت المجموعة المدعومة من requirements-transcribe.txt مع الحفاظ على Torch CUDA إذا كان يعمل:",
+            "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
+        ])
+    elif setuptools_issue:
+        repair_mode = "gpu" if report.get("torch_runtime", {}).get("cuda_available") else "cpu"
+        lines.extend([
+            "سبب الفشل: إصدار setuptools خارج النطاق الآمن المدعوم للمشروع.",
+            "المجموعة تتطلب setuptools>=84.1.0,<85 ولا تعتمد على pkg_resources. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
         ])
     if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
@@ -184,7 +190,7 @@ def build_error_message(
         ])
     if report.get("fallback_ready"):
         lines.append("يتوفر faster-whisper كمسار احتياطي مستقل؛ شغّل OUSSAMA مجدداً بعد تثبيته لاستخدامه تلقائياً.")
-    elif not pkg_resources_issue:
+    else:
         lines.extend([
             "لتجنب توقف التفريغ عند تعطل WhisperX، ثبّت المسار الاختياري faster-whisper من requirements-transcribe-fallback.txt.",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair-fallback",

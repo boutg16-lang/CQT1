@@ -116,12 +116,15 @@ def test_check_assets_ok_and_missing(tmp_path):
         preflight.APP_ROOT = old
 
 
-def _write_safety_pack(path, version, updated):
-    path.write_text(json.dumps({
+def _write_safety_pack(path, version, updated, reviewed_at=None):
+    pack = {
         "version": version,
         "updated": updated,
         "terms": [{"term": "test-term", "lang": "en", "severity": "high"}],
-    }), encoding="utf-8")
+    }
+    if reviewed_at is not None:
+        pack["reviewed_at"] = reviewed_at
+    path.write_text(json.dumps(pack), encoding="utf-8")
 
 
 def test_safety_blocklist_freshness_warns_after_review_interval(tmp_path):
@@ -133,6 +136,63 @@ def test_safety_blocklist_freshness_warns_after_review_interval(tmp_path):
     assert result["status"] == preflight.WARN
     assert "15 days ago" in result["detail"]
     assert "14-day review interval" in result["detail"]
+
+
+def test_safety_blocklist_freshness_uses_review_date_without_rewriting_content_date(tmp_path):
+    _write_safety_pack(
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
+        reviewed_at="2026-10-25")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 25))
+
+    assert result["status"] == preflight.OK
+    assert "last reviewed 2026-10-25" in result["detail"]
+    assert "content last updated 2026-09-27" in result["detail"]
+
+
+def test_safety_blocklist_freshness_does_not_hide_newer_unreviewed_version(tmp_path):
+    _write_safety_pack(
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
+        reviewed_at="2026-10-25")
+    _write_safety_pack(
+        tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 25))
+
+    assert result["status"] == preflight.WARN
+    assert "v8 from downloaded cache" in result["detail"]
+    assert "older than the 14-day review interval" in result["detail"]
+
+
+def test_safety_blocklist_freshness_uses_review_date_without_changing_content_date(tmp_path):
+    _write_safety_pack(
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
+        reviewed_at="2026-10-25")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 25))
+
+    assert result["status"] == preflight.OK
+    assert "last reviewed 2026-10-25 (0 days ago" in result["detail"]
+    assert "content last updated 2026-09-27" in result["detail"]
+
+
+def test_safety_blocklist_freshness_prefers_newer_version_over_reviewed_older_pack(tmp_path):
+    _write_safety_pack(
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
+        reviewed_at="2026-10-25")
+    _write_safety_pack(
+        tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 25))
+
+    assert result["status"] == preflight.WARN
+    assert "downloaded cache" in result["detail"]
+    assert "v8" in result["detail"]
+    assert "24 days ago" in result["detail"]
 
 
 def test_safety_blocklist_freshness_uses_newer_cache_at_boundary(tmp_path):
@@ -192,17 +252,17 @@ def test_check_pin_numpy_violation(monkeypatch):
     assert r is not None and r["status"] == preflight.FAIL
 
 
-def test_check_pin_setuptools_accepts_pkg_resources_compatible_range(monkeypatch):
+def test_check_pin_setuptools_accepts_patched_release(monkeypatch):
     class FakeSpec:
         pass
 
     assert any(
-        dist == "setuptools" and rule == "setuptools>=81.0.0,<82"
+        dist == "setuptools" and rule == "setuptools>=84.1.0,<85"
         for dist, rule, _note in preflight.PINNED_RULES
     )
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "81.0.0")
-    assert preflight.check_pin("setuptools", "setuptools>=81.0.0,<82") is None
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "84.2.1")
+    assert preflight.check_pin("setuptools", "setuptools>=84.1.0,<85") is None
 
 
 def test_check_pin_setuptools_rejects_below_security_floor(monkeypatch):
@@ -210,22 +270,22 @@ def test_check_pin_setuptools_rejects_below_security_floor(monkeypatch):
         pass
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "80.10.2")
-    result = preflight.check_pin("setuptools", "setuptools>=81.0.0,<82")
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "84.0.0")
+    result = preflight.check_pin("setuptools", "setuptools>=84.1.0,<85")
     assert result is not None and result["status"] == preflight.FAIL
 
 
-def test_check_pin_setuptools_rejects_removed_pkg_resources_release(monkeypatch):
+def test_check_pin_setuptools_rejects_outside_supported_range(monkeypatch):
     class FakeSpec:
         pass
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "82.0.0")
-    result = preflight.check_pin("setuptools", "setuptools>=81.0.0,<82")
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "85.0.0")
+    result = preflight.check_pin("setuptools", "setuptools>=84.1.0,<85")
     assert result is not None and result["status"] == preflight.FAIL
 
 
-def test_fix_setuptools_pin_restores_pkg_resources_compatibility(monkeypatch):
+def test_fix_setuptools_pin_installs_patched_release(monkeypatch):
     class FakeSpec:
         pass
 
@@ -234,15 +294,16 @@ def test_fix_setuptools_pin_restores_pkg_resources_compatibility(monkeypatch):
 
     calls = []
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(preflight, "_version", lambda dist: "84.0.0")
+    monkeypatch.setattr(preflight, "_version", lambda dist: "81.0.0")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
     monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
 
     ok, detail = preflight.fix_setuptools_pin()
 
     assert ok
-    assert "setuptools>=81.0.0,<82" in calls[0]
-    assert "pkg_resources" in detail
+    assert "--upgrade" in calls[0]
+    assert "setuptools>=84.1.0,<85" in calls[0]
+    assert "patched setuptools" in detail
 
 
 def test_check_pin_transformers_supported_range(monkeypatch):

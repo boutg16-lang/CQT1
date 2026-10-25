@@ -26,6 +26,7 @@ Guarantees (unchanged):
 * No dependencies — pure urllib (works on Windows out of the box).
 """
 
+import datetime
 import json
 import os
 import time
@@ -95,6 +96,7 @@ def validate_pack(data):
         version = 0
     return {"version": version, "terms": clean,
             "updated": str(data.get("updated", ""))[:40],
+            "reviewed_at": str(data.get("reviewed_at", ""))[:40],
             "source": str(data.get("source", ""))[:200]}
 
 
@@ -130,11 +132,17 @@ def merge_packs(packs):
     merged = {}
     max_version = 0
     updated = ""
+    reviewed_dates = []
     source_labels = []
     for pack in packs:
         if not pack:
             continue
-        max_version = max(max_version, pack["version"])
+        version = pack["version"]
+        if version > max_version:
+            max_version = version
+            reviewed_dates = [pack.get("reviewed_at", "")]
+        elif version == max_version:
+            reviewed_dates.append(pack.get("reviewed_at", ""))
         if pack.get("updated", "").upper() > updated.upper():
             updated = pack["updated"]
         if pack.get("source"):
@@ -145,9 +153,19 @@ def merge_packs(packs):
             order = {"low": 0, "medium": 1, "high": 2}
             if previous is None or order.get(term["severity"], 2) > order.get(previous["severity"], 2):
                 merged[key] = term
+    reviewed_at = ""
+    if reviewed_dates and all(reviewed_dates):
+        try:
+            reviewed_at = min(
+                datetime.date.fromisoformat(value[:10])
+                for value in reviewed_dates
+            ).isoformat()
+        except (TypeError, ValueError):
+            pass
     return {
         "version": max_version,
         "updated": updated,
+        "reviewed_at": reviewed_at,
         "source": "; ".join(dict.fromkeys(source_labels)) or "merged packs",
         "terms": list(merged.values()),
     }
