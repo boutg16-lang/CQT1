@@ -1,6 +1,7 @@
 {
-  "version": 6,
-  "updated": "2026-09-27",
+  "version": 7,
+  "updated": "2026-10-25",
+  "reviewed_at": "2026-10-25",
   "source": "ViralCutter built-in blocklist",
   "terms": [
     {
@@ -2018,6 +2019,252 @@
       "lang": "tr",
       "severity": "medium",
       "category": "hate_slur"
+    },
+    {
+      "term": "vatan haini",
+      "lang": "tr",
+      "severity": "medium",
+      "category": "hate_slur"
+    },
+    {
+      "term": "gook",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "wog",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "polack",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "zipperhead",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "coon",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "shemale",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "camel jockey",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "cocksucker",
+      "lang": "en",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "lynch them",
+      "lang": "en",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "murder them",
+      "lang": "en",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "rape them",
+      "lang": "en",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "go back to where you came from",
+      "lang": "en",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "fdp",
+      "lang": "fr",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "ntm",
+      "lang": "fr",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "nique ta mère",
+      "lang": "fr",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "enculé",
+      "lang": "fr",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "sale arabe",
+      "lang": "fr",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "sale juif",
+      "lang": "fr",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "sale noir",
+      "lang": "fr",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "tu vas mourir",
+      "lang": "fr",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "bâtard",
+      "lang": "fr",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "zorra",
+      "lang": "es",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "cabrón",
+      "lang": "es",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "mátate",
+      "lang": "es",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "que te mueras",
+      "lang": "es",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "vete a tu país",
+      "lang": "es",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "puta que pariu",
+      "lang": "pt",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "viadinho",
+      "lang": "pt",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "mate todos",
+      "lang": "pt",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "morram",
+      "lang": "pt",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "siktir",
+      "lang": "tr",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "şerefsiz",
+      "lang": "tr",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "gerizekalı",
+      "lang": "tr",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "اقتلوا",
+      "lang": "ar",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "نذبحهم",
+      "lang": "ar",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "قطع الرقاب",
+      "lang": "ar",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "سحاقية",
+      "lang": "ar",
+      "severity": "high",
+      "category": "profanity"
+    },
+    {
+      "term": "زوعة",
+      "lang": "ar",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "طيز",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "profanity"
+    },
+    {
+      "term": "عقبيلك",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "harassment"
     }
   ]
 }
