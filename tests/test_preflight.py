@@ -1,5 +1,6 @@
 """Tests for the pre-flight check & auto-repair module (scripts/preflight.py)."""
 
+import datetime
 import json
 import os
 import sys
@@ -15,6 +16,7 @@ from scripts import preflight
 def test_collect_checks_structure():
     checks, critical, warn = preflight.collect_checks()
     assert len(checks) > 5
+    assert any(c["name"] == "Safety blocklist freshness" for c in checks)
     for c in checks:
         assert set(c.keys()) == {"name", "status", "detail"}
         assert c["status"] in (preflight.OK, preflight.WARN, preflight.FAIL)
@@ -112,6 +114,57 @@ def test_check_assets_ok_and_missing(tmp_path):
         assert r["status"] == preflight.FAIL
     finally:
         preflight.APP_ROOT = old
+
+
+def _write_safety_pack(path, version, updated):
+    path.write_text(json.dumps({
+        "version": version,
+        "updated": updated,
+        "terms": [{"term": "test-term", "lang": "en", "severity": "high"}],
+    }), encoding="utf-8")
+
+
+def test_safety_blocklist_freshness_warns_after_review_interval(tmp_path):
+    _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "2026-09-27")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 12))
+
+    assert result["status"] == preflight.WARN
+    assert "15 days ago" in result["detail"]
+    assert "14-day review interval" in result["detail"]
+
+
+def test_safety_blocklist_freshness_uses_newer_cache_at_boundary(tmp_path):
+    _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "2026-09-27")
+    _write_safety_pack(tmp_path / "safety_blocklist_cache.json", 7, "2026-10-10")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 24))
+
+    assert result["status"] == preflight.OK
+    assert "downloaded cache" in result["detail"]
+    assert "v7" in result["detail"]
+
+
+def test_safety_blocklist_freshness_warns_when_date_is_missing(tmp_path):
+    _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 24))
+
+    assert result["status"] == preflight.WARN
+    assert "could not verify" in result["detail"]
+
+
+def test_safety_blocklist_freshness_warns_for_future_date(tmp_path):
+    _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "2026-10-25")
+
+    result = preflight.check_safety_blocklist_freshness(
+        str(tmp_path), today=datetime.date(2026, 10, 24))
+
+    assert result["status"] == preflight.WARN
+    assert "future" in result["detail"]
 
 
 def test_check_models_dir(tmp_path):
