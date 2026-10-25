@@ -76,7 +76,7 @@ goto INSTALL_CORE
 echo.
 echo [3/6] Installing OUSSAMA Cutter transcription runtime: %GPU_MODE%
 if /I "%GPU_MODE%"=="cuda" goto INSTALL_CUDA
-uv pip install --python "%PYTHON%" --no-cache torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python "%PYTHON%" --no-cache torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 if errorlevel 1 goto TRANSCRIPTION_TORCH_FAILED
 goto INSTALL_CORE
 
@@ -87,7 +87,7 @@ goto INSTALL_CORE
 
 :INSTALL_CUDA
 echo Installing NVIDIA CUDA PyTorch runtime...
-uv pip install --python "%PYTHON%" --no-cache torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+uv pip install --python "%PYTHON%" --no-cache torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
 if errorlevel 1 goto TRANSCRIPTION_TORCH_FAILED
 
 goto INSTALL_CORE
@@ -111,18 +111,18 @@ goto CHECK_FFMPEG
 echo.
 echo [4/6] Installing optional WhisperX stack...
 rem Resolve the pinned WhisperX/Hugging Face stack without upgrading the selected Torch wheel.
-uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=70,<82" "numpy<2"
+uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=81.0.0,<82" "numpy<2"
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
 if /I "%GPU_MODE%"=="cuda" goto RESTORE_CUDA_TORCH
 goto VERIFY_TRANSCRIPTION
 
 :RESTORE_CUDA_TORCH
 echo Restoring NVIDIA CUDA Torch after WhisperX dependency resolution...
-uv pip install --python "%PYTHON%" --no-cache --reinstall torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+uv pip install --python "%PYTHON%" --no-cache --reinstall torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
 if errorlevel 1 goto TRANSCRIPTION_TORCH_FAILED
 
 :VERIFY_TRANSCRIPTION
-"%PYTHON%" -c "import pkg_resources, torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; from importlib.metadata import version; from packaging.version import Version; ok = Version(version('whisperx')) == Version('3.3.1') and Version('5.14.1') <= Version(transformers.__version__) < Version('5.16') and Version('1.16.0') <= Version(huggingface_hub.__version__) < Version('2') and Version('0.22.2') <= Version(tokenizers.__version__) < Version('0.23.1') and Version('70') <= Version(version('setuptools')) < Version('82'); raise SystemExit(0 if ok else 1)" >nul 2>&1
+"%PYTHON%" -c "import pkg_resources, torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; from importlib.metadata import version; from packaging.version import Version; ok = Version(version('whisperx')) == Version('3.3.1') and Version('5.14.1') <= Version(transformers.__version__) < Version('5.16') and Version('1.16.0') <= Version(huggingface_hub.__version__) < Version('2') and Version('0.22.2') <= Version(tokenizers.__version__) < Version('0.23.1') and Version('81.0.0') <= Version(version('setuptools')) < Version('82.0.0'); raise SystemExit(0 if ok else 1)" >nul 2>&1
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
 if /I "%GPU_MODE%"=="cuda" goto VERIFY_GPU
 if "%INSTALL_FALLBACK%"=="1" goto INSTALL_FASTER_FALLBACK

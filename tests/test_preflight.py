@@ -56,6 +56,9 @@ def test_check_bundled_binary_found_when_frozen(monkeypatch, tmp_path):
 def test_check_dependency_present():
     assert preflight.check_dependency("json", "json", True)["status"] == preflight.OK
 
+def test_opentelemetry_distribution_uses_public_import_name():
+    assert preflight._import_name("opentelemetry-api") == "opentelemetry"
+
 
 def test_check_dependency_missing(monkeypatch):
     monkeypatch.setattr(preflight, "_module_importable", lambda m: False)
@@ -141,12 +144,22 @@ def test_check_pin_setuptools_accepts_pkg_resources_compatible_range(monkeypatch
         pass
 
     assert any(
-        dist == "setuptools" and rule == "setuptools>=70,<82"
+        dist == "setuptools" and rule == "setuptools>=81.0.0,<82"
         for dist, rule, _note in preflight.PINNED_RULES
     )
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "81.0.0")
-    assert preflight.check_pin("setuptools", "setuptools>=70,<82") is None
+    assert preflight.check_pin("setuptools", "setuptools>=81.0.0,<82") is None
+
+
+def test_check_pin_setuptools_rejects_below_security_floor(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "80.10.2")
+    result = preflight.check_pin("setuptools", "setuptools>=81.0.0,<82")
+    assert result is not None and result["status"] == preflight.FAIL
 
 
 def test_check_pin_setuptools_rejects_removed_pkg_resources_release(monkeypatch):
@@ -155,7 +168,7 @@ def test_check_pin_setuptools_rejects_removed_pkg_resources_release(monkeypatch)
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "82.0.0")
-    result = preflight.check_pin("setuptools", "setuptools>=70,<82")
+    result = preflight.check_pin("setuptools", "setuptools>=81.0.0,<82")
     assert result is not None and result["status"] == preflight.FAIL
 
 
@@ -175,7 +188,7 @@ def test_fix_setuptools_pin_restores_pkg_resources_compatibility(monkeypatch):
     ok, detail = preflight.fix_setuptools_pin()
 
     assert ok
-    assert "setuptools>=70,<82" in calls[0]
+    assert "setuptools>=81.0.0,<82" in calls[0]
     assert "pkg_resources" in detail
 
 

@@ -237,7 +237,7 @@ cd D:\OS
 uv pip install --python .\.venv\Scripts\python.exe --force-reinstall --no-cache numpy==1.26.4
 ```
 
-لا تحذف البيئة ولا تعِد تثبيت Torch CUDA؛ النتيجة السابقة تؤكد أن `Torch 2.6.0+cu124` و`CUDA available: True` و`RTX 3060` تعمل بشكل صحيح. المشكلة الحالية محصورة في أداة تثبيت NumPy داخل venv.
+لا تحذف البيئة ولا تعِد تثبيت Torch CUDA إذا أظهر الفحص `CUDA available: True` واسم بطاقة RTX. المشكلة الحالية محصورة في أداة تثبيت NumPy داخل venv.
 
 
 ## إصلاح تعارض huggingface-hub مع WhisperX
@@ -292,7 +292,7 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14
 
 ## إصلاح `No module named 'pkg_resources'` مع WhisperX
 
-هذا الخطأ يعني أن تبعية من WhisperX تحتاج وحدة `pkg_resources`، بينما setuptools `82` وما بعده لم يعد يضمّنها. لا تعِد تثبيت Torch ولا تخفّض نسخة CUDA؛ أُضيف إلى ملفات تثبيت التفريغ القيد `setuptools>=70,<82`، ويكتشف التشخيص أيضاً غياب الوحدة أو نسخة setuptools غير المتوافقة.
+هذا الخطأ يعني أن تبعية من WhisperX تحتاج وحدة `pkg_resources`، بينما setuptools `82` وما بعده لم يعد يضمّنها. لا تعِد تثبيت Torch ولا تخفّض نسخة CUDA؛ أُضيف إلى ملفات تثبيت التفريغ القيد `setuptools>=81.0.0,<82`، ويكتشف التشخيص أيضاً غياب الوحدة أو نسخة setuptools غير المتوافقة.
 
 من جذر المشروع في PowerShell، أصلح مجموعة التفريغ مع إبقاء Torch CUDA العامل:
 
@@ -333,14 +333,14 @@ Error loading model from huggingface ... could not be found in huggingface
 Continuando com transcrição bruta.
 ```
 
-رسالة "could not be found" مضلّلة — المشكلة ليست الشبكة بل إصدار Torch. الإصلاح (نفس خط cu124 المعتمد في المشروع):
+رسالة "could not be found" مضلّلة — المشكلة ليست الشبكة بل إصدار Torch. استخدم زوج 2.8 المتوافق مع WhisperX وpyannote، من فهرس CUDA 12.6:
 
 ```powershell
 cd D:\OS
-uv pip install --python .\.venv\Scripts\python.exe torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+uv pip install --python .\.venv\Scripts\python.exe torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
 ```
 
-ثم تحقق: `torch.__version__` يجب أن يكون `2.6.0+cu124` و`CUDA available: True`. النسخ المحدثة من `install_dependencies.bat` تثبت 2.6.0 تلقائياً.
+ثم تحقق من `torch.__version__` و`torchaudio.__version__` أنهما `2.8.0+cu126`، ومن أن `CUDA available: True`. مُثبّت `install_dependencies.bat` يختار الزوج نفسه تلقائياً.
 
 ### 2) فيديو محلي باسم مختلف عن input — ملفات التفريغ بلا اسم موحد
 
