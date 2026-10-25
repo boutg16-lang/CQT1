@@ -56,6 +56,18 @@ jobs:
           python -c "import json; json.load(open('sbom-${{ matrix.python-version }}.json', encoding='utf-8'))"
       - name: Audit dependency licenses
         run: pip-licenses --fail-on="GPL;AGPL" --format=markdown --output-file=licenses-${{ matrix.python-version }}.md
+      - name: Audit locked core runtime dependencies
+        run: |
+          python -m pip install uv==0.13.5
+          uv export --locked --no-dev --no-emit-project --no-hashes --no-annotate --no-header --output-file runtime-requirements-${{ matrix.python-version }}.txt
+          audit_status=0
+          pip-audit --requirement runtime-requirements-${{ matrix.python-version }}.txt --no-deps --disable-pip --progress-spinner off --format json --output runtime-pip-audit-${{ matrix.python-version }}.json || audit_status=$?
+          if [[ "$audit_status" -gt 1 ]]; then
+            echo "Locked runtime pip-audit failed operationally with exit code $audit_status"
+            exit "$audit_status"
+          fi
+          python -m scripts.validate_dependency_audit runtime-pip-audit-${{ matrix.python-version }}.json
+
       - name: Build package
         run: python -m build --wheel --sdist
       - name: Run deterministic quality benchmark
@@ -73,6 +85,7 @@ jobs:
             dist/*
             sbom-${{ matrix.python-version }}.json
             pip-audit-${{ matrix.python-version }}.json
+            runtime-pip-audit-${{ matrix.python-version }}.json
             licenses-${{ matrix.python-version }}.md
             quality-benchmark-${{ matrix.python-version }}.json
           if-no-files-found: warn
@@ -102,8 +115,17 @@ jobs:
         run: python -m pip install --upgrade pytest
       - name: Run deterministic benchmark on Windows
         run: python -m scripts.quality_benchmark --output quality-benchmark-windows.json
-      - name: Run portable exporter, benchmark, and StreamGuard tests
-        run: python -m pytest -q tests/test_otio_export.py tests/test_quality_benchmark.py tests/test_stream_guard.py tests/test_stream_guard_downloads.py
+      - name: Run portable and Windows harness tests
+        run: >-
+          python -m pytest -q
+          tests/test_otio_export.py
+          tests/test_quality_benchmark.py
+          tests/test_stream_guard.py
+          tests/test_stream_guard_downloads.py
+          tests/test_windows_acceptance.py
+          tests/test_windows_diagnostics.py
+          tests/test_windows_launchers.py
+          -k "not core_pipeline_real_ffmpeg and not generated_clip_carries_the_planted_silence"
       - name: Upload Windows quality report
         uses: actions/upload-artifact@v7
         with:
