@@ -1,7 +1,17 @@
+import gc
 import json
 import logging
 import os
+import re
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+from i18n.i18n import I18nAuto
+from scripts.transcription_diagnostics import (
+    TranscriptionUnavailableError,
+    build_error_message,
+)
 
 try:
     import torch  # optional: only required for the real whisperx transcription path
@@ -10,7 +20,6 @@ except Exception as _torch_err:
     _TORCH_IMPORT_ERROR = str(_torch_err)
 else:
     _TORCH_IMPORT_ERROR = ""
-import time
 
 
 def _install_hub_compat_shim():
@@ -56,9 +65,8 @@ def _install_hub_compat_shim():
         pass
 
 
-_install_hub_compat_shim()
-
 try:
+    _install_hub_compat_shim()
     import whisperx
 except Exception as _whisperx_err:
     # NOT just ModuleNotFoundError: a broken optional stack (e.g. a
@@ -68,15 +76,6 @@ except Exception as _whisperx_err:
     _WHISPERX_IMPORT_ERROR = str(_whisperx_err)
 else:
     _WHISPERX_IMPORT_ERROR = ""
-import gc
-import re
-from concurrent.futures import ThreadPoolExecutor
-
-from i18n.i18n import I18nAuto
-from scripts.transcription_diagnostics import (
-    TranscriptionUnavailableError,
-    build_error_message,
-)
 
 logger = logging.getLogger(__name__)
 
