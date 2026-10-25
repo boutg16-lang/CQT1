@@ -1,7 +1,17 @@
+import gc
 import json
 import logging
 import os
+import re
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+from i18n.i18n import I18nAuto
+from scripts.transcription_diagnostics import (
+    TranscriptionUnavailableError,
+    build_error_message,
+)
 
 try:
     import torch  # optional: only required for the real whisperx transcription path
@@ -10,9 +20,53 @@ except Exception as _torch_err:
     _TORCH_IMPORT_ERROR = str(_torch_err)
 else:
     _TORCH_IMPORT_ERROR = ""
-import time
+
+
+def _install_hub_compat_shim():
+    """pyannote.audio 3.3.x (locked by requirements-transcribe.txt) still
+    calls ``hf_hub_download(..., use_auth_token=...)``, but huggingface-hub
+    1.x removed the kwarg in favour of ``token`` (whisperX #1322; whisperX
+    upstream pinned hub<1.0 for the same reason in #1327). Renaming the
+    kwarg at the hub boundary keeps the locked pyannote 3.3.x + hub 1.x
+    combination working without downgrading either."""
+    try:
+        import huggingface_hub
+
+        original = getattr(huggingface_hub, "hf_hub_download", None)
+        if original is None or getattr(original, "_vircutter_hub_shim", False):
+            return
+
+        def hub_shim(*args, **kwargs):
+            if "use_auth_token" in kwargs:
+                token = kwargs.pop("use_auth_token")
+                kwargs.setdefault("token", token)
+            return original(*args, **kwargs)
+
+        hub_shim._vircutter_hub_shim = True
+        huggingface_hub.hf_hub_download = hub_shim
+
+        # Modules that already bound the name at import time.
+        try:
+            import importlib
+
+            for mod_name in (
+                "pyannote.audio.core.model",
+                "pyannote.audio.core.pipeline",
+            ):
+                try:
+                    mod = importlib.import_module(mod_name)
+                    if getattr(mod, "hf_hub_download", None) is original:
+                        mod.hf_hub_download = hub_shim
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    except Exception:
+        pass
+
 
 try:
+    _install_hub_compat_shim()
     import whisperx
 except Exception as _whisperx_err:
     # NOT just ModuleNotFoundError: a broken optional stack (e.g. a
@@ -22,15 +76,6 @@ except Exception as _whisperx_err:
     _WHISPERX_IMPORT_ERROR = str(_whisperx_err)
 else:
     _WHISPERX_IMPORT_ERROR = ""
-import gc
-import re
-from concurrent.futures import ThreadPoolExecutor
-
-from i18n.i18n import I18nAuto
-from scripts.transcription_diagnostics import (
-    TranscriptionUnavailableError,
-    build_error_message,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +314,24 @@ def apply_safe_globals_hack():
             # Preserve explicit choices; Lightning may pass None as its default.
             if kwargs.get("weights_only") is not None:
                 return original_load(*args, **kwargs)
+
+            # pyannote/lightning hand torch.load an OPEN FILE OBJECT, not a
+            # path. The first (weights_only=True) attempt consumes the stream,
+            # so a blind retry would re-read from the middle of the file and
+            # fail with a misleading "persistent id" unpickling error. Rewind
+            # seekable streams before every attempt so each try starts from
+            # byte zero (paths are unaffected).
+            stream = args[0] if args else kwargs.get("f")
+
+            def _rewind_stream():
+                seek = getattr(stream, "seek", None)
+                if seek is not None:
+                    try:
+                        seek(0)
+                    except Exception:
+                        pass
+
+            _rewind_stream()
             safe_kwargs = dict(kwargs)
             safe_kwargs["weights_only"] = True
             try:
@@ -283,6 +346,7 @@ def apply_safe_globals_hack():
                 print("WARNING: weights_only=True failed ({!r}); retrying with "
                       "weights_only=False (VIRALCUTTER_ALLOW_UNSAFE_LOAD=1)."
                       .format(safe_err))
+                _rewind_stream()
                 unsafe_kwargs = dict(safe_kwargs)
                 unsafe_kwargs["weights_only"] = False
                 return original_load(*args, **unsafe_kwargs)
