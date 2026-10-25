@@ -79,6 +79,7 @@ DIST_TO_MODULE = {
     "opencv-python": "cv2",
     "ffmpeg-python": "ffmpeg",
     "faster-whisper": "faster_whisper",
+    "ctranslate2": "ctranslate2",
     "google-genai": "google.genai",
     "google-generativeai": "google.generativeai",
     "google-api-python-client": "googleapiclient",
@@ -115,8 +116,11 @@ PINNED_RULES = [
      "install tokenizers 0.22.2, the newest available version below 0.23.1"),
     ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
      "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
+    ("ctranslate2", "ctranslate2>=4.4.0,<4.5.0",
+     "WhisperX 3.3.1 requires CTranslate2<4.5.0; Windows uses the local pkg_resources compatibility shim"),
     ("setuptools", "setuptools>=84.1.0,<85",
      "avoid vulnerable setuptools releases while retaining the tested transcription stack"),
+
 ]
 
 # --------------------------------------------------------------------------
@@ -195,6 +199,14 @@ def _module_importable(module):
     # by default and the legacy package remains a silent compatibility fallback.
     if module == "google.generativeai":
         return _dist_installed("google-generativeai")
+    if module in {"ctranslate2", "whisperx", "faster_whisper"}:
+        try:
+            from scripts.transcription_diagnostics import (
+                prepare_ctranslate2_windows_import,
+            )
+            prepare_ctranslate2_windows_import()
+        except Exception:
+            pass
     try:
         importlib.import_module(module)
         return True
@@ -635,6 +647,28 @@ def fix_setuptools_pin(dry_run=False):
     return False, "could not install patched setuptools (exit %s)" % (proc.returncode if proc else "?")
 
 
+def fix_ctranslate2_pin(dry_run=False):
+    """Keep CTranslate2 inside WhisperX 3.3.1's supported dependency range."""
+    spec = _iu.find_spec("ctranslate2")
+    if spec is None:
+        return True, "CTranslate2 not installed - the optional transcription stack installs its supported range"
+    try:
+        from packaging.version import Version
+        version = _version("ctranslate2")
+        if version != "?" and Version("4.4.0") <= Version(version) < Version("4.5.0"):
+            return True, "CTranslate2 %s OK (>=4.4.0,<4.5.0)" % version
+    except Exception:
+        return True, "cannot read CTranslate2 version"
+    if dry_run:
+        return False, "would install ctranslate2>=4.4.0,<4.5.0"
+    if _is_frozen():
+        return False, "cannot reinstall CTranslate2 inside the packaged exe"
+    proc = _run_pip(["--upgrade", "--no-cache-dir", "--no-deps", "ctranslate2>=4.4.0,<4.5.0"])
+    if proc is not None and proc.returncode == 0:
+        return True, "installed CTranslate2>=4.4.0,<4.5.0"
+    return False, "could not install compatible CTranslate2 (exit %s)" % (proc.returncode if proc else "?")
+
+
 def ensure_dirs():
     """Create the folders the app expects. Returns list of (label, ok, detail)."""
     out = []
@@ -766,6 +800,8 @@ def repair(mode, checks, ensure_upload=False):
                 ok, detail = fix_hub_pin()
             elif dist == "setuptools":
                 ok, detail = fix_setuptools_pin()
+            elif dist == "ctranslate2":
+                ok, detail = fix_ctranslate2_pin()
             else:
                 continue
             fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})

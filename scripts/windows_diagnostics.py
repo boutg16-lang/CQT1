@@ -81,6 +81,7 @@ def _huggingface_stack_checks() -> list[dict[str, Any]]:
     checks = []
     supported = (
         ("whisperx", "WhisperX version", "whisperx", "3.3.1", "3.3.2"),
+        ("ctranslate2", "CTranslate2", "ctranslate2", "4.4.0", "4.5.0"),
         ("transformers", "Transformers", "transformers", "5.14.1", "5.16.0"),
         ("huggingface_hub", "huggingface-hub", "huggingface-hub", "1.16.0", "2.0.0"),
         ("tokenizers", "tokenizers", "tokenizers", "0.22.2", "0.23.1"),
@@ -160,6 +161,11 @@ def _disk_checks(root: Path) -> list[dict[str, Any]]:
 
 def _torch_checks() -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
+    try:
+        from scripts.transcription_diagnostics import prepare_ctranslate2_windows_import
+        prepare_ctranslate2_windows_import()
+    except Exception:
+        pass
     ok, detail = _import_probe("torch", "torch")
     if not ok:
         checks.append(_check("Torch", WARN, "missing or failed import — %s" % detail))

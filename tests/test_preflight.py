@@ -285,6 +285,44 @@ def test_check_pin_setuptools_rejects_outside_supported_range(monkeypatch):
     assert result is not None and result["status"] == preflight.FAIL
 
 
+def test_check_pin_ctranslate2_rejects_outside_whisperx_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    assert any(
+        dist == "ctranslate2" and rule == "ctranslate2>=4.4.0,<4.5.0"
+        for dist, rule, _note in preflight.PINNED_RULES
+    )
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda dist: "4.5.0")
+
+    result = preflight.check_pin("ctranslate2", "ctranslate2>=4.4.0,<4.5.0")
+
+    assert result is not None and result["status"] == preflight.FAIL
+
+
+def test_fix_ctranslate2_pin_preserves_existing_dependencies(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    calls = []
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "4.5.0")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+
+    ok, detail = preflight.fix_ctranslate2_pin()
+
+    assert ok
+    assert "--no-deps" in calls[0]
+    assert "ctranslate2>=4.4.0,<4.5.0" in calls[0]
+    assert "torch" not in calls[0]
+    assert "CTranslate2" in detail
+
+
 def test_fix_setuptools_pin_installs_patched_release(monkeypatch):
     class FakeSpec:
         pass
@@ -304,6 +342,19 @@ def test_fix_setuptools_pin_installs_patched_release(monkeypatch):
     assert "--upgrade" in calls[0]
     assert "setuptools>=84.1.0,<85" in calls[0]
     assert "patched setuptools" in detail
+
+
+def test_check_pin_ctranslate2_accepts_whisperx_331_range(monkeypatch):
+    class FakeSpec:
+        pass
+
+    assert any(
+        dist == "ctranslate2" and rule == "ctranslate2>=4.4.0,<4.5.0"
+        for dist, rule, _note in preflight.PINNED_RULES
+    )
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda dist: "4.4.0")
+    assert preflight.check_pin("ctranslate2", "ctranslate2>=4.4.0,<4.5.0") is None
 
 
 def test_check_pin_transformers_supported_range(monkeypatch):

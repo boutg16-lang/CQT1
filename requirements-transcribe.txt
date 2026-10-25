@@ -11,6 +11,7 @@
 # Then install the remaining transcription dependencies:
 #   pip install -r requirements-transcribe.txt
 whisperx==3.3.1
+ctranslate2>=4.4.0,<4.5.0
 torch==2.8.0
 torchaudio==2.8.0
 transformers>=5.14.1,<5.16
@@ -19,8 +20,7 @@ lightning>=2.6.6
 pytorch-lightning>=2.6.6
 nltk>=3.10.4
 
-# Avoid vulnerable setuptools releases while keeping the build tool current.
-# The locked WhisperX stack imports successfully without pkg_resources.
+# Keep the secure setuptools floor; CTranslate2 4.4 needs a scoped Windows resource shim.
 setuptools>=84.1.0,<85
 
 # caps tokenizers at <=0.23.0 — and tokenizers 0.23.0 was never released on

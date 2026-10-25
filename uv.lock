@@ -2363,6 +2363,7 @@ otio = [
     { name = "opentimelineio" },
 ]
 transcribe = [
+    { name = "ctranslate2" },
     { name = "huggingface-hub" },
     { name = "lightning" },
     { name = "nltk" },
@@ -2387,6 +2388,7 @@ upload = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
+    { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.5.0" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "ffmpeg-python" },
