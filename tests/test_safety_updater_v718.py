@@ -41,6 +41,26 @@ class TestMergePacks:
         terms = {t["term"]: t for t in merged["terms"]}
         assert terms["x"]["severity"] == "high"
 
+    def test_review_date_tracks_the_highest_pack_version(self):
+        older = _pack(7, [_term("old")])
+        older["reviewed_at"] = "2026-10-10"
+        latest = _pack(8, [_term("latest")])
+        latest["reviewed_at"] = "2026-10-25"
+
+        merged = su.merge_packs([older, latest])
+
+        assert merged["version"] == 8
+        assert merged["reviewed_at"] == "2026-10-25"
+
+    def test_unreviewed_pack_at_latest_version_clears_merged_review_date(self):
+        reviewed = _pack(8, [_term("reviewed")])
+        reviewed["reviewed_at"] = "2026-10-25"
+        unreviewed = _pack(8, [_term("unreviewed")])
+
+        merged = su.merge_packs([reviewed, unreviewed])
+
+        assert merged["reviewed_at"] == ""
+
     def test_deduplicates_same_term_and_lang(self):
         merged = su.merge_packs([
             _pack(1, [_term("word", lang="ar"), _term("word", lang="en")]),
@@ -55,6 +75,27 @@ class TestMergePacks:
     def test_empty_input(self):
         merged = su.merge_packs([])
         assert merged["version"] == 0 and merged["terms"] == []
+
+    def test_review_date_comes_from_highest_version_pack(self):
+        current = _pack(7, [_term("current")])
+        current["reviewed_at"] = "2026-10-25"
+        legacy = _pack(6, [_term("legacy")])
+        legacy["reviewed_at"] = "2026-09-27"
+
+        merged = su.merge_packs([current, legacy])
+
+        assert merged["version"] == 7
+        assert merged["reviewed_at"] == "2026-10-25"
+
+    def test_review_date_is_unknown_when_same_version_source_is_unreviewed(self):
+        reviewed = _pack(7, [_term("current")])
+        reviewed["reviewed_at"] = "2026-10-25"
+        unreviewed = _pack(7, [_term("extra")])
+
+        merged = su.merge_packs([reviewed, unreviewed])
+
+        assert merged["version"] == 7
+        assert merged["reviewed_at"] == ""
 
 
 class TestMultiSourceUpdate:
