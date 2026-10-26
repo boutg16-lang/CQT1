@@ -11,6 +11,7 @@ from i18n.i18n import I18nAuto
 from scripts.transcription_diagnostics import (
     TranscriptionUnavailableError,
     build_error_message,
+    prepare_ctranslate2_windows_import,
 )
 
 try:
@@ -66,6 +67,7 @@ def _install_hub_compat_shim():
 
 
 try:
+    prepare_ctranslate2_windows_import()
     _install_hub_compat_shim()
     import whisperx
 except Exception as _whisperx_err:

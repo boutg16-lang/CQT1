@@ -254,7 +254,7 @@ uv pip install --python .\.venv\Scripts\python.exe -r requirements-transcribe.tx
 ثم تحقق من الاستيراد:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; print('WhisperX: READY'); print('Transformers:', transformers.__version__); print('Hub:', huggingface_hub.__version__); print('Tokenizers:', tokenizers.__version__); print('CUDA:', torch.cuda.is_available())"
+.\.venv\Scripts\python.exe -c "from scripts.transcription_diagnostics import prepare_ctranslate2_windows_import; prepare_ctranslate2_windows_import(); import torch, torchaudio, whisperx, transformers, huggingface_hub, tokenizers, gradio; print('WhisperX: READY'); print('Transformers:', transformers.__version__); print('Hub:', huggingface_hub.__version__); print('Tokenizers:', tokenizers.__version__); print('CUDA:', torch.cuda.is_available())"
 ```
 
 يجب أن يظهر `WhisperX: READY`، وأن تكون Transformers ضمن 5.14.1–أقل من 5.16 وHub ضمن 1.16–أقل من 2. أمرك السابق بدأ باستيراد `is_offline_mode` مباشرةً؛ لذلك توقف عند Hub 0.36.2 قبل تنفيذ `import whisperx`، ولم يختبر WhisperX. التثبيت من ملف المتطلبات ينسق WhisperX 3.3.1 واعتمادياته، ولا يستبدل Torch العامل.
@@ -285,30 +285,33 @@ uv pip install --python .\.venv\Scripts\python.exe --upgrade "transformers>=5.14
 ثم تحقق من الاستيراد:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import huggingface_hub, transformers, tokenizers, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
+.\.venv\Scripts\python.exe -c "from scripts.transcription_diagnostics import prepare_ctranslate2_windows_import; prepare_ctranslate2_windows_import(); import huggingface_hub, transformers, tokenizers, whisperx, torch; print('huggingface-hub:', huggingface_hub.__version__); print('transformers:', transformers.__version__); print('tokenizers:', tokenizers.__version__); print('WhisperX: READY'); print('CUDA:', torch.cuda.is_available())"
 ```
 
 يجب أن يكون إصدار `tokenizers` هو `0.22.2`، وTransformers ضمن `>=5.14.1,<5.16`، وHub ضمن `>=1.16.0,<2.0`، وأن تبقى `CUDA: True`. ملفات `requirements-transcribe.txt` و`install_dependencies.bat` و`pyproject.toml` تفرض هذه الحدود معاً حتى لا يعود التعارض.
 
-## استخدام setuptools الآمن مع WhisperX
+## إصلاح `No module named pkg_resources` على Windows
 
-أظهر اختبار الاستيراد الفعلي أن WhisperX `3.3.1` وPyTorch `2.8.0` يعملان مع setuptools `84.2.1` من دون `pkg_resources`. لم يعد المشروع يفرض setuptools `81.x`؛ فهذا الإصدار يتضمن ثغرات معروفة، بينما تثبّت الملفات الحالية النطاق الآمن `>=84.1.0,<85`.
+هذا الخطأ يأتي من CTranslate2 `4.4.0`، لا من setuptools مباشرةً: مُحمّل DLL في نسخة Windows يستدعي `pkg_resources.resource_filename`، بينما setuptools `82.0.0` وما بعده لا يضمّن `pkg_resources`. اختبار Linux السابق لم يُشغّل هذا المسار، لذلك بدت WhisperX سليمة هناك. لا تخفّض setuptools إلى `81.x`؛ المشروع يبقي النطاق الآمن `>=84.1.0,<85` ويضيف توافقاً ضيقاً عبر `importlib.resources` قبل استيراد WhisperX. أبقِ CTranslate2 ضمن `>=4.4.0,<4.5.0` لأن WhisperX `3.3.1` يفرض هذا الحد.
 
-من جذر المشروع في PowerShell، أصلح مجموعة التفريغ مع إبقاء Torch CUDA العامل:
+بعد تحديث المشروع إلى النسخة التي تتضمن الإصلاح، من جذر المشروع أصلح مجموعة التفريغ. اختر أمراً واحداً حسب جهازك:
 
 ```powershell
 cd D:\OS
+# جهاز NVIDIA وCUDA تعمل:
 .\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --repair gpu
+# جهاز بلا CUDA:
+.\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --repair cpu
 ```
 
-بعد اكتمال الإصلاح، افحص الحالة والاستيراد:
+الأمر يعيد تثبيت مجموعة WhisperX ويحافظ على Torch CUDA العامل. بعد نجاحه، أعد تشغيل OUSSAMA Cutter ثم افحص الحالة والاستيراد:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.transcription_diagnostics --json
-.\.venv\Scripts\python.exe -c "import torch, torchaudio, whisperx, transformers, setuptools; print('WhisperX: READY'); print('setuptools:', setuptools.__version__); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+.\.venv\Scripts\python.exe -c "from scripts.transcription_diagnostics import prepare_ctranslate2_windows_import; prepare_ctranslate2_windows_import(); import torch, torchaudio, whisperx, transformers, setuptools; print('WhisperX: READY'); print('setuptools:', setuptools.__version__); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 ```
 
-لا تثبّت setuptools `81.x` لإصلاح خطأ `pkg_resources`؛ إذا ظهر ذلك الخطأ، فهناك تبعية قديمة ويجب إصلاح المجموعة عبر التشخيص بدلاً من الرجوع إلى إصدار ضعيف. إذا استمر الفشل، أرسل `transcription_diagnostic.json` المحدّث وسجل أمر الإصلاح.
+لا تثبّت setuptools `81.x` لإصلاح خطأ `pkg_resources`. إذا استمر الخطأ بعد التحديث والإصلاح، تأكد أن التطبيق يستخدم مجلد المشروع المحدّث ثم أرسل `transcription_diagnostic.json` وسجل أمر الإصلاح.
 
 ## إصلاح تعارض `weights_only=None` عند تحميل VAD
 

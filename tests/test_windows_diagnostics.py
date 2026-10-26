@@ -20,7 +20,7 @@ def test_windows_diagnostics_is_json_serializable(tmp_path):
 def test_windows_diagnostics_contains_runtime_checks(tmp_path):
     report = collect(tmp_path)
     names = {item["name"] for item in report["checks"]}
-    assert {"Python", "Project root", "Project drive space", "Torch", "WhisperX", "Faster-whisper fallback", "setuptools", "google-auth-oauthlib"} <= names
+    assert {"Python", "Project root", "Project drive space", "Torch", "WhisperX", "CTranslate2", "Faster-whisper fallback", "setuptools", "google-auth-oauthlib"} <= names
     text = render(report)
     assert "OUSSAMA Cutter Windows diagnostics" in text
     assert "Summary:" in text
@@ -62,6 +62,7 @@ def test_windows_diagnostics_flags_whisperx_3_2_outside_locked_stack(monkeypatch
 
     versions = {
         "whisperx": "3.2.0",
+        "ctranslate2": "4.4.0",
         "transformers": "5.15.1",
         "huggingface_hub": "1.33.0",
         "tokenizers": "0.22.2",
@@ -78,6 +79,15 @@ def test_windows_diagnostics_flags_whisperx_3_2_outside_locked_stack(monkeypatch
     whisperx = next(item for item in checks if item["name"] == "WhisperX version")
     assert whisperx["status"] == "warn"
     assert "3.3.1" in whisperx["detail"]
+    ctranslate2 = next(item for item in checks if item["name"] == "CTranslate2")
+    assert ctranslate2["status"] == "ok"
+
+
+def test_windows_diagnostics_rejects_ctranslate2_outside_whisperx_range():
+    result = _version_range_check("CTranslate2", "4.5.0", "4.4.0", "4.5.0")
+    assert result["status"] == "warn"
+    assert "4.4.0" in result["detail"]
+
 
 def test_windows_diagnostics_rejects_huggingface_hub_0_x():
     result = _version_range_check("huggingface-hub", "0.36.2", "1.16.0", "2.0")
@@ -100,6 +110,7 @@ def test_windows_diagnostics_does_not_require_pkg_resources(monkeypatch):
 
     versions = {
         "whisperx": "3.3.1",
+        "ctranslate2": "4.4.0",
         "transformers": "5.15.1",
         "huggingface_hub": "1.33.0",
         "tokenizers": "0.22.2",

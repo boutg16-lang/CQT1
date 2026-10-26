@@ -11,7 +11,7 @@ def test_diagnostics_is_json_serializable():
     assert report["app"] == "OUSSAMA Cutter"
     assert isinstance(report["packages"], dict)
     assert set(report["packages"]) == {
-        "torch", "torchaudio", "whisperx", "transformers",
+        "torch", "torchaudio", "ctranslate2", "whisperx", "transformers",
         "huggingface_hub", "tokenizers", "setuptools", "faster_whisper",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
@@ -50,6 +50,8 @@ def test_supported_transcription_versions_reject_user_reported_mix():
     assert not _version_supported("4.57.6", "5.14.1", "5.16.0")
     assert not _version_supported("0.36.2", "1.16.0", "2.0.0")
     assert _version_supported("3.3.1", "3.3.1", "3.3.2")
+    assert not _version_supported("4.3.0", "4.4.0", "4.5.0")
+    assert _version_supported("4.4.0", "4.4.0", "4.5.0")
 
 
 def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
@@ -58,6 +60,7 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
     versions = {
         "torch": "2.8.0+cu126",
         "torchaudio": "2.8.0+cu126",
+        "ctranslate2": "4.4.0",
         "whisperx": "3.2.0",
         "transformers": "4.57.6",
         "huggingface_hub": "0.36.2",
@@ -98,12 +101,41 @@ def test_huggingface_conflict_message_is_actionable():
     assert "-r requirements-transcribe.txt" in message
 
 
+def test_ctranslate2_windows_import_uses_local_resource_shim(monkeypatch, tmp_path):
+    import sys
+    from importlib import resources
+    from types import ModuleType
+
+    import scripts.transcription_diagnostics as diagnostics
+
+    monkeypatch.setattr(resources, "files", lambda package: tmp_path)
+    imported = []
+
+    def fake_import(module_name):
+        if module_name == "pkg_resources":
+            raise ModuleNotFoundError("No module named 'pkg_resources'", name="pkg_resources")
+        if module_name == "ctranslate2":
+            shim = sys.modules["pkg_resources"]
+            assert shim.resource_filename(module_name, "") == str(tmp_path)
+            imported.append(module_name)
+            return ModuleType(module_name)
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr(diagnostics.sys, "platform", "win32")
+    monkeypatch.setattr(diagnostics.importlib, "import_module", fake_import)
+    diagnostics.prepare_ctranslate2_windows_import()
+
+    assert imported == ["ctranslate2"]
+    assert "pkg_resources" not in sys.modules
+
+
 def test_pkg_resources_is_not_required_for_whisperx_backend(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
     versions = {
         "torch": "2.8.0+cu126",
         "torchaudio": "2.8.0+cu126",
+        "ctranslate2": "4.4.0",
         "whisperx": "3.3.1",
         "transformers": "5.14.1",
         "huggingface_hub": "1.16.0",
@@ -133,11 +165,13 @@ def test_pkg_resources_is_not_required_for_whisperx_backend(monkeypatch):
 def test_pkg_resources_error_never_recommends_vulnerable_setuptools(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
+    monkeypatch.setattr(diagnostics.sys, "platform", "win32")
+
     monkeypatch.setattr(
         diagnostics,
         "diagnose",
         lambda base_dir=None: {
-            "missing": [],
+            "missing": ["ctranslate2"],
             "incompatible": [],
             "fallback_ready": False,
             "torch_runtime": {"cuda_available": True},
@@ -147,6 +181,10 @@ def test_pkg_resources_error_never_recommends_vulnerable_setuptools(monkeypatch)
     assert "لا تخفّض setuptools إلى 81.x" in message
     assert "setuptools>=81.0.0,<82" not in message
     assert "--repair gpu" in message
+    assert "CTranslate2" in message
+    assert "importlib.resources" in message
+
+
 def test_repair_installs_transformers_5_compatibility_range(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
 
@@ -268,6 +306,7 @@ def test_transcription_install_manifests_pin_the_locked_stack():
     for manifest in manifests:
         text = manifest.read_text(encoding="utf-8")
         assert "whisperx==3.3.1" in text
+        assert "ctranslate2>=4.4.0,<4.5.0" in text
         assert "transformers>=5.14.1,<5.16" in text
         assert "huggingface-hub>=1.16.0,<2.0" in text
         assert "tokenizers>=0.22.2,<0.23.1" in text
@@ -275,6 +314,7 @@ def test_transcription_install_manifests_pin_the_locked_stack():
         if manifest.name == "install_dependencies.bat":
             install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
             assert '"setuptools>=84.1.0,<85"' in install_line
+            assert '"ctranslate2>=4.4.0,<4.5.0"' in install_line
             assert "import pkg_resources" not in text
             assert "Version('84.1.0')" in text and "Version('85.0.0')" in text
             assert "--upgrade" not in install_line

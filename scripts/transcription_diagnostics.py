@@ -18,6 +18,38 @@ from importlib import metadata
 from typing import Any, Dict, Optional
 
 
+def prepare_ctranslate2_windows_import() -> None:
+    """Load WhisperX's Windows backend without requiring removed pkg_resources."""
+    if sys.platform != "win32":
+        return
+    try:
+        importlib.import_module("pkg_resources")
+        return
+    except ModuleNotFoundError as exc:
+        if exc.name != "pkg_resources":
+            raise
+    from importlib.resources import files
+    from types import ModuleType
+
+    missing = object()
+    previous = sys.modules.get("pkg_resources", missing)
+    compat = ModuleType("pkg_resources")
+
+    def resource_filename(package: Any, resource: str) -> str:
+        package_name = getattr(package, "module_name", package)
+        return os.fspath(files(package_name).joinpath(resource))
+
+    compat.resource_filename = resource_filename
+    sys.modules["pkg_resources"] = compat
+    try:
+        importlib.import_module("ctranslate2")
+    finally:
+        if previous is missing:
+            sys.modules.pop("pkg_resources", None)
+        else:
+            sys.modules["pkg_resources"] = previous
+
+
 class TranscriptionUnavailableError(ImportError):
     """خطأ قابل للتمييز حتى لا يعيد التطبيق تشغيل العملية بلا فائدة."""
 
@@ -28,6 +60,7 @@ APP_NAME = "OUSSAMA Cutter"
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIN_FREE_MB = 4096
 SUPPORTED_TRANSCRIPTION_VERSIONS = {
+    "ctranslate2": ("4.4.0", "4.5.0"),
     "whisperx": ("3.3.1", "3.3.2"),
     "transformers": ("5.14.1", "5.16.0"),
     "huggingface_hub": ("1.16.0", "2.0.0"),
@@ -49,6 +82,8 @@ def _version_supported(installed: str, minimum: str, maximum: str) -> bool:
 
 def _probe(module_name: str) -> Dict[str, Any]:
     try:
+        if module_name in {"ctranslate2", "whisperx", "faster_whisper"}:
+            prepare_ctranslate2_windows_import()
         module = importlib.import_module(module_name)
         version = getattr(module, "__version__", None)
         if version is None:
@@ -98,7 +133,7 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
     probes = {
         name: _probe(name)
         for name in (
-            "torch", "torchaudio", "whisperx", "transformers",
+            "torch", "torchaudio", "ctranslate2", "whisperx", "transformers",
             "huggingface_hub", "tokenizers", "setuptools",
             "faster_whisper",
         )
@@ -158,6 +193,15 @@ def build_error_message(
         lines.append("تفاصيل WhisperX: {}".format(whisperx_error))
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
     legacy_pkg_resources_error = "pkg_resources" in combined_error
+    ctranslate2_issue = (
+        "ctranslate2" in report["missing"]
+        or "ctranslate2" in report["incompatible"]
+        or (legacy_pkg_resources_error and sys.platform == "win32")
+    )
+    if ctranslate2_issue:
+        if legacy_pkg_resources_error and sys.platform == "win32":
+            lines.append("على Windows، CTranslate2 4.4.0 يستعمل pkg_resources القديم لتحميل DLL؛ توافق المشروع يعالجه عبر importlib.resources من دون تخفيض setuptools أو تغيير Torch CUDA.")
+        lines.append("أبقِ CTranslate2 ضمن >=4.4.0,<4.5.0 لأن WhisperX 3.3.1 يفرض هذا النطاق.")
     setuptools_issue = (
         "setuptools" in report["missing"]
         or "setuptools" in report["incompatible"]
