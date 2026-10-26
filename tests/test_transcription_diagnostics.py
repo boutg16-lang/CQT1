@@ -306,7 +306,7 @@ def test_transcription_install_manifests_pin_the_locked_stack():
     for manifest in manifests:
         text = manifest.read_text(encoding="utf-8")
         assert "whisperx==3.3.1" in text
-        assert "ctranslate2>=4.4.0,<4.5.0" in text
+        assert "ctranslate2>=4.4.0,<4.9.0" in text
         assert "transformers>=5.14.1,<5.16" in text
         assert "huggingface-hub>=1.16.0,<2.0" in text
         assert "tokenizers>=0.22.2,<0.23.1" in text
@@ -314,7 +314,7 @@ def test_transcription_install_manifests_pin_the_locked_stack():
         if manifest.name == "install_dependencies.bat":
             install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
             assert '"setuptools>=84.1.0,<85"' in install_line
-            assert '"ctranslate2>=4.4.0,<4.5.0"' in install_line
+            assert '"ctranslate2>=4.4.0,<4.9.0"' in install_line
             assert "import pkg_resources" not in text
             assert "Version('84.1.0')" in text and "Version('85.0.0')" in text
             assert "--upgrade" not in install_line

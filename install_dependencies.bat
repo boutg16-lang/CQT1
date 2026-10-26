@@ -111,7 +111,7 @@ goto CHECK_FFMPEG
 echo.
 echo [4/6] Installing optional WhisperX stack...
 rem Resolve the pinned WhisperX/Hugging Face stack without upgrading the selected Torch wheel.
-uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "ctranslate2>=4.4.0,<4.5.0" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=84.1.0,<85" "numpy<2"
+uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "ctranslate2>=4.4.0,<4.9.0" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=84.1.0,<85" "numpy<2"
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
 if /I "%GPU_MODE%"=="cuda" goto RESTORE_CUDA_TORCH
 goto VERIFY_TRANSCRIPTION
