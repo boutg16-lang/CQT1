@@ -44,6 +44,13 @@ OOM_MARKERS = (
     "_arraymemoryerror",       # numpy.core._exceptions._ArrayMemoryError repr
     "numpy.core._exceptions",
     "memoryerror",
+    # v7.33: CTranslate2/MKL host-RAM failure at model load — surfaced as a
+    # bare RuntimeError("mkl_malloc: failed to allocate memory") that none of
+    # the markers above matched, so it escaped the guard as a raw traceback.
+    "mkl_malloc",
+    "failed to allocate memory",
+    "cannot allocate memory",
+    "out of memory error",
 )
 
 

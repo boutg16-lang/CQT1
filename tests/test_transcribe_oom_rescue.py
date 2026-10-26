@@ -33,12 +33,37 @@ def test_oom_guard_still_ignores_unrelated_errors():
     assert not oom_guard._looks_like_oom(RuntimeError("expected scalar type Long"))
     assert not oom_guard._looks_like_oom(ValueError("Invalid model size"))
 
+def test_oom_guard_matches_ctranslate2_mkl_malloc():
+    # Real-world traceback from faster-whisper model load on Windows (v7.33):
+    # RuntimeError: mkl_malloc: failed to allocate memory
+    assert oom_guard._looks_like_oom(
+        RuntimeError("mkl_malloc: failed to allocate memory"))
+
+
+def test_oom_guard_mkl_malloc_triggers_model_downgrade(tmp_path):
+    calls = []
+
+    def fake_transcribe(path, model, project_folder, **kwargs):
+        calls.append(model)
+        if model == "large-v3-turbo":
+            raise RuntimeError("mkl_malloc: failed to allocate memory")
+        return ("srt", "tsv")
+
+    srt, tsv = oom_guard.transcribe_with_fallback(
+        "x.mp4", "large-v3-turbo", str(tmp_path),
+        transcribe_fn=fake_transcribe, verbose=False)
+    assert (srt, tsv) == ("srt", "tsv")
+    assert calls[0] == "large-v3-turbo"
+    assert calls[-1] != "large-v3-turbo"
+
 
 def test_is_memory_error_same_coverage_in_transcribe_video():
     assert transcribe_video._is_memory_error(RuntimeError("bad allocation"))
     assert transcribe_video._is_memory_error(
         RuntimeError("Unable to allocate 1.2 GiB for an array"))
     assert transcribe_video._is_memory_error(MemoryError())
+    assert transcribe_video._is_memory_error(
+        RuntimeError("mkl_malloc: failed to allocate memory"))
     assert not transcribe_video._is_memory_error(RuntimeError("boom"))
 
 
