@@ -295,7 +295,47 @@ def apply_safe_globals_hack():
     try:
         from typing import Any
 
-        safe_globals = [(Any, "typing.Any")]
+        safe_globals = [(Any, "typing.Any")]        # Builtins containers: pyannote/Lightning checkpoints legitimately
+        # reference plain list/dict/set/tuple globals (e.g. VAD
+        # hyper_parameters), which torch's weights_only unpickler rejects by
+        # default ("Unsupported global: GLOBAL builtins.list"). These are
+        # inert data types, not executable code.
+        safe_globals.extend([list, dict, set, frozenset, tuple, range])
+        try:
+            import collections
+
+            safe_globals.extend([
+                collections.OrderedDict,
+                collections.defaultdict,
+                collections.Counter,
+            ])
+        except (ImportError, AttributeError):
+            pass
+        try:
+            import numpy as _np
+
+            safe_globals.extend([
+                _np.float16, _np.float32, _np.float64,
+                _np.int8, _np.int16, _np.int32, _np.int64,
+                _np.uint8, _np.uint16, _np.uint32, _np.uint64,
+                _np.bool_, _np.dtype,
+                _np.core.multiarray._reconstruct,
+                _np.core.multiarray.scalar,
+                _np.core.multiarray.fillcontiguousarray_fromfile,
+                _np.core.multiarray.reconstruct,
+            ])
+            safe_globals.extend(
+                getattr(_np.dtypes, name)
+                for name in (
+                    "Float16DType", "Float32DType", "Float64DType",
+                    "Int8DType", "Int16DType", "Int32DType", "Int64DType",
+                    "UInt8DType", "UInt16DType", "UInt32DType", "UInt64DType",
+                    "BoolDType",
+                )
+                if hasattr(_np.dtypes, name)
+            )
+        except (ImportError, AttributeError):
+            pass
         try:
             import omegaconf
             safe_globals.extend([
