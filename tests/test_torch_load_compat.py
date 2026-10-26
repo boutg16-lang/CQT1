@@ -150,3 +150,28 @@ def test_safe_load_tolerates_unseekable_streams(monkeypatch):
 
     assert safe_load(ClosedStream(), weights_only=None) == "loaded"
     assert [call["weights_only"] for call in calls] == [True, False]
+
+
+def test_builtins_containers_are_registered_as_safe_globals(monkeypatch):
+    """pyannote VAD checkpoints legitimately reference GLOBAL builtins.list
+    (and friends). torch's weights_only unpickler rejects them unless they
+    are registered — its own error message recommends add_safe_globals([list]).
+    These are inert data containers, not executable code."""
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    registered = []
+    serialization = SimpleNamespace(
+        add_safe_globals=lambda values: registered.extend(values)
+    )
+    fake_torch = SimpleNamespace(load=lambda *args, **kwargs: "loaded", serialization=serialization)
+    monkeypatch.setattr(transcribe_video, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
+    monkeypatch.setitem(sys.modules, "torchaudio", ModuleType("torchaudio"))
+
+    transcribe_video.apply_safe_globals_hack()
+
+    for cls in (list, dict, set, tuple, frozenset, range):
+        assert cls in registered
+    import collections
+
+    assert collections.OrderedDict in registered
+    assert collections.defaultdict in registered
