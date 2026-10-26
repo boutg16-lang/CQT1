@@ -2388,8 +2388,8 @@ upload = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
-    { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.5.0" },
     { name = "cryptography" },
+    { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.9.0" },
     { name = "fastapi" },
     { name = "ffmpeg-python" },
     { name = "g4f" },
