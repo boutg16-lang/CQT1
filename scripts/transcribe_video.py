@@ -104,6 +104,13 @@ _MEMORY_ERROR_MARKERS = (
     "cannot allocate",
     "cudnn error",
     "cublas error",
+    # v7.33: CTranslate2/MKL host-RAM failure at model load — same class as
+    # "bad allocation" but phrased differently, and it used to escape the
+    # rescue path as a raw traceback instead of downgrading the model.
+    "mkl_malloc",
+    "failed to allocate memory",
+    "cannot allocate memory",
+    "out of memory error",
 )
 
 
