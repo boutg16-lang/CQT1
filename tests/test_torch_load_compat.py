@@ -103,16 +103,20 @@ def test_safe_load_auto_allows_missing_globals_then_loads(monkeypatch):
 
     fake_torch = SimpleNamespace(load=original_load, serialization=FakeSerialization())
     monkeypatch.setattr(transcribe_video, "torch", fake_torch)
-    # Real omegaconf/torch must be importable: the auto-allowlist imports the
-    # module named in the error message to resolve the missing global.
+    # Stub the modules named in the error messages so the auto-allowlist can
+    # import them regardless of what is installed in the environment.
+    fake_oc_base = ModuleType("omegaconf.base")
+    fake_oc_base.Metadata = type("Metadata", (), {})
+    monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
+    monkeypatch.setitem(sys.modules, "omegaconf.base", fake_oc_base)
     transcribe_video.apply_safe_globals_hack()
 
     assert fake_torch.load("model.ckpt", weights_only=None) == "loaded"
     assert attempts["n"] == 3
-    import omegaconf.base
+
     import torch as real_torch
 
-    assert omegaconf.base.Metadata in registered
+    assert fake_oc_base.Metadata in registered
     assert real_torch.torch_version.TorchVersion in registered
 
 
