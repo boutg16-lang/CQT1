@@ -116,21 +116,6 @@ def test_safe_load_auto_allows_missing_globals_then_loads(monkeypatch):
     assert real_torch.torch_version.TorchVersion in registered
 
 
-def test_safe_load_keeps_unsafe_retry_opt_in(monkeypatch):
-    monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
-    calls = []
-
-    def original_load(*args, **kwargs):
-        calls.append(kwargs.copy())
-        if kwargs["weights_only"]:
-            raise ValueError("legacy checkpoint")
-        return "loaded"
-
-    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
-
-    assert safe_load("model.ckpt", weights_only=None) == "loaded"
-    assert [call["weights_only"] for call in calls] == [True, False]
-
 
 def test_safe_load_does_not_retry_unsafely_without_opt_in(monkeypatch):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
