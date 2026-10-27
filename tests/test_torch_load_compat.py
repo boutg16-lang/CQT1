@@ -70,6 +70,68 @@ def test_safe_load_keeps_unsafe_retry_opt_in(monkeypatch):
     assert [call["weights_only"] for call in calls] == [True, False]
 
 
+def test_safe_load_auto_allows_missing_globals_then_loads(monkeypatch):
+    """Real pyannote VAD checkpoints (whisperx 3.x on torch 2.6+) hit a
+    chain of 'Unsupported global: GLOBAL <module>.<attr>' errors —
+    omegaconf.base.Metadata, torch.torch_version.TorchVersion,
+    pyannote.audio.core.model.Introspection, ... safe_load parses each
+    named global out of the error, registers it, and retries — keeping
+    the weights_only=True boundary while ending the whack-a-mole."""
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    registered = []
+    attempts = {"n": 0}
+
+    class FakeSerialization:
+        def add_safe_globals(self, values):
+            registered.extend(values)
+
+    def original_load(*args, **kwargs):
+        if not kwargs["weights_only"]:
+            return "loaded"
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise ValueError(
+                "WeightsUnpickler error: Unsupported global: GLOBAL "
+                "omegaconf.base.Metadata was not an allowed global by default."
+            )
+        if attempts["n"] == 2:
+            raise ValueError(
+                "WeightsUnpickler error: Unsupported global: GLOBAL "
+                "torch.torch_version.TorchVersion was not an allowed global by default."
+            )
+        return "loaded"
+
+    fake_torch = SimpleNamespace(load=original_load, serialization=FakeSerialization())
+    monkeypatch.setattr(transcribe_video, "torch", fake_torch)
+    # Real omegaconf/torch must be importable: the auto-allowlist imports the
+    # module named in the error message to resolve the missing global.
+    transcribe_video.apply_safe_globals_hack()
+
+    assert fake_torch.load("model.ckpt", weights_only=None) == "loaded"
+    assert attempts["n"] == 3
+    import omegaconf.base
+    import torch as real_torch
+
+    assert omegaconf.base.Metadata in registered
+    assert real_torch.torch_version.TorchVersion in registered
+
+
+def test_safe_load_keeps_unsafe_retry_opt_in(monkeypatch):
+    monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
+    calls = []
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        if kwargs["weights_only"]:
+            raise ValueError("legacy checkpoint")
+        return "loaded"
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+
+    assert safe_load("model.ckpt", weights_only=None) == "loaded"
+    assert [call["weights_only"] for call in calls] == [True, False]
+
+
 def test_safe_load_does_not_retry_unsafely_without_opt_in(monkeypatch):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
     calls = []
@@ -169,7 +231,8 @@ def test_builtins_containers_are_registered_as_safe_globals(monkeypatch):
 
     transcribe_video.apply_safe_globals_hack()
 
-    for cls in (list, dict, set, tuple, frozenset, range):
+    for cls in (list, dict, set, tuple, frozenset, range,
+                int, float, bool, str, bytes, complex, type(None)):
         assert cls in registered
     import collections
 
