@@ -422,7 +422,8 @@ def apply_safe_globals_hack():
                         obj = getattr(module, attr_name)
                         torch.serialization.add_safe_globals([obj])
                         print("Registered missing safe global: {}".format(qualified))
-                    except Exception:
+                    except Exception as reg_err:
+                        print("Could not auto-register {}: {!r}".format(qualified, reg_err))
                         break
                     _rewind_stream()
                     try:
