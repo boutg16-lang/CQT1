@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import speaker_diarization as sd
+from scripts import speechbrain_compat as sbc
 from scripts.edit_video import _apply_voice_face_link
 from scripts.voice_face_link import VoiceFaceLink
 
@@ -51,6 +52,60 @@ class TestSpeechTurns:
 
 
 class TestDiarizationFallbacks:
+    def test_speechbrain_lazy_import_ignores_windows_inspect_probe(self, monkeypatch):
+        import inspect
+        from types import ModuleType
+
+        class FakeLazyModule(ModuleType):
+            def __init__(self):
+                super().__init__("speechbrain.integrations.k2_fsa")
+                self.attempts = 0
+
+            def ensure_module(self, stacklevel):
+                self.attempts += 1
+                raise ImportError("optional k2 dependency is unavailable")
+
+            def __getattr__(self, attr):
+                return getattr(self.ensure_module(1), attr)
+
+        importutils = ModuleType("speechbrain.utils.importutils")
+        importutils.LazyModule = FakeLazyModule
+        monkeypatch.setitem(sys.modules, "speechbrain.utils.importutils", importutils)
+        monkeypatch.setattr(inspect, "__file__", r"D:\OS\.venv\Lib\inspect.py")
+
+        assert sbc.patch_speechbrain_inspect_compat() is True
+        lazy = FakeLazyModule()
+        namespace = {"lazy": lazy}
+        exec(compile("has_file = hasattr(lazy, '__file__')", inspect.__file__, "exec"), namespace)
+
+        assert namespace["has_file"] is False
+        assert lazy.attempts == 0
+
+    def test_speechbrain_lazy_import_still_loads_for_application_code(self, monkeypatch):
+        import inspect
+        from types import ModuleType, SimpleNamespace
+
+        calls = []
+
+        class FakeLazyModule(ModuleType):
+            def ensure_module(self, stacklevel):
+                calls.append(stacklevel)
+                return SimpleNamespace(ready=True)
+
+            def __getattr__(self, attr):
+                return getattr(self.ensure_module(1), attr)
+
+        importutils = ModuleType("speechbrain.utils.importutils")
+        importutils.LazyModule = FakeLazyModule
+        monkeypatch.setitem(sys.modules, "speechbrain.utils.importutils", importutils)
+        monkeypatch.setattr(inspect, "__file__", r"D:\OS\.venv\Lib\inspect.py")
+
+        assert sbc.patch_speechbrain_inspect_compat() is True
+        lazy = FakeLazyModule("speechbrain.integrations.k2_fsa")
+
+        assert lazy.ready is True
+        assert calls == [2]
+
     def test_diarize_audio_returns_none_without_pyannote(self, tmp_path, monkeypatch):
         monkeypatch.delenv("PYANNOTE_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("HF_TOKEN", raising=False)
