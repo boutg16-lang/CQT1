@@ -88,6 +88,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.9",
     "pip-audit>=2.9",
+    "msgpack>=1.2.3",
     "pip-licenses>=5.0",
     "build>=1.2",
     "numpy<2",
