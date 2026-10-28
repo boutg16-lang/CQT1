@@ -1,5 +1,6 @@
 # سجل تغييرات OUSSAMA Cutter
 ## تغييرات غير مُصدرة
+- إصلاح تحميل pyannote على Windows: يمنع فحص `inspect.py` من تشغيل الاستيراد الكسول الاختياري لـ SpeechBrain (`k2_fsa`) أثناء تحميل النموذج، مع إبقاء التحميل الكسول الطبيعي للتطبيق.
 - تضمين `scripts.export_xml_lib` في wheel وsdist، وإضافة اختبار استيراد للـwheel المثبّت خارج مجلد المصدر.
 - تضمين أصول التشغيل في wheel وsdist بقائمة واحدة مشتركة مع فحص preflight؛ والتحقق من بناء wheel وتثبيته انطلاقاً من sdist.
 - تثبيت زوج PyTorch/TorchAudio `2.8.0` لمسار WhisperX؛ TorchAudio 2.9 حذف واجهات يحتاجها pyannote.audio 3.3.x. مُثبّت Windows يختار CPU أو CUDA 12.6 صراحةً، ومثبّت Linux يسأل عن المسرّع بينما يختار مثبّت macOS CPU. رُفعت حدود NLTK وLightning وPyTorch Lightning وOAuthlib وOpenTelemetry، وانتقل setuptools إلى `>=84.1.0,<85` لتجنب الإصدارات الضعيفة. يعالج التطبيق استيراد `pkg_resources` الخاص بـCTranslate2 على Windows بجسر محصور عبر `importlib.resources`، من دون خفض setuptools أو تغيير Torch CUDA السليم.

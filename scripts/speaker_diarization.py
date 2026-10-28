@@ -75,6 +75,9 @@ def diarize_audio(audio_path, token=None):
         from scripts.transcribe_video import apply_safe_globals_hack
         apply_safe_globals_hack()
         from pyannote.audio import Pipeline
+
+        from scripts.speechbrain_compat import patch_speechbrain_inspect_compat
+        patch_speechbrain_inspect_compat()
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1", use_auth_token=token)
         result = pipeline(audio_path)
