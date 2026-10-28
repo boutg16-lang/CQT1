@@ -642,6 +642,23 @@ def test_main_json_output(capsys):
     assert code == data["exit"]
 
 
+def test_main_json_output_when_autofix_repairs(monkeypatch, capsys):
+    reports = iter([
+        ([{"name": "api_config.json", "status": preflight.FAIL, "detail": "missing"}],
+         ["api_config.json"], []),
+        ([{"name": "api_config.json", "status": preflight.OK, "detail": "created"}],
+         [], ["whisperx"]),
+    ])
+    monkeypatch.setattr(preflight, "collect_checks", lambda: next(reports))
+    monkeypatch.setattr(preflight, "repair", lambda *args, **kwargs: ([], [], ["whisperx"]))
+
+    code = preflight.main(["--auto-fix", "--json"])
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["exit"] == 2
+    assert code == data["exit"]
+
+
 def test_run_pip_falls_back_to_uv_when_pip_missing(monkeypatch):
     calls = []
     monkeypatch.setattr(preflight, "_module_importable", lambda name: False)
