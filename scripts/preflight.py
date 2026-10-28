@@ -846,7 +846,7 @@ def run_preflight(mode="auto-fix", json_out=False, quiet=False, ensure_upload=Fa
             for c in checks
         )
     if (critical or upload_missing) and mode in ("fix", "auto-fix"):
-        if not quiet:
+        if not quiet and not json_out:
             _print_report(checks, "Pre-flight: problems found, repairing")
         _, critical, warn = repair(mode, checks, ensure_upload=ensure_upload)
         checks, critical, warn = collect_checks()
