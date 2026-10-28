@@ -109,15 +109,17 @@ def test_safe_load_auto_allows_missing_globals_then_loads(monkeypatch):
     fake_oc_base.Metadata = type("Metadata", (), {})
     monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
     monkeypatch.setitem(sys.modules, "omegaconf.base", fake_oc_base)
+    fake_torch_version = ModuleType("torch.torch_version")
+    fake_torch_version.TorchVersion = type("TorchVersion", (), {})
+    monkeypatch.setitem(sys.modules, "torch", ModuleType("torch"))
+    monkeypatch.setitem(sys.modules, "torch.torch_version", fake_torch_version)
     transcribe_video.apply_safe_globals_hack()
 
     assert fake_torch.load("model.ckpt", weights_only=None) == "loaded"
     assert attempts["n"] == 3
 
-    import torch as real_torch
-
     assert fake_oc_base.Metadata in registered
-    assert real_torch.torch_version.TorchVersion in registered
+    assert fake_torch_version.TorchVersion in registered
 
 
 
