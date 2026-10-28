@@ -36,7 +36,7 @@ dependencies = [
     # Keep the supported WhisperX/ONNX stack on the tested compatibility line.
     "onnxruntime<1.24",
     "cryptography",
-    # Gradio 6.30 requires Pillow<13; the temporary audit exception expires 2026-11-04.
+    # Gradio 6.31 requires Pillow<13; the temporary audit exception expires 2026-12-15.
     "Pillow==12.3.0",
     "scenedetect",
 ]
