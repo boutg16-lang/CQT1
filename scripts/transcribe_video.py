@@ -295,7 +295,10 @@ def apply_safe_globals_hack():
     try:
         from typing import Any
 
-        safe_globals = [(Any, "typing.Any")]        # Builtins containers: pyannote/Lightning checkpoints legitimately
+        safe_globals = [
+            (Any, "typing.Any"),
+            int, float, bool, str, bytes, complex, type(None),
+        ]        # Builtins containers: pyannote/Lightning checkpoints legitimately
         # reference plain list/dict/set/tuple globals (e.g. VAD
         # hyper_parameters), which torch's weights_only unpickler rejects by
         # default ("Unsupported global: GLOBAL builtins.list"). These are
@@ -344,6 +347,20 @@ def apply_safe_globals_hack():
                 omegaconf.base.ContainerMetadata,
                 omegaconf.base.Node,
             ])
+            try:
+                from omegaconf import nodes as _oc_nodes
+
+                safe_globals.extend(
+                    getattr(_oc_nodes, name)
+                    for name in (
+                        "AnyNode", "ValueNode", "BooleanNode", "IntegerNode",
+                        "FloatNode", "StringNode", "DateNode", "DateTimeNode",
+                        "EnumNode",
+                    )
+                    if hasattr(_oc_nodes, name)
+                )
+            except (ImportError, AttributeError):
+                pass
         except (ImportError, AttributeError):
             pass
 
@@ -386,6 +403,33 @@ def apply_safe_globals_hack():
             try:
                 return original_load(*args, **safe_kwargs)
             except Exception as safe_err:
+                # torch names the exact missing global in its error message
+                # ("Unsupported global: GLOBAL module.attr was not allowed").
+                # Auto-register that single class and retry once: allowlisting
+                # stays intact — we only add what torch itself named.
+                for _ in range(30):
+                    match = re.search(
+                        r"Unsupported global: GLOBAL ([\w\.]+) was not",
+                        str(safe_err),
+                    )
+                    if not match:
+                        break
+                    qualified = match.group(1)
+                    module_name, _, attr_name = qualified.rpartition(".")
+                    try:
+                        import importlib
+                        module = importlib.import_module(module_name)
+                        obj = getattr(module, attr_name)
+                        torch.serialization.add_safe_globals([obj])
+                        print("Registered missing safe global: {}".format(qualified))
+                    except Exception as reg_err:
+                        print("Could not auto-register {}: {!r}".format(qualified, reg_err))
+                        break
+                    _rewind_stream()
+                    try:
+                        return original_load(*args, **safe_kwargs)
+                    except Exception as retry_err:
+                        safe_err = retry_err
                 if not allow_unsafe:
                     raise RuntimeError(
                         "torch.load failed under weights_only=True ({!r}). If you "

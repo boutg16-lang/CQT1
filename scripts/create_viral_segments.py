@@ -14,6 +14,17 @@ from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
 
 logger = logging.getLogger(__name__)
 
+def _purge_broken_asyncio() -> None:
+    """Drop a half-initialized asyncio left in sys.modules by a failed import.
+
+    A failed optional import that transitively imported asyncio under a
+    faked ``sys.platform`` leaves a broken partial module behind; the next
+    ``import asyncio`` then raises NameError instead of ImportError and
+    escapes ``except ImportError`` guards.
+    """
+    for name in [n for n in sys.modules if n == "asyncio" or n.startswith("asyncio.")]:
+        del sys.modules[name]
+
 try:
     from scripts import performance_weights
 except Exception:
@@ -58,24 +69,28 @@ try:
     HAS_GEMINI = True
     GEMINI_SDK = "new"
 except Exception:
+    _purge_broken_asyncio()
     try:
         genai = importlib.import_module("google.generativeai")
         HAS_GEMINI = True
         GEMINI_SDK = "legacy"
     except Exception:
+        _purge_broken_asyncio()
         HAS_GEMINI = False
         GEMINI_SDK = None
 
 try:
     import g4f
     HAS_G4F = True
-except ImportError:
+except Exception:
+    _purge_broken_asyncio()
     HAS_G4F = False
 
 try:
     from llama_cpp import Llama
     HAS_LLAMA_CPP = True
-except ImportError:
+except Exception:
+    _purge_broken_asyncio()
     HAS_LLAMA_CPP = False
 
 def clean_json_response(response_text):

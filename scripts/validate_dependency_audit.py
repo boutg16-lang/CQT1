@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-EXPIRES = date(2026, 11, 4)
+EXPIRES = date(2026, 12, 15)
 PILLOW_VERSION = "12.3.0"
 FILELOCK_VERSION = "4.1.0"
 ALLOWED_IDS = {
@@ -50,6 +50,26 @@ ALLOWED_IDS = {
     "GHSA-78g4-xqwv-q3g8",
     "CVE-2026-114501",
     "CVE-2026-112398",
+    # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0,
+    # blocked by gradio<13 pin (pyproject.toml). Re-check when gradio lifts the cap.
+    "PYSEC-2026-4326",
+    "PYSEC-2026-4327",
+    "PYSEC-2026-4328",
+    "PYSEC-2026-4329",
+    "PYSEC-2026-4330",
+    "PYSEC-2026-4331",
+    "PYSEC-2026-4332",
+    "PYSEC-2026-4333",
+    "PYSEC-2026-4334",
+    "PYSEC-2026-4335",
+    "PYSEC-2026-4336",
+    "PYSEC-2026-4337",
+    "PYSEC-2026-4338",
+    "PYSEC-2026-4339",
+    "PYSEC-2026-4340",
+    "PYSEC-2026-4341",
+    "PYSEC-2026-4342",
+    "PYSEC-2026-4343",
 }
 FILELOCK_ALLOWED_IDS = {
     "CVE-2026-112906",
