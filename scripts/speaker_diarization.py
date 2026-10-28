@@ -72,6 +72,8 @@ def diarize_audio(audio_path, token=None):
     if not token or not audio_path or not os.path.isfile(audio_path):
         return None
     try:
+        from scripts.transcribe_video import apply_safe_globals_hack
+        apply_safe_globals_hack()
         from pyannote.audio import Pipeline
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1", use_auth_token=token)
