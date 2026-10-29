@@ -35,6 +35,18 @@ def test_build_report_verdicts():
     assert report["summary"] == {"ok": 1, "warn": 1, "fail": 2, "critical_fail": 1}
 
 
+def test_python_check_matches_supported_project_range(monkeypatch):
+    assert wa.SUPPORTED_PYTHON == ((3, 10), (3, 12))
+
+    monkeypatch.setattr(wa.platform, "python_version_tuple", lambda: ("3", "9", "18"))
+    monkeypatch.setattr(wa.platform, "python_version", lambda: "3.9.18")
+    assert wa.check_python()["status"] == wa.FAIL
+
+    monkeypatch.setattr(wa.platform, "python_version_tuple", lambda: ("3", "10", "0"))
+    monkeypatch.setattr(wa.platform, "python_version", lambda: "3.10.0")
+    assert wa.check_python()["status"] == wa.OK
+
+
 def test_render_console_lists_every_check():
     report = wa.build_report([
         wa._check("خطوة", wa.OK, "تفاصيل", elapsed=1.25),
