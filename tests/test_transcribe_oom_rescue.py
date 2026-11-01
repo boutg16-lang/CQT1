@@ -67,6 +67,13 @@ def test_is_memory_error_same_coverage_in_transcribe_video():
     assert not transcribe_video._is_memory_error(RuntimeError("boom"))
 
 
+def test_cuda_runtime_error_detects_missing_cudnn_dll():
+    assert transcribe_video._is_cuda_runtime_error(
+        RuntimeError("Could not locate cudnn_ops_infer64_8.dll")
+    )
+    assert not transcribe_video._is_cuda_runtime_error(RuntimeError("boom"))
+
+
 # --- faster-whisper rescue --------------------------------------------------
 
 def _write_outputs_fake(result, srt_path, tsv_path, json_path):

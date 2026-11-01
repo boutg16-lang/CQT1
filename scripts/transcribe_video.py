@@ -114,12 +114,35 @@ _MEMORY_ERROR_MARKERS = (
     "out of memory error",
 )
 
+_CUDA_RUNTIME_ERROR_MARKERS = (
+    "cudnn_ops_infer64_8.dll",
+    "cudnn_ops_infer64_9.dll",
+    "cudnn64_8.dll",
+    "cudnn64_9.dll",
+    "cudnn_status_not_initialized",
+    "cudnn error",
+    "cuda driver version is insufficient",
+    "dll load failed",
+    "could not locate",
+)
+
 
 def _is_memory_error(exc):
     if isinstance(exc, MemoryError):
         return True
     msg = str(exc).lower()
     return any(m in msg for m in _MEMORY_ERROR_MARKERS)
+
+
+def _is_cuda_runtime_error(exc):
+    """Return whether a CUDA backend failed before transcription started.
+
+    ``torch.cuda.is_available()`` can be true while CTranslate2 cannot load
+    its cuDNN DLL on Windows.  Auto mode may safely retry WhisperX on CPU;
+    an explicit ``cuda`` request must still surface the original error.
+    """
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _CUDA_RUNTIME_ERROR_MARKERS)
 
 
 def _log_memory_state(label=""):
@@ -837,7 +860,7 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                 try:
                     model = _run_with_heartbeat(
                         f"جاري تحميل نموذج WhisperX {candidate} وVAD — قد يستغرق ذلك وقتاً أول مرة",
-                        lambda candidate=candidate: whisperx.load_model(
+                        lambda candidate=candidate, device=device, compute_type=compute_type: whisperx.load_model(
                             candidate,
                             device,
                             compute_type=compute_type,
@@ -857,6 +880,22 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                         continue
                     raise
                 except Exception as load_err:
+                    if (
+                        device == "cuda"
+                        and requested_device == "auto"
+                        and _is_cuda_runtime_error(load_err)
+                    ):
+                        print(
+                            "[transcribe] CUDA/cuDNN runtime is unavailable "
+                            "for CTranslate2; retrying WhisperX on CPU. "
+                            "Choose CUDA explicitly to fail instead.",
+                            flush=True,
+                        )
+                        _release_cuda_memory(model, delete_model=True)
+                        device = "cpu"
+                        compute_type = "float32"
+                        last_load_err = load_err
+                        continue
                     conflict = str(load_err).lower()
                     if ("huggingface-hub" in conflict or "huggingface_hub" in conflict
                             or "tokenizers" in conflict):
