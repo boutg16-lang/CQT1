@@ -69,6 +69,19 @@ def test_check_dependency_missing(monkeypatch):
     assert preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", False)["status"] == preflight.WARN
 
 
+def test_check_google_genai_reports_import_error_type_without_exception_details(monkeypatch):
+    monkeypatch.setattr(preflight, "_module_importable", lambda module: False)
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "2.17.0")
+    monkeypatch.setattr(preflight, "_import_failure_type", lambda module: "ModuleNotFoundError")
+
+    result = preflight.check_dependency("google-genai", "google-genai", True)
+
+    assert result["status"] == preflight.FAIL
+    assert "ModuleNotFoundError" in result["detail"]
+    assert "token" not in result["detail"].lower()
+
+
 def test_check_api_config_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
     r = preflight.check_api_config()
@@ -627,6 +640,111 @@ def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
     monkeypatch.setattr(preflight, "collect_checks", fake_collect)
     assert preflight.run_preflight(mode="auto-fix", quiet=True) == 0
     assert calls == ["requirements.txt"]
+
+
+def test_run_package_reinstall_uses_pip_without_dependencies(monkeypatch):
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(preflight, "_module_importable", lambda name: name == "pip")
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda cmd, **kwargs: calls.append((cmd, kwargs)) or Result(),
+    )
+
+    result = preflight._run_package_reinstall("google-genai", "2.17.0")
+
+    assert result.returncode == 0
+    assert calls[0][0] == [
+        preflight.sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--force-reinstall",
+        "--no-deps",
+        "google-genai==2.17.0",
+    ]
+
+
+def test_run_package_reinstall_uses_uv_when_pip_is_unavailable(monkeypatch):
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(preflight, "_module_importable", lambda name: False)
+    monkeypatch.setattr(
+        preflight.shutil, "which", lambda name: "uv.exe" if name == "uv" else None
+    )
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda cmd, **kwargs: calls.append((cmd, kwargs)) or Result(),
+    )
+
+    result = preflight._run_package_reinstall("google-genai", "2.17.0")
+
+    assert result.returncode == 0
+    assert calls[0][0] == [
+        "uv.exe",
+        "pip",
+        "install",
+        "--python",
+        preflight.sys.executable,
+        "--reinstall-package",
+        "google-genai",
+        "--no-deps",
+        "google-genai==2.17.0",
+    ]
+
+
+def test_repair_reinstalls_broken_google_genai_without_resolving_core_dependencies(monkeypatch):
+    checks = [{
+        "name": "google-genai",
+        "status": preflight.FAIL,
+        "detail": "installed but import failed (google.genai)",
+    }]
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
+    monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "2.17.0")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(
+        preflight,
+        "_run_package_reinstall",
+        lambda dist, version: calls.append((dist, version)) or Result(),
+    )
+    def reject_full_install(req_file, dry_run=False):
+        raise AssertionError("must not reinstall the whole core stack")
+
+    monkeypatch.setattr(preflight, "install_requirements", reject_full_install)
+    monkeypatch.setattr(preflight, "PINNED_RULES", [])
+    monkeypatch.setattr(
+        preflight,
+        "collect_checks",
+        lambda: ([{"name": "google-genai", "status": preflight.OK, "detail": "2.17.0"}], [], []),
+    )
+
+    fixed, remaining, warnings = preflight.repair("auto-fix", checks)
+
+    assert calls == [("google-genai", "2.17.0")]
+    assert not remaining
+    assert not warnings
+    assert any(item["name"] == "google-genai" and item["status"] == preflight.OK for item in fixed)
 
 
 def test_main_off_flag(capsys):

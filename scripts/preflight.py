@@ -214,11 +214,20 @@ def _module_importable(module):
         return False
 
 
+def _import_failure_type(module):
+    try:
+        importlib.import_module(module)
+    except Exception as exc:
+        return type(exc).__name__
+    return "UnknownImportError"
+
+
 def _version(dist):
     try:
         return _pkg_meta.version(dist)
     except Exception:
         return "?"
+
 
 # --------------------------------------------------------------------------
 # Checks
@@ -320,8 +329,14 @@ def check_dependency(dist, raw_line, critical):
     module = _import_name(dist)
     if not _module_importable(module):
         installed = _dist_installed(dist)
-        detail = "missing (%s)" % dist if not installed else \
-            "installed but import failed (%s)" % module
+        if not installed:
+            detail = "missing (%s)" % dist
+        else:
+            detail = "installed but import failed (%s)" % module
+            if dist == "google-genai":
+                detail = "installed but import failed (%s; %s)" % (
+                    module, _import_failure_type(module),
+                )
         return {"name": dist, "status": FAIL if critical else WARN, "detail": detail}
     return {"name": dist, "status": OK, "detail": _version(dist)}
 
@@ -503,6 +518,59 @@ def _run_pip(args):
         return subprocess.run(cmd, capture_output=True, text=True)
     except Exception:
         return None
+
+
+def _run_package_reinstall(dist, version):
+    spec = "%s==%s" % (dist, version)
+    if _module_importable("pip"):
+        cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            "--no-deps",
+            spec,
+        ]
+    else:
+        uv = shutil.which("uv")
+        if not uv:
+            return None
+        cmd = [
+            uv,
+            "pip",
+            "install",
+            "--python",
+            sys.executable,
+            "--reinstall-package",
+            dist,
+            "--no-deps",
+            spec,
+        ]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True)
+    except Exception:
+        return None
+
+
+def fix_google_genai_import():
+    if not _dist_installed("google-genai"):
+        return False, "google-genai metadata is missing; core dependency installation is required"
+    version = _version("google-genai")
+    if version == "?":
+        return False, "could not determine the installed google-genai version"
+    if _is_frozen():
+        return False, "cannot reinstall google-genai inside the packaged exe"
+    proc = _run_package_reinstall("google-genai", version)
+    if proc is None:
+        return False, "pip and uv are unavailable for repairing google-genai"
+    if proc.returncode == 0:
+        for module in tuple(sys.modules):
+            if module == "google.genai" or module.startswith("google.genai."):
+                del sys.modules[module]
+        importlib.invalidate_caches()
+        return True, "reinstalled google-genai %s without changing other dependencies" % version
+    return False, "could not reinstall google-genai %s (installer exit %d)" % (version, proc.returncode)
 
 
 def install_requirements(req_file, dry_run=False):
@@ -753,8 +821,23 @@ def repair(mode, checks, ensure_upload=False):
     ok_cfg, cfg_detail = ensure_api_config()
     fixed.append({"name": "api_config.json", "status": OK if ok_cfg else FAIL, "detail": cfg_detail})
 
-    # 2) pip installs (core always attempted; optional stacks only on request)
-    fail_names = [c["name"] for c in checks if c["status"] == FAIL]
+    # 2) Repair a corrupted Gemini SDK wheel without resolving unrelated core packages.
+    broken_imports = {
+        c["name"]
+        for c in checks
+        if c["name"] == "google-genai"
+        and c["status"] == FAIL
+        and c["detail"].startswith("installed but import failed")
+    }
+    for dist in sorted(broken_imports):
+        ok, detail = fix_google_genai_import()
+        fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})
+
+    # 3) pip installs (core always attempted; optional stacks only on request)
+    fail_names = [
+        c["name"] for c in checks
+        if c["status"] == FAIL and c["name"] not in broken_imports
+    ]
     if ensure_upload:
         upload_dists = {dist for dist, _raw in _read_req_names("requirements-upload.txt")}
         fail_names.extend(
