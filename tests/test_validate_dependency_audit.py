@@ -32,7 +32,7 @@ def test_rejects_same_advisory_on_another_package():
 
 
 def test_accepts_scoped_filelock_exception_for_python_310():
-    assert len(FILELOCK_ALLOWED_IDS) == 6
+    assert len(FILELOCK_ALLOWED_IDS) == 17
     assert validate_report(
         _report("filelock", "4.1.0", FILELOCK_ALLOWED_IDS), EXPIRES - timedelta(days=1)
     ) == []
