@@ -1,5 +1,11 @@
+import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,6 +56,39 @@ def test_installer_preflight_matches_running_python_environment():
     assert "[System.IO.Path]::GetFullPath" in text
     assert "OrdinalIgnoreCase" in text
     assert "exit 2" in text
+
+
+def test_installer_preflight_detects_python_hosts_loading_venv_modules():
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    assert "Get-Process -Name python,pythonw" in text
+    assert "$process.Modules" in text
+    assert "$venvPrefix" in text
+    assert "moduleInspectionFailed" in text
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows PowerShell")
+def test_installer_preflight_blocks_current_python_interpreter():
+    powershell = shutil.which("powershell")
+    if not powershell:
+        pytest.skip("Windows PowerShell is unavailable")
+    script = ROOT / "scripts" / "windows_installer_preflight.ps1"
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            "-PythonPath",
+            sys.executable,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "using modules from this project's Python environment" in result.stdout
 
 
 def test_webui_launcher_is_non_destructive_and_has_warning_path():
