@@ -51,7 +51,7 @@ ALLOWED_IDS = {
     "CVE-2026-114501",
     "CVE-2026-112398",
     # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0,
-    # blocked by gradio<13 pin (pyproject.toml). Re-check when gradio lifts the cap.
+    # blocked by Gradio's pillow<13 pin (pyproject.toml). Re-check when Gradio lifts the cap.
     "PYSEC-2026-4326",
     "PYSEC-2026-4327",
     "PYSEC-2026-4328",
