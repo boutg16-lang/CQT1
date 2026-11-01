@@ -34,6 +34,24 @@ def test_install_launcher_uses_project_drive_for_temp_and_runs_diagnostics():
     assert "google_auth_oauthlib" in text
 
 
+def test_installer_checks_for_locked_venv_before_mutating_it():
+    text = _read_ascii("install_dependencies.bat")
+    guard = 'scripts\\windows_installer_preflight.ps1'
+    assert guard in text
+    assert text.index(guard) < text.index('rmdir /s /q ".venv"')
+    assert text.index(guard) < text.index("uv pip install")
+    assert "(3,10) <= sys.version_info[:2] <= (3,12)" in text
+    assert "[INFO] If an Access is denied error names a .pyd or .dll file" in text
+
+
+def test_installer_preflight_matches_running_python_environment():
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    assert "Get-CimInstance -ClassName Win32_Process" in text
+    assert "[System.IO.Path]::GetFullPath" in text
+    assert "OrdinalIgnoreCase" in text
+    assert "exit 2" in text
+
+
 def test_webui_launcher_is_non_destructive_and_has_warning_path():
     text = _read_ascii("run_webui.bat")
     assert "setlocal EnableExtensions" in text

@@ -182,6 +182,40 @@ def _release_cuda_memory(model=None, delete_model=False):
             logger.debug("CUDA cache cleanup failed (%s).", type(exc).__name__)
 
 
+def _load_whisperx_model(candidate, device, compute_type, requested_device):
+    while True:
+        try:
+            model = _run_with_heartbeat(
+                f"جاري تحميل نموذج WhisperX {candidate} وVAD — قد يستغرق ذلك وقتاً أول مرة",
+                lambda candidate=candidate, device=device, compute_type=compute_type: whisperx.load_model(
+                    candidate,
+                    device,
+                    compute_type=compute_type,
+                    asr_options={"hotwords": None}
+                ),
+                stage="transcribe",
+                start_percent=25,
+                end_percent=45,
+            )
+            return model, device, compute_type
+        except Exception as load_err:
+            if (
+                device != "cuda"
+                or requested_device != "auto"
+                or not _is_cuda_runtime_error(load_err)
+            ):
+                raise
+            print(
+                "[transcribe] CUDA/cuDNN runtime is unavailable "
+                "for CTranslate2; retrying WhisperX on CPU. "
+                "Choose CUDA explicitly to fail instead.",
+                flush=True,
+            )
+            _release_cuda_memory(delete_model=True)
+            device = "cpu"
+            compute_type = "float32"
+
+
 def _transcribe_via_fallback(input_file, model_name, project_folder,
                              srt_file, tsv_file, json_file, cache_path, device):
     """Memory-exhausted rescue: run the lightweight faster-whisper backend.
@@ -858,17 +892,8 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
             last_load_err = None
             for candidate in resolve_model_candidates(model_name):
                 try:
-                    model = _run_with_heartbeat(
-                        f"جاري تحميل نموذج WhisperX {candidate} وVAD — قد يستغرق ذلك وقتاً أول مرة",
-                        lambda candidate=candidate, device=device, compute_type=compute_type: whisperx.load_model(
-                            candidate,
-                            device,
-                            compute_type=compute_type,
-                            asr_options={"hotwords": None}
-                        ),
-                        stage="transcribe",
-                        start_percent=25,
-                        end_percent=45,
+                    model, device, compute_type = _load_whisperx_model(
+                        candidate, device, compute_type, requested_device
                     )
                     if candidate != model_name:
                         print("[transcribe] '{}' not supported by this faster-whisper "
@@ -880,22 +905,6 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                         continue
                     raise
                 except Exception as load_err:
-                    if (
-                        device == "cuda"
-                        and requested_device == "auto"
-                        and _is_cuda_runtime_error(load_err)
-                    ):
-                        print(
-                            "[transcribe] CUDA/cuDNN runtime is unavailable "
-                            "for CTranslate2; retrying WhisperX on CPU. "
-                            "Choose CUDA explicitly to fail instead.",
-                            flush=True,
-                        )
-                        _release_cuda_memory(model, delete_model=True)
-                        device = "cpu"
-                        compute_type = "float32"
-                        last_load_err = load_err
-                        continue
                     conflict = str(load_err).lower()
                     if ("huggingface-hub" in conflict or "huggingface_hub" in conflict
                             or "tokenizers" in conflict):

@@ -74,6 +74,63 @@ def test_cuda_runtime_error_detects_missing_cudnn_dll():
     assert not transcribe_video._is_cuda_runtime_error(RuntimeError("boom"))
 
 
+def test_auto_device_retries_same_model_on_cpu_when_cudnn_is_missing(monkeypatch):
+    from types import SimpleNamespace
+
+    calls = []
+
+    def fake_load_model(candidate, device, **kwargs):
+        calls.append((candidate, device, kwargs["compute_type"]))
+        if device == "cuda":
+            raise RuntimeError("Could not locate cudnn_ops_infer64_8.dll")
+        return "loaded-model"
+
+    monkeypatch.setattr(
+        transcribe_video, "whisperx", SimpleNamespace(load_model=fake_load_model)
+    )
+    monkeypatch.setattr(
+        transcribe_video, "_run_with_heartbeat",
+        lambda message, operation, **kwargs: operation(),
+    )
+    monkeypatch.setattr(transcribe_video, "_release_cuda_memory", lambda **kwargs: None)
+
+    model, device, compute_type = transcribe_video._load_whisperx_model(
+        "large-v3", "cuda", "float16", "auto"
+    )
+
+    assert model == "loaded-model"
+    assert device == "cpu"
+    assert compute_type == "float32"
+    assert calls == [("large-v3", "cuda", "float16"), ("large-v3", "cpu", "float32")]
+
+
+def test_explicit_cuda_does_not_silently_fall_back_to_cpu(monkeypatch):
+    from types import SimpleNamespace
+
+    calls = []
+
+    def fake_load_model(candidate, device, **kwargs):
+        calls.append(device)
+        raise RuntimeError("Could not locate cudnn_ops_infer64_8.dll")
+
+    monkeypatch.setattr(
+        transcribe_video, "whisperx", SimpleNamespace(load_model=fake_load_model)
+    )
+    monkeypatch.setattr(
+        transcribe_video, "_run_with_heartbeat",
+        lambda message, operation, **kwargs: operation(),
+    )
+
+    try:
+        transcribe_video._load_whisperx_model("large-v3", "cuda", "float16", "cuda")
+    except RuntimeError as exc:
+        assert "cudnn_ops_infer64_8.dll" in str(exc)
+    else:
+        raise AssertionError("explicit CUDA mode should preserve the runtime failure")
+
+    assert calls == ["cuda"]
+
+
 # --- faster-whisper rescue --------------------------------------------------
 
 def _write_outputs_fake(result, srt_path, tsv_path, json_path):

@@ -56,9 +56,11 @@ goto FAILED
 echo [1/6] uv is ready.
 
 echo.
-echo [2/6] Preparing Python 3.12 virtual environment...
+echo [2/6] Preparing supported Python 3.10-3.12 virtual environment...
 if not exist ".venv\Scripts\python.exe" goto CREATE_VENV
-".venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if (3,9) <= sys.version_info[:2] <= (3,12) else 1)"
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%CD%\.venv\Scripts\python.exe"
+if errorlevel 1 goto ENVIRONMENT_IN_USE
+".venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 1)"
 if not errorlevel 1 goto VENV_READY
 rmdir /s /q ".venv"
 :CREATE_VENV
@@ -231,6 +233,11 @@ if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
 pause
 exit /b 1
 
+:ENVIRONMENT_IN_USE
+echo [ERROR] Cannot safely update the project Python environment while it is in use.
+echo [INFO] Save your work, close OUSSAMA Cutter and its WebUI, then stop other Python commands started from this project.
+echo [INFO] If no project process is running and this repeats, restart Windows to release locked .pyd files, then retry.
+goto FAILED
 :DISK_FAILED
 echo [ERROR] At least 8 GB free space is required on the project drive.
 echo Delete temporary files or move the project folder to a drive with more space.
@@ -239,7 +246,9 @@ goto FAILED
 echo [ERROR] Could not create a Python 3.12 virtual environment.
 goto FAILED
 :CORE_FAILED
-echo [ERROR] Core dependencies failed. Check free space, network, and Python 3.12.
+echo [ERROR] Core dependencies failed. Check free space, network, and supported Python 3.10-3.12.
+echo [INFO] If an Access is denied error names a .pyd or .dll file, close OUSSAMA Cutter and all Python processes using this .venv, then rerun setup.
+echo [INFO] If the file remains locked after closing those processes, restart Windows and retry; check Windows Security if the error persists.
 goto FAILED
 :FAILED
 rmdir /s /q ".installer-tmp" >nul 2>&1
