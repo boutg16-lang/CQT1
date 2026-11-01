@@ -42,7 +42,7 @@ OK = "ok"
 WARN = "warn"
 FAIL = "fail"
 
-SUPPORTED_PYTHON = ((3, 9), (3, 12))  # [min, max] inclusive — matches preflight
+SUPPORTED_PYTHON = ((3, 10), (3, 12))  # [min, max] inclusive — matches preflight
 
 
 def _check(name: str, status: str, detail: str, *, critical: bool = False,
