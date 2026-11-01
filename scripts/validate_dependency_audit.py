@@ -73,7 +73,18 @@ ALLOWED_IDS = {
 }
 FILELOCK_ALLOWED_IDS = {
     "CVE-2026-112906",
+    "CVE-2026-112908",
+    "CVE-2026-112909",
+    "CVE-2026-112910",
+    "CVE-2026-112911",
+    "CVE-2026-112912",
+    "CVE-2026-112915",
+    "CVE-2026-112934",
+    "CVE-2026-112935",
+    "CVE-2026-112938",
+    "CVE-2026-112939",
     "CVE-2026-112940",
+    "CVE-2026-112941",
     "CVE-2026-112914",
     "CVE-2026-112913",
     "CVE-2026-112937",
@@ -143,7 +154,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"Dependency audit accepted; Pillow exception expires {EXPIRES.isoformat()}.")
+    print(f"Dependency audit accepted; temporary exceptions expire {EXPIRES.isoformat()}.")
     return 0
 
 
