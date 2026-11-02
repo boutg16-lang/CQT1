@@ -20,6 +20,27 @@ if exist "bin\ffmpeg.exe" set "PATH=%CD%\bin;%PATH%"
 :: app starts with everything in place. --auto-fix installs missing core
 :: dependencies automatically; --off skips the check.
 echo.
+echo [preflight] Checking WebSockets compatibility...
+"%PYTHON%" scripts/ensure_websockets.py --check
+if errorlevel 1 (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%PYTHON%"
+    if errorlevel 1 (
+        echo [ERROR] Could not verify that this project's Python environment is idle.
+        echo [INFO] Close OUSSAMA Cutter and other Python processes from this project, then retry.
+        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
+        pause
+        exit /b 1
+    )
+    echo [preflight] Repairing WebSockets without changing other packages...
+    "%PYTHON%" scripts/ensure_websockets.py --repair
+    if errorlevel 1 (
+        echo [ERROR] Could not repair the WebSockets compatibility dependency.
+        echo [INFO] Close OUSSAMA Cutter, restart Windows if necessary, and retry.
+        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
+        pause
+        exit /b 1
+    )
+)
 echo [preflight] Checking environment and installing anything missing...
 "%PYTHON%" -m scripts.preflight --auto-fix
 set "PREFLIGHT_EXIT=%errorlevel%"

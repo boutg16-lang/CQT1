@@ -95,9 +95,23 @@ def test_webui_launcher_is_non_destructive_and_has_warning_path():
     text = _read_ascii("run_webui.bat")
     assert "setlocal EnableExtensions" in text
     assert "cd /d \"%~dp0\"" in text
-    assert "scripts.preflight --auto-fix --ensure-upload" in text
+    assert "scripts/ensure_websockets.py --check" in text
+    assert "scripts/ensure_websockets.py --repair" in text
+    assert text.index("scripts/ensure_websockets.py --check") < text.index("scripts.preflight --auto-fix --ensure-upload")
+    assert text.index("scripts/ensure_websockets.py --repair") < text.index("scripts.preflight --auto-fix --ensure-upload")
     assert 'if "%PREFLIGHT_EXIT%"=="2" goto START_WEBUI_WARNINGS' in text
     assert 'if exist "bin\\ffmpeg.exe" set "PATH=%CD%\\bin;%PATH%"' in text
+
+
+def test_cli_launchers_repair_websockets_before_preflight():
+    windows = (ROOT / "run.bat").read_text(encoding="utf-8")
+    shell = (ROOT / "run.sh").read_text(encoding="utf-8")
+
+    assert "ensure_websockets.py --check" in windows
+    assert "ensure_websockets.py --repair" in windows
+    assert windows.index("ensure_websockets.py --repair") < windows.index("scripts.preflight --auto-fix")
+    assert "ensure_websockets.py --repair" in shell
+    assert shell.index("ensure_websockets.py --repair") < shell.index("scripts.preflight --auto-fix")
 
 
 def test_powershell_wrappers_keep_temp_on_project_drive_and_forward_args():

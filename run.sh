@@ -17,6 +17,11 @@ if [ ! -d .venv ]; then
 fi
 . .venv/bin/activate
 
+if ! python scripts/ensure_websockets.py --repair; then
+    echo "[preflight] WebSockets repair failed. Close other Python processes and retry."
+    exit 1
+fi
+
 # Pre-flight: verify EVERYTHING (deps, ffmpeg, config, assets) and auto-install
 # whatever is missing, so the app starts with everything in place.
 # Use --off or VIRALCUTTER_SKIP_PREFLIGHT=1 to skip.

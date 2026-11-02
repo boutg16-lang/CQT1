@@ -17,6 +17,27 @@ set "UV_NO_CACHE=1"
 if exist "bin\ffmpeg.exe" set "PATH=%CD%\bin;%PATH%"
 
 echo.
+echo [preflight] Checking WebSockets compatibility...
+"%PYTHON%" scripts/ensure_websockets.py --check
+if errorlevel 1 (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%PYTHON%"
+    if errorlevel 1 (
+        echo [ERROR] Could not verify that this project's Python environment is idle.
+        echo [INFO] Close OUSSAMA Cutter and other Python processes from this project, then retry.
+        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
+        pause
+        exit /b 1
+    )
+    echo [preflight] Repairing WebSockets without changing other packages...
+    "%PYTHON%" scripts/ensure_websockets.py --repair
+    if errorlevel 1 (
+        echo [ERROR] Could not repair the WebSockets compatibility dependency.
+        echo [INFO] Close OUSSAMA Cutter, restart Windows if necessary, and retry.
+        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
+        pause
+        exit /b 1
+    )
+)
 echo [preflight] Checking environment...
 "%PYTHON%" -m scripts.preflight --auto-fix --ensure-upload
 set "PREFLIGHT_EXIT=%ERRORLEVEL%"

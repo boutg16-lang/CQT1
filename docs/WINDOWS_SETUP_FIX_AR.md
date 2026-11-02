@@ -4,6 +4,16 @@
 
 المشروع موجود في `D:\OS`، والقرص C ممتلئ تقريباً. لذلك لا يكفي أن يكون المشروع على D، لأن Windows وuv قد يستخدمان `%TEMP%` و`%LOCALAPPDATA%\uv\cache` على C أثناء فك ضغط الحزم.
 
+إذا ظهر `fatal: not a git repository` بعد `cd D:\OS`، فالمجلد ليس نسخة Git (غالباً فُكّ من ZIP)، لذلك لن ينجح `git pull` فيه. لا تستخدم `git init` ولا تستبدل المجلد الحالي. استنسخ النسخة المحدّثة إلى مجلد جديد مثل `D:\CQT1`، وشغّل الإعداد هناك؛ انقل `api_config.json` أو ملفاتك المحلية بنفسك فقط إذا احتجتها، ولا تشاركها لأنها قد تحتوي مفاتيح.
+
+```powershell
+cd D:\
+git clone https://github.com/boutg16-lang/CQT1.git CQT1
+cd D:\CQT1
+.\setup_on_d.ps1 -Mode Light -CleanUvCache
+.\run_webui_on_d.ps1
+```
+
 ## الحل الموصى به
 
 أضفت مشغلين PowerShell ينقلان ملفات التثبيت المؤقتة وكاش uv إلى D:
@@ -60,6 +70,10 @@ cd D:\OS
 إذا ظهر `google-genai installed but import failed (google.genai; ...)`، فبيانات الحزمة موجودة لكن ملف الاستيراد أو أحد مكوناتها غير صالح. بعد تحديث المشروع إلى الإصلاح الحالي، يعيد preflight تثبيت **الإصدار الموجود من `google-genai` فقط** دون إعادة حل اعتماديات WebUI؛ ثم يعيد فحص الاستيراد قبل تشغيل الواجهة. إذا بقي الاستيراد فاشلاً، أرسل نوع الخطأ الظاهر في السطر (مثل `ModuleNotFoundError` أو `ImportError`) دون إرسال مفتاح Gemini.
 
 تحذير المفتاح `does not look like a Gemini key` منفصل عن تلف الحزمة: إذا كان مزودك Gemini، تحقّق محلياً من المفتاح في `api_config.json` وأنه مفتاح Google AI Studio، ولا تلصقه في المحادثة. غياب `edge-tts` ووجود مجلد `models/` فارغ تحذيران اختياريان ولا يمنعان الواجهة الأساسية.
+
+## إصلاح تعارض Google GenAI مع WebSockets
+
+إذا ظهر `AttributeError: module 'websockets' has no attribute 'ConnectionClosed'`، فإصدار `websockets 17.x` غير متوافق مع الاستيراد الذي يستخدمه Google GenAI. قُيّد النطاق في `requirements.txt` و`pyproject.toml` إلى `websockets>=16.1.1,<17`، ويُفحص الإصدار ويُصلح قبل preflight بإعادة تثبيت WebSockets وحدها، دون تحديث بقية الحزم. على Windows يجب إغلاق عمليات المشروع؛ إذا منع Windows استبدال الملف، يعرض المشغّل خطوات الإغلاق وإعادة المحاولة.
 
 ## حل غياب cuDNN أثناء التفريغ
 
