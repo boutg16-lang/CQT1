@@ -2347,6 +2347,7 @@ dependencies = [
     { name = "scenedetect" },
     { name = "tqdm" },
     { name = "uvicorn" },
+    { name = "websockets" },
     { name = "yt-dlp", extra = ["default"] },
 ]
 
@@ -2428,6 +2429,7 @@ requires-dist = [
     { name = "tqdm" },
     { name = "transformers", marker = "extra == 'transcribe'", specifier = ">=5.14.1,<5.16" },
     { name = "uvicorn" },
+    { name = "websockets", specifier = ">=16.1.1,<17" },
     { name = "whisperx", marker = "extra == 'transcribe'", specifier = "==3.3.1" },
     { name = "yt-dlp", extras = ["default"] },
 ]

@@ -36,6 +36,7 @@ import subprocess
 import sys
 
 from app_assets import RUNTIME_ASSETS
+from scripts import ensure_websockets
 from scripts.gemini_models import DEFAULT_GEMINI_MODEL
 
 try:
@@ -327,6 +328,15 @@ def check_writable(path, label):
 
 def check_dependency(dist, raw_line, critical):
     module = _import_name(dist)
+    if dist == "websockets" and ensure_websockets.needs_repair():
+        installed = _dist_installed(dist)
+        if not installed:
+            detail = "missing (%s)" % dist
+        else:
+            detail = "incompatible or damaged version %s (requires %s)" % (
+                _version(dist), ensure_websockets.COMPATIBILITY_SPEC,
+            )
+        return {"name": dist, "status": FAIL if critical else WARN, "detail": detail}
     if not _module_importable(module):
         installed = _dist_installed(dist)
         if not installed:
@@ -809,7 +819,7 @@ def _prompt(msg):
         return False
 
 
-def repair(mode, checks, ensure_upload=False):
+def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
     """Apply fixes. mode: 'fix' (interactive) or 'auto-fix' (non-interactive).
     Returns (fixed_report, remaining_critical, remaining_warn)."""
     fixed = []
@@ -832,11 +842,21 @@ def repair(mode, checks, ensure_upload=False):
     for dist in sorted(broken_imports):
         ok, detail = fix_google_genai_import()
         fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})
+    broken_websockets = any(
+        c["name"] == "websockets" and c["status"] == FAIL
+        for c in checks
+    )
+    if broken_websockets and not websockets_prechecked:
+        ok = not _is_frozen() and ensure_websockets.repair()
+        detail = "compatible version installed" if ok else "compatible version could not be installed"
+        fixed.append({"name": "websockets", "status": OK if ok else FAIL, "detail": detail})
 
     # 3) pip installs (core always attempted; optional stacks only on request)
     fail_names = [
         c["name"] for c in checks
-        if c["status"] == FAIL and c["name"] not in broken_imports
+        if c["status"] == FAIL
+        and c["name"] not in broken_imports
+        and not (broken_websockets and c["name"] == "websockets")
     ]
     if ensure_upload:
         upload_dists = {dist for dist, _raw in _read_req_names("requirements-upload.txt")}
@@ -919,6 +939,9 @@ def run_preflight(mode="auto-fix", json_out=False, quiet=False, ensure_upload=Fa
     mode: 'check' (read-only) | 'fix' (interactive) | 'auto-fix' (default)
     Returns exit code: 0 ready, 1 critical remains, 2 warnings only.
     """
+    websockets_prechecked = mode in ("fix", "auto-fix") and not _is_frozen()
+    if websockets_prechecked:
+        ensure_websockets.repair()
     checks, critical, warn = collect_checks()
 
     upload_missing = False
@@ -931,7 +954,12 @@ def run_preflight(mode="auto-fix", json_out=False, quiet=False, ensure_upload=Fa
     if (critical or upload_missing) and mode in ("fix", "auto-fix"):
         if not quiet and not json_out:
             _print_report(checks, "Pre-flight: problems found, repairing")
-        _, critical, warn = repair(mode, checks, ensure_upload=ensure_upload)
+        _, critical, warn = repair(
+            mode,
+            checks,
+            ensure_upload=ensure_upload,
+            websockets_prechecked=websockets_prechecked,
+        )
         checks, critical, warn = collect_checks()
 
     if not quiet and not json_out:

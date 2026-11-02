@@ -69,6 +69,18 @@ def test_check_dependency_missing(monkeypatch):
     assert preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", False)["status"] == preflight.WARN
 
 
+def test_check_dependency_reports_incompatible_websockets_version(monkeypatch):
+    monkeypatch.setattr(preflight.ensure_websockets, "needs_repair", lambda: True)
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "17.4")
+
+    result = preflight.check_dependency("websockets", "websockets>=16.1.1,<17", True)
+
+    assert result["status"] == preflight.FAIL
+    assert "17.4" in result["detail"]
+    assert preflight.ensure_websockets.COMPATIBILITY_SPEC in result["detail"]
+
+
 def test_check_google_genai_reports_import_error_type_without_exception_details(monkeypatch):
     monkeypatch.setattr(preflight, "_module_importable", lambda module: False)
     monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
@@ -590,6 +602,25 @@ def test_fix_numpy_pin_dry_run(monkeypatch):
 # --------------------------------------------------------------------------
 # Orchestration exit codes
 # --------------------------------------------------------------------------
+def test_run_preflight_repairs_websockets_before_import_checks(monkeypatch):
+    events = []
+    checks = [{"name": "Python", "status": preflight.OK, "detail": "3.11"}]
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(
+        preflight.ensure_websockets,
+        "repair",
+        lambda: events.append("repair") or True,
+    )
+    monkeypatch.setattr(
+        preflight,
+        "collect_checks",
+        lambda: events.append("checks") or (checks, [], []),
+    )
+
+    assert preflight.run_preflight(mode="auto-fix", quiet=True) == 0
+    assert events == ["repair", "checks"]
+
+
 def test_run_preflight_ready(monkeypatch):
     fake = [
         {"name": "Python", "status": preflight.OK, "detail": "3.11"},
@@ -618,6 +649,24 @@ def test_run_preflight_critical_blocks(monkeypatch):
     assert preflight.run_preflight(mode="check", quiet=True) == 1
 
 
+def test_repair_uses_targeted_websockets_fix_without_reinstalling_core(monkeypatch):
+    installs = []
+    checks = [{"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}]
+    monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
+    monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
+    monkeypatch.setattr(preflight.ensure_websockets, "repair", lambda: True)
+    monkeypatch.setattr(preflight, "install_requirements", lambda *args, **kwargs: installs.append(args))
+    monkeypatch.setattr(preflight, "check_pin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(preflight, "collect_checks", lambda: ([], [], []))
+
+    fixed, remaining, warnings = preflight.repair("auto-fix", checks)
+
+    assert not installs
+    assert not remaining
+    assert not warnings
+    assert any(item["name"] == "websockets" and item["status"] == preflight.OK for item in fixed)
+
+
 def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
     """A missing core dep + auto-fix must trigger a pip install and end ready."""
     calls = []
@@ -628,6 +677,7 @@ def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
 
     monkeypatch.setattr(preflight, "install_requirements", fake_install)
     monkeypatch.setattr(preflight, "ensure_dirs", lambda: [("x", True, "ok")])
+    monkeypatch.setattr(preflight.ensure_websockets, "repair", lambda: True)
     monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
     monkeypatch.setattr(preflight, "fix_numpy_pin", lambda: (True, "ok"))
 
@@ -640,6 +690,33 @@ def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
     monkeypatch.setattr(preflight, "collect_checks", fake_collect)
     assert preflight.run_preflight(mode="auto-fix", quiet=True) == 0
     assert calls == ["requirements.txt"]
+
+
+def test_repair_keeps_websockets_failure_out_of_core_reinstall(monkeypatch):
+    checks = [{"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}]
+    calls = []
+    monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
+    monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
+    monkeypatch.setattr(
+        preflight.ensure_websockets,
+        "repair",
+        lambda: calls.append("websockets") or False,
+    )
+    monkeypatch.setattr(preflight, "REQ_FILES", {"requirements.txt": ("core", False, "")})
+    monkeypatch.setattr(preflight, "_read_req_names", lambda _: [("websockets", "websockets>=16.1.1,<17")])
+    monkeypatch.setattr(
+        preflight,
+        "install_requirements",
+        lambda *args, **kwargs: calls.append("core") or (True, "installed"),
+    )
+    monkeypatch.setattr(preflight, "PINNED_RULES", [])
+    monkeypatch.setattr(preflight, "collect_checks", lambda: (checks, ["websockets"], []))
+
+    fixed, remaining, warnings = preflight.repair("auto-fix", checks)
+
+    assert calls == ["websockets"]
+    assert remaining == ["websockets"]
+    assert not warnings
 
 
 def test_run_package_reinstall_uses_pip_without_dependencies(monkeypatch):
