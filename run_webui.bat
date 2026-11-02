@@ -19,25 +19,37 @@ if exist "bin\ffmpeg.exe" set "PATH=%CD%\bin;%PATH%"
 echo.
 echo [preflight] Checking WebSockets compatibility...
 "%PYTHON%" scripts/ensure_websockets.py --check
-if errorlevel 1 (
-    powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%PYTHON%"
-    if errorlevel 1 (
-        echo [ERROR] Could not verify that this project's Python environment is idle.
-        echo [INFO] Close OUSSAMA Cutter and other Python processes from this project, then retry.
-        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
-        pause
-        exit /b 1
-    )
-    echo [preflight] Repairing WebSockets without changing other packages...
-    "%PYTHON%" scripts/ensure_websockets.py --repair
-    if errorlevel 1 (
-        echo [ERROR] Could not repair the WebSockets compatibility dependency.
-        echo [INFO] Close OUSSAMA Cutter, restart Windows if necessary, and retry.
-        if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
-        pause
-        exit /b 1
-    )
-)
+if not errorlevel 1 goto WEBSOCKETS_READY
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%PYTHON%"
+if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN
+if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE
+if errorlevel 1 goto WEBSOCKETS_PROCESS_UNKNOWN
+echo [preflight] Repairing WebSockets without changing other packages...
+"%PYTHON%" scripts/ensure_websockets.py --repair
+if errorlevel 1 goto WEBSOCKETS_REPAIR_FAILED
+goto WEBSOCKETS_READY
+
+:WEBSOCKETS_PROCESS_IN_USE
+echo [ERROR] A process is using modules from this project's Python environment.
+echo [INFO] Close the PID listed above in Task Manager, then retry setup.
+goto WEBSOCKETS_FAILED
+
+:WEBSOCKETS_PROCESS_UNKNOWN
+echo [ERROR] Could not inspect whether this project's Python environment is idle.
+echo [INFO] Close OUSSAMA Cutter and Python processes from this project, then retry.
+goto WEBSOCKETS_FAILED
+
+:WEBSOCKETS_REPAIR_FAILED
+echo [ERROR] Could not repair the WebSockets compatibility dependency.
+echo [INFO] Close the listed process and retry; restart Windows if it remains locked.
+goto WEBSOCKETS_FAILED
+
+:WEBSOCKETS_FAILED
+if "%VIRALCUTTER_NO_PAUSE%"=="1" exit /b 1
+pause
+exit /b 1
+
+:WEBSOCKETS_READY
 echo [preflight] Checking environment...
 "%PYTHON%" -m scripts.preflight --auto-fix --ensure-upload
 set "PREFLIGHT_EXIT=%ERRORLEVEL%"
