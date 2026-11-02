@@ -88,7 +88,8 @@ def test_installer_preflight_blocks_current_python_interpreter():
         timeout=30,
     )
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "using modules from this project's Python environment" in result.stdout
+    assert "A process is using this project's Python environment" in result.stdout
+    assert re.search(r"\[INFO\] PID \d+: .* is running this project's Python interpreter\.", result.stdout)
 
 
 def test_webui_launcher_is_non_destructive_and_has_warning_path():
@@ -112,6 +113,26 @@ def test_cli_launchers_repair_websockets_before_preflight():
     assert windows.index("ensure_websockets.py --repair") < windows.index("scripts.preflight --auto-fix")
     assert "ensure_websockets.py --repair" in shell
     assert shell.index("ensure_websockets.py --repair") < shell.index("scripts.preflight --auto-fix")
+
+
+def test_installer_preflight_reports_process_identity_without_command_line():
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    assert "ProcessId = $process.Id" in text
+    assert "ProcessName = $process.ProcessName" in text
+    assert "[INFO] PID {0}: {1}" in text
+    assert "$process.CommandLine" not in text
+
+
+def test_windows_launchers_distinguish_busy_environment_from_inspection_failure():
+    for name in ("run.bat", "run_webui.bat"):
+        text = (ROOT / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+        assert "if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN" in text
+        assert "if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE" in text
+        assert text.index("if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN") < text.index(
+            "if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE"
+        )
+        assert ":WEBSOCKETS_PROCESS_IN_USE" in text
+        assert ":WEBSOCKETS_PROCESS_UNKNOWN" in text
 
 
 def test_powershell_wrappers_keep_temp_on_project_drive_and_forward_args():
