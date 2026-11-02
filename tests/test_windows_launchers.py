@@ -88,7 +88,8 @@ def test_installer_preflight_blocks_current_python_interpreter():
         timeout=30,
     )
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "using modules from this project's Python environment" in result.stdout
+    assert "A process is using this project's Python environment" in result.stdout
+    assert re.search(r"\[INFO\] PID \d+: .* is running this project's Python interpreter\.", result.stdout)
 
 
 def test_webui_launcher_is_non_destructive_and_has_warning_path():
