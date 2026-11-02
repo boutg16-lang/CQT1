@@ -83,6 +83,28 @@ def test_windows_installer_version_matches_app_version():
 
 
 
+def test_dependabot_ignores_standalone_torch_stack_updates():
+    text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    update_types = {
+        "version-update:semver-major",
+        "version-update:semver-minor",
+        "version-update:semver-patch",
+    }
+    for package in ("torch", "torchaudio", "torchvision"):
+        entry = f'      - dependency-name: "{package}"'
+        assert entry in lines
+        index = lines.index(entry)
+        block = []
+        for line in lines[index + 1:]:
+            if line.startswith("      - dependency-name: "):
+                break
+            block.append(line.strip().strip('"- '))
+        assert "update-types:" in block
+        assert update_types <= set(block)
+        assert "versions:" not in block
+
+
 def test_transcription_torch_pair_matches_windows_installer():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r"(?ms)^transcribe\s*=\s*\[(.*?)^\]", pyproject)
