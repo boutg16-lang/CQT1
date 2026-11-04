@@ -272,6 +272,49 @@ class TestPolish:
         assert words[1]["start"] == pytest.approx(2.5)
         assert data["segments"][0]["start"] == pytest.approx(0.5)
 
+    def test_retime_subs_maps_partial_cut_intersections(self, tmp_path):
+        subs = tmp_path / "partial.json"
+        subs.write_text(json.dumps({"segments": [{
+            "start": 0.0, "end": 4.0, "text": "partial",
+            "words": [{"word": "cross", "start": 0.8, "end": 1.4},
+                      {"word": "after", "start": 3.2, "end": 3.8}],
+        }]}), encoding="utf-8")
+        polish.retime_subs(str(subs), [(1.0, 3.0)])
+        words = json.loads(subs.read_text(encoding="utf-8"))["segments"][0]["words"]
+        assert words[0]["start"] == pytest.approx(0.8)
+        assert words[0]["end"] == pytest.approx(1.0)
+        assert words[1]["start"] == pytest.approx(1.2)
+        assert words[1]["end"] == pytest.approx(1.8)
+
+    def test_prepare_subs_for_polish_is_repeatable_and_detects_edits(self, tmp_path):
+        subs = tmp_path / "repeat.json"
+        original = {"segments": [{"start": 0.0, "end": 5.0, "text": "original"}]}
+        subs.write_text(json.dumps(original), encoding="utf-8")
+        assert polish.prepare_subs_for_polish(str(subs)) is True
+        polish.retime_subs(str(subs), [(1.0, 3.0)], intro_duration=0.5)
+        polish._record_subs_polish_output(str(subs))
+        assert json.loads(subs.read_text(encoding="utf-8"))["segments"][0]["end"] == pytest.approx(3.5)
+        assert polish.prepare_subs_for_polish(str(subs)) is True
+        assert json.loads(subs.read_text(encoding="utf-8")) == original
+        edited = {"segments": [{"start": 0.0, "end": 8.0, "text": "edited"}]}
+        subs.write_text(json.dumps(edited), encoding="utf-8")
+        assert polish.prepare_subs_for_polish(str(subs)) is True
+        assert json.loads(subs.read_text(encoding="utf-8")) == edited
+
+    def test_prepare_subs_for_polish_recovers_from_malformed_state(self, tmp_path):
+        subs = tmp_path / "state.json"
+        baseline = tmp_path / "state.json.pre_polish"
+        state = tmp_path / "state.json.polish_state.json"
+        original = {"segments": [{"start": 0.0, "end": 5.0, "text": "old"}]}
+        edited = {"segments": [{"start": 0.0, "end": 8.0, "text": "current"}]}
+        baseline.write_text(json.dumps(original), encoding="utf-8")
+        subs.write_text(json.dumps(edited), encoding="utf-8")
+        state.write_text("[]", encoding="utf-8")
+
+        assert polish.prepare_subs_for_polish(str(subs)) is True
+        assert json.loads(subs.read_text(encoding="utf-8")) == edited
+        assert json.loads(baseline.read_text(encoding="utf-8")) == edited
+
     @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg required")
     def test_polish_project_end_to_end(self, tmp_path):
         project = tmp_path / "proj"

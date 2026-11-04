@@ -38,6 +38,40 @@ def test_leading_filler_trim_rejects_long_hesitation_run():
     assert hook_analyzer.leading_filler_trim(words, max_filler=4) is None
 
 
+
+def test_leading_filler_trim_rejects_invalid_or_non_finite_timestamps():
+    assert hook_analyzer.leading_filler_trim([
+        {"start": 1.0, "end": 1.4, "word": "يعني"},
+        {"start": float("nan"), "end": 2.0, "word": "الحل"},
+    ]) is None
+    assert hook_analyzer.leading_filler_trim([
+        {"start": 2.0, "end": 1.5, "word": "يعني"},
+        {"start": 2.1, "end": 2.5, "word": "الحل"},
+    ]) is None
+
+
+def test_leading_filler_trim_rejects_out_of_order_word_timings():
+    assert hook_analyzer.leading_filler_trim([
+        {"start": 2.0, "end": 2.3, "word": "يعني"},
+        {"start": 1.8, "end": 2.4, "word": "الحل"},
+    ]) is None
+
+
+def test_leading_filler_trim_rejects_overlap_into_content_word():
+    assert hook_analyzer.leading_filler_trim([
+        {"start": 1.0, "end": 1.8, "word": "يعني"},
+        {"start": 1.6, "end": 2.0, "word": "الحل"},
+    ]) is None
+
+
+def test_leading_filler_trim_allows_small_alignment_rounding_overlap():
+    plan = hook_analyzer.leading_filler_trim([
+        {"start": 1.0, "end": 1.50, "word": "يعني"},
+        {"start": 1.47, "end": 1.90, "word": "الحل"},
+    ])
+    assert plan is not None
+    assert plan["new_start"] == 1.47
+
 def test_leading_filler_trim_rejects_all_filler():
     assert hook_analyzer.leading_filler_trim(_timed(["يعني", "طيب"])) is None
     assert hook_analyzer.leading_filler_trim([]) is None

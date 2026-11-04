@@ -13,11 +13,13 @@ logo, intro/outro) only skips that stage, never the clip.
 """
 
 import glob
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from scripts import (
     auto_sfx,
@@ -104,68 +106,144 @@ def _finalize_stage_lists(stage_report):
     return stage_report
 
 
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _subs_sidecars(subs_json_path):
+    return subs_json_path + ".pre_polish", subs_json_path + ".polish_state.json"
+
+
+def prepare_subs_for_polish(subs_json_path):
+    """Restore the immutable transcript baseline before every polish run.
+
+    The state hash distinguishes our previous retimed output from an external
+    transcript edit. External edits become the new baseline automatically.
+    """
+    if not subs_json_path or not os.path.isfile(subs_json_path):
+        return False
+    baseline_path, state_path = _subs_sidecars(subs_json_path)
+    try:
+        current_hash = _sha256_file(subs_json_path)
+        state = {}
+        if os.path.isfile(state_path):
+            with open(state_path, "r", encoding="utf-8") as stream:
+                state = json.load(stream)
+        if not isinstance(state, dict):
+            state = {}
+        baseline_exists = os.path.isfile(baseline_path)
+        previous_output_hash = state.get("last_output_sha256")
+        if (not baseline_exists or not isinstance(previous_output_hash, str)
+                or not previous_output_hash or current_hash != previous_output_hash):
+            shutil.copy2(subs_json_path, baseline_path)
+        shutil.copy2(baseline_path, subs_json_path)
+        restored_hash = _sha256_file(subs_json_path)
+        state.update({"version": 1, "baseline_sha256": restored_hash,
+                      "last_output_sha256": restored_hash})
+        _write_json_atomic(state_path, state)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _write_json_atomic(path, payload):
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, temporary = tempfile.mkstemp(prefix=".polish_", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            try:
+                os.remove(temporary)
+            except OSError:
+                pass
+
+
+def _record_subs_polish_output(subs_json_path):
+    if not subs_json_path or not os.path.isfile(subs_json_path):
+        return
+    _, state_path = _subs_sidecars(subs_json_path)
+    try:
+        state = {}
+        if os.path.isfile(state_path):
+            with open(state_path, "r", encoding="utf-8") as stream:
+                state = json.load(stream)
+        state["last_output_sha256"] = _sha256_file(subs_json_path)
+        _write_json_atomic(state_path, state)
+    except (OSError, ValueError, TypeError):
+        pass
+
+
 def retime_subs(subs_json_path, cuts, intro_duration=0.0):
     """Re-time word/segment timings after jump cuts + intro prepend.
 
-    Keeps burned subtitles in sync with the polished video:
-      new_t = (t − removed_before(t)) + intro_duration
-    Words/segments fully removed by a cut are dropped.
-    Overwrites the file in place (called BEFORE adjust_subtitles).
+    Every timestamp is mapped through the removed-time function, including
+    timestamps that fall inside a cut. This preserves A/V alignment for
+    partially intersecting words instead of leaving them at stale positions.
+    Writes atomically so interruption cannot truncate the transcript.
     """
     if not subs_json_path or not os.path.exists(subs_json_path):
         return None
     try:
-        with open(subs_json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(subs_json_path, "r", encoding="utf-8") as stream:
+            data = json.load(stream)
     except Exception:
         return None
-    cuts = [(float(s), float(e)) for s, e in (cuts or []) if e > s]
+    raw_cuts = sorted((float(s), float(e)) for s, e in (cuts or [])
+                      if float(e) > float(s))
+    cuts = []
+    for start, end in raw_cuts:
+        if cuts and start <= cuts[-1][1]:
+            cuts[-1] = (cuts[-1][0], max(cuts[-1][1], end))
+        else:
+            cuts.append((start, end))
 
-    def removed_before(t):
-        return sum(e - s for s, e in cuts if e <= t)
-
-    def fully_cut(ws, we):
-        return any(s <= ws and we <= e for s, e in cuts)
+    def map_time(timestamp):
+        removed = sum(max(0.0, min(timestamp, end) - start)
+                      for start, end in cuts if timestamp > start)
+        return max(0.0, timestamp - removed + float(intro_duration or 0.0))
 
     new_segments = []
-    for seg in data.get("segments", []):
+    for segment in data.get("segments", []):
         try:
-            s0, e0 = float(seg["start"]), float(seg["end"])
-        except Exception:
+            start, end = float(segment["start"]), float(segment["end"])
+        except (KeyError, TypeError, ValueError):
             continue
-        if fully_cut(s0, e0):
+        mapped_start, mapped_end = map_time(start), map_time(end)
+        if mapped_end <= mapped_start:
             continue
-        ns = s0 - removed_before(s0) + intro_duration
-        ne = e0 - removed_before(e0) + intro_duration
-        if ne <= ns:
-            continue
-        out_seg = dict(seg)
-        out_seg["start"], out_seg["end"] = ns, ne
-        words = seg.get("words")
-        if words:
-            kept = []
-            for w in words:
+        output_segment = dict(segment)
+        output_segment["start"], output_segment["end"] = mapped_start, mapped_end
+        words = segment.get("words")
+        if isinstance(words, list):
+            kept_words = []
+            for word in words:
                 try:
-                    ws, we = float(w["start"]), float(w["end"])
-                except Exception:
+                    word_start, word_end = float(word["start"]), float(word["end"])
+                except (KeyError, TypeError, ValueError):
                     continue
-                if fully_cut(ws, we):
+                new_start, new_end = map_time(word_start), map_time(word_end)
+                if new_end <= new_start:
                     continue
-                nws = ws - removed_before(ws) + intro_duration
-                nwe = we - removed_before(we) + intro_duration
-                if nwe > nws:
-                    nw = dict(w)
-                    nw["start"], nw["end"] = nws, nwe
-                    kept.append(nw)
-            if kept:
-                out_seg["words"] = kept
-        new_segments.append(out_seg)
+                output_word = dict(word)
+                output_word["start"], output_word["end"] = new_start, new_end
+                kept_words.append(output_word)
+            output_segment["words"] = kept_words
+        new_segments.append(output_segment)
 
     data["segments"] = new_segments
     try:
-        with open(subs_json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
+        _write_json_atomic(subs_json_path, data)
+    except OSError:
         return None
     return data
 
@@ -198,6 +276,8 @@ def polish_project(project_folder, enable=None, keywords=None,
         os.makedirs(tmp_dir, exist_ok=True)
         current = video_file
         subs_json = _subs_json_for(final_dir, video_file, subs_dir)
+        if subs_json:
+            prepare_subs_for_polish(subs_json)
         applied_cuts = []
         intro_duration = 0.0
         stage_report = {
@@ -368,8 +448,10 @@ def polish_project(project_folder, enable=None, keywords=None,
 
             # re-time subtitles for the final polished video (jump cuts + intro)
             if subs_json and (applied_cuts or intro_duration):
-                retime_subs(subs_json, applied_cuts, intro_duration)
-                stage_report["retimed_subs"] = True
+                retimed = retime_subs(subs_json, applied_cuts, intro_duration)
+                stage_report["retimed_subs"] = retimed is not None
+            if subs_json:
+                _record_subs_polish_output(subs_json)
 
             output_path = os.path.join(out_dir, base)
             if os.path.abspath(current) == os.path.abspath(video_file):
