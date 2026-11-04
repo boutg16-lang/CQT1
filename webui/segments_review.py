@@ -75,8 +75,15 @@ def _read_payload(project_path):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else None
-    except Exception:
+        if not isinstance(data, dict):
+            return None
+        segments = data.get("segments", [])
+        # A malformed segment collection must never be treated as a valid
+        # project: later selection/export code assumes each entry is a dict.
+        if not isinstance(segments, list) or any(not isinstance(item, dict) for item in segments):
+            return None
+        return data
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         return None
 
 
@@ -313,9 +320,16 @@ def restore_all(project_path):
         return False
     # Copy through an atomic replace so a failed disk write cannot leave a
     # half-written viral_segments.txt behind.
-    with open(bak_path, "rb") as source:
-        data = json.load(source)
-    _atomic_write_json(seg_path, data)
+    try:
+        with open(bak_path, "r", encoding="utf-8") as source:
+            data = json.load(source)
+        if (not isinstance(data, dict)
+                or not isinstance(data.get("segments", []), list)
+                or any(not isinstance(item, dict) for item in data.get("segments", []))):
+            return False
+        _atomic_write_json(seg_path, data)
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        return False
     cuts_dir = os.path.join(project_path, "cuts")
     if os.path.isdir(cuts_dir):
         shutil.rmtree(cuts_dir, ignore_errors=True)
@@ -331,7 +345,11 @@ def title_choices_for(project_path, index):
     Returns ([], "") when the segment does not exist.
     """
     segments = load_segments(project_path)
-    if index is None or index < 0 or index >= len(segments):
+    try:
+        index = int(index)
+    except (TypeError, ValueError, OverflowError):
+        return [], ""
+    if index < 0 or index >= len(segments):
         return [], ""
     seg = segments[index]
     current = str(seg.get("recommended_title") or seg.get("title") or "").strip()
@@ -359,8 +377,14 @@ def title_choices_for(project_path, index):
         validation = (metadata or {}).get("validation") or {}
         status_order = {"verified": 0, "review": 1}.get(validation.get("status"), 2)
         checks = validation.get("checks") or {}
-        factual = float(checks.get("factual_accuracy_score") or 0.0)
-        score = float((metadata or {}).get("score") or 0.0)
+        try:
+            factual = float(checks.get("factual_accuracy_score") or 0.0)
+        except (TypeError, ValueError, OverflowError):
+            factual = 0.0
+        try:
+            score = float((metadata or {}).get("score") or 0.0)
+        except (TypeError, ValueError, OverflowError):
+            score = 0.0
         return status_order, -factual, -score, text.casefold()
 
     ordered = [item[0] for item in sorted(unique.values(), key=option_key)]
@@ -376,7 +400,11 @@ def choose_title(project_path, index, title):
     accepted — the choice can never drift from the segment's own content.
     """
     segments = load_segments(project_path)
-    if index is None or index < 0 or index >= len(segments):
+    try:
+        index = int(index)
+    except (TypeError, ValueError, OverflowError):
+        return False, i18n("Segment not found.")
+    if index < 0 or index >= len(segments):
         return False, i18n("Segment not found.")
     title = str(title or "").strip()
     if not title:
@@ -400,8 +428,14 @@ def choose_title(project_path, index, title):
             if validation.get("status") == "rejected":
                 return False, i18n("That title is not supported by this clip: {}").format(
                     "; ".join(validation.get("reasons") or ["factual validation failed"]))
-        except Exception:
-            validation = None
+        except Exception as exc:
+            # A selected title must not bypass factual review merely because
+            # the validator failed to load or raised unexpectedly.  The clip
+            # transcript is present, so fail closed and leave the project
+            # file untouched; the user can retry after the validation issue
+            # is repaired.
+            return False, i18n("Title validation could not be completed; the title was not saved: {}").format(
+                type(exc).__name__)
     if title == current:
         return True, i18n("Title unchanged: {}").format(title)
     payload = _read_payload(project_path)

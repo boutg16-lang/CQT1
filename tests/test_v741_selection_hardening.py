@@ -289,3 +289,83 @@ def test_transcript_fingerprint_changes_with_content():
     a = cvs.transcript_fingerprint([{"start": 0, "end": 1, "text": "hello"}])
     b = cvs.transcript_fingerprint([{"start": 0, "end": 1, "text": "world"}])
     assert a and b and a != b
+
+
+def test_review_title_choice_fails_closed_when_validator_crashes(tmp_path, monkeypatch):
+    from scripts import title_factual
+    from webui import segments_review
+
+    payload = {"segments": [{
+        "title": "عنوان صحيح", "recommended_title": "عنوان صحيح",
+        "alt_titles": ["عنوان بديل صحيح"],
+        "transcript_text": "هذا نص المقطع ويتحدث عن عنوان بديل صحيح",
+        "title_data": {"title_language": "ar"},
+    }]}
+    path = tmp_path / "viral_segments.txt"
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def broken_validator(*args, **kwargs):
+        raise RuntimeError("validator unavailable")
+
+    monkeypatch.setattr(title_factual, "validate_title_vs_clip", broken_validator)
+    ok, message = segments_review.choose_title(str(tmp_path), 0, "عنوان بديل صحيح")
+    assert ok is False
+    assert "RuntimeError" in message
+    unchanged = json.loads(path.read_text(encoding="utf-8"))
+    assert unchanged["segments"][0]["recommended_title"] == "عنوان صحيح"
+
+
+def test_load_segments_rejects_malformed_segment_collection(tmp_path):
+    from webui import segments_review
+
+    (tmp_path / "viral_segments.txt").write_text(
+        json.dumps({"segments": {"not": "a list"}}), encoding="utf-8")
+    assert segments_review.load_segments(str(tmp_path)) == []
+
+
+def test_load_segments_rejects_non_object_segment_entries(tmp_path):
+    from webui import segments_review
+
+    (tmp_path / "viral_segments.txt").write_text(
+        json.dumps({"segments": [{"title": "valid"}, "broken-entry"]}),
+        encoding="utf-8")
+    assert segments_review.load_segments(str(tmp_path)) == []
+
+
+def test_title_choices_handles_invalid_index_and_scores(tmp_path):
+    from webui import segments_review
+
+    payload = {"segments": [{
+        "title": "العنوان الأساسي",
+        "alt_titles": ["بديل عادي"],
+        "title_data": {"validated_alternatives": [{
+            "text": "بديل بتقييم تالف", "score": "not-a-number",
+            "validation": {"status": "verified", "checks": {
+                "factual_accuracy_score": "invalid"}},
+        }]},
+    }]}
+    (tmp_path / "viral_segments.txt").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    assert segments_review.title_choices_for(str(tmp_path), "bad-index") == ([], "")
+    options, current = segments_review.title_choices_for(str(tmp_path), 0)
+    assert current == "العنوان الأساسي"
+    assert "بديل بتقييم تالف" in options
+
+
+def test_restore_all_returns_false_for_corrupt_backup_without_overwriting(tmp_path):
+    from webui import segments_review
+
+    original = '{"segments": [{"title": "keep me"}]}'
+    (tmp_path / "viral_segments.txt").write_text(original, encoding="utf-8")
+    (tmp_path / segments_review.BACKUP_FILENAME).write_text(
+        '{"segments": "corrupt"}', encoding="utf-8")
+
+    assert segments_review.restore_all(str(tmp_path)) is False
+    assert (tmp_path / "viral_segments.txt").read_text(encoding="utf-8") == original
+
+
+def test_choose_title_handles_non_numeric_index(tmp_path):
+    from webui import segments_review
+
+    assert segments_review.choose_title(str(tmp_path), "bad-index", "Title")[0] is False
