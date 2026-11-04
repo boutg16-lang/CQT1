@@ -194,3 +194,33 @@ class TestRunDaemon:
         summary = publish_scheduler.run_daemon({"ok": False, "error": "x"},
                                                dry_run=True)
         assert summary["ok"] is False
+
+
+class TestGroundedArabicTitles:
+    def test_transcript_mode_uses_only_clip_wording_and_marks_provenance(self):
+        transcript = (
+            "تحدث الضيف عن أهمية اختيار مهارة واحدة والعمل على تطويرها باستمرار. "
+            "ثم شرح كيف يمكن تنظيم الوقت لتحقيق نتائج أفضل."
+        )
+        titles = seo_titles.generate_titles(
+            "موضوع عام", count=5, transcript_text=transcript,
+            content_language="ar")
+        assert titles
+        assert all(item["title"] in transcript for item in titles)
+        assert all(item["grounded"] is True for item in titles)
+        assert all(item["title_source"] == "exact_clip_transcript" for item in titles)
+        assert all(item["validation"]["status"] != "rejected" for item in titles)
+
+    def test_empty_transcript_does_not_fall_back_to_templates(self):
+        assert seo_titles.generate_titles("موضوع عام", transcript_text="") == []
+        assert seo_titles.generate_titles("موضوع عام", count=0,
+                                          transcript_text="نص موجود في المقطع") == []
+
+    def test_requested_title_count_is_bounded(self):
+        transcript = " ".join(
+            f"شرح المتحدث النقطة رقم {index} بالتفصيل." for index in range(1, 31)
+        )
+        titles = seo_titles.generate_titles(
+            "موضوع عام", count=100, transcript_text=transcript,
+            content_language="ar")
+        assert len(titles) <= 20

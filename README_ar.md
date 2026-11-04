@@ -441,5 +441,13 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 > الأصوات المُصنَّعة تحتاج **إفصاحاً عن المحتوى المُعدَّل** عند النشر. التفاصيل:
 > [docs/DUBBING_AR.md](docs/DUBBING_AR.md).
 
+## أدوات الإنتاج والمراجعة — تحديث نوفمبر 2026
+
+- **مراجعة المقطع قبل النشر**: `python -m scripts.pro_clip_review` يجمع فحص التفريغ والعنوان والبيانات الوصفية وOCR وجودة الوسائط؛ التقرير لا يجيز النشر آلياً، وتجاوز فحص الفيديو يفرض `review`. [الدليل](docs/CLIP_INSPECTOR_AR.md)
+- **تحليل تحريري عربي**: مؤشرات الحوار، اقتراح نافذة زمنية للمقطع، وحزمة مقاطع متنوعة قابلة للمراجعة البشرية. [التحليل](docs/ARABIC_DIALOGUE_INTELLIGENCE_AR.md) · [التوقيت](docs/VIRAL_MOMENT_INTELLIGENCE_AR.md) · [الحزمة](docs/CLIP_PACKAGE_PLANNER_AR.md) · [المحرك](docs/EDITORIAL_INTELLIGENCE_AR.md) · [مسار الإنتاج](docs/PRODUCTION_WORKFLOW_AR.md)
+- **عناوين من كلام المقطع**: عند تمرير نص التفريغ، يستخرج مولّد SEO عبارات من النص نفسه ويستبعد العناوين المرفوضة. [تفاصيل التحديث](RELEASE_NOTES_AR_7.52.0_ARABIC_TITLE_PATCH.md)
+- **RTX 3060 ومراقبة المجلد**: `setup_rtx3060.bat` يضبط بيئة GPU، ثم `watch_folder_rtx3060.bat` يعالج ملفات `INBOX` محلياً؛ لا يرفع أو ينشر تلقائياً. [إعداد GPU](docs/RTX3060_SETUP_AR.md) · [المراقبة](docs/WATCH_FOLDER_RTX3060_AR.md)
+- **تجميع المقاطع**: [ملاحظات مخطط الحزمة](RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
+
 **الإصدار الحالي**: 7.52.0-pro — تقوية أمنية (بوابات fail-closed، توكنات 0600)، CI بأقل صلاحية، واختبارات QA
 *OUSSAMA Cutter: لأن المقاطع الفيروسية لا يجب أن تكلّف ثروة.*

@@ -1,4 +1,5 @@
 import gc
+import hashlib
 import json
 import logging
 import os
@@ -435,6 +436,55 @@ def apply_safe_globals_hack():
     try:
         original_load = torch.load
 
+        def _is_verified_vad_checkpoint(args, kwargs, stream):
+            candidate = getattr(stream, "name", None)
+            if not isinstance(candidate, (str, bytes, os.PathLike)):
+                candidate = args[0] if args else kwargs.get("f")
+            if not isinstance(candidate, (str, bytes, os.PathLike)):
+                return False
+
+            try:
+                candidate_path = os.path.realpath(
+                    os.fsdecode(os.fspath(candidate)))
+                import whisperx.vad as vad_module
+                module_file = getattr(vad_module, "__file__", None)
+                if not isinstance(module_file, (str, bytes, os.PathLike)):
+                    return False
+                vad_path = os.path.join(
+                    os.path.dirname(os.path.realpath(
+                        os.fsdecode(os.fspath(module_file)))),
+                    "assets", "pytorch_model.bin")
+                expected_path = os.path.realpath(vad_path)
+            except Exception:
+                return False
+
+            if os.path.normcase(candidate_path) != os.path.normcase(expected_path):
+                return False
+
+            url_parts = str(getattr(vad_module, "VAD_SEGMENTATION_URL", "")).split("/")
+            expected = url_parts[-2].lower() if len(url_parts) > 1 else ""
+            if not re.fullmatch(r"[0-9a-f]{64}", expected):
+                raise RuntimeError(
+                    "Refusing VAD unsafe load: invalid expected SHA256.")
+
+            digest = hashlib.sha256()
+            try:
+                with open(expected_path, "rb") as checkpoint:
+                    for chunk in iter(lambda: checkpoint.read(1024 * 1024), b""):
+                        digest.update(chunk)
+            except OSError as exc:
+                raise RuntimeError(
+                    "Could not read the exact WhisperX VAD checkpoint; "
+                    "unsafe loading is refused.") from exc
+
+            actual = digest.hexdigest()
+            if actual != expected:
+                raise RuntimeError(
+                    "Refusing VAD unsafe load: checkpoint SHA256 mismatch. "
+                    "Expected {}, got {}.".format(expected, actual))
+            print("Verified official WhisperX VAD checkpoint SHA256.")
+            return True
+
         def safe_load(*args, **kwargs):
             # Preserve explicit choices; Lightning may pass None as its default.
             if kwargs.get("weights_only") is not None:
@@ -462,6 +512,17 @@ def apply_safe_globals_hack():
             try:
                 return original_load(*args, **safe_kwargs)
             except Exception as safe_err:
+                if _is_verified_vad_checkpoint(args, kwargs, stream):
+                    print(
+                        "WARNING: verified WhisperX VAD checkpoint failed "
+                        "weights_only=True; retrying this file with "
+                        "weights_only=False."
+                    )
+                    _rewind_stream()
+                    vad_kwargs = dict(safe_kwargs)
+                    vad_kwargs["weights_only"] = False
+                    return original_load(*args, **vad_kwargs)
+
                 # torch names the exact missing global in its error message
                 # ("Unsupported global: GLOBAL module.attr was not allowed").
                 # Auto-register that single class and retry once: allowlisting
