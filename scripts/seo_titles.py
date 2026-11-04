@@ -243,8 +243,64 @@ def generate_titles(topic: str, keywords: list[str] | None = None,
     Without it the function stays a pure brainstorming template (the caller is
     then responsible for validating before showing/publishing).
     """
+    count = max(0, min(20, int(count)))
+    if count == 0:
+        return []
+    keywords = [str(k).strip() for k in (keywords or []) if str(k).strip()]
+    if transcript_text is not None:
+        from scripts import title_factual
+
+        raw = str(transcript_text or "").strip()
+        if not raw:
+            return []
+        parts = re.split(r"(?<=[.!?؟؛])\s+|[\r\n]+", raw)
+        grounded_candidates = []
+        seen_grounded = set()
+        for part in parts:
+            title = re.sub(r"\s+", " ", part).strip(" \t\r\n-–—•،؛:|")
+            title = title.rstrip(".!?؟؛،: ")
+            if len(title) < 12:
+                continue
+            if len(title) > title_factual.PUBLISH_TITLE_LIMIT:
+                shortened = []
+                for word in title.split():
+                    candidate = " ".join(shortened + [word])
+                    if len(candidate) > title_factual.PUBLISH_TITLE_LIMIT:
+                        break
+                    shortened.append(word)
+                title = " ".join(shortened).rstrip("،؛: -")
+            if len(title) < 12:
+                continue
+            key = (
+                title_factual.arabic_text.to_search(title)
+                if hasattr(title_factual, "arabic_text")
+                else title.casefold()
+            )
+            if not key or key in seen_grounded:
+                continue
+            seen_grounded.add(key)
+            validation = title_factual.validate_title_vs_clip(
+                title, raw, content_language)
+            if validation.get("status") == "rejected":
+                continue
+            grounded_candidates.append({
+                "title": title,
+                **score_title(title, keywords),
+                "validation": validation,
+                "grounded": True,
+                "title_source": "exact_clip_transcript",
+            })
+        grounded_candidates.sort(
+            key=lambda item: (
+                item["validation"].get("status") == "verified",
+                item["score"],
+                item["validation"].get("factual_consistency", 0),
+            ),
+            reverse=True,
+        )
+        return grounded_candidates[:count]
+
     topic = _topic_token(topic)
-    keywords = [str(k) for k in (keywords or []) if str(k).strip()]
     candidates = []
     import random
     # Deterministic ACROSS processes: the builtin hash() is salted per
@@ -272,23 +328,7 @@ def generate_titles(topic: str, keywords: list[str] | None = None,
             continue
         seen.add(key)
         unique.append(item)
-    if transcript_text:
-        # Grounding pass: keep only titles the clip actually supports.
-        grounded = []
-        for item in unique:
-            try:
-                from scripts import title_factual
-                validation = title_factual.validate_title_vs_clip(
-                    item["title"], str(transcript_text), content_language)
-            except Exception:
-                validation = None
-            if validation is not None:
-                item = dict(item, validation=validation,
-                            grounded=validation.get("status") != "rejected")
-                if validation.get("status") == "rejected":
-                    continue
-            grounded.append(item)
-        unique = grounded
+
     unique.sort(key=lambda item: item["score"], reverse=True)
     return unique[:count]
 

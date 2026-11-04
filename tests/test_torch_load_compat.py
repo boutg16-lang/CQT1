@@ -229,3 +229,163 @@ def test_builtins_containers_are_registered_as_safe_globals(monkeypatch):
 
     assert collections.OrderedDict in registered
     assert collections.defaultdict in registered
+
+
+def _install_fake_vad_module(monkeypatch, tmp_path, checkpoint_bytes):
+    import hashlib
+
+    package = tmp_path / "whisperx"
+    assets = package / "assets"
+    assets.mkdir(parents=True)
+    vad_file = package / "vad.py"
+    vad_file.write_text("# test module\n", encoding="utf-8")
+    checkpoint = assets / "pytorch_model.bin"
+    checkpoint.write_bytes(checkpoint_bytes)
+
+    digest = hashlib.sha256(checkpoint_bytes).hexdigest()
+    fake_vad = ModuleType("whisperx.vad")
+    fake_vad.__file__ = str(vad_file)
+    fake_vad.VAD_SEGMENTATION_URL = (
+        "https://example.invalid/model_weights/" + digest + "/pytorch_model.bin"
+    )
+    fake_whisperx = ModuleType("whisperx")
+    fake_whisperx.vad = fake_vad
+    monkeypatch.setitem(sys.modules, "whisperx", fake_whisperx)
+    monkeypatch.setitem(sys.modules, "whisperx.vad", fake_vad)
+    return checkpoint
+
+
+def test_verified_vad_checkpoint_gets_narrow_unsafe_retry(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"trusted test checkpoint")
+    calls = []
+
+    class NamedStream:
+        name = str(checkpoint)
+
+        def seek(self, position):
+            pass
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        if kwargs["weights_only"]:
+            raise ValueError("legacy VAD checkpoint")
+        return "loaded"
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    assert safe_load(NamedStream(), weights_only=None) == "loaded"
+    assert [call["weights_only"] for call in calls] == [True, False]
+
+
+def test_vad_hash_mismatch_never_uses_unsafe_load(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"original checkpoint")
+    checkpoint.write_bytes(b"tampered checkpoint")
+    calls = []
+
+    class NamedStream:
+        name = str(checkpoint)
+
+        def seek(self, position):
+            pass
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        raise ValueError("safe load rejected checkpoint")
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    with pytest.raises(RuntimeError, match="SHA256 mismatch"):
+        safe_load(NamedStream(), weights_only=None)
+    assert [call["weights_only"] for call in calls] == [True]
+
+
+def test_non_vad_checkpoint_does_not_get_vad_exception(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    _install_fake_vad_module(monkeypatch, tmp_path, b"trusted test checkpoint")
+    other_file = tmp_path / "other" / "pytorch_model.bin"
+    other_file.parent.mkdir()
+    other_file.write_bytes(b"not the VAD checkpoint")
+    calls = []
+
+    class NamedStream:
+        name = str(other_file)
+
+        def seek(self, position):
+            pass
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        raise ValueError("legacy checkpoint")
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    with pytest.raises(RuntimeError, match="VIRALCUTTER_ALLOW_UNSAFE_LOAD=1"):
+        safe_load(NamedStream(), weights_only=None)
+    assert [call["weights_only"] for call in calls] == [True]
+
+
+def test_verified_vad_checkpoint_supports_direct_path(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"direct path checkpoint")
+    calls = []
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        if kwargs["weights_only"]:
+            raise ValueError("legacy VAD checkpoint")
+        return "loaded"
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    assert safe_load(str(checkpoint), weights_only=None) == "loaded"
+    assert [call["weights_only"] for call in calls] == [True, False]
+
+
+def test_verified_vad_checkpoint_rechecks_hash_on_repeated_loads(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"repeated checkpoint")
+    calls = []
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        if kwargs["weights_only"]:
+            raise ValueError("legacy VAD checkpoint")
+        return "loaded"
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    assert safe_load(str(checkpoint), weights_only=None) == "loaded"
+    assert safe_load(str(checkpoint), weights_only=None) == "loaded"
+    assert [call["weights_only"] for call in calls] == [True, False, True, False]
+
+
+def test_invalid_expected_vad_hash_never_uses_unsafe_load(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"invalid digest checkpoint")
+    fake_vad = sys.modules["whisperx.vad"]
+    fake_vad.VAD_SEGMENTATION_URL = (
+        "https://example.invalid/model_weights/not-a-valid-hash/pytorch_model.bin"
+    )
+    calls = []
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        raise ValueError("safe load rejected checkpoint")
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    with pytest.raises(RuntimeError, match="invalid expected SHA256"):
+        safe_load(str(checkpoint), weights_only=None)
+    assert [call["weights_only"] for call in calls] == [True]
+
+
+def test_missing_whisperx_vad_keeps_explicit_unsafe_opt_in(monkeypatch):
+    monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
+    monkeypatch.setitem(sys.modules, "whisperx.vad", None)
+    calls = []
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        if kwargs["weights_only"]:
+            raise ValueError("legacy checkpoint")
+        return "loaded"
+
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    assert safe_load("other.ckpt", weights_only=None) == "loaded"
+    assert [call["weights_only"] for call in calls] == [True, False]

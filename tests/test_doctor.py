@@ -16,9 +16,18 @@ def test_run_checks_structure():
         assert c["status"] in (doctor.OK, doctor.WARN, doctor.FAIL)
 
 
-def test_check_python_passes_in_test_env():
+def test_check_python_matches_declared_runtime_support():
     result = doctor.check_python()
-    assert result["status"] == doctor.OK
+    version = (sys.version_info.major, sys.version_info.minor)
+    supported = doctor.MIN_PYTHON <= version <= doctor.MAX_PYTHON
+    assert result["status"] == (doctor.OK if supported else doctor.FAIL)
+    assert result["name"] == "Python"
+    assert result["detail"]
+
+
+def test_dependency_checks_do_not_duplicate_modules():
+    modules = [module for module, _critical in doctor.DEPENDENCIES]
+    assert len(modules) == len(set(modules))
 
 
 def test_check_binary_found(monkeypatch):

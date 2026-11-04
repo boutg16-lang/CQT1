@@ -30,7 +30,6 @@ DEPENDENCIES = [
     ("cv2", False),
     ("mediapipe", False),
     ("insightface", False),
-    ("torch", False),
     ("google.genai", False),
     ("g4f", False),
     ("tqdm", False),

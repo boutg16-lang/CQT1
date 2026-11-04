@@ -50,6 +50,7 @@ oussama-cutter-audio-qc = "scripts.audio_qc:main"
 oussama-cutter-otio = "scripts.otio_export:main"
 oussama-cutter-quality-benchmark = "scripts.quality_benchmark:main"
 oussama-cutter-stream-guard = "scripts.stream_guard.cli:main"
+oussama-cutter-production = "scripts.production_workflow:main"
 # Compatibility aliases for existing installations and scripts.
 viralcutter = "main_improved:main"
 viralcutter-webui = "webui.app:_launch"
@@ -58,6 +59,7 @@ viralcutter-audio-qc = "scripts.audio_qc:main"
 viralcutter-otio = "scripts.otio_export:main"
 viralcutter-quality-benchmark = "scripts.quality_benchmark:main"
 viralcutter-stream-guard = "scripts.stream_guard.cli:main"
+viralcutter-production = "scripts.production_workflow:main"
 
 [project.optional-dependencies]
 transcribe = [

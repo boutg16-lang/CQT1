@@ -1,5 +1,15 @@
 # OUSSAMA Cutter 7.52.0-pro candidate
 
+## Unified production and review update — 2026-11-04
+
+- Added `scripts.pro_clip_review.py` for local transcript, title, metadata, OCR, technical-media, and audio-quality review. It never publishes; `publish_allowed` remains false, human sign-off is required, and skipping OCR/media checks on a supplied video forces review.
+- Added `scripts.production_workflow.py` and Arabic editorial helpers for dialogue cues, contextual timing suggestions, diverse clip packages, speaker continuity, final-segment validation, and optional audio QC. Outputs remain review-first and are not connected to an uploader.
+- Grounded SEO title mode now uses wording from the exact clip transcript, bounds the candidate count, and never falls back to speculative templates for an empty transcript.
+- Added NVIDIA/GPU profiling, RTX 3060 Windows launchers, and a durable local watch-folder worker. The worker uses the existing strict Autopilot path and does not upload or publish. Generated `gpu_profile.json`, `INBOX/`, and `.watch-folder/` state are ignored by Git.
+- Fixed the unsupported `scale` argument on a Gradio Markdown component and removed a duplicate optional PyTorch diagnostic check.
+- Added Arabic operator guides and focused regression tests. No version bump, CI workflow, existing upload gate, or safety-filter implementation was changed.
+- Preserved the WebSockets 16.x pin and launch/preflight repair added in #61/#62; the archive's rollback of those fixes was intentionally not applied.
+
 ## StreamGuard — 2026-10-18
 
 - Added an optional Arabic livestream review CLI for local transcript/chat files and completed YouTube streams. It writes escaped HTML/Markdown reports plus atomic risk/safe-window JSON; applying reviewed windows is explicit and preserves a non-overwriting backup.

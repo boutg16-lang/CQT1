@@ -1438,7 +1438,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     with gr.Row():
                         save_settings_btn = gr.Button("💾 " + i18n("Save Settings"), variant="secondary", size="sm", scale=1)
                         test_key_btn = gr.Button("🔌 " + i18n("Test Connection"), variant="secondary", size="sm", scale=1)
-                        settings_hint = gr.Markdown("💡 " + i18n("Add up to 3 keys. Auto rotate switches after quota or key errors; keys are masked in the status."), scale=3)
+                        settings_hint = gr.Markdown("💡 " + i18n("Add up to 3 keys. Auto rotate switches after quota or key errors; keys are masked in the status."))
                     with gr.Row():
                         ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=DEFAULT_GEMINI_MODEL, allow_custom_value=False, visible=True, scale=5)
                         refresh_models_btn = gr.Button("🔄", size="sm", visible=False, scale=0, min_width=50)
