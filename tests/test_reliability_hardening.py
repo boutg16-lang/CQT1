@@ -285,7 +285,7 @@ def test_probe_media_handles_na_size(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("secret", [
     "AIza_FAKE_NOT_A_REAL_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.abc123signature",
+    "eyJ" + "a" * 20 + "." + "b" * 20 + "." + "c" * 20,
     "supersecrettoken",
     "hunter2",
     "sk-livesecretkeyvalue0123456789",
