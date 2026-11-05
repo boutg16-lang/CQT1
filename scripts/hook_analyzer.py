@@ -18,6 +18,7 @@ Design notes:
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional
 
@@ -89,20 +90,46 @@ def leading_filler_trim(
     words = [w for w in (word_timings or []) if isinstance(w, dict)]
     if not words:
         return None
+
+    # WhisperX can emit malformed or out-of-order word boundaries after a
+    # fallback/alignment edge case. Never turn those into an edit decision:
+    # validate the complete sequence before proposing a destructive trim.
+    normalized: List[Dict[str, Any]] = []
+    previous_start = -1.0
+    for word in words:
+        try:
+            start = float(word.get("start"))
+            end = float(word.get("end"))
+        except (TypeError, ValueError):
+            return None
+        if not (math.isfinite(start) and math.isfinite(end)):
+            return None
+        if start < 0.0 or end <= start or start < previous_start:
+            return None
+        previous_start = start
+        normalized.append({**word, "start": start, "end": end})
+
     filler: List[Dict[str, Any]] = []
-    for word in words[: max(1, int(max_scan))]:
+    for word in normalized[: max(1, int(max_scan))]:
         if _norm_word(word.get("word")) in FILLER_OPENERS:
             filler.append(word)
         else:
             break
-    if not filler or len(filler) > int(max_filler) or len(words) <= len(filler):
+    if not filler or len(filler) > int(max_filler) or len(normalized) <= len(filler):
         return None
-    next_word = words[len(filler)]
+
+    next_word = normalized[len(filler)]
+    filler_end = float(filler[-1]["end"])
+    next_start = float(next_word["start"])
+    # Do not cut into the first content word when alignments overlap. A
+    # 50 ms tolerance absorbs harmless rounding while rejecting real overlap.
+    if next_start < filler_end - 0.05:
+        return None
     return {
         "trim_words": len(filler),
         "filler_words": [str(w.get("word") or "") for w in filler],
-        "filler_end": float(filler[-1].get("end") or 0.0),
-        "new_start": float(next_word.get("start") or 0.0),
+        "filler_end": filler_end,
+        "new_start": next_start,
         "next_word": str(next_word.get("word") or ""),
     }
 

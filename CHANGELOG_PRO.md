@@ -1,3 +1,12 @@
+# OUSSAMA Cutter 7.52.2-pro — subtitle synchronization and safe opening-hook trims
+
+## Editorial timing reliability — 2026-11-04
+
+- Subtitle retiming maps timestamps through actual removed intervals, including partial cut intersections; a saved baseline prevents repeated polishing from accumulating timing shifts, manual transcript edits become the next baseline, and malformed tracking state safely resets from the current transcript.
+- Atomic subtitle writes reduce the chance of leaving a truncated transcript after interruption.
+- Opening-hook auto-trim rejects missing, non-numeric, non-finite, negative, zero-duration, reversed, or out-of-order word timings and avoids cutting into the first content word. Up to 50 ms of alignment-rounding overlap is allowed; auto-trim remains opt-in.
+- Regression coverage: `tests/test_editing_modules.py` and `tests/test_hook_autotrim.py`; release validation details are in `docs/RELEASE_NOTES_7.52.2_AR.md`.
+
 # OUSSAMA Cutter 7.52.0-pro candidate
 
 ## Unified production and review update — 2026-11-04

@@ -166,5 +166,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - ✅ **Reproducible installs**: `uv sync` (uses `uv.lock`); the classic `install_dependencies.bat` flow still works.
 
 
-**Current Version**: 7.52.0-pro — security hardening (fail-closed gates, 0600 OAuth tokens), least-privilege CI and QA tests
+**Current Version**: 7.52.2-pro — safe opening-hook trims, subtitle sync after jump cuts, and the existing security hardening
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀
