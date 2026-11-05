@@ -440,7 +440,8 @@ def test_secure_config_multiple_keys_roundtrip(tmp_path, monkeypatch):
     assert secure_config.get_key(passphrase="hunter2") == "k-one"
 
 
-def test_settings_store_multiple_keys_roundtrip(tmp_path):
+def test_settings_store_multiple_keys_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     from webui import settings_store
     ok, err = settings_store.save_ui_settings(
         ai_backend="gemini", api_keys=["k-one", "k-two", "k-three"],

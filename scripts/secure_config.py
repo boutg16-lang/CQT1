@@ -9,13 +9,11 @@ Gemini key:
     2. encrypted store (api_config.secure.json, Fernet AES)   [new]
     3. legacy plaintext api_config.json (with a warning)
 
-Encryption: uses `cryptography` (Fernet) when installed
-otherwise falls
-back to a scrypt-derived XOR obfuscation and warns that it is NOT
-real encryption — install `cryptography` for real protection. The
-passphrase never touches the file
-it is asked once interactively or via
-the VIRALCUTTER_CONFIG_PASSPHRASE env var.
+Encryption uses `cryptography` (Fernet) with a scrypt-derived key. There is
+no obfuscation fallback: credential writes fail closed when real encryption
+is unavailable. The passphrase is supplied through the
+VIRALCUTTER_CONFIG_PASSPHRASE environment variable. The CLI prompts for the
+key without echoing it and never accepts the key as an argument.
 
 API: resolve_api_key(), set_key(), get_key(), load_api_config() (returns
 the merged config dict the rest of the app already expects).
@@ -119,12 +117,16 @@ def set_keys(api_keys, passphrase=None, base_dir=None):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
-        try: os.chmod(path, 0o600)
-        except OSError: pass
+        try:
+            os.chmod(path, 0o600)
+        except OSError as exc:
+            logger.warning("Could not restrict secure config permissions (%s).", type(exc).__name__)
     finally:
         if os.path.exists(tmp):
-            try: os.remove(tmp)
-            except OSError: pass
+            try:
+                os.remove(tmp)
+            except OSError as exc:
+                logger.warning("Could not remove temporary secure config (%s).", type(exc).__name__)
     return path
 
 
@@ -141,6 +143,7 @@ def get_keys(passphrase=None, base_dir=None):
     if not passphrase:
         passphrase = os.getenv("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
     if not passphrase:
+        logger.warning("Encrypted Gemini credentials are unavailable; set VIRALCUTTER_CONFIG_PASSPHRASE.")
         return []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -150,7 +153,8 @@ def get_keys(passphrase=None, base_dir=None):
         if encrypted is None and gemini.get("api_key"):
             encrypted = [gemini["api_key"]]
         return _clean_keys(_decrypt_blob(item, passphrase).decode("utf-8") for item in (encrypted or []))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not decrypt Gemini credentials (%s).", type(exc).__name__)
         return []
 
 
@@ -195,13 +199,19 @@ def _env_keys():
 
 
 def resolve_api_keys(base_dir=None, warn=True):
-    """Resolve up to three keys: env → encrypted store → legacy file."""
+    """Resolve keys from env, encrypted storage, or legacy config, fail-closed."""
     keys = _env_keys()
     if keys:
         return keys
+    secure_path = secure_config_path(base_dir)
     keys = get_keys(base_dir=base_dir)
     if keys:
         return keys
+    if os.path.isfile(secure_path):
+        if warn:
+            logger.warning(
+                "Encrypted Gemini credentials could not be resolved; refusing plaintext fallback.")
+        return []
     keys = _legacy_keys(base_dir)
     if keys and warn:
         print("[secure-config] WARNING: reading Gemini key(s) from plaintext "
@@ -250,24 +260,56 @@ def load_api_config(base_dir=None):
     return config
 
 
-def main():
+def _masked_key(key):
+    key = str(key or "").strip()
+    if not key:
+        return "(no key configured)"
+    if len(key) <= 8:
+        return "****"
+    return "{}…{}".format(key[:4], key[-4:])
+
+
+def main(argv=None):
     import argparse
+    import getpass
+    import sys
+
     parser = argparse.ArgumentParser(description="ViralCutter secure API config.")
-    parser.add_argument("--set", metavar="KEY", help="store an API key (encrypted)")
-    parser.add_argument("--get", action="store_true", help="print the resolved key")
-    parser.add_argument("--passphrase", default=None,
-                        help="passphrase (or VIRALCUTTER_CONFIG_PASSPHRASE env)")
+    parser.add_argument("--set", nargs="?", const="__prompt__", metavar="KEY",
+                        help="store a Gemini key; omit KEY to enter it securely")
+    parser.add_argument("--get", action="store_true", help="show the resolved key masked")
+    parser.add_argument("--show-key", action="store_true",
+                        help="explicitly print the full resolved key")
     parser.add_argument("--no-warn", action="store_true")
-    args = parser.parse_args()
-    if args.set:
-        path = set_key(args.set, args.passphrase)
-        print("key stored encrypted in {}".format(path))
-        if not HAS_CRYPTOGRAPHY:
-            print("WARNING: 'cryptography' not installed — using obfuscation only. "
-                  "Run: pip install cryptography")
-    elif args.get:
+    args, unknown = parser.parse_known_args(argv)
+    if unknown:
+        print("Unknown options are not accepted; use VIRALCUTTER_CONFIG_PASSPHRASE in the environment.",
+              file=sys.stderr)
+        return 2
+    if args.set is not None and args.set != "__prompt__":
+        print("Do not pass API keys as command-line arguments. Use --set without a value.",
+              file=sys.stderr)
+        return 2
+    if args.set is not None:
+        passphrase = os.getenv("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
+        if not passphrase:
+            print("Set VIRALCUTTER_CONFIG_PASSPHRASE before storing a key.", file=sys.stderr)
+            return 2
+        key = getpass.getpass("Gemini API key: ").strip()
+        if not key:
+            print("No key was entered; nothing was saved.", file=sys.stderr)
+            return 2
+        try:
+            set_key(key, passphrase=passphrase)
+        except Exception as exc:
+            print("Encrypted key storage failed ({}).".format(type(exc).__name__),
+                  file=sys.stderr)
+            return 1
+        print("Gemini key stored in the encrypted configuration.")
+        return 0
+    if args.get or args.show_key:
         key = resolve_api_key(warn=not args.no_warn)
-        print(key or "(no key configured)")
+        print(key if args.show_key and key else _masked_key(key))
     return 0
 
 

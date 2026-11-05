@@ -1,3 +1,4 @@
+import builtins
 import sys
 import typing
 from types import ModuleType, SimpleNamespace
@@ -295,6 +296,34 @@ def test_vad_hash_mismatch_never_uses_unsafe_load(monkeypatch, tmp_path):
 
     safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
     with pytest.raises(RuntimeError, match="SHA256 mismatch"):
+        safe_load(NamedStream(), weights_only=None)
+    assert [call["weights_only"] for call in calls] == [True]
+
+
+def test_vad_checkpoint_read_failure_never_uses_unsafe_load(monkeypatch, tmp_path):
+    monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
+    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"trusted test checkpoint")
+    calls = []
+    original_open = builtins.open
+
+    class NamedStream:
+        name = str(checkpoint)
+
+        def seek(self, position):
+            pass
+
+    def original_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        raise ValueError("safe load rejected checkpoint")
+
+    def unreadable_open(path, *args, **kwargs):
+        if str(path) == str(checkpoint.resolve()):
+            raise OSError("permission denied")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", unreadable_open)
+    safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
+    with pytest.raises(RuntimeError, match="could not read checkpoint"):
         safe_load(NamedStream(), weights_only=None)
     assert [call["weights_only"] for call in calls] == [True]
 

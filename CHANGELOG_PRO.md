@@ -1,3 +1,16 @@
+# OUSSAMA Cutter 8.0.0-ultimate — hardened scoring and encrypted settings
+
+## Release candidate — 2026-11-05
+
+- Non-finite and malformed clip metadata no longer crashes ranking or creates accidental extreme scores; regression tests cover `NaN`, infinities, invalid strings, and missing values.
+- WhisperX unsafe checkpoint loading remains narrowly limited to the exact VAD asset after path and SHA-256 verification. If WhisperX identity cannot be established, the normal safe-load path and explicit opt-in remain in force.
+- The WebUI refuses to write Gemini keys to plaintext `api_config.json`. With `VIRALCUTTER_CONFIG_PASSPHRASE`, keys are migrated to the Fernet-encrypted store; existing legacy files remain readable and are not discarded.
+- Gemini connection checks send the key in the `x-goog-api-key` request header, never the URL; error details redact credentials.
+- Edge TTS is available as an optional `uv sync --extra dubbing` dependency; its network use remains explicit opt-in.
+- Secure-config CLI prompts for keys instead of accepting them in process arguments; `--get` masks keys and full reveal requires an explicit flag.
+- Package source excludes user configuration, cache, logs, and sample media. This is a review-branch candidate; no public release, tag, or merge was made.
+- Validation status and remaining hardware limits are documented in `docs/RELEASE_NOTES_8.0.0_ULTIMATE_AR.md`.
+
 # OUSSAMA Cutter 7.52.2-pro — subtitle synchronization and safe opening-hook trims
 
 ## Editorial timing reliability — 2026-11-04

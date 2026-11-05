@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts import preflight
+from scripts import preflight, secure_config
 
 
 # --------------------------------------------------------------------------
@@ -95,10 +95,46 @@ def test_check_google_genai_reports_import_error_type_without_exception_details(
 
 
 def test_check_api_config_missing(monkeypatch, tmp_path):
+    for name in ("VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
     r = preflight.check_api_config()
-    assert r["status"] == preflight.FAIL
-    assert "missing" in r["detail"]
+    assert r["status"] == preflight.WARN
+    assert "optional" in r["detail"]
+
+
+def test_check_api_config_accepts_encrypted_key(tmp_path, monkeypatch):
+    passphrase = "unit-test-preflight-passphrase"
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("VIRALCUTTER_GEMINI_KEY", raising=False)
+    monkeypatch.delenv("VIRALCUTTER_GEMINI_KEYS", raising=False)
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", passphrase)
+    monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
+    secure_config.set_key("AIza_test_preflight_key_123456", passphrase=passphrase,
+                          base_dir=str(tmp_path))
+
+    result = preflight.check_api_config()
+
+    assert result["status"] == preflight.OK
+    assert "configured in encrypted store" in result["detail"]
+
+
+def test_unreadable_encrypted_store_disables_legacy_fallback(tmp_path, monkeypatch):
+    legacy_key = "AIza_legacy_must_not_be_used_123456"
+    for name in ("VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
+    monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
+    (tmp_path / "api_config.json").write_text(json.dumps({
+        "selected_api": "gemini", "gemini": {"api_key": legacy_key, "api_keys": []},
+    }), encoding="utf-8")
+    (tmp_path / "api_config.secure.json").write_text("{broken", encoding="utf-8")
+
+    result = preflight.check_api_config()
+
+    assert result["status"] == preflight.WARN
+    assert "plaintext fallback is disabled" in result["detail"]
+    assert legacy_key not in result["detail"]
 
 
 def test_check_api_config_invalid(tmp_path):

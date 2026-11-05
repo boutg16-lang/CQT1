@@ -18,10 +18,11 @@ from webui import settings_store
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    """Tests must not be polluted by a real GEMINI_API_KEY in the env."""
+    """Tests use an isolated passphrase and no ambient API credentials."""
     for var in ("GEMINI_API_KEY", "VIRALCUTTER_GEMINI_KEY",
-                "VIRALCUTTER_CONFIG_PASSPHRASE"):
+                "VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_CONFIG_PASSPHRASE"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ def _clean_env(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_mask_key_long():
-    key = "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x"
+    key = "AIza_FAKE_NOT_A_REAL_KEY"
     masked = settings_store.mask_key(key)
     assert masked.startswith("AIza")
     assert masked.endswith(key[-4:])
@@ -48,7 +49,7 @@ def test_mask_key_empty():
 
 
 @pytest.mark.parametrize("key,expected", [
-    ("AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x", True),
+    ("AIza_FAKE_NOT_A_REAL_KEY", True),
     ("AIza", True),
     ("sk-proj-abc123", False),
     ("", False),
@@ -65,20 +66,97 @@ def test_looks_like_gemini_key(key, expected):
 def test_save_then_load_roundtrip(tmp_path):
     ok, err = settings_store.save_ui_settings(
         ai_backend="gemini",
-        api_key="AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x",
+        api_key="AIza_FAKE_NOT_A_REAL_KEY",
         ai_model="gemini-2.5-flash",
         chunk_size=50000,
         base_dir=str(tmp_path),
     )
     assert ok, err
     assert (tmp_path / "api_config.json").exists()
+    with open(tmp_path / "api_config.json", encoding="utf-8") as f:
+        plain_config = json.load(f)
+    with open(tmp_path / "api_config.secure.json", encoding="utf-8") as f:
+        encrypted_config = json.load(f)
+    assert plain_config["gemini"]["api_key"] == ""
+    assert plain_config["gemini"]["api_keys"] == []
+    assert "AIza_FAKE_NOT_A_REAL_KEY" not in json.dumps(encrypted_config)
 
     loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
     assert loaded["ai_backend"] == "gemini"
-    assert loaded["api_key"] == "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x"
-    assert loaded["key_source"] == settings_store.KEY_SOURCE_FILE
+    assert loaded["api_key"] == "AIza_FAKE_NOT_A_REAL_KEY"
+    assert loaded["key_source"] == settings_store.KEY_SOURCE_SECURE
     assert loaded["ai_model"] == "gemini-2.5-flash"
     assert loaded["chunk_size"] == 50000
+
+
+def test_save_refuses_plaintext_without_passphrase(tmp_path, monkeypatch):
+    monkeypatch.delenv("VIRALCUTTER_CONFIG_PASSPHRASE", raising=False)
+    ok, message = settings_store.save_ui_settings(
+        ai_backend="gemini", api_key="AIza_never_write_plaintext_123",
+        ai_model="gemini-2.5-flash", chunk_size=50000, base_dir=str(tmp_path))
+    assert not ok
+    assert "VIRALCUTTER_CONFIG_PASSPHRASE" in message
+    assert not (tmp_path / "api_config.json").exists()
+    assert not (tmp_path / "api_config.secure.json").exists()
+
+
+def test_save_migrates_legacy_plaintext_key_when_passphrase_exists(tmp_path):
+    legacy_key = "AIza_legacy_migrate_123456"
+    legacy = {
+        "selected_api": "gemini",
+        "gemini": {"api_key": legacy_key, "api_keys": [], "model": "gemini-2.5-flash"},
+        "g4f": {"model": "gpt-4o-mini"},
+    }
+    with open(tmp_path / "api_config.json", "w", encoding="utf-8") as f:
+        json.dump(legacy, f)
+
+    ok, message = settings_store.save_ui_settings(
+        ai_backend="gemini", ai_model="gemini-2.5-flash", base_dir=str(tmp_path))
+    assert ok, message
+    with open(tmp_path / "api_config.json", encoding="utf-8") as f:
+        plain_config = json.load(f)
+    assert plain_config["gemini"]["api_key"] == ""
+    assert plain_config["gemini"]["api_keys"] == []
+    assert legacy_key not in json.dumps(plain_config)
+    assert settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"] == legacy_key
+
+
+def test_unreadable_encrypted_store_never_falls_back_to_legacy_key(tmp_path, monkeypatch):
+    legacy_key = "AIza_legacy_must_not_be_used_123456"
+    (tmp_path / "api_config.json").write_text(json.dumps({
+        "selected_api": "gemini",
+        "gemini": {"api_key": legacy_key, "api_keys": []},
+    }), encoding="utf-8")
+    (tmp_path / "api_config.secure.json").write_text("{broken", encoding="utf-8")
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
+
+    loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
+
+    assert loaded["api_key"] == ""
+    assert loaded["key_source"] == settings_store.KEY_SOURCE_NONE
+
+
+def test_corrupt_config_is_never_replaced(tmp_path):
+    path = tmp_path / "api_config.json"
+    path.write_text("{broken", encoding="utf-8")
+    original = path.read_bytes()
+    ok, message = settings_store.save_ui_settings(
+        ai_backend="g4f", ai_model="gpt-4o-mini", base_dir=str(tmp_path))
+    assert not ok
+    assert "لم يتم تغييره" in message
+    assert path.read_bytes() == original
+
+
+def test_encryption_failure_never_falls_back_to_plaintext(tmp_path, monkeypatch):
+    def fail_encrypt(*args, **kwargs):
+        raise RuntimeError("encryption unavailable")
+
+    monkeypatch.setattr("scripts.secure_config.set_keys", fail_encrypt)
+    ok, _ = settings_store.save_ui_settings(
+        ai_backend="gemini", api_key="AIza_never_fallback_123456",
+        ai_model="gemini-2.5-flash", base_dir=str(tmp_path))
+    assert not ok
+    assert not (tmp_path / "api_config.json").exists()
 
 
 def test_save_preserves_unrelated_fields(tmp_path):
@@ -101,7 +179,8 @@ def test_save_preserves_unrelated_fields(tmp_path):
     assert saved["custom_future_field"] == {"keep": "me"}
     assert saved["g4f"]["model"] == "gpt-4o-mini"
     assert saved["gemini"]["model"] == "gemini-3.8-flash"
-    assert saved["gemini"]["api_key"] == "AIza_new_key_here_123"
+    assert saved["gemini"]["api_key"] == ""
+    assert settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"] == "AIza_new_key_here_123"
 
 
 def test_save_empty_key_keeps_existing(tmp_path):
@@ -163,7 +242,8 @@ def test_backend_switch_remembered(tmp_path):
     # gemini key preserved for when the user switches back
     with open(tmp_path / "api_config.json", encoding="utf-8") as f:
         saved = json.load(f)
-    assert saved["gemini"]["api_key"] == "AIza_still_there_0000000"
+    assert saved["gemini"]["api_key"] == ""
+    assert settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"] == "AIza_still_there_0000000"
     assert saved["g4f"]["model"] == "gpt-4o"
 
 
@@ -183,6 +263,8 @@ def test_connection_rest_invalid_key(monkeypatch):
     import urllib.error
 
     def fake_urlopen(req, timeout=10):
+        assert "key=" not in req.full_url
+        assert req.get_header("X-goog-api-key") == "AIza_bad_key"
         raise urllib.error.HTTPError(
             req.full_url, 400, "Bad Request", {},
             io.BytesIO(b'{"error": {"message": "API key not valid"}}'))
@@ -191,6 +273,65 @@ def test_connection_rest_invalid_key(monkeypatch):
     ok, msg = settings_store._rest_test_gemini("AIza_bad_key")
     assert ok is False
     assert "400" in msg
+    assert "API key not valid" in msg
+    assert "AIza_bad_key" not in msg
+
+
+def test_connection_rest_error_does_not_echo_key(monkeypatch):
+    import urllib.error
+
+    key = "AIza_sensitive_key_value"
+
+    def fake_urlopen(req, timeout=10):
+        assert key not in req.full_url
+        raise urllib.error.URLError("failed https://example.invalid/?key=" + key)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    ok, msg = settings_store._rest_test_gemini(key)
+
+    assert ok is False
+    assert key not in msg
+    assert "Network request failed" in msg
+
+
+def test_connection_rest_uses_header_and_redacts_api_key(monkeypatch):
+    import io
+    import urllib.error
+
+    secret = "AIza_FAKE_NOT_A_REAL_KEY"
+    captured = {}
+
+    def fake_urlopen(req, timeout=10):
+        captured["url"] = req.full_url
+        captured["key_header"] = req.get_header("X-goog-api-key")
+        body = json.dumps({"error": {"message": "API key not valid: " + secret}}).encode()
+        raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", {}, io.BytesIO(body))
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    ok, message = settings_store._rest_test_gemini(secret)
+
+    assert not ok
+    assert captured["key_header"] == secret
+    assert secret not in captured["url"]
+    assert secret not in message
+    assert "API key not valid" in message
+
+
+def test_connection_network_error_never_echoes_api_key(monkeypatch):
+    import urllib.error
+
+    secret = "AIza_FAKE_NOT_A_REAL_KEY6"
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=10: (_ for _ in ()).throw(urllib.error.URLError(
+            "failed for ?key=" + secret)),
+    )
+
+    ok, message = settings_store._rest_test_gemini(secret)
+
+    assert not ok
+    assert secret not in message
+    assert "Network request failed" in message
 
 
 def test_connection_rest_ok(monkeypatch):
