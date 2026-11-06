@@ -6,6 +6,15 @@ from scripts import edit_video
 from scripts.active_speaker import ActiveSpeakerSelector
 
 
+def test_segment_index_from_modern_filename():
+    assert edit_video.segment_index_from_filename("007_topic_original_scale.mp4") == 7
+
+
+def test_segment_index_from_legacy_filename_and_invalid_input():
+    assert edit_video.segment_index_from_filename("output012_original_scale.mp4") == 12
+    assert edit_video.segment_index_from_filename("unexpected.mp4") == 0
+
+
 def test_finalize_video_rejects_audio_extraction_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(
         edit_video.subprocess,
