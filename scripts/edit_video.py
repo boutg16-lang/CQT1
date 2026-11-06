@@ -57,6 +57,19 @@ def _debug_faces_print(*parts):
         print(*parts)
 
 
+def segment_index_from_filename(filename):
+    """Return the segment index encoded in modern or legacy cut filenames."""
+    name = os.path.basename(str(filename))
+    prefix = name.split("_", 1)[0]
+    if prefix.isdigit():
+        return int(prefix)
+    if name.startswith("output"):
+        legacy_index = name[6:9]
+        if legacy_index.isdigit():
+            return int(legacy_index)
+    return 0
+
+
 # Global cache for encoder
 CACHED_ENCODER = None
 
@@ -1787,15 +1800,8 @@ def edit(project_folder="tmp", face_model="insightface", face_mode="auto", detec
     for input_file in found_files:
         input_filename = os.path.basename(input_file)
         
-        # Extract Index
-        index = 0
-        try:
-             parts = input_filename.split('_')
-             if parts[0].isdigit(): index = int(parts[0])
-             elif input_filename.startswith("output"): # output000
-                 idx_str = input_filename[6:9]
-                 if idx_str.isdigit(): index = int(idx_str)
-        except: pass
+        # Extract Index from modern and legacy output names.
+        index = segment_index_from_filename(input_filename)
         
         output_file = os.path.join(final_folder, f"temp_video_no_audio_{index}.mp4")
 
