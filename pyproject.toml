@@ -12,8 +12,8 @@
 
 [project]
 name = "oussama-cutter"
-# PEP 440-compatible distribution version; the UI displays 7.52.2-pro.
-version = "7.52.2+pro"
+# PEP 440-compatible distribution version; the UI displays 8.0.0-ultimate.
+version = "8.0.0+ultimate"
 description = "OUSSAMA Cutter — استوديو عربي احترافي لتحويل الفيديوهات الطويلة إلى مقاطع قصيرة مع المونتاج الذكي والترجمة والأمان قبل النشر."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
@@ -86,6 +86,9 @@ upload = [
 ]
 otio = [
     "opentimelineio>=0.17,<0.19",
+]
+dubbing = [
+    "edge-tts>=7.3.1",
 ]
 dev = [
     "pytest>=8.0",

@@ -99,7 +99,7 @@ To run ViralCutter on a fresh computer, you need to install the following core t
     *(Both use the `uv` package manager to set everything up automatically).*
 
 2.  **Configure AI (Optional)**
-    -   **Gemini (Recommended/Free)**: Add your key in `api_config.json`.
+    -   **Gemini (Recommended/Free)**: Set `GEMINI_API_KEY` in your user environment, or set `VIRALCUTTER_CONFIG_PASSPHRASE` before saving a key through the WebUI. UI-entered keys are encrypted into `api_config.secure.json`; the app refuses to write new keys in plaintext. Existing `api_config.json` keys remain readable for migration.
     -   **Local (GGUF)**: Download your favorite `.gguf` models and place them in the `models/` folder. ViralCutter will detect them automatically.
 
 3.  **Run**
@@ -164,7 +164,8 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 📈 **Performance**: WebUI tab "📈 Performance" or `python -m scripts.analytics --summary|--top|--trends` (YouTube Analytics, read-only; enable the API in the Google console first).
 - 📐 **Output formats**: `--output-aspect 4:5|1:1|16:9` (after subtitle burning) — or the "📐 Output framing" menu in the WebUI.
 - ✅ **Reproducible installs**: `uv sync` (uses `uv.lock`); the classic `install_dependencies.bat` flow still works.
+- 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 7.52.2-pro — safe opening-hook trims, subtitle sync after jump cuts, and the existing security hardening
+**Current Version**: 8.0.0-ultimate — hardened scoring and transcription, encrypted API-key storage, and safer release packaging
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

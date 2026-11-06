@@ -437,35 +437,40 @@ def apply_safe_globals_hack():
         original_load = torch.load
 
         def _is_verified_vad_checkpoint(args, kwargs, stream):
+            """Return True only for WhisperX's exact, hash-verified VAD file."""
             candidate = getattr(stream, "name", None)
+
             if not isinstance(candidate, (str, bytes, os.PathLike)):
                 candidate = args[0] if args else kwargs.get("f")
+
             if not isinstance(candidate, (str, bytes, os.PathLike)):
                 return False
 
             try:
-                candidate_path = os.path.realpath(
-                    os.fsdecode(os.fspath(candidate)))
                 import whisperx.vad as vad_module
-                module_file = getattr(vad_module, "__file__", None)
-                if not isinstance(module_file, (str, bytes, os.PathLike)):
-                    return False
                 vad_path = os.path.join(
-                    os.path.dirname(os.path.realpath(
-                        os.fsdecode(os.fspath(module_file)))),
-                    "assets", "pytorch_model.bin")
+                    os.path.dirname(os.path.realpath(vad_module.__file__)),
+                    "assets",
+                    "pytorch_model.bin",
+                )
+                candidate_path = os.path.realpath(os.fsdecode(os.fspath(candidate)))
                 expected_path = os.path.realpath(vad_path)
-            except Exception:
+            except Exception as exc:
+                logger.debug(
+                    "WhisperX VAD checkpoint identity unavailable (%s).",
+                    type(exc).__name__,
+                )
                 return False
 
             if os.path.normcase(candidate_path) != os.path.normcase(expected_path):
                 return False
 
-            url_parts = str(getattr(vad_module, "VAD_SEGMENTATION_URL", "")).split("/")
-            expected = url_parts[-2].lower() if len(url_parts) > 1 else ""
+            url = getattr(vad_module, "VAD_SEGMENTATION_URL", "")
+            expected = url.split("/")[-2].lower() if isinstance(url, str) and "/" in url else ""
             if not re.fullmatch(r"[0-9a-f]{64}", expected):
                 raise RuntimeError(
-                    "Refusing VAD unsafe load: invalid expected SHA256.")
+                    "Refusing VAD unsafe load: invalid expected SHA256."
+                )
 
             digest = hashlib.sha256()
             try:
@@ -474,14 +479,16 @@ def apply_safe_globals_hack():
                         digest.update(chunk)
             except OSError as exc:
                 raise RuntimeError(
-                    "Could not read the exact WhisperX VAD checkpoint; "
-                    "unsafe loading is refused.") from exc
+                    "Refusing VAD unsafe load: could not read checkpoint for SHA256 verification."
+                ) from exc
 
             actual = digest.hexdigest()
             if actual != expected:
                 raise RuntimeError(
                     "Refusing VAD unsafe load: checkpoint SHA256 mismatch. "
-                    "Expected {}, got {}.".format(expected, actual))
+                    "Expected {}, got {}.".format(expected, actual)
+                )
+
             print("Verified official WhisperX VAD checkpoint SHA256.")
             return True
 
@@ -512,6 +519,8 @@ def apply_safe_globals_hack():
             try:
                 return original_load(*args, **safe_kwargs)
             except Exception as safe_err:
+                # The official VAD checkpoint is a narrowly scoped exception:
+                # verify its exact path and SHA256 before any unsafe retry.
                 if _is_verified_vad_checkpoint(args, kwargs, stream):
                     print(
                         "WARNING: verified WhisperX VAD checkpoint failed "

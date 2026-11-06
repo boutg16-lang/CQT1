@@ -29,6 +29,7 @@ import importlib
 import importlib.metadata as _pkg_meta
 import importlib.util as _iu
 import json
+import logging
 import os
 import re
 import shutil
@@ -43,6 +44,8 @@ try:
     from app_brand import APP_NAME
 except Exception:
     APP_NAME = "OUSSAMA Cutter"
+
+logger = logging.getLogger(__name__)
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 ICONS = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
@@ -379,27 +382,86 @@ def check_pin(dist, rule, note=None):
 
 
 def check_api_config():
-    path = os.path.join(_app_dir(), "api_config.json")
+    app_dir = _app_dir()
+    path = os.path.join(app_dir, "api_config.json")
+    env_present = any(os.getenv(name, "").strip() for name in (
+        "VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"))
+    secure_store_exists = os.path.isfile(os.path.join(app_dir, "api_config.secure.json"))
+    try:
+        from scripts.secure_config import get_keys, resolve_api_keys, secure_config_path
+        resolved_keys = resolve_api_keys(base_dir=app_dir, warn=False)
+        encrypted_keys = get_keys(base_dir=app_dir)
+        secure_store_exists = os.path.isfile(secure_config_path(app_dir))
+    except Exception as exc:
+        logger.warning("Could not resolve Gemini credentials (%s).", type(exc).__name__)
+        resolved_keys = []
+        encrypted_keys = []
+
     if not os.path.exists(path):
-        return {"name": "api_config.json", "status": FAIL,
-                "detail": "missing - will be created from template (add your AI key afterwards)"}
+        if env_present and resolved_keys:
+            key = resolved_keys[0]
+            if not key.startswith("AIza"):
+                return {"name": "Gemini API key", "status": WARN,
+                        "detail": "environment key does not look like a Gemini key"}
+            return {"name": "Gemini API key", "status": OK,
+                    "detail": "configured via environment; no plaintext config file needed"}
+        if encrypted_keys:
+            return {"name": "Gemini API key", "status": OK,
+                    "detail": "configured in encrypted store; no plaintext config file needed"}
+        if secure_store_exists:
+            return {"name": "Encrypted Gemini key store", "status": WARN,
+                    "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled"}
+        return {"name": "api_config.json", "status": WARN,
+                "detail": "missing on first run; Gemini credentials are optional until AI analysis is used"}
+
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
-    except Exception as e:
-        return {"name": "api_config.json", "status": FAIL, "detail": "invalid JSON: %s" % e}
-    missing = [k for k in ("selected_api", "gemini") if k not in data]
-    if missing:
-        return {"name": "api_config.json", "status": WARN,
-                "detail": "missing keys %s - defaulting works but is fragile" % missing}
-    key = (data.get("gemini") or {}).get("api_key") or ""
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        return {"name": "api_config.json", "status": FAIL,
+                "detail": "invalid JSON (%s); the file was not changed" % type(exc).__name__}
+    if not isinstance(data, dict):
+        return {"name": "api_config.json", "status": FAIL,
+                "detail": "invalid configuration structure; expected a JSON object"}
+    gemini = data.get("gemini") or {}
+    if not isinstance(gemini, dict):
+        return {"name": "api_config.json", "status": FAIL,
+                "detail": "invalid Gemini configuration structure"}
+    backend = str(data.get("selected_api") or "gemini").strip().lower()
+    if backend in {"g4f", "local", "manual"}:
+        return {"name": "Gemini API key", "status": OK,
+                "detail": "not required for selected backend: %s" % backend}
+
+    if env_present and resolved_keys:
+        key = resolved_keys[0]
+        if not key.startswith("AIza"):
+            return {"name": "Gemini API key", "status": WARN,
+                    "detail": "environment key does not look like a Gemini key"}
+        return {"name": "Gemini API key", "status": OK,
+                "detail": "configured via environment"}
+    if encrypted_keys:
+        key = encrypted_keys[0]
+        if not key.startswith("AIza"):
+            return {"name": "Gemini API key", "status": WARN,
+                    "detail": "encrypted key does not look like a Gemini key"}
+        return {"name": "Gemini API key", "status": OK,
+                "detail": "configured in encrypted store"}
+
+    if secure_store_exists:
+        return {"name": "Encrypted Gemini key store", "status": WARN,
+                "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled"}
+
+    file_keys = gemini.get("api_keys") or [gemini.get("api_key", "")]
+    key = next((str(value or "").strip() for value in file_keys
+                if str(value or "").strip()), "")
     if not key:
         return {"name": "Gemini API key", "status": WARN,
-                "detail": "empty - AI analysis needs a key in api_config.json (or use --ai-backend manual/g4f/local)"}
+                "detail": "empty - set an environment key or encrypted store, or use --ai-backend manual/g4f/local"}
     if not key.startswith("AIza"):
         return {"name": "Gemini API key", "status": WARN,
-                "detail": "does not look like a Gemini key (should start with AIza)"}
-    return {"name": "Gemini API key", "status": OK, "detail": "configured"}
+                "detail": "legacy file key does not look like a Gemini key"}
+    return {"name": "Gemini API key", "status": WARN,
+            "detail": "configured in legacy plaintext api_config.json; set VIRALCUTTER_CONFIG_PASSPHRASE to migrate"}
 
 
 def check_assets():

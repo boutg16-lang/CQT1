@@ -79,14 +79,15 @@ def test_save_webui_prefs_concurrent_writers_keep_valid_json(tmp_path):
     assert not list(tmp_path.glob("*.tmp"))
 
 
-def test_save_ui_settings_concurrent_writers_keep_valid_json(tmp_path):
+def test_save_ui_settings_concurrent_writers_keep_valid_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     errors = []
 
     def writer(index):
         for _ in range(20):
             ok, err = settings_store.save_ui_settings(
                 ai_backend="gemini",
-                api_key="AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x",
+                api_key="AIza_FAKE_NOT_A_REAL_KEY",
                 ai_model="gemini-2.5-flash",
                 chunk_size=20000 + index,
                 base_dir=str(tmp_path))
@@ -101,20 +102,24 @@ def test_save_ui_settings_concurrent_writers_keep_valid_json(tmp_path):
 
     assert errors == []
     config = json.loads((tmp_path / "api_config.json").read_text(encoding="utf-8"))
-    assert config["gemini"]["api_key"] == "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x"
+    assert config["gemini"]["api_key"] == ""
+    secure_json = (tmp_path / "api_config.secure.json").read_text(encoding="utf-8")
+    assert "AIza_FAKE_NOT_A_REAL_KEY" not in secure_json
     # The stored key must still be readable (a corrupt file resets everything).
     assert settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"] == \
-        "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x"
+        "AIza_FAKE_NOT_A_REAL_KEY"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits only")
-def test_save_ui_settings_uses_owner_only_permissions(tmp_path):
+def test_save_ui_settings_uses_owner_only_permissions(tmp_path, monkeypatch):
+    monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     ok, err = settings_store.save_ui_settings(
-        ai_backend="gemini", api_key="AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x",
+        ai_backend="gemini", api_key="AIza_FAKE_NOT_A_REAL_KEY",
         base_dir=str(tmp_path))
     assert ok, err
-    mode = stat.S_IMODE(os.stat(tmp_path / "api_config.json").st_mode)
-    assert mode == 0o600
+    for filename in ("api_config.json", "api_config.secure.json"):
+        mode = stat.S_IMODE(os.stat(tmp_path / filename).st_mode)
+        assert mode == 0o600
 
 
 # ---------------------------------------------------------------------------
@@ -279,8 +284,8 @@ def test_probe_media_handles_na_size(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("secret", [
-    "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.abc123signature",
+    "AIza_FAKE_NOT_A_REAL_KEY",
+    "eyJ" + "a" * 20 + "." + "b" * 20 + "." + "c" * 20,
     "supersecrettoken",
     "hunter2",
     "sk-livesecretkeyvalue0123456789",
@@ -303,10 +308,10 @@ def test_sanitize_redacts_windows_path_with_spaces():
 
 
 def test_collect_does_not_expose_credentials():
-    exc = RuntimeError("download failed: https://x/y?key=AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x "
+    exc = RuntimeError("download failed: https://x/y?key=AIza_FAKE_NOT_A_REAL_KEY "
                        "token=topsecretvalue")
     entry = crash_report._collect("cut", exc)
-    assert "AIzaSyD4iE8fG0hI1jK2lM3nO4pQ5rS6tU7vW8x" not in entry["error"]
+    assert "AIza_FAKE_NOT_A_REAL_KEY" not in entry["error"]
     assert "topsecretvalue" not in entry["error"]
 
 

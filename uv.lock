@@ -756,6 +756,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/55/8f8cab2afd404cf578136ef2cc5dfb50baa1761b68c9da1fb1e4eed343c9/docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491", size = 25901, upload-time = "2014-06-16T11:18:57.406Z" }
 
 [[package]]
+name = "edge-tts"
+version = "7.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "certifi" },
+    { name = "tabulate" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/ce/14e713ba774063e00444a091eb790539fe0d848a9d8df35fd81a7639a28e/edge_tts-7.3.1.tar.gz", hash = "sha256:ee1fabf911b9ea83b38ae93aee5619ee41eaf0b109fef6e65d797dc4ebf1f20f", size = 35843, upload-time = "2026-10-13T18:22:53.226Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/86/3b97d755992777d5a9ca0e45a8ec96cc9858b2d6dd8f65f3f688d60e8709/edge_tts-7.3.1-py3-none-any.whl", hash = "sha256:2a3c79d6235a7a736d681233823ce5492e829b43eb47beae49aa181237a8f9a4", size = 38908, upload-time = "2026-10-13T18:22:51.772Z" },
+]
+
+[[package]]
 name = "einops"
 version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2327,7 +2342,7 @@ wheels = [
 
 [[package]]
 name = "oussama-cutter"
-version = "7.52.2+pro"
+version = "8.0.0+ultimate"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -2360,6 +2375,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+dubbing = [
+    { name = "edge-tts" },
+]
 otio = [
     { name = "opentimelineio" },
 ]
@@ -2391,6 +2409,7 @@ requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
     { name = "cryptography" },
     { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.9.0" },
+    { name = "edge-tts", marker = "extra == 'dubbing'", specifier = ">=7.3.1" },
     { name = "fastapi" },
     { name = "ffmpeg-python" },
     { name = "g4f" },
@@ -2433,7 +2452,7 @@ requires-dist = [
     { name = "whisperx", marker = "extra == 'transcribe'", specifier = "==3.3.1" },
     { name = "yt-dlp", extras = ["default"] },
 ]
-provides-extras = ["transcribe", "upload", "otio", "dev"]
+provides-extras = ["transcribe", "upload", "otio", "dubbing", "dev"]
 
 [[package]]
 name = "packageurl-python"

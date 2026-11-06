@@ -1,24 +1,16 @@
-"""Persistent UI settings for the ViralCutter WebUI.
+"""Persistent AI settings for the ViralCutter WebUI.
 
-The WebUI used to require re-entering the Gemini API key (and model /
-chunk size / backend) on every run and every restart. This module lets the
-UI read and write the same `api_config.json` the CLI already uses, so a
-key saved once is remembered forever — no more retyping it each session.
-
-Design:
-  * `load_ui_settings()`  — reads the merged config exactly like the CLI
-    (`scripts.secure_config.load_api_config`): env var wins, then the
-    encrypted store, then legacy plaintext api_config.json.
-  * `save_ui_settings()`  — atomically writes api_config.json (temp file +
-    rename), preserving the selected backend / model / chunk size.
-  * `mask_key()`          — safe display (AIza…XXXX) for status cards.
-  * `test_gemini_connection()` — validates a key right in the UI instead of
-    failing mid-processing ("think outside the box": instant feedback).
+The WebUI can resolve keys from the environment, the encrypted store, or a
+legacy plaintext config. New keys are never written to plaintext: encrypted
+persistence requires VIRALCUTTER_CONFIG_PASSPHRASE, while existing legacy
+files remain readable and can be migrated without discarding user data.
 
 No gradio imports — pure and unit-testable.
 """
 import json
+import logging
 import os
+import re
 import sys
 import tempfile
 
@@ -26,6 +18,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
 from scripts.secure_config import legacy_config_path, load_api_config
+
+logger = logging.getLogger(__name__)
 
 # Local UI-preferences file (user-machine state, NOT tracked by git).
 WEBUI_PREFS_FILE = "webui_settings.json"
@@ -125,21 +119,24 @@ def load_ui_settings(base_dir=None):
         gemini = {}
 
     # Resolve up to three keys in the same priority order as the CLI.
+    from scripts.secure_config import get_keys as _secure_get_keys
     from scripts.secure_config import resolve_api_keys as _resolve_keys
+    from scripts.secure_config import secure_config_path
     keys = []
     source = KEY_SOURCE_NONE
     env_keys = _resolve_keys(base_dir=base_dir, warn=False) if os.getenv("VIRALCUTTER_GEMINI_KEYS") or os.getenv("VIRALCUTTER_GEMINI_KEY") or os.getenv("GEMINI_API_KEY") else []
     if env_keys:
         keys, source = env_keys, KEY_SOURCE_ENV
     else:
-        from scripts.secure_config import get_keys as _secure_get_keys
         try:
             keys = _secure_get_keys(base_dir=base_dir)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Could not load encrypted Gemini settings (%s).", type(exc).__name__)
             keys = []
         if keys:
             source = KEY_SOURCE_SECURE
-    if not keys:
+    secure_store_exists = os.path.isfile(secure_config_path(base_dir))
+    if not keys and not secure_store_exists:
         file_keys = gemini.get("api_keys") or [gemini.get("api_key", "")]
         keys = [str(item).strip() for item in file_keys if str(item or "").strip() not in FAKE_KEYS][:3]
         if keys:
@@ -168,31 +165,32 @@ def load_ui_settings(base_dir=None):
 
 def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=None,
                      base_dir=None, api_keys=None, key_mode=None):
-    """Persist the UI's AI settings to api_config.json (atomic write).
-
-    Explicitly does NOT persist the key when it came from an environment
-    variable (env stays the source of truth and the file stays clean).
-
-    Returns (ok, message) — message is human-readable (Arabic) so the UI
-    can show it directly.
-    """
+    """Persist settings without writing Gemini keys to the legacy plaintext file."""
     path = legacy_config_path(base_dir)
     config = _defaults()
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-            if isinstance(loaded, dict):
-                config.update(loaded)
-        except Exception:
-            pass
+            if not isinstance(loaded, dict):
+                return False, "ملف الإعدادات ليس كائن JSON صالحاً؛ لم يتم تغييره."
+            for section in ("gemini", "g4f"):
+                if section in loaded and not isinstance(loaded[section], dict):
+                    return False, "بنية ملف الإعدادات غير صالحة؛ لم يتم تغييره."
+            config.update(loaded)
+        except (OSError, UnicodeError, ValueError, TypeError) as exc:
+            logger.warning("Could not read saved AI settings (%s); refusing to replace the file.",
+                           type(exc).__name__)
+            return False, "تعذّرت قراءة ملف الإعدادات؛ لم يتم تغييره."
+
     for section in ("gemini", "g4f"):
         if not isinstance(config.get(section), dict):
             config[section] = {}
 
     env_keys = []
     from scripts.secure_config import resolve_api_keys as _resolve_keys
-    if os.getenv("VIRALCUTTER_GEMINI_KEYS") or os.getenv("VIRALCUTTER_GEMINI_KEY") or os.getenv("GEMINI_API_KEY"):
+    if any(os.getenv(name) for name in (
+            "VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY")):
         env_keys = _resolve_keys(base_dir=base_dir, warn=False)
     if ai_backend in VALID_BACKENDS:
         config["selected_api"] = ai_backend
@@ -232,27 +230,34 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
         default_chunk = 20000 if backend == "gemini" else 2000
         section["chunk_size"] = _coerce_chunk(chunk_size, default_chunk)
 
-    # SECURITY: when a passphrase is configured, keep the API key OUT of the
-    # plaintext api_config.json and store it in the encrypted store instead.
+    stored = config["gemini"].get("api_keys") or [config["gemini"].get("api_key", "")]
+    if isinstance(stored, str):
+        stored = [stored]
+    stored_keys = [str(value or "").strip() for value in stored
+                   if str(value or "").strip() not in FAKE_KEYS]
     passphrase = os.environ.get("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
-    stored_keys = config["gemini"].get("api_keys") or []
-    if stored_keys and passphrase:
+    if stored_keys and not passphrase:
+        return False, (
+            "لم يتم حفظ التغييرات لأن مفاتيح Gemini لا تُحفظ كنص مكشوف. "
+            "اضبط VIRALCUTTER_CONFIG_PASSPHRASE للحفظ المشفّر؛ لم يتم تعديل الملف."
+        )
+    if stored_keys:
         try:
             from scripts.secure_config import set_keys
             set_keys(stored_keys, passphrase=passphrase, base_dir=base_dir)
-            config["gemini"]["api_key"] = ""
-            config["gemini"]["api_keys"] = []  # plaintext file stays clean
-        except Exception as e:
-            print("[settings-store] WARNING: encrypted key storage failed "
-                  "({}); falling back to plaintext api_config.json.".format(e))
+        except Exception as exc:
+            logger.warning("Encrypted Gemini key storage failed (%s); settings were not written.",
+                           type(exc).__name__)
+            return False, "تعذّر حفظ المفتاح مشفّراً؛ لم يتم حفظ الإعدادات."
+        config["gemini"]["api_key"] = ""
+        config["gemini"]["api_keys"] = []
 
     try:
-        # api_config.json may hold a plaintext Gemini key → owner-only perms.
         _atomic_write_json(path, config, indent=4, restrict=True)
         return True, ""
-    except Exception as e:
-        return False, str(e)
-
+    except (OSError, TypeError, ValueError) as exc:
+        logger.warning("Could not persist AI settings (%s).", type(exc).__name__)
+        return False, "تعذّر حفظ الإعدادات؛ راجع سجل التطبيق للتفاصيل."
 
 def mask_key(key, visible_head=4, visible_tail=4):
     """Mask a key for display: AIza****wxyz (short keys fully masked)."""
@@ -272,37 +277,45 @@ def looks_like_gemini_key(key):
     return key.startswith(GEMINI_KEY_PREFIX)
 
 
+def _safe_api_error(message, api_key=""):
+    text = str(message or "").strip()
+    if api_key:
+        text = text.replace(api_key, "[redacted]")
+    text = re.sub(r"(?i)([?&](?:key|api_key)=)[^&\s]+", r"\1[redacted]", text)
+    text = re.sub(r"(?i)(api[_ -]?key\s*[:=]\s*)[^,\s]+", r"\1[redacted]", text)
+    return text[:300] or "request failed"
+
+
 def _rest_test_gemini(api_key, timeout=10):
-    """Fallback REST check — no SDK needed. Returns (ok, detail)."""
+    """Fallback REST check without exposing the key in a URL or error."""
     import json as _json
     import urllib.error
     import urllib.request
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models?key={}".format(
-        api_key.strip())
-    req = urllib.request.Request(url, headers={"User-Agent": "ViralCutter/1.0"})
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "ViralCutter/1.0", "X-Goog-Api-Key": api_key.strip()})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = _json.loads(resp.read().decode("utf-8", "replace"))
             models = data.get("models", [])
             return True, "{} models".format(len(models))
-    except urllib.error.HTTPError as e:
-        body = ""
+    except urllib.error.HTTPError as exc:
         try:
-            body = e.read().decode("utf-8", "replace")[:300]
-        except Exception:
-            pass
-        return False, "HTTP {}: {}".format(e.code, body)
-    except Exception as e:
-        return False, str(e)
+            payload = _json.loads(exc.read(4096).decode("utf-8", "replace"))
+            error = payload.get("error") or {}
+            detail = _safe_api_error(error.get("message", "request rejected"), api_key)
+        except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as read_exc:
+            logger.warning("Could not read Gemini error response (%s).", type(read_exc).__name__)
+            detail = "request rejected"
+        return False, "HTTP {}: {}".format(exc.code, detail)
+    except Exception as exc:
+        logger.warning("Gemini REST check failed (%s).", type(exc).__name__)
+        return False, "Network request failed ({})".format(type(exc).__name__)
 
 
 def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10):
-    """Validate a Gemini API key. Returns (ok, message).
-
-    Uses the installed Google SDK when available, otherwise the REST
-    endpoint. Never raises.
-    """
+    """Validate a Gemini API key without echoing it in errors."""
     key = (api_key or "").strip()
     if not key:
         return False, "Gemini API key is empty"
@@ -316,7 +329,7 @@ def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10)
             return True, (getattr(resp, "text", "") or "").strip()
         except ImportError:
             try:
-                genai = importlib.import_module("google.generativeai")  # legacy SDK
+                genai = importlib.import_module("google.generativeai")
                 genai.configure(api_key=key)
                 model = genai.GenerativeModel(model_name)
                 resp = model.generate_content("Reply with exactly: ok", request_options={"timeout": timeout})
@@ -324,16 +337,16 @@ def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10)
                 return True, text.strip()
             except ImportError:
                 return _rest_test_gemini(key, timeout)
-    except Exception as e:
-        err = str(e)
-        # translate the common SDK errors into something the UI can show
-        if "API key not valid" in err or "API_KEY_INVALID" in err:
+    except Exception as exc:
+        error = _safe_api_error(str(exc), key)
+        if "API key not valid" in error or "API_KEY_INVALID" in error:
             return False, "API key not valid"
-        if "quota" in err.lower() or "RESOURCE_EXHAUSTED" in err:
+        if "quota" in error.lower() or "RESOURCE_EXHAUSTED" in error:
             return False, "quota exceeded"
-        if "PERMISSION_DENIED" in err:
+        if "PERMISSION_DENIED" in error:
             return False, "permission denied"
-        return False, err
+        logger.warning("Gemini key check failed (%s).", type(exc).__name__)
+        return False, "Gemini key check failed ({})".format(type(exc).__name__)
 
 
 # ---------------------------------------------------------------------------

@@ -176,12 +176,15 @@ def test_navigation_and_actions_are_confined_to_local_project():
 
 
 def test_secret_strings_are_redacted_from_page_output():
+    github_token = "ghp_" + "a" * 26
     output = policy.redact_sensitive_text(
-        "API_KEY=privatevalue Bearer abcdefghijklmnop ghp_abcdefghijklmnopqrstuvwxyz Token=private_token_value Secret:private_secret_value"
+        "API_KEY=privatevalue Bearer abcdefghijklmnop "
+        + github_token
+        + " Token=private_token_value Secret:private_secret_value"
     )
     assert "privatevalue" not in output
     assert "abcdefghijklmnop" not in output
-    assert "ghp_abcdefghijklmnopqrstuvwxyz" not in output
+    assert github_token not in output
     assert "private_token_value" not in output
     assert "private_secret_value" not in output
 

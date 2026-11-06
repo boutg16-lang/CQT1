@@ -139,7 +139,7 @@ run_webui.bat
 > 1. `pip install -r requirements.txt`
 > 2. ثبّت زوج Torch/Torchaudio المناسب (CUDA 12.6 لـ NVIDIA أو CPU)، ثم نفّذ `pip install -r requirements-transcribe.txt`؛ يثبت المثبّت `install_dependencies.bat` الزوج الصحيح تلقائياً على Windows.
 > 3. عند تعطل المسار الأساسي: `pip install -r requirements-transcribe-fallback.txt`  ← faster-whisper مستقل
-> 4. ضع مفتاح Gemini: `export GEMINI_API_KEY=...`  (أو `python -m scripts.secure_config --set KEY --passphrase ...`)
+> 4. لمتغير جلسة فقط: `export GEMINI_API_KEY=...`. للحفظ المشفّر: اضبط `VIRALCUTTER_CONFIG_PASSPHRASE` في البيئة ثم شغّل `python -m scripts.secure_config --set` والصق المفتاح عند الطلب؛ لا تمرّر المفتاح كوسيط للأمر.
 >
 > في Windows يمكن فرض المسار الاحتياطي مؤقتاً: `$env:VIRALCUTTER_TRANSCRIPTION_BACKEND="faster-whisper"`. الوضع الافتراضي `auto` يفضّل WhisperX ثم يستخدم fallback عند غيابه.
 >
@@ -183,7 +183,7 @@ run_webui.bat
    - `install_dependencies_advanced_LocalLLM.bat`: تثبيت **متقدم** — لتشغيل نماذج أوفلاين 100% (يتطلب كرت شاشة قوي).
 
 2. **إعداد الذكاء الاصطناعي (اختياري)**
-   - **Gemini (موصى به/مجاني)**: أضف مفتاحك في `api_config.json`.
+   - **Gemini (موصى به/مجاني)**: اضبط `GEMINI_API_KEY` في متغيرات البيئة، أو اضبط `VIRALCUTTER_CONFIG_PASSPHRASE` قبل حفظ المفتاح من الواجهة. تُشفّر مفاتيح الواجهة في `api_config.secure.json`، ويرفض البرنامج كتابة مفاتيح جديدة كنص مكشوف. تبقى مفاتيح `api_config.json` القديمة قابلة للقراءة للترحيل.
    - **محلي (GGUF)**: ضع نماذج `.gguf` في مجلد `models/` وسيكتشفها تلقائياً.
 
 3. **التشغيل**
@@ -426,6 +426,7 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 - 📈 **الأداء**: تبويب "📈 الأداء" في الواجهة أو `python -m scripts.analytics --summary|--top|--trends` (تحليلات يوتيوب، قراءة فقط — فعّل الـ API في كونسول جوجل أولاً).
 - 📐 **أبعاد الإخراج**: `--output-aspect 4:5|1:1|16:9` (بعد حرق الترجمات) — أو قائمة "📐 تأطير الإخراج" في الواجهة.
 - ✅ **تثبيت قابل للتكرار**: `uv sync` (يستخدم `uv.lock`)؛ تدفق `install_dependencies.bat` الكلاسيكي يعمل كما هو.
+- 🎙️ **الدبلجة الاختيارية**: ثبّت اعتماد Edge TTS عبر `uv sync --extra dubbing`؛ لا يرسل النص إلى Microsoft إلا بعد تفعيل الشبكة صراحةً.
 
 
 ## 🎙️ دبلجة المقاطع المترجمة (اختياري)
@@ -449,5 +450,5 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 - **RTX 3060 ومراقبة المجلد**: `setup_rtx3060.bat` يضبط بيئة GPU، ثم `watch_folder_rtx3060.bat` يعالج ملفات `INBOX` محلياً؛ لا يرفع أو ينشر تلقائياً. [إعداد GPU](docs/RTX3060_SETUP_AR.md) · [المراقبة](docs/WATCH_FOLDER_RTX3060_AR.md)
 - **تجميع المقاطع**: [ملاحظات مخطط الحزمة](RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
 
-**الإصدار الحالي**: 7.52.2-pro — قصّ افتتاحية آمن ومزامنة الترجمة بعد Jump Cuts، مع تقوية الأمان الحالية. [ملاحظات الإصدار](docs/RELEASE_NOTES_7.52.2_AR.md)
+**الإصدار الحالي**: 8.0.0-ultimate — تقييم أكثر تحملاً للبيانات التالفة، تخزين مشفّر للمفاتيح، وتحسين تحميل WhisperX. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.0.0_ULTIMATE_AR.md)
 *OUSSAMA Cutter: لأن المقاطع الفيروسية لا يجب أن تكلّف ثروة.*
