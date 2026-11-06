@@ -10,6 +10,7 @@ Covers three defects found in review:
 * ``ocr_safety`` reported a clean "scanned/allow" pass when every sampled
   frame failed, i.e. it failed open with zero evidence.
 """
+
 import json
 import os
 
@@ -18,6 +19,7 @@ from scripts import censor_engine, ocr_safety, semantic_safety, upload_gate
 # ---------------------------------------------------------------------------
 # semantic_safety: patterns must live in the same orthographic space as text
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticPatternsAreNormalized:
     def test_flagship_exclusion_phrase_is_blocked(self):
@@ -43,8 +45,10 @@ class TestSemanticPatternsAreNormalized:
         assert "counter_speech_or_educational_context" in verdict["signals"]
 
     def test_ordinary_arabic_text_is_allowed(self):
-        for text in ("نصائح عملية لتحسين جودة الفيديو والصوت",
-                     "القنفذ حيوان أليف ومفيد للغاية"):
+        for text in (
+            "نصائح عملية لتحسين جودة الفيديو والصوت",
+            "القنفذ حيوان أليف ومفيد للغاية",
+        ):
             assert semantic_safety.analyze_text(text)["action"] == "allow"
 
     def test_normalization_helper_agrees_with_patterns(self):
@@ -52,22 +56,24 @@ class TestSemanticPatternsAreNormalized:
         # normalized form through the compiled pattern.
         for phrase in semantic_safety._GROUP_PHRASES:
             normalized = semantic_safety.normalize_text(phrase)
-            assert semantic_safety._matched(
-                semantic_safety._GROUPS, normalized), phrase
+            assert semantic_safety._matched(semantic_safety._GROUPS, normalized), phrase
 
 
 # ---------------------------------------------------------------------------
 # censor_engine: a failed run must not leave evidence the gate will trust
 # ---------------------------------------------------------------------------
 
+
 def _censor_report(index=0):
     return {
-        "segments": [{
-            "index": index,
-            "status": "censor",
-            "title": "Risky",
-            "semantic": {"action": "allow", "explanation": "word-level match"},
-        }]
+        "segments": [
+            {
+                "index": index,
+                "status": "censor",
+                "title": "Risky",
+                "semantic": {"action": "allow", "explanation": "word-level match"},
+            }
+        ]
     }
 
 
@@ -91,11 +97,14 @@ def _stale_map():
 
 def test_failed_censor_run_removes_stale_map(tmp_path):
     (tmp_path / "censor_map.json").write_text(
-        json.dumps(_stale_map()), encoding="utf-8")
+        json.dumps(_stale_map()), encoding="utf-8"
+    )
 
     # No input.json ⇒ bleep censoring cannot locate words and bails out.
     result = censor_engine.censor_project(
-        str(tmp_path), {"segments": [{"title": "Risky", "start_time": 10, "end_time": 20}]})
+        str(tmp_path),
+        {"segments": [{"title": "Risky", "start_time": 10, "end_time": 20}]},
+    )
 
     assert result.get("error") == "no_word_transcript"
     assert not (tmp_path / "censor_map.json").exists()
@@ -103,32 +112,41 @@ def test_failed_censor_run_removes_stale_map(tmp_path):
 
 def test_gate_refuses_censor_status_after_failed_censor_run(tmp_path):
     (tmp_path / "censor_map.json").write_text(
-        json.dumps(_stale_map()), encoding="utf-8")
+        json.dumps(_stale_map()), encoding="utf-8"
+    )
     (tmp_path / "safety_report.json").write_text(
-        json.dumps(_censor_report()), encoding="utf-8")
+        json.dumps(_censor_report()), encoding="utf-8"
+    )
 
     censor_engine.censor_project(
-        str(tmp_path), {"segments": [{"title": "Risky", "start_time": 10, "end_time": 20}]})
+        str(tmp_path),
+        {"segments": [{"title": "Risky", "start_time": 10, "end_time": 20}]},
+    )
 
     verdict = upload_gate.check_clip(
-        str(tmp_path), index=0, title="Clean", caption="Clean", hashtags=[])
+        str(tmp_path), index=0, title="Clean", caption="Clean", hashtags=[]
+    )
 
     assert verdict["allowed"] is False
-    assert any(reason["source"] == "censor_verification"
-               for reason in verdict["reasons"])
+    assert any(
+        reason["source"] == "censor_verification" for reason in verdict["reasons"]
+    )
 
 
 def test_stale_map_alone_is_not_evidence(tmp_path):
     # Guard the baseline: with a stale map present and no censoring attempted,
     # the gate must not accept the entry just because the file exists.
     (tmp_path / "censor_map.json").write_text(
-        json.dumps(_stale_map()), encoding="utf-8")
+        json.dumps(_stale_map()), encoding="utf-8"
+    )
     (tmp_path / "safety_report.json").write_text(
-        json.dumps(_censor_report()), encoding="utf-8")
+        json.dumps(_censor_report()), encoding="utf-8"
+    )
     os.remove(tmp_path / "censor_map.json")
 
     verdict = upload_gate.check_clip(
-        str(tmp_path), index=0, title="Clean", caption="Clean", hashtags=[])
+        str(tmp_path), index=0, title="Clean", caption="Clean", hashtags=[]
+    )
 
     assert verdict["allowed"] is False
 
@@ -137,10 +155,13 @@ def test_stale_map_alone_is_not_evidence(tmp_path):
 # ocr_safety: zero usable evidence must fail closed
 # ---------------------------------------------------------------------------
 
+
 def test_all_frames_failed_fails_closed(monkeypatch):
-    monkeypatch.setattr(ocr_safety, "availability",
-                        lambda *a, **k: {"available": True, "binary": "tesseract",
-                                         "reason": None})
+    monkeypatch.setattr(
+        ocr_safety,
+        "availability",
+        lambda *a, **k: {"available": True, "binary": "tesseract", "reason": None},
+    )
     monkeypatch.setattr(ocr_safety, "_duration", lambda *a, **k: 30.0)
 
     def boom(*args, **kwargs):
@@ -152,15 +173,17 @@ def test_all_frames_failed_fails_closed(monkeypatch):
 
     assert report["available"] is False
     assert report["status"] == "failed"
-    assert report["reason"] == "all_frames_failed"
+    assert report["reason"] == "frame_sampling_incomplete"
     assert report["action"] == "review"
     assert all(frame.get("error") for frame in report["frames"])
 
 
 def test_partial_frame_failure_still_scans(monkeypatch):
-    monkeypatch.setattr(ocr_safety, "availability",
-                        lambda *a, **k: {"available": True, "binary": "tesseract",
-                                         "reason": None})
+    monkeypatch.setattr(
+        ocr_safety,
+        "availability",
+        lambda *a, **k: {"available": True, "binary": "tesseract", "reason": None},
+    )
     monkeypatch.setattr(ocr_safety, "_duration", lambda *a, **k: 30.0)
 
     calls = {"n": 0}
@@ -176,6 +199,6 @@ def test_partial_frame_failure_still_scans(monkeypatch):
 
     report = ocr_safety.analyze_video("clip.mp4", frames=3)
 
-    assert report["status"] == "scanned"
-    assert report["available"] is True
-    assert report["action"] == "allow"
+    assert report["status"] == "partial"
+    assert report["available"] is False
+    assert report["action"] == "review"

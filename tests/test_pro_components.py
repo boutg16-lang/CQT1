@@ -21,6 +21,7 @@ def test_editor_undo_and_roundtrip(tmp_path):
     assert loaded.clips[0]["aspect"] == "9:16"
     assert loaded.clips[0]["zoom"] == 1.2
 
+
 def test_render_queue_preserves_corrupt_state_file(tmp_path):
     path = tmp_path / "queue.json"
     path.write_text('{"jobs":', encoding="utf-8")
@@ -40,12 +41,13 @@ def test_render_queue_persists_and_recovers(tmp_path):
     q2 = RenderQueue(p)
     assert q2.jobs[jid].status == "queued"
 
+
 def test_pipeline_dependencies_and_persistence(tmp_path):
     p = tmp_path / "run.json"
     out = []
     e = PipelineEngine(p)
-    e.register("a", lambda c,r: out.append("a") or 1)
-    e.register("b", lambda c,r: out.append("b") or 2, deps=["a"])
+    e.register("a", lambda c, r: out.append("a") or 1)
+    e.register("b", lambda c, r: out.append("b") or 2, deps=["a"])
     result = e.run()
     assert out == ["a", "b"]
     assert result["b"] == 2
@@ -59,12 +61,15 @@ def test_pipeline_corrupt_state_is_logged_and_reset(tmp_path, caplog):
     engine = PipelineEngine(path)
 
     assert engine.state == {"stages": {}, "updated": None}
-    assert any("Could not load pipeline state" in record.message for record in caplog.records)
+    assert any(
+        "Could not load pipeline state" in record.message for record in caplog.records
+    )
+
 
 def test_pipeline_cycle_detection(tmp_path):
     e = PipelineEngine(tmp_path / "run.json")
-    e.register("a", lambda c,r: 1, deps=["b"])
-    e.register("b", lambda c,r: 2, deps=["a"])
+    e.register("a", lambda c, r: 1, deps=["b"])
+    e.register("b", lambda c, r: 2, deps=["a"])
     try:
         e.order()
         raise AssertionError("cycle should fail")
@@ -74,6 +79,7 @@ def test_pipeline_cycle_detection(tmp_path):
 
 def test_render_queue_worker_retry_cancel_and_progress(tmp_path):
     from webui.render_queue import RenderQueue
+
     attempts = []
 
     def runner(job, cancel_event, progress):
@@ -99,6 +105,7 @@ def test_render_queue_worker_retry_cancel_and_progress(tmp_path):
 
 def test_render_queue_requeues_running_job_after_restart(tmp_path):
     from webui.render_queue import RenderQueue
+
     path = tmp_path / "worker.json"
     q = RenderQueue(path)
     jid = q.add({"source": "a.mp4"})
@@ -118,8 +125,11 @@ def test_project_store_manifest_events_and_safe_names(tmp_path):
         safe_project_name,
         update_manifest,
     )
+
     assert "/" not in safe_project_name("a/b:c")
-    project_dir, manifest = create_project(tmp_path, "جلسة/تجربة", source={"type": "upload"})
+    project_dir, manifest = create_project(
+        tmp_path, "جلسة/تجربة", source={"type": "upload"}
+    )
     assert os.path.isdir(project_dir)
     assert manifest["status"] == "created"
     append_event(project_dir, "render_started", {"clip": 1})
@@ -192,9 +202,13 @@ def test_translate_chunk_bounded_retry_falls_back(monkeypatch):
         def translate(self, _text):
             raise RuntimeError("offline")
 
-    monkeypatch.setattr(translate_json, "GoogleTranslator", lambda **_kwargs: FailingTranslator())
+    monkeypatch.setattr(
+        translate_json, "GoogleTranslator", lambda **_kwargs: FailingTranslator()
+    )
     result = asyncio.run(
-        translate_json.translate_chunk(1, "النص الأصلي", "en", max_attempts=2, retry_delay=0)
+        translate_json.translate_chunk(
+            1, "النص الأصلي", "en", max_attempts=2, retry_delay=0
+        )
     )
     assert result == "النص الأصلي"
 
@@ -229,10 +243,12 @@ def test_google_translator_parses_response_without_third_party_package(monkeypat
 def test_adjust_segments_accepts_empty_subtitle_text():
     from scripts.translate_json import adjust_segments
 
-    segments = adjust_segments([
-        {"text": "", "start": 0, "end": 1, "words": []},
-        {"text": "hello", "start": 1, "end": 2, "words": []},
-    ])
+    segments = adjust_segments(
+        [
+            {"text": "", "start": 0, "end": 1, "words": []},
+            {"text": "hello", "start": 1, "end": 2, "words": []},
+        ]
+    )
 
     assert segments[0]["words"] == []
     assert segments[1]["words"][0]["word"] == "hello"
@@ -342,20 +358,21 @@ def test_transcription_repair_removes_empty_entries_from_all_artifacts(tmp_path)
     )
     tsv = tmp_path / "input.tsv"
     tsv.write_text(
-        "start\tend\ttext\n"
-        "0.000\t2.000\tنص صالح\n"
-        "2.000\t3.000\t\n",
+        "start\tend\ttext\n0.000\t2.000\tنص صالح\n2.000\t3.000\t\n",
         encoding="utf-8",
     )
     transcript_json = tmp_path / "input.json"
     transcript_json.write_text(
-        json.dumps({
-            "language": "ar",
-            "segments": [
-                {"start": 0, "end": 2, "text": "نص صالح"},
-                {"start": 2, "end": 3, "text": ""},
-            ],
-        }, ensure_ascii=False),
+        json.dumps(
+            {
+                "language": "ar",
+                "segments": [
+                    {"start": 0, "end": 2, "text": "نص صالح"},
+                    {"start": 2, "end": 3, "text": ""},
+                ],
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 
@@ -370,3 +387,38 @@ def test_transcription_repair_removes_empty_entries_from_all_artifacts(tmp_path)
     assert validated["count"] == 1
     assert "\t\n" not in tsv.read_text(encoding="utf-8")
     assert '"text": ""' not in transcript_json.read_text(encoding="utf-8")
+
+
+def test_editor_rejects_non_finite_values_and_bad_project_shape(tmp_path):
+    import pytest
+
+    from webui.editor_core import EditorState
+
+    for payload in [
+        {
+            "source": "a.mp4",
+            "clips": [{"source": "a.mp4", "start": float("nan"), "end": 3}],
+        },
+        {"source": "a.mp4", "clips": [{"source": "a.mp4", "x": 2}]},
+        {
+            "source": "a.mp4",
+            "clips": [{"source": "a.mp4", "rotation": float("inf")}],
+        },
+        {"source": "a.mp4", "clips": "bad"},
+    ]:
+        file_path = tmp_path / "bad.json"
+        file_path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(ValueError):
+            EditorState.load(file_path)
+
+
+def test_editor_save_rejects_nan(tmp_path):
+    import pytest
+
+    from webui.editor_core import EditorState
+
+    editor = EditorState("input.mp4")
+    editor.add_clip("input.mp4", 0, 3)
+    editor.clips[0]["zoom"] = float("nan")
+    with pytest.raises(ValueError):
+        editor.save(tmp_path / "bad.json")
