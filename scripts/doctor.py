@@ -6,6 +6,7 @@ report instead of a crash mid-pipeline.
 Usage:  python scripts/doctor.py
 Exit code 0 = all critical checks pass, 1 = something critical failed.
 """
+
 import importlib
 import os
 import shutil
@@ -47,13 +48,21 @@ DEPENDENCIES = [
 
 def check_python():
     version = (sys.version_info.major, sys.version_info.minor)
-    detail = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    detail = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
     if version < MIN_PYTHON:
-        return {"name": "Python", "status": FAIL,
-                "detail": f"{detail} — required >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]}"}
+        return {
+            "name": "Python",
+            "status": FAIL,
+            "detail": f"{detail} — required >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]}",
+        }
     if version > MAX_PYTHON:
-        return {"name": "Python", "status": FAIL,
-                "detail": f"{detail} — supported through Python {MAX_PYTHON[0]}.{MAX_PYTHON[1]}; use Python 3.12"}
+        return {
+            "name": "Python",
+            "status": FAIL,
+            "detail": f"{detail} — supported through Python {MAX_PYTHON[0]}.{MAX_PYTHON[1]}; use Python 3.12",
+        }
     return {"name": "Python", "status": OK, "detail": detail}
 
 
@@ -61,8 +70,11 @@ def check_binary(name, critical=True):
     path = shutil.which(name)
     if path:
         return {"name": name, "status": OK, "detail": path}
-    return {"name": name, "status": FAIL if critical else WARN,
-            "detail": "not found on PATH"}
+    return {
+        "name": name,
+        "status": FAIL if critical else WARN,
+        "detail": "not found on PATH",
+    }
 
 
 def check_dependency(module, critical):
@@ -75,8 +87,7 @@ def check_dependency(module, critical):
             detail += " — repair: .\\setup_on_d.ps1 -Mode Full -Transcription cpu"
             if str(exc):
                 detail += " — " + str(exc)[:160]
-        return {"name": module, "status": FAIL if critical else WARN,
-                "detail": detail}
+        return {"name": module, "status": FAIL if critical else WARN, "detail": detail}
 
 
 def check_ytdlp():
@@ -84,7 +95,8 @@ def check_ytdlp():
     (Chrome 127+ App-Bound Encryption). Newer releases handle it."""
     try:
         import yt_dlp
-        version = getattr(yt_dlp.version, '__version__', 'unknown')
+
+        version = getattr(yt_dlp.version, "__version__", "unknown")
         return {"name": "yt-dlp", "status": OK, "detail": version}
     except Exception as e:
         return {"name": "yt-dlp", "status": FAIL, "detail": str(e)}
@@ -93,27 +105,41 @@ def check_ytdlp():
 def check_gpu():
     try:
         import torch
+
         if torch.cuda.is_available():
-            return {"name": "GPU (CUDA)", "status": OK,
-                    "detail": torch.cuda.get_device_name(0)}
-        return {"name": "GPU (CUDA)", "status": WARN,
-                "detail": "no CUDA device — CPU mode will be slow"}
+            return {
+                "name": "GPU (CUDA)",
+                "status": OK,
+                "detail": torch.cuda.get_device_name(0),
+            }
+        return {
+            "name": "GPU (CUDA)",
+            "status": WARN,
+            "detail": "no CUDA device — CPU mode will be slow",
+        }
     except Exception:
-        return {"name": "GPU (CUDA)", "status": WARN,
-                "detail": "torch not installed — cannot detect GPU"}
+        return {
+            "name": "GPU (CUDA)",
+            "status": WARN,
+            "detail": "torch not installed — cannot detect GPU",
+        }
 
 
 def check_disk_space(path="."):
     try:
         total, used, free = shutil.disk_usage(path)
-        free_gb = free / (1024 ** 3)
+        free_gb = free / (1024**3)
         if free < 200 * 1024 * 1024:
             status = FAIL
         elif free_gb < 2:
             status = WARN
         else:
             status = OK
-        return {"name": "Free disk space", "status": status, "detail": "{:.2f} GiB free".format(free_gb)}
+        return {
+            "name": "Free disk space",
+            "status": status,
+            "detail": "{:.2f} GiB free".format(free_gb),
+        }
     except OSError as exc:
         return {"name": "Free disk space", "status": WARN, "detail": str(exc)}
 
@@ -123,9 +149,15 @@ def check_ffmpeg_version():
     if not path:
         return {"name": "FFmpeg version", "status": FAIL, "detail": "ffmpeg not found"}
     try:
-        proc = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=10)
+        proc = subprocess.run(
+            [path, "-version"], capture_output=True, text=True, timeout=10
+        )
         first_line = (proc.stdout or "").splitlines()[0] if proc.stdout else "unknown"
-        return {"name": "FFmpeg version", "status": OK if proc.returncode == 0 else WARN, "detail": first_line[:200]}
+        return {
+            "name": "FFmpeg version",
+            "status": OK if proc.returncode == 0 else WARN,
+            "detail": first_line[:200],
+        }
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"name": "FFmpeg version", "status": WARN, "detail": str(exc)}
 
@@ -136,7 +168,11 @@ def check_writable(path="."):
         with open(test_path, "w") as f:
             f.write("ok")
         os.remove(test_path)
-        return {"name": "Working dir writable", "status": OK, "detail": os.path.abspath(path)}
+        return {
+            "name": "Working dir writable",
+            "status": OK,
+            "detail": os.path.abspath(path),
+        }
     except Exception as e:
         return {"name": "Working dir writable", "status": FAIL, "detail": str(e)}
 
@@ -153,6 +189,33 @@ def run_checks():
         check_gpu(),
     ]
     checks.extend(check_dependency(mod, crit) for mod, crit in DEPENDENCIES)
+    try:
+        proc = subprocess.run(
+            ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
+        )
+        langs = {
+            line.strip()
+            for line in ((proc.stdout or "") + (proc.stderr or "")).splitlines()
+        }
+        for code, label in (
+            ("ara", "Tesseract Arabic language"),
+            ("fra", "Tesseract French language"),
+        ):
+            checks.append(
+                {
+                    "name": label,
+                    "status": OK if code in langs else WARN,
+                    "detail": "installed" if code in langs else "language pack missing",
+                }
+            )
+    except (OSError, subprocess.TimeoutExpired):
+        checks.append(
+            {
+                "name": "Tesseract language packs",
+                "status": WARN,
+                "detail": "could not inspect OCR language packs",
+            }
+        )
     return checks
 
 
@@ -167,7 +230,9 @@ def main():
 
     print()
     if critical_failed:
-        print(f"❌ {critical_failed} critical check(s) failed. Fix them before running OUSSAMA Cutter.")
+        print(
+            f"❌ {critical_failed} critical check(s) failed. Fix them before running OUSSAMA Cutter."
+        )
         return 1
     warns = sum(1 for c in checks if c["status"] == WARN)
     print(f"✅ System ready. ({warns} optional warning(s))")
