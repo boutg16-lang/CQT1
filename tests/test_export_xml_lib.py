@@ -346,6 +346,16 @@ class TestCreatePremiereXmlDeterminism:
 
 
 class TestCreatePremiereXmlFaceData:
+    def test_malformed_coordinate_metadata_falls_back_to_media_dimensions(self):
+        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        face_data = [{"frame": 0, "src_size": "invalid", "faces": [[100, 100, 200, 300]]}]
+        xml_text = xml_generator.create_premiere_xml(
+            "P", "/v/v.mp4", overlays, 30, face_data=face_data,
+            source_width=1920, source_height=1080,
+        )
+        _parse_xml(xml_text)
+        assert "Basic Motion" in xml_text
+
     def test_no_face_data_still_valid_and_centered(self, capsys):
         overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
         xml_text = xml_generator.create_premiere_xml(

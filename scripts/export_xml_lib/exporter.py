@@ -176,7 +176,8 @@ def export_pack(project_path, segment_index, output_format="premiere"):
             srt_content = json_to_srt(jdata_srt)
             with open(dest_srt, 'w', encoding='utf-8') as f:
                 f.write(srt_content)
-        except Exception: pass
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            print(f"Warning: could not generate SRT sidecar: {exc}")
 
     # 7. GENERATE XML
     width_src, height_src, frames, fps = get_video_dims(dest_video)
@@ -237,10 +238,5 @@ def export_pack(project_path, segment_index, output_format="premiere"):
     
     print(f"SUCCESS: Export Pack created at {zip_path}")
     
-    # Cleanup
-    try:
-        # shutil.rmtree(stage_dir)
-        pass
-    except: pass
-    
+    # Keep the staging directory beside the ZIP for editor inspection.
     return zip_path

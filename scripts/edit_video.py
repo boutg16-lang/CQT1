@@ -1636,7 +1636,12 @@ def generate_short_insightface(input_file, output_file, index, project_folder, f
                     f_list.append(float(f"{rh:.4f}"))
                     processed_faces_log.append(f_list)
                 coords_entry["faces"] = processed_faces_log
-        except: pass
+        except (AttributeError, IndexError, TypeError, ValueError) as exc:
+            _debug_faces_print(
+                "Coordinate logging skipped for frame",
+                frame_index,
+                type(exc).__name__,
+            )
         coordinate_log.append(coords_entry)
 
         out.write(result)

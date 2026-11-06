@@ -46,7 +46,10 @@ def create_premiere_xml(project_name, video_path, overlay_segments, duration_fra
                          coords_h = h_json
                          print(f"Coordinate System Reference: {coords_w}x{coords_h}")
                          # DO NOT overwrite source_width/source_height (Actual Media Dims)
-                 except: pass
+                 except (TypeError, ValueError, KeyError):
+                     # Keep media dimensions when optional metadata is malformed.
+                     coords_w = source_width
+                     coords_h = source_height
 
         print(f"Processing {len(face_data)} face entries for Dual-Track logic...")
         for entry in face_data:
@@ -197,7 +200,8 @@ def create_premiere_xml(project_name, video_path, overlay_segments, duration_fra
             def get_mode_avg(vals):
                 if not vals: return 0.5
                 try: return statistics.mean(vals)
-                except: return vals[0]
+                except (TypeError, ValueError, statistics.StatisticsError):
+                    return vals[0]
             
             # If after filtering we have no valid V2 candidates, revert to Single Track
             if is_dual_track and not cand_v2_x:
