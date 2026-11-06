@@ -1377,6 +1377,304 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 outputs=[home_status_html, telegram_status_html],
             )
 
+        with gr.Tab("🎬 PRODUCTION STUDIO"):
+            gr.Markdown("## 🎬 PRODUCTION STUDIO")
+            gr.Markdown(
+                "استوديو الإنتاج والتحرير الأصلي محفوظ في تبويب Create New وجميع أدواته الحالية. استخدم هذا المسار لإنتاج الفيديو، ثم انقله إلى الحامي المستقل للمراجعة قبل النشر."
+            )
+            gr.Markdown(
+                "**مسار العمل:** إنتاج وتحرير ← تصدير ملف نهائي ← YOUTUBE CONTENT PROTECTOR ← مراجعة بشرية ← معالجة محددة ← إعادة فحص."
+            )
+
+        with gr.Tab("🛡️ YOUTUBE CONTENT PROTECTOR"):
+            gr.Markdown("## 🛡️ YOUTUBE CONTENT PROTECTOR — مراجعة مستقلة للفيديو")
+            gr.Markdown(
+                "يقبل الفيديوهات المنتجة داخل OUSSAMA CUTTER أو خارجه. لا تُطبق أي معالجة اعتماداً على تصنيف آلي وحده؛ راجع السياق والتوقيت ووافق على كل تعديل."
+            )
+            with gr.Row():
+                ultimate_video = gr.Video(
+                    label="ارفع الفيديو المراد مراجعته", sources=["upload"]
+                )
+                with gr.Column():
+                    ultimate_title = gr.Textbox(label="عنوان الفيديو")
+                    ultimate_context = gr.Textbox(
+                        label="السياق الصحفي / السياسي / التعليمي", lines=3
+                    )
+                    ultimate_backend = gr.Dropdown(
+                        choices=[
+                            ("تلقائي", "auto"),
+                            ("Gemini", "gemini"),
+                            ("OpenAI Moderation", "openai-moderation"),
+                            ("G4F", "g4f"),
+                        ],
+                        value="auto",
+                        label="محرك التحليل",
+                    )
+                    ultimate_device = gr.Dropdown(
+                        choices=[("تلقائي", "auto"), ("CPU", "cpu"), ("CUDA", "cuda")],
+                        value="auto",
+                        label="جهاز التفريغ",
+                    )
+            ultimate_review_btn = gr.Button(
+                "🔍 تحليل الكلام والسياق", variant="primary"
+            )
+            ultimate_review_status = gr.Markdown(
+                "لم يبدأ الفحص. يلزم إعداد محرك سياقي ومزود تفريغ صالحين."
+            )
+            ultimate_review_report = gr.JSON(label="تقرير مراجعة الكلام")
+            ultimate_ocr_frames = gr.Slider(
+                2, 20, value=8, step=1, label="عدد إطارات OCR للفحص البصري"
+            )
+            ultimate_ocr_language = gr.Dropdown(
+                choices=[
+                    ("العربية والإنجليزية", "ara+eng"),
+                    ("العربية", "ara"),
+                    ("الفرنسية والإنجليزية", "fra+eng"),
+                    ("الإنجليزية", "eng"),
+                ],
+                value="ara+eng",
+                label="لغات OCR — يتطلب Tesseract واللغات المختارة",
+            )
+            ultimate_ocr_btn = gr.Button("🖼️ فحص النصوص الظاهرة داخل الفيديو")
+            ultimate_ocr_status = gr.Markdown("فحص OCR لم يبدأ.")
+            ultimate_ocr_report = gr.JSON(label="نتائج النصوص الظاهرة")
+            gr.Markdown("### ✂️ التعديلات التي وافقت عليها بعد المراجعة")
+            gr.Markdown(
+                "التوقيت بالثواني. الإجراءات: mute للكتم، bleep للصفارة، cut لحذف الصورة والصوت. لا تخلط القص مع الكتم/الصفارة في عملية تصدير واحدة."
+            )
+            ultimate_edits = gr.Code(
+                label="JSON — التعديلات المعتمدة بشرياً",
+                language="json",
+                lines=10,
+                value='[\n  {"start": 12.4, "end": 14.8, "action": "mute", "reason": "تمت مراجعة العبارة واعتماد كتمها"}\n]',
+            )
+            ultimate_srt = gr.File(
+                label="ملف ترجمة SRT خارجي اختياري", file_types=[".srt"]
+            )
+            ultimate_output_name = gr.Textbox(
+                label="اسم ملف النسخة الناتجة", value="oussama_reviewed_final.mp4"
+            )
+            ultimate_process_btn = gr.Button(
+                "⚙️ معالجة الفيديو وإعادة الفحص آلياً", variant="primary"
+            )
+            ultimate_process_status = gr.Markdown(
+                "حالة النشر: HOLD حتى إكمال المعالجة وإعادة المراجعة."
+            )
+            with gr.Row():
+                ultimate_output_video = gr.Video(
+                    label="النسخة المعالجة — راجعها قبل النشر"
+                )
+                ultimate_audit_file = gr.File(label="تقرير التدقيق Before / After")
+
+            def _ultimate_path(value):
+                return value.get("path") if isinstance(value, dict) else value
+
+            def _ultimate_review(video, title, context, backend, device):
+                import os
+
+                from scripts.upload_content_review import review_video, write_report
+
+                path = _ultimate_path(video)
+                if not path or not os.path.isfile(str(path)):
+                    return "⚠️ ارفع فيديو صالحاً أولاً.", {
+                        "status": "unavailable",
+                        "review_complete": False,
+                    }
+                try:
+                    report = review_video(
+                        str(path),
+                        title=title or "",
+                        caption=context or "",
+                        backend=backend or "auto",
+                        transcription_device=device or "auto",
+                        root_dir=WORKING_DIR,
+                    )
+                    folder = os.path.join(VIRALS_DIR, "_ultimate_reviews")
+                    os.makedirs(folder, exist_ok=True)
+                    from datetime import datetime
+
+                    report_path = os.path.join(
+                        folder,
+                        "review_"
+                        + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                        + ".json",
+                    )
+                    write_report(report_path, report)
+                    return (
+                        "نتيجة التحليل: **{}** — ليست قراراً نهائياً. افحص الاقتباسات والسياق والتوقيتات يدوياً.".format(
+                            report.get("status", "unknown")
+                        ),
+                        report,
+                    )
+                except Exception as exc:
+                    return "🔴 لم يكتمل الفحص؛ الحالة HOLD: {}: {}".format(
+                        type(exc).__name__, str(exc)[:500]
+                    ), {
+                        "status": "unavailable",
+                        "review_complete": False,
+                        "error": str(exc)[:500],
+                    }
+
+            def _ultimate_ocr(video, frames, language):
+                import os
+
+                from scripts.ocr_safety import analyze_video
+
+                path = _ultimate_path(video)
+                if not path or not os.path.isfile(str(path)):
+                    return "⚠️ ارفع فيديو صالحاً أولاً.", {
+                        "status": "unavailable",
+                        "action": "review",
+                    }
+                try:
+                    report = analyze_video(
+                        str(path), frames=int(frames), language=language or "ara+eng"
+                    )
+                    status = report.get("status", "unavailable")
+                    return (
+                        "نتيجة OCR: **{}** — فحص عينات إطارات وليس ضماناً لاكتشاف كل النصوص.".format(
+                            status
+                        ),
+                        report,
+                    )
+                except Exception as exc:
+                    return "تعذر فحص OCR؛ الحالة HOLD: {}".format(str(exc)[:400]), {
+                        "status": "failed",
+                        "action": "review",
+                        "error": str(exc)[:400],
+                    }
+
+            def _ultimate_process(
+                video,
+                edits_json,
+                subtitle,
+                output_name,
+                title,
+                context,
+                backend,
+                device,
+            ):
+                import json
+                import os
+
+                from scripts.ocr_safety import analyze_video
+                from scripts.upload_content_review import review_video
+                from scripts.video_sanitizer import sanitize_video
+
+                path = _ultimate_path(video)
+                if not path or not os.path.isfile(str(path)):
+                    return "⚠️ ارفع الفيديو الأصلي أولاً.", None, None
+                try:
+                    edits = json.loads(edits_json or "[]")
+                    name = os.path.basename(
+                        str(output_name or "oussama_reviewed_final.mp4")
+                    )
+                    if not name.lower().endswith(".mp4"):
+                        name += ".mp4"
+                    folder = os.path.join(VIRALS_DIR, "_ultimate_sanitized")
+                    os.makedirs(folder, exist_ok=True)
+                    srt_path = _ultimate_path(subtitle)
+                    result = sanitize_video(
+                        str(path),
+                        edits,
+                        os.path.join(folder, name),
+                        subtitle_path=srt_path,
+                    )
+                    try:
+                        post = review_video(
+                            result["video"],
+                            title=title or "",
+                            caption=context or "",
+                            backend=backend or "auto",
+                            transcription_device=device or "auto",
+                            root_dir=WORKING_DIR,
+                        )
+                        result["report"]["post_render_review"] = post
+                    except Exception as exc:
+                        post = {
+                            "status": "unavailable",
+                            "review_complete": False,
+                            "error": str(exc)[:500],
+                        }
+                        result["report"]["post_render_review"] = post
+                    try:
+                        ocr = analyze_video(
+                            result["video"], frames=8, language="ara+eng"
+                        )
+                        result["report"]["post_render_ocr"] = ocr
+                    except Exception as exc:
+                        result["report"]["post_render_ocr"] = {
+                            "status": "unavailable",
+                            "error": str(exc)[:300],
+                        }
+                    review_ok = (
+                        bool(post.get("review_complete"))
+                        and post.get("status") == "clear"
+                    )
+                    ocr_ok = (
+                        result["report"]["post_render_ocr"].get("status") == "scanned"
+                        and result["report"]["post_render_ocr"].get("action") == "allow"
+                    )
+                    result["report"]["publish_status"] = (
+                        "HOLD"
+                        if not (review_ok and ocr_ok)
+                        else "HUMAN_APPROVAL_REQUIRED"
+                    )
+                    with open(result["audit"], "w", encoding="utf-8") as stream:
+                        json.dump(
+                            result["report"], stream, ensure_ascii=False, indent=2
+                        )
+                    state = result["report"]["publish_status"]
+                    message = "تم إنتاج النسخة وإعادة فحصها. **{}** — راجع الفيديو والتقرير ووافق بشرياً قبل النشر.".format(
+                        state
+                    )
+                    if state == "HOLD":
+                        message += " لم يكتمل أحد الفحصين أو ظهرت نتيجة تستلزم المراجعة؛ لا تنشر قبل معالجة السبب وإعادة الفحص."
+                    return message, result["video"], result["audit"]
+                except Exception as exc:
+                    return (
+                        "🔴 فشلت المعالجة؛ لم تُعتبر النسخة مجتازة: {}: {}".format(
+                            type(exc).__name__, str(exc)[:600]
+                        ),
+                        None,
+                        None,
+                    )
+
+            ultimate_review_btn.click(
+                _ultimate_review,
+                inputs=[
+                    ultimate_video,
+                    ultimate_title,
+                    ultimate_context,
+                    ultimate_backend,
+                    ultimate_device,
+                ],
+                outputs=[ultimate_review_status, ultimate_review_report],
+            )
+            ultimate_ocr_btn.click(
+                _ultimate_ocr,
+                inputs=[ultimate_video, ultimate_ocr_frames, ultimate_ocr_language],
+                outputs=[ultimate_ocr_status, ultimate_ocr_report],
+            )
+            ultimate_process_btn.click(
+                _ultimate_process,
+                inputs=[
+                    ultimate_video,
+                    ultimate_edits,
+                    ultimate_srt,
+                    ultimate_output_name,
+                    ultimate_title,
+                    ultimate_context,
+                    ultimate_backend,
+                    ultimate_device,
+                ],
+                outputs=[
+                    ultimate_process_status,
+                    ultimate_output_video,
+                    ultimate_audit_file,
+                ],
+            )
+
         with gr.Tab("📥 " + i18n("Create New")):
             with gr.Row(elem_id="vc-create-toolbar", elem_classes=["vc-create-toolbar"]):
                 create_config_status = gr.HTML(
