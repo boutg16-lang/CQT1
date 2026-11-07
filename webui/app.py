@@ -1553,6 +1553,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 context,
                 backend,
                 device,
+                ocr_frames,
+                ocr_language,
             ):
                 import json
                 import os
@@ -1598,7 +1600,9 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         result["report"]["post_render_review"] = post
                     try:
                         ocr = analyze_video(
-                            result["video"], frames=8, language="ara+eng"
+                            result["video"],
+                            frames=ocr_frames,
+                            language=ocr_language or "ara+eng",
                         )
                         result["report"]["post_render_ocr"] = ocr
                     except Exception as exc:
@@ -1666,6 +1670,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     ultimate_context,
                     ultimate_backend,
                     ultimate_device,
+                    ultimate_ocr_frames,
+                    ultimate_ocr_language,
                 ],
                 outputs=[
                     ultimate_process_status,

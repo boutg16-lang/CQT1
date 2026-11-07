@@ -185,3 +185,83 @@ def test_schedule_requires_timezone_future_and_valid_interval():
         auto_upload_interval_minutes=0,
     ))
     assert any("فاصل الجدولة" in item for item in invalid_interval["errors"])
+
+
+def test_post_render_ocr_uses_selected_sampling_settings(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import scripts.ocr_safety as ocr_safety
+    import scripts.upload_content_review as upload_content_review
+    import scripts.video_sanitizer as video_sanitizer
+
+    config = app.demo.get_config_file()
+    component_ids = {
+        component.get("props", {}).get("label"): component["id"]
+        for component in config["components"]
+    }
+    process_button = next(
+        component
+        for component in config["components"]
+        if component.get("type") == "button"
+        and component.get("props", {}).get("value")
+        == "⚙️ معالجة الفيديو وإعادة الفحص آلياً"
+    )
+    process_event = next(
+        dependency
+        for dependency in config["dependencies"]
+        if any(
+            target[0] == process_button["id"] and target[1] == "click"
+            for target in dependency.get("targets", [])
+        )
+    )
+    assert component_ids["عدد إطارات OCR للفحص البصري"] in process_event["inputs"]
+    assert component_ids["لغات OCR — يتطلب Tesseract واللغات المختارة"] in process_event["inputs"]
+
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    output_root = tmp_path / "VIRALS"
+    monkeypatch.setattr(app, "VIRALS_DIR", str(output_root))
+    monkeypatch.setattr(app, "WORKING_DIR", str(tmp_path))
+    seen = {}
+
+    def fake_sanitize(_source, _edits, output_path, subtitle_path=None):
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"rendered")
+        return {
+            "video": str(output),
+            "audit": str(output.parent / "audit.json"),
+            "report": {},
+        }
+
+    def fake_review(*_args, **_kwargs):
+        return {"status": "clear", "review_complete": True}
+
+    def fake_ocr(_video, *, frames, language):
+        seen["frames"] = frames
+        seen["language"] = language
+        return {"status": "scanned", "action": "allow"}
+
+    monkeypatch.setattr(video_sanitizer, "sanitize_video", fake_sanitize)
+    monkeypatch.setattr(upload_content_review, "review_video", fake_review)
+    monkeypatch.setattr(ocr_safety, "analyze_video", fake_ocr)
+    process_callback = next(
+        block_fn.fn
+        for block_fn in app.demo.fns.values()
+        if getattr(block_fn.fn, "__name__", "") == "_ultimate_process"
+    )
+    result = process_callback(
+        str(source),
+        '[{"start": 1, "end": 2, "action": "mute"}]',
+        None,
+        "reviewed.mp4",
+        "title",
+        "context",
+        "auto",
+        "cpu",
+        14,
+        "fra+eng",
+    )
+
+    assert seen == {"frames": 14, "language": "fra+eng"}
+    assert "HUMAN_APPROVAL_REQUIRED" in result[0]
