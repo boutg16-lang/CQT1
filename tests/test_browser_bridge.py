@@ -136,9 +136,11 @@ def test_session_creation_fails_closed_without_control_file(relay_url, monkeypat
 def test_agent_relay_url_is_pinned_to_the_owner_service():
     from tools.browser_bridge import agent
 
+    assert agent.DEFAULT_RELAY_URL == "https://cqt1-browser-bridge-369880.zocomputer.io"
     assert agent.validate_relay_url(agent.DEFAULT_RELAY_URL) == agent.DEFAULT_RELAY_URL
     for value in (
-        "http://cat-browser-bridge-2nnhh.zocomputer.io",
+        "http://cqt1-browser-bridge-369880.zocomputer.io",
+        "https://cat-browser-bridge-2nnhh.zocomputer.io",
         "https://example.com",
         agent.DEFAULT_RELAY_URL + "/other",
         agent.DEFAULT_RELAY_URL + "?token=secret",
