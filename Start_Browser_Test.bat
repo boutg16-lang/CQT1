@@ -10,7 +10,7 @@ if not exist "%PYTHON%" (
     exit /b 1
 )
 
-if not defined CAT_BROWSER_BRIDGE_URL set "CAT_BROWSER_BRIDGE_URL=https://cat-browser-bridge-2nnhh.zocomputer.io"
+if not defined CAT_BROWSER_BRIDGE_URL set "CAT_BROWSER_BRIDGE_URL=https://cqt1-browser-bridge-369880.zocomputer.io"
 set "UV=uv"
 where uv >nul 2>&1
 if errorlevel 1 (

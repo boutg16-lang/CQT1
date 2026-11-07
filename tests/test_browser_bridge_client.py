@@ -208,12 +208,14 @@ def test_action_result_redacts_secret_text_before_sharing():
     assert "abcdefghijklmnop" not in result
 
 def test_relay_url_is_pinned_to_the_owned_https_service():
+    assert agent.DEFAULT_RELAY_URL == "https://cqt1-browser-bridge-369880.zocomputer.io"
     assert agent.validate_relay_url(agent.DEFAULT_RELAY_URL) == agent.DEFAULT_RELAY_URL
     for value in (
-        "http://cat-browser-bridge-2nnhh.zocomputer.io",
+        "http://cqt1-browser-bridge-369880.zocomputer.io",
+        "https://cat-browser-bridge-2nnhh.zocomputer.io",
         "https://attacker.example",
-        "https://cat-browser-bridge-2nnhh.zocomputer.io/other-path",
-        "https://user@cat-browser-bridge-2nnhh.zocomputer.io",
+        "https://cqt1-browser-bridge-369880.zocomputer.io/other-path",
+        "https://user@cqt1-browser-bridge-369880.zocomputer.io",
     ):
         with pytest.raises(agent.BridgeError):
             agent.validate_relay_url(value)

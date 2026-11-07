@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 
-RELAY_HOST = "cat-browser-bridge-2nnhh.zocomputer.io"
+RELAY_HOST = "cqt1-browser-bridge-369880.zocomputer.io"
 DEFAULT_RELAY_URL = "https://{}".format(RELAY_HOST)
 
 
