@@ -2,6 +2,7 @@
 
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -59,6 +60,29 @@ def test_check_dependency_missing():
 def test_check_dependency_present():
     result = doctor.check_dependency("json", critical=True)
     assert result["status"] == doctor.OK
+
+
+def test_cuda_runtime_warns_when_cuda_is_unavailable(monkeypatch):
+    fake_torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    result = doctor.check_cuda_runtime()
+    assert result["status"] == doctor.WARN
+    assert "CPU fallback" in result["detail"]
+
+
+def test_cuda_runtime_reports_cudnn_version(monkeypatch):
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: True),
+        version=SimpleNamespace(cuda="12.6"),
+        backends=SimpleNamespace(cudnn=SimpleNamespace(version=lambda: 9100)),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    result = doctor.check_cuda_runtime()
+    assert result == {
+        "name": "CUDA/cuDNN runtime",
+        "status": doctor.OK,
+        "detail": "CUDA 12.6, cuDNN 9100",
+    }
 
 
 def test_check_writable(tmp_path):

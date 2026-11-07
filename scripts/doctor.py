@@ -43,6 +43,7 @@ DEPENDENCIES = [
     # editing/safety/polish features run.
     ("whisperx", False),
     ("torch", False),
+    ("faster_whisper", False),
 ]
 
 
@@ -87,6 +88,8 @@ def check_dependency(module, critical):
             detail += " — repair: .\\setup_on_d.ps1 -Mode Full -Transcription cpu"
             if str(exc):
                 detail += " — " + str(exc)[:160]
+        elif module == "faster_whisper":
+            detail += " — repair: .\\.venv\\Scripts\\python.exe -m pip install -r requirements-transcribe-fallback.txt"
         return {"name": module, "status": FAIL if critical else WARN, "detail": detail}
 
 
@@ -123,6 +126,42 @@ def check_gpu():
             "status": WARN,
             "detail": "torch not installed — cannot detect GPU",
         }
+
+
+def check_cuda_runtime():
+    """Report CUDA/cuDNN readiness while keeping CPU fallback non-fatal."""
+    try:
+        import torch
+    except Exception as exc:
+        return {
+            "name": "CUDA/cuDNN runtime",
+            "status": WARN,
+            "detail": "Torch unavailable — CPU fallback required ({})".format(
+                str(exc)[:120]
+            ),
+        }
+    if not torch.cuda.is_available():
+        return {
+            "name": "CUDA/cuDNN runtime",
+            "status": WARN,
+            "detail": "CUDA unavailable — CPU fallback is active",
+        }
+    cuda_version = getattr(getattr(torch, "version", None), "cuda", None) or "unknown"
+    try:
+        cudnn_version = torch.backends.cudnn.version()
+    except Exception:
+        cudnn_version = None
+    if not cudnn_version:
+        return {
+            "name": "CUDA/cuDNN runtime",
+            "status": WARN,
+            "detail": f"CUDA {cuda_version} detected but cuDNN is unavailable — use CPU fallback",
+        }
+    return {
+        "name": "CUDA/cuDNN runtime",
+        "status": OK,
+        "detail": f"CUDA {cuda_version}, cuDNN {cudnn_version}",
+    }
 
 
 def check_disk_space(path="."):
@@ -187,6 +226,7 @@ def run_checks():
         check_disk_space(),
         check_writable(),
         check_gpu(),
+        check_cuda_runtime(),
     ]
     checks.extend(check_dependency(mod, crit) for mod, crit in DEPENDENCIES)
     try:
