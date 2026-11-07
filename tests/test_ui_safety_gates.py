@@ -2,6 +2,20 @@ from scripts import upload_gate as ug
 from webui import app, publish_panel
 
 
+def test_protector_edits_field_starts_empty():
+    component = next(
+        (
+            component
+            for component in app.demo.get_config_file()["components"]
+            if component.get("props", {}).get("label")
+            == "JSON — التعديلات المعتمدة بشرياً"
+        ),
+        None,
+    )
+    assert component is not None
+    assert component["props"]["value"] == "[]"
+
+
 def _validation_args(**overrides):
     values = {
         "input_source": "YouTube URL",

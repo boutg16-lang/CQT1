@@ -7,6 +7,27 @@ import pytest
 from scripts.video_sanitizer import process_srt, sanitize_video, validate_edits
 
 
+def test_edit_validation_rejects_empty_list():
+    with pytest.raises(ValueError, match="أدخل تعديلاً معتمداً واحداً على الأقل"):
+        validate_edits([], 4)
+
+
+def test_empty_edit_list_does_not_create_output_folder(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    monkeypatch.setattr(
+        "scripts.video_sanitizer.validate_media_file",
+        lambda *_args, **_kwargs: {"ok": True, "duration": 4.0},
+    )
+    monkeypatch.setattr("scripts.video_sanitizer.shutil.which", lambda _name: "ffmpeg")
+    output = tmp_path / "_ultimate_sanitized" / "output.mp4"
+
+    with pytest.raises(ValueError, match="أدخل تعديلاً معتمداً واحداً على الأقل"):
+        sanitize_video(str(source), [], str(output))
+
+    assert not output.parent.exists()
+
+
 def test_edit_validation_rejects_overlap_and_mixed_cut():
     assert (
         validate_edits([{"start": 1, "end": 2, "action": "mute"}], 4)[0]["action"]

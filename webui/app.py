@@ -1446,7 +1446,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 label="JSON — التعديلات المعتمدة بشرياً",
                 language="json",
                 lines=10,
-                value='[\n  {"start": 12.4, "end": 14.8, "action": "mute", "reason": "تمت مراجعة العبارة واعتماد كتمها"}\n]',
+                value="[]",
             )
             ultimate_srt = gr.File(
                 label="ملف ترجمة SRT خارجي اختياري", file_types=[".srt"]
@@ -1572,7 +1572,6 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     if not name.lower().endswith(".mp4"):
                         name += ".mp4"
                     folder = os.path.join(VIRALS_DIR, "_ultimate_sanitized")
-                    os.makedirs(folder, exist_ok=True)
                     srt_path = _ultimate_path(subtitle)
                     result = sanitize_video(
                         str(path),
