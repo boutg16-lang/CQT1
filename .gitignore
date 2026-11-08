@@ -111,3 +111,11 @@ INBOX/
 stream_reports/
 # Synthetic StreamGuard fixture; downloaded captions remain ignored.
 !tests/fixtures/stream_ar.srt
+
+# Android/Gradle generated files and signing material
+.gradle/
+**/build/
+local.properties
+*.keystore
+*.jks
+captures/

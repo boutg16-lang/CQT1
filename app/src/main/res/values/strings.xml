@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">OUSSAMA Cutter</string>
+    <string name="app_tagline">استوديو عربي ذكي لتحويل الفيديوهات إلى مقاطع فيروسية</string>
+    <string name="tab_home">الرئيسية</string>
+    <string name="tab_create">إنشاء مقاطع</string>
+    <string name="tab_safety">حامي المحتوى</string>
+    <string name="tab_review">مراجعة المقاطع</string>
+    <string name="tab_publish">النشر والجدولة</string>
+    <string name="tab_queue">طابور المعالجة</string>
+</resources>

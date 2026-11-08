@@ -1,0 +1,8 @@
+{
+  "name": "OUSSAMA Cutter",
+  "description": "استوديو عربي احترافي لتحويل الفيديوهات الطويلة إلى مقاطع قصيرة، مع مونتاج ذكي، ترجمة، أمان، ومراجعة قبل النشر.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
