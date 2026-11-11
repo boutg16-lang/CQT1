@@ -67,6 +67,7 @@ def load_word_transcript(project_folder):
         return []
 
     words = []
+    skipped = 0
     for seg in data.get("segments", []):
         for w in seg.get("words", []) or []:
             try:
@@ -75,8 +76,11 @@ def load_word_transcript(project_folder):
                     "start": float(w.get("start", 0)),
                     "end": float(w.get("end", 0)),
                 })
-            except Exception:
-                continue
+            except (AttributeError, OverflowError, TypeError, ValueError):
+                skipped += 1
+    if skipped:
+        # A word we cannot time can never be bleeped; make that visible.
+        print(f"[censor] Skipped {skipped} word(s) with unreadable timestamps")
     words.sort(key=lambda w: w["start"])
     return words
 
@@ -243,12 +247,14 @@ def mask_subtitle_json(json_path, spans, mask=MASK_TEXT):
         return 0
 
     masked = 0
+    skipped = 0
     for seg in data.get("segments", []):
         for w in seg.get("words", []) or []:
             try:
                 w_start = float(w.get("start", 0))
                 w_end = float(w.get("end", 0))
-            except Exception:
+            except (AttributeError, OverflowError, TypeError, ValueError):
+                skipped += 1
                 continue
             for span in spans:
                 # overlap test (cut-relative time on both sides)
@@ -260,6 +266,8 @@ def mask_subtitle_json(json_path, spans, mask=MASK_TEXT):
                     masked += 1
                     break
 
+    if skipped:
+        print(f"[censor] Could not mask {skipped} word(s) with unreadable timestamps")
     if masked:
         try:
             with open(json_path, "w", encoding="utf-8") as f:

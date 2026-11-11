@@ -123,9 +123,9 @@ select = ["E", "F", "I", "B", "C4"]
 # Documented intentional ignores:
 #   E501 — long lines are a deliberate style in this codebase.
 #   E701 — one-line `if x: y` blocks are used throughout.
-#   E722 — bare except is the project's defensive resilience pattern
-#          (fallbacks must never crash the app; see v6.7b).
-ignore = ["E501", "E701", "E722"]
+#   E722 is NOT ignored: bare `except:` also swallows KeyboardInterrupt and
+#   SystemExit. Catch specific exceptions (or `Exception` with logging).
+ignore = ["E501", "E701"]
 
 [tool.ruff.lint.per-file-ignores]
 # Env/bootstrap imports must stay before heavy library imports (main_improved

@@ -55,7 +55,7 @@ def parse_timestamp(ts_str):
         elif len(parts) == 2:
             return float(parts[0]) * 60 + float(parts[1])
         return 0.0
-    except:
+    except (ValueError, TypeError, AttributeError):
         return 0.0
 
 def load_transcription_for_editor(json_path):
