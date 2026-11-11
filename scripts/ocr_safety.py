@@ -86,14 +86,23 @@ def _frame_png(video_path: str, seconds: float, ffmpeg: str = "ffmpeg") -> bytes
 
 
 def _recognize(png: bytes, binary: str, language: str) -> str:
-    result = subprocess.run(
-        [binary, "stdin", "stdout", "--psm", "6", "-l", language],
-        input=png,
-        capture_output=True,
-        text=False,
-        timeout=45,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [binary, "stdin", "stdout", "--psm", "6", "-l", language],
+            input=png,
+            capture_output=True,
+            text=False,
+            timeout=45,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        detail = str(detail or "").strip()
+        raise RuntimeError(
+            detail[:300] or f"Tesseract exited with status {exc.returncode}"
+        ) from exc
     return result.stdout.decode("utf-8", errors="replace").strip()
 
 
@@ -153,14 +162,7 @@ def analyze_video(
         frame = {"seconds": round(seconds, 3), "text": "", "error": None}
         try:
             png = _frame_png(video_path, seconds, ffmpeg)
-            try:
-                text = _recognize(png, status["binary"], language)
-            except Exception:
-                text = (
-                    _recognize(png, status["binary"], "eng")
-                    if language != "eng"
-                    else ""
-                )
+            text = _recognize(png, status["binary"], language)
             frame["text"] = text
             if text:
                 texts.append(text)
