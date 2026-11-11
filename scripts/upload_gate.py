@@ -836,8 +836,9 @@ class _BaseUploader:
             try:
                 content_guard.record_platform_error(
                     self.project_folder, self.platform, exc)
-            except Exception:
-                pass
+            except Exception as record_exc:
+                logger.warning("Could not record %s platform error: %s",
+                               self.platform, type(record_exc).__name__)
             raise
         if isinstance(result, dict) and result.get("status") in content_guard.SUCCESS_STATUSES:
             try:
@@ -985,8 +986,10 @@ class YouTubeUploader(_BaseUploader):
             creds.refresh(g_requests.Request())
             try:
                 store_token_json(creds.to_json(), token_path)
-            except Exception:
-                pass
+            except Exception as store_exc:
+                # Never log the token itself, only the failure type.
+                logger.warning("Could not persist refreshed OAuth token: %s",
+                               type(store_exc).__name__)
         if not creds or not creds.valid:
             raise RuntimeError("stored OAuth token is not valid")
         return require_scopes(creds, self.oauth_full_access)

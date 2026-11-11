@@ -9,7 +9,7 @@
 [![Stars](https://img.shields.io/github/stars/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/stargazers)
 [![Forks](https://img.shields.io/github/forks/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/network/members)
 
-[English](README_en.md) • [Português](README.md) • **العربية**
+[English](README_en.md) • [الرئيسية](README.md) • **العربية**
 > **الإسناد / الاعتماد** — هذا المشروع فرع (fork) من مشروع
 > [ViralCutter](https://github.com/RafaelGodoyEbert/ViralCutter) مفتوح
 > المصدر للمطوّر [Rafael Godoy](https://github.com/RafaelGodoyEbert)
@@ -446,9 +446,9 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 
 - **مراجعة المقطع قبل النشر**: `python -m scripts.pro_clip_review` يجمع فحص التفريغ والعنوان والبيانات الوصفية وOCR وجودة الوسائط؛ التقرير لا يجيز النشر آلياً، وتجاوز فحص الفيديو يفرض `review`. [الدليل](docs/CLIP_INSPECTOR_AR.md)
 - **تحليل تحريري عربي**: مؤشرات الحوار، اقتراح نافذة زمنية للمقطع، وحزمة مقاطع متنوعة قابلة للمراجعة البشرية. [التحليل](docs/ARABIC_DIALOGUE_INTELLIGENCE_AR.md) · [التوقيت](docs/VIRAL_MOMENT_INTELLIGENCE_AR.md) · [الحزمة](docs/CLIP_PACKAGE_PLANNER_AR.md) · [المحرك](docs/EDITORIAL_INTELLIGENCE_AR.md) · [مسار الإنتاج](docs/PRODUCTION_WORKFLOW_AR.md)
-- **عناوين من كلام المقطع**: عند تمرير نص التفريغ، يستخرج مولّد SEO عبارات من النص نفسه ويستبعد العناوين المرفوضة. [تفاصيل التحديث](RELEASE_NOTES_AR_7.52.0_ARABIC_TITLE_PATCH.md)
+- **عناوين من كلام المقطع**: عند تمرير نص التفريغ، يستخرج مولّد SEO عبارات من النص نفسه ويستبعد العناوين المرفوضة. [تفاصيل التحديث](docs/RELEASE_NOTES_AR_7.52.0_ARABIC_TITLE_PATCH.md)
 - **RTX 3060 ومراقبة المجلد**: `setup_rtx3060.bat` يضبط بيئة GPU، ثم `watch_folder_rtx3060.bat` يعالج ملفات `INBOX` محلياً؛ لا يرفع أو ينشر تلقائياً. [إعداد GPU](docs/RTX3060_SETUP_AR.md) · [المراقبة](docs/WATCH_FOLDER_RTX3060_AR.md)
-- **تجميع المقاطع**: [ملاحظات مخطط الحزمة](RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
+- **تجميع المقاطع**: [ملاحظات مخطط الحزمة](docs/RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
 
 **الإصدار الحالي**: 8.0.0-ultimate — تقييم أكثر تحملاً للبيانات التالفة، تخزين مشفّر للمفاتيح، وتحسين تحميل WhisperX. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.0.0_ULTIMATE_AR.md)
 *OUSSAMA Cutter: لأن المقاطع الفيروسية لا يجب أن تكلّف ثروة.*

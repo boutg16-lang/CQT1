@@ -10,7 +10,7 @@ Turn long YouTube videos into viral shorts optimized for TikTok, Instagram Reels
 [![Forks](https://img.shields.io/github/forks/boutg16-lang/CQT1?style=social)](https://github.com/boutg16-lang/CQT1/network/members)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1UZKzeqjIeEyvq9nPx7s_4mU6xlkZQn_R?usp=sharing)
 
-[English](README_en.md) • [Português](README.md) • [العربية](README_ar.md)
+[English](README_en.md) • [Home](README.md) • [العربية](README_ar.md)
 > **Attribution / Credits** — This project is a fork of the open-source
 > [ViralCutter](https://github.com/RafaelGodoyEbert/ViralCutter) by
 > [Rafael Godoy](https://github.com/RafaelGodoyEbert) (GPL-3.0). It keeps the

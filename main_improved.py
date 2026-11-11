@@ -965,7 +965,7 @@ def main():
                             else:
                                 print(i18n("Invalid selection. Using first model."))
                                 args.ai_model_name = models[0]
-                        except:
+                        except (ValueError, EOFError):
                              print(i18n("Invalid input. Using first model."))
                              args.ai_model_name = models[0]
                              
@@ -1510,7 +1510,7 @@ def main():
             # Parse dead zone safely
             try:
                 dead_zone_val = float(args.face_dead_zone)
-            except:
+            except (TypeError, ValueError):
                 dead_zone_val = 40.0
                 
             emit_progress("edit", 85, "Editing video")
