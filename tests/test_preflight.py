@@ -24,6 +24,51 @@ def test_collect_checks_structure():
     assert isinstance(warn, list)
 
 
+def test_collect_checks_deduplicates_shared_dependencies(monkeypatch):
+    requirements = {
+        "requirements.txt": [("numpy", "numpy")],
+        "requirements-transcribe.txt": [("numpy", "numpy<2"), ("torch", "torch")],
+        "requirements-transcribe-fallback.txt": [("numpy", "numpy<2"), ("faster-whisper", "faster-whisper")],
+    }
+    monkeypatch.setattr(
+        preflight,
+        "REQ_FILES",
+        {
+            "requirements.txt": ("Core", False, ""),
+            "requirements-transcribe.txt": ("Transcription", True, ""),
+            "requirements-transcribe-fallback.txt": ("Fallback", True, ""),
+        },
+    )
+    monkeypatch.setattr(preflight, "_read_req_names", lambda name: requirements[name])
+    monkeypatch.setattr(preflight, "_app_dir", lambda: "/tmp")
+    def status(name):
+        return {"name": name, "status": preflight.OK, "detail": "ok"}
+    monkeypatch.setattr(preflight, "check_python", lambda: status("Python"))
+    monkeypatch.setattr(preflight, "check_ffmpeg_toolchain", lambda: [status("ffmpeg")])
+    monkeypatch.setattr(preflight, "check_bundled_binary", lambda name: None)
+    monkeypatch.setattr(preflight, "check_disk_space", lambda path: status("Disk"))
+    monkeypatch.setattr(preflight, "check_writable", lambda path, label: status(label))
+    monkeypatch.setattr(preflight, "check_api_config", lambda: status("API"))
+    monkeypatch.setattr(preflight, "check_assets", lambda: status("Assets"))
+    monkeypatch.setattr(preflight, "check_safety_blocklist_freshness", lambda: status("Blocklist"))
+    monkeypatch.setattr(preflight, "check_models_dir", lambda: status("Models"))
+    monkeypatch.setattr(preflight, "check_telegram_config", lambda: status("Telegram"))
+    dependency_calls = []
+    monkeypatch.setattr(
+        preflight,
+        "check_dependency",
+        lambda dist, raw, critical: dependency_calls.append((dist, critical)) or status(dist),
+    )
+    pin_calls = []
+    monkeypatch.setattr(preflight, "PINNED_RULES", [("numpy", "numpy<2", "test pin")])
+    monkeypatch.setattr(preflight, "check_pin", lambda *args: pin_calls.append(args) or None)
+
+    preflight.collect_checks()
+
+    assert dependency_calls == [("numpy", True), ("torch", False), ("faster-whisper", False)]
+    assert len(pin_calls) == 1
+
+
 def test_check_python_passes():
     assert preflight.check_python()["status"] in (preflight.OK, preflight.WARN)
 
@@ -81,17 +126,49 @@ def test_check_dependency_reports_incompatible_websockets_version(monkeypatch):
     assert preflight.ensure_websockets.COMPATIBILITY_SPEC in result["detail"]
 
 
-def test_check_google_genai_reports_import_error_type_without_exception_details(monkeypatch):
+def test_import_failure_detail_reports_missing_module_without_exception_message(monkeypatch):
+    def fail_import(module):
+        raise ModuleNotFoundError("api_token=must-not-be-shown", name="google.genai.types")
+
+    monkeypatch.setattr(preflight.importlib, "import_module", fail_import)
+
+    detail = preflight._import_failure_detail("google.genai")
+
+    assert detail == "ModuleNotFoundError: missing module google.genai.types"
+    assert "api_token" not in detail
+
+
+def test_check_dependency_reports_import_failure_for_any_installed_package(monkeypatch):
     monkeypatch.setattr(preflight, "_module_importable", lambda module: False)
     monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
-    monkeypatch.setattr(preflight, "_version", lambda dist: "2.17.0")
-    monkeypatch.setattr(preflight, "_import_failure_type", lambda module: "ModuleNotFoundError")
+    monkeypatch.setattr(preflight, "_version", lambda dist: "6.0.0")
+    monkeypatch.setattr(
+        preflight,
+        "_import_failure_detail",
+        lambda module: "ModuleNotFoundError: missing module gradio_client",
+    )
 
-    result = preflight.check_dependency("google-genai", "google-genai", True)
+    result = preflight.check_dependency("gradio", "gradio", True)
 
     assert result["status"] == preflight.FAIL
-    assert "ModuleNotFoundError" in result["detail"]
-    assert "token" not in result["detail"].lower()
+    assert "gradio_client" in result["detail"]
+
+
+def test_check_dependency_does_not_report_null_metadata_as_ok(monkeypatch):
+    monkeypatch.setattr(preflight, "_module_importable", lambda module: True)
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "?")
+
+    result = preflight.check_dependency("numpy", "numpy", True)
+
+    assert result["status"] == preflight.WARN
+    assert "metadata unavailable" in result["detail"]
+
+
+def test_version_normalizes_none_metadata_to_unknown(monkeypatch):
+    monkeypatch.setattr(preflight._pkg_meta, "version", lambda dist: None)
+
+    assert preflight._version("numpy") == "?"
 
 
 def test_check_api_config_missing(monkeypatch, tmp_path):
@@ -311,6 +388,19 @@ def test_check_pin_numpy_violation(monkeypatch):
     monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "2.1.0")
     r = preflight.check_pin("numpy", "numpy<2")
     assert r is not None and r["status"] == preflight.FAIL
+
+
+def test_check_pin_fails_when_installed_version_is_unknown(monkeypatch):
+    class FakeSpec:
+        pass
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "?")
+
+    result = preflight.check_pin("numpy", "numpy<2")
+
+    assert result is not None and result["status"] == preflight.FAIL
+    assert "could not determine" in result["detail"]
 
 
 def test_check_pin_setuptools_accepts_patched_release(monkeypatch):
@@ -623,16 +713,55 @@ def test_fix_numpy_pin_dry_run(monkeypatch):
         pass
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
-    monkeypatch.setattr(preflight.sys, "path", [])
-    # force version read as 2.x
-    import types
+    monkeypatch.setattr(preflight, "_version", lambda dist: "2.1.0")
 
-    fake_numpy = types.ModuleType("numpy")
-    fake_numpy.__version__ = "2.1.0"
-    monkeypatch.setitem(sys.modules, "numpy", fake_numpy)
     ok, detail = preflight.fix_numpy_pin(dry_run=True)
+
     assert not ok
     assert "would downgrade" in detail
+
+
+def test_fix_numpy_pin_reinstalls_when_installed_version_is_unknown(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    versions = iter(("?", "1.26.4"))
+    calls = []
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: next(versions))
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(
+        preflight,
+        "_run_package_reinstall",
+        lambda dist, version: calls.append((dist, version)) or Result(),
+    )
+
+    ok, detail = preflight.fix_numpy_pin()
+
+    assert ok
+    assert calls == [("numpy", "1.26.4")]
+    assert "pinned to 1.26.4" in detail
+
+
+def test_fix_numpy_pin_rejects_unverified_reinstall(monkeypatch):
+    class FakeSpec:
+        pass
+
+    class Result:
+        returncode = 0
+
+    monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
+    monkeypatch.setattr(preflight, "_version", lambda dist: "?")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_package_reinstall", lambda *args: Result())
+
+    ok, detail = preflight.fix_numpy_pin()
+
+    assert not ok
+    assert "version metadata is still unverifiable" in detail
 
 
 # --------------------------------------------------------------------------
@@ -818,13 +947,17 @@ def test_run_package_reinstall_uses_uv_when_pip_is_unavailable(monkeypatch):
     ]
 
 
-def test_repair_reinstalls_broken_google_genai_without_resolving_core_dependencies(monkeypatch):
-    checks = [{
-        "name": "google-genai",
-        "status": preflight.FAIL,
-        "detail": "installed but import failed (google.genai)",
-    }]
+def test_repair_reinstalls_all_broken_imports_without_resolving_dependencies(monkeypatch):
+    checks = [
+        {"name": dist, "status": preflight.FAIL, "detail": f"installed but import failed ({module})"}
+        for dist, module in (
+            ("google-genai", "google.genai"),
+            ("gradio", "gradio"),
+            ("fastapi", "fastapi"),
+        )
+    ]
     calls = []
+    versions = {"google-genai": "2.17.0", "gradio": "6.0.0", "fastapi": "0.115.0"}
 
     class Result:
         returncode = 0
@@ -834,13 +967,15 @@ def test_repair_reinstalls_broken_google_genai_without_resolving_core_dependenci
     monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
     monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
     monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
-    monkeypatch.setattr(preflight, "_version", lambda dist: "2.17.0")
+    monkeypatch.setattr(preflight, "_version", lambda dist: versions[dist])
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_module_importable", lambda module: True)
     monkeypatch.setattr(
         preflight,
         "_run_package_reinstall",
         lambda dist, version: calls.append((dist, version)) or Result(),
     )
+
     def reject_full_install(req_file, dry_run=False):
         raise AssertionError("must not reinstall the whole core stack")
 
@@ -849,15 +984,111 @@ def test_repair_reinstalls_broken_google_genai_without_resolving_core_dependenci
     monkeypatch.setattr(
         preflight,
         "collect_checks",
-        lambda: ([{"name": "google-genai", "status": preflight.OK, "detail": "2.17.0"}], [], []),
+        lambda: ([{"name": dist, "status": preflight.OK, "detail": versions[dist]} for dist in versions], [], []),
     )
 
     fixed, remaining, warnings = preflight.repair("auto-fix", checks)
 
-    assert calls == [("google-genai", "2.17.0")]
+    assert set(calls) == set(versions.items())
     assert not remaining
     assert not warnings
-    assert any(item["name"] == "google-genai" and item["status"] == preflight.OK for item in fixed)
+    assert {item["name"] for item in fixed if item["status"] == preflight.OK} >= set(versions)
+
+
+def test_repair_falls_back_to_core_stack_when_targeted_import_repair_fails(monkeypatch):
+    checks = [{
+        "name": "gradio",
+        "status": preflight.FAIL,
+        "detail": "installed but import failed (gradio)",
+    }]
+    targeted_calls = []
+    install_calls = []
+
+    class FailedResult:
+        returncode = 1
+        stdout = ""
+        stderr = "import still fails"
+
+    monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
+    monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "6.0.0")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(
+        preflight,
+        "_run_package_reinstall",
+        lambda dist, version: targeted_calls.append((dist, version)) or FailedResult(),
+    )
+    monkeypatch.setattr(
+        preflight,
+        "REQ_FILES",
+        {"requirements.txt": ("Core", False, "")},
+    )
+    monkeypatch.setattr(
+        preflight,
+        "_read_req_names",
+        lambda req_file: [("gradio", "gradio")],
+    )
+    monkeypatch.setattr(
+        preflight,
+        "install_requirements",
+        lambda req_file, dry_run=False: install_calls.append((req_file, dry_run)) or (True, "installed core"),
+    )
+    monkeypatch.setattr(preflight, "PINNED_RULES", [])
+    monkeypatch.setattr(
+        preflight,
+        "collect_checks",
+        lambda: ([{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}], [], []),
+    )
+
+    fixed, remaining, warnings = preflight.repair("auto-fix", checks)
+
+    assert targeted_calls == [("gradio", "6.0.0")]
+    assert install_calls == [("requirements.txt", False)]
+    assert not remaining
+    assert not warnings
+    assert any(item["name"] == "stack Core" and item["status"] == preflight.OK for item in fixed)
+
+
+def test_repair_falls_back_to_core_install_when_import_reinstall_fails(monkeypatch):
+    checks = [{
+        "name": "gradio",
+        "status": preflight.FAIL,
+        "detail": "installed but import failed (gradio; ModuleNotFoundError: missing module gradio_client)",
+    }]
+    calls = []
+
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "repair failed"
+
+    monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
+    monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+    monkeypatch.setattr(preflight, "_version", lambda dist: "6.0.0")
+    monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
+    monkeypatch.setattr(preflight, "_run_package_reinstall", lambda *args: Result())
+    monkeypatch.setattr(preflight, "REQ_FILES", {"requirements.txt": ("Core", False, "")})
+    monkeypatch.setattr(preflight, "_read_req_names", lambda _: [("gradio", "gradio")])
+    monkeypatch.setattr(
+        preflight,
+        "install_requirements",
+        lambda req_file, dry_run=False: calls.append(req_file) or (True, "installed core"),
+    )
+    monkeypatch.setattr(preflight, "PINNED_RULES", [])
+    monkeypatch.setattr(
+        preflight,
+        "collect_checks",
+        lambda: ([{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}], [], []),
+    )
+
+    fixed, remaining, warnings = preflight.repair("auto-fix", checks)
+
+    assert calls == ["requirements.txt"]
+    assert any(item["name"] == "gradio" and item["status"] == preflight.FAIL for item in fixed)
+    assert not remaining
+    assert not warnings
 
 
 def test_main_off_flag(capsys):

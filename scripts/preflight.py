@@ -218,19 +218,25 @@ def _module_importable(module):
         return False
 
 
-def _import_failure_type(module):
+def _import_failure_detail(module):
     try:
         importlib.import_module(module)
+    except ModuleNotFoundError as exc:
+        missing = exc.name or module
+        return "ModuleNotFoundError: missing module %s" % missing
     except Exception as exc:
-        return type(exc).__name__
-    return "UnknownImportError"
+        return "%s while importing %s" % (type(exc).__name__, module)
+    return "UnknownImportError while importing %s" % module
 
 
 def _version(dist):
     try:
-        return _pkg_meta.version(dist)
+        version = _pkg_meta.version(dist)
     except Exception:
         return "?"
+    if not isinstance(version, str) or not version.strip():
+        return "?"
+    return version.strip()
 
 
 # --------------------------------------------------------------------------
@@ -345,39 +351,68 @@ def check_dependency(dist, raw_line, critical):
         if not installed:
             detail = "missing (%s)" % dist
         else:
-            detail = "installed but import failed (%s)" % module
-            if dist == "google-genai":
-                detail = "installed but import failed (%s; %s)" % (
-                    module, _import_failure_type(module),
-                )
+            detail = "installed but import failed (%s; %s)" % (
+                module, _import_failure_detail(module),
+            )
         return {"name": dist, "status": FAIL if critical else WARN, "detail": detail}
-    return {"name": dist, "status": OK, "detail": _version(dist)}
+    version = _version(dist)
+    if version == "?":
+        if not _dist_installed(dist):
+            return {
+                "name": dist,
+                "status": OK,
+                "detail": "import succeeded; no distribution metadata is available",
+            }
+        return {
+            "name": dist,
+            "status": WARN,
+            "detail": "import succeeded; distribution version metadata unavailable",
+        }
+    return {"name": dist, "status": OK, "detail": version}
 
 
 def check_pin(dist, rule, note=None):
-    """Enforce PINNED_RULES. Returns None when ok/unverifiable, else a FAIL dict."""
+    """Enforce PINNED_RULES. Returns None when ok, else a FAIL dict."""
     spec = _iu.find_spec(dist.replace("-", "_"))
     if spec is None:
-        return None  # missing -> handled by check_dependency
+        return None
     try:
         from packaging.specifiers import SpecifierSet
         from packaging.version import parse as parse_version
     except Exception:
-        return None
+        return {
+            "name": dist,
+            "status": FAIL,
+            "detail": "cannot verify %s because packaging metadata support is unavailable" % rule,
+        }
     if note is None:
         for _dist, _rule, _note in PINNED_RULES:
             if _dist == dist and _rule == rule:
                 note = _note
                 break
         note = note or "version pin %s violated" % rule
+    version = _version(dist)
+    if version == "?":
+        return {
+            "name": dist,
+            "status": FAIL,
+            "detail": "could not determine installed version for %s; cannot verify %s" % (dist, rule),
+        }
     try:
-        installed = parse_version(_version(dist))
-        constraint = rule[len(dist):].strip()
-        if constraint and not SpecifierSet(constraint).contains(installed, prereleases=True):
-            return {"name": dist, "status": FAIL,
-                    "detail": "version %s violates %s - %s" % (_version(dist), rule, note)}
+        installed = parse_version(version)
     except Exception:
-        return None
+        return {
+            "name": dist,
+            "status": FAIL,
+            "detail": "invalid installed version metadata for %s; cannot verify %s" % (dist, rule),
+        }
+    constraint = rule[len(dist):].strip()
+    if constraint and not SpecifierSet(constraint).contains(installed, prereleases=True):
+        return {
+            "name": dist,
+            "status": FAIL,
+            "detail": "version %s violates %s - %s" % (version, rule, note),
+        }
     return None
 
 
@@ -625,24 +660,33 @@ def _run_package_reinstall(dist, version):
         return None
 
 
-def fix_google_genai_import():
-    if not _dist_installed("google-genai"):
-        return False, "google-genai metadata is missing; core dependency installation is required"
-    version = _version("google-genai")
+def fix_broken_import(dist):
+    if not _dist_installed(dist):
+        return False, "%s metadata is missing; core dependency installation is required" % dist
+    version = _version(dist)
     if version == "?":
-        return False, "could not determine the installed google-genai version"
+        return False, "could not determine the installed %s version" % dist
     if _is_frozen():
-        return False, "cannot reinstall google-genai inside the packaged exe"
-    proc = _run_package_reinstall("google-genai", version)
+        return False, "cannot reinstall %s inside the packaged exe" % dist
+    proc = _run_package_reinstall(dist, version)
     if proc is None:
-        return False, "pip and uv are unavailable for repairing google-genai"
-    if proc.returncode == 0:
-        for module in tuple(sys.modules):
-            if module == "google.genai" or module.startswith("google.genai."):
-                del sys.modules[module]
-        importlib.invalidate_caches()
-        return True, "reinstalled google-genai %s without changing other dependencies" % version
-    return False, "could not reinstall google-genai %s (installer exit %d)" % (version, proc.returncode)
+        return False, "pip and uv are unavailable for repairing %s" % dist
+    if proc.returncode != 0:
+        return False, "could not reinstall %s %s (installer exit %d)" % (dist, version, proc.returncode)
+    module = _import_name(dist)
+    for loaded in tuple(sys.modules):
+        if loaded == module or loaded.startswith(module + "."):
+            del sys.modules[loaded]
+    importlib.invalidate_caches()
+    if not _module_importable(module):
+        return False, "reinstalled %s %s but import still fails (%s)" % (
+            dist, version, _import_failure_detail(module),
+        )
+    return True, "reinstalled %s %s without changing other dependencies" % (dist, version)
+
+
+def fix_google_genai_import():
+    return fix_broken_import("google-genai")
 
 
 def install_requirements(req_file, dry_run=False):
@@ -664,25 +708,36 @@ def install_requirements(req_file, dry_run=False):
 
 
 def fix_numpy_pin(dry_run=False):
-    """NumPy 2 breaks whisperx/pyannote - force the known-good 1.26.4 wheel."""
+    """Keep NumPy on the known-good 1.26.4 wheel used by WhisperX."""
     spec = _iu.find_spec("numpy")
     if spec is None:
         return True, "numpy not installed - nothing to pin"
-    try:
-        import packaging.version as _pv
-        from numpy import __version__ as v
-        if _pv.parse(v) < _pv.parse("2.0"):
-            return True, "numpy %s OK (<2)" % v
-    except Exception:
-        return True, "cannot read numpy version"
+    version = _version("numpy")
+    parsed = None
+    if version != "?":
+        try:
+            import packaging.version as _pv
+            parsed = _pv.parse(version)
+        except Exception:
+            pass
+    if parsed is not None and parsed < _pv.parse("2.0"):
+        return True, "numpy %s OK (<2)" % version
     if dry_run:
-        return False, "would downgrade numpy (currently %s)" % v
+        if version == "?" or parsed is None:
+            return False, "would reinstall numpy==1.26.4 because the installed version cannot be verified"
+        return False, "would downgrade numpy (currently %s)" % version
     if _is_frozen():
         return False, "cannot reinstall numpy inside the packaged exe"
-    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "--no-deps", "numpy==1.26.4"])
-    if proc is not None and proc.returncode == 0:
-        return True, "pinned numpy to 1.26.4 (<2)"
-    return False, "could not downgrade numpy (exit %s)" % (proc.returncode if proc else "?")
+    proc = _run_package_reinstall("numpy", "1.26.4")
+    if proc is None:
+        return False, "pip and uv are unavailable for repairing numpy"
+    if proc.returncode != 0:
+        return False, "could not reinstall numpy==1.26.4 (installer exit %d)" % proc.returncode
+    importlib.invalidate_caches()
+    repaired_version = _version("numpy")
+    if repaired_version != "1.26.4":
+        return False, "reinstalled numpy==1.26.4 but its version metadata is still unverifiable"
+    return True, "numpy pinned to 1.26.4 (<2)"
 
 
 def fix_tokenizers_pin(dry_run=False):
@@ -857,11 +912,15 @@ def collect_checks():
                check_models_dir(), check_telegram_config()]
 
     # dependency checks per requirements file
+    seen_dists = set()
     for req_file, (_label, _optional, _hint) in REQ_FILES.items():
         deps = _read_req_names(req_file)
         if not deps:
             continue
         for dist, _raw in deps:
+            if dist in seen_dists:
+                continue
+            seen_dists.add(dist)
             checks.append(check_dependency(dist, _raw, critical=not _optional))
             for pin_dist, pin_rule, pin_note in PINNED_RULES:
                 if dist == pin_dist:
@@ -893,16 +952,18 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
     ok_cfg, cfg_detail = ensure_api_config()
     fixed.append({"name": "api_config.json", "status": OK if ok_cfg else FAIL, "detail": cfg_detail})
 
-    # 2) Repair a corrupted Gemini SDK wheel without resolving unrelated core packages.
+    # 2) Reinstall broken packages individually before resolving the core stack.
     broken_imports = {
         c["name"]
         for c in checks
-        if c["name"] == "google-genai"
-        and c["status"] == FAIL
+        if c["status"] == FAIL
         and c["detail"].startswith("installed but import failed")
     }
+    failed_import_repairs = set()
     for dist in sorted(broken_imports):
-        ok, detail = fix_google_genai_import()
+        ok, detail = fix_broken_import(dist)
+        if not ok:
+            failed_import_repairs.add(dist)
         fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})
     broken_websockets = any(
         c["name"] == "websockets" and c["status"] == FAIL
@@ -917,7 +978,7 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
     fail_names = [
         c["name"] for c in checks
         if c["status"] == FAIL
-        and c["name"] not in broken_imports
+        and (c["name"] not in broken_imports or c["name"] in failed_import_repairs)
         and not (broken_websockets and c["name"] == "websockets")
     ]
     if ensure_upload:
