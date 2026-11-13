@@ -455,6 +455,14 @@ def choose_title(project_path, index, title):
         payload["segments"][index]["title_validation"] = validation
         verified = validation.get("status") == "verified"
         payload["segments"][index]["title_review_required"] = not verified
+        if verified:
+            # The publish gate requires >=60 confidence. A reviewer-approved
+            # verified title must not stay at the old fallback's 35.
+            try:
+                current = float(payload["segments"][index].get("title_confidence") or 0.0)
+            except (TypeError, ValueError):
+                current = 0.0
+            payload["segments"][index]["title_confidence"] = max(current, 60.0)
         if verified and not payload["segments"][index].get("export_blocked"):
             payload["segments"][index]["requires_review"] = False
             payload["segments"][index]["publish_blocked_reason"] = ""
@@ -527,6 +535,12 @@ def apply_title_edits(project_path, rows):
             segment["title_validation"] = validation
             verified = validation.get("status") == "verified"
             segment["title_review_required"] = not verified
+            if verified:
+                try:
+                    current = float(segment.get("title_confidence") or 0.0)
+                except (TypeError, ValueError):
+                    current = 0.0
+                segment["title_confidence"] = max(current, 60.0)
             # The table edit replaces the old title's verdict. Leaving a stale
             # requires_review flag blocked a clip whose new title verifies.
             if verified and not segment.get("export_blocked"):

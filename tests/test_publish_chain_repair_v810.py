@@ -170,3 +170,18 @@ def test_edited_table_title_is_persisted_or_rejected(tmp_path):
     assert changed == 1 and errors == []
     saved = segments_review.load_segments(str(tmp_path))[0]
     assert saved["title"] == saved["recommended_title"] == "إتقان مهارة واحدة"
+
+
+def test_verified_title_choice_raises_confidence_for_the_publish_gate(tmp_path):
+    window = "اختيار مهارة واحدة وإتقانها أفضل من تشتيت الجهد"
+    payload = {"segments": [dict(_segment("topic", 0, 10),
+                                 recommended_title="اختيار مهارة واحدة وإتقانها",
+                                 transcript_text=window,
+                                 title_confidence=35.0,
+                                 alt_titles=["إتقان مهارة واحدة"])]}
+    segments_review._write_payload(str(tmp_path), payload)
+    ok, _message = segments_review.choose_title(str(tmp_path), 0, "إتقان مهارة واحدة")
+    assert ok is True
+    saved = segments_review.load_segments(str(tmp_path))[0]
+    assert saved["title_confidence"] >= 60.0
+    assert saved["title_review_required"] is False
