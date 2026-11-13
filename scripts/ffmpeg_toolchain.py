@@ -141,3 +141,25 @@ def resolve_toolchain(which_fn=None, isfile=None, runs=None, env=None):
 
     ok = all(p["state"] in ("ok", "rescued") for p in programs.values())
     return {"programs": programs, "location": location, "ok": ok, "problems": problems}
+
+
+def encoder_works(codec, timeout=20):
+    """True only when FFmpeg can actually encode one frame with ``codec``.
+
+    ``ffmpeg -encoders`` lists everything COMPILED IN, not what the hardware
+    can run. A distro build exposes h264_nvenc without an NVIDIA GPU, so the
+    old detection picked it and every real cut failed with a non-zero exit.
+    This probe is the only reliable check.
+    """
+    if not codec:
+        return False
+    command = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-f", "lavfi", "-i", "color=c=black:s=128x72:d=0.2",
+        "-frames:v", "1", "-c:v", str(codec), "-f", "null", "-",
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=timeout)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False

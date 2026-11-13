@@ -57,15 +57,24 @@ _CLICKBAIT_PATTERNS = [
 ]
 _CLICKBAIT_RE = re.compile("|".join(_CLICKBAIT_PATTERNS), re.IGNORECASE)
 
-_LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{2,}")
-_NUMBER_RE = re.compile(r"(?<!\w)\d+(?:[,٬]\d{3})*(?:[.٫]\d+)?")
+_LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{1,}")
+# Digit runs with optional separators, matched on the RAW text so the Arabic
+# thousands separator (U+066C) is not blindly rewritten to a decimal point.
+_NUMBER_RE = re.compile(r"(?<!\w)[0-9٠-٩۰-۹]+(?:[٬,٫.\u066B][0-9٠-٩۰-۹]+)*")
+_NUMBER_SEP_RE = re.compile(r"[٬,٫.\u066B]")
+_DIGIT_ONLY_TRANSLATION = str.maketrans({
+    **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
+    **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
+})
 
 PUBLISH_TITLE_LIMIT = 100
 
 _ARABIC_NUMBER_WORD_VALUES = {}
 for _value, _forms in {
     0: ("صفر",),
-    1: ("واحد", "واحدة", "أحد", "إحدى"),
+    # 1-forms (واحد/أحد/إحدى) are deliberately absent: in Arabic they are
+    # overwhelmingly pronouns/idioms ("واحد من الناس", "أحدهم"), and treating
+    # them as the number 1 rejected ordinary titles as invented facts.
     2: ("اثنان", "اثنين", "اثنتان", "اثنتين", "ثنتان", "ثنتين"),
     3: ("ثلاثة", "ثلاث"),
     4: ("أربعة", "أربع"),
@@ -91,19 +100,39 @@ for _value, _forms in {
     for _form in _forms:
         _ARABIC_NUMBER_WORD_VALUES[arabic_text.normalized_match_text(_form)] = _value
 
+# Scale words are handled by multiplication ("20 ألف" == 20000), not as
+# standalone numbers, so "عشرون ألف" is not read as {20, 1000}.
+_ARABIC_SCALE_WORDS = {}
+for _scale, _forms in {
+    1000: ("ألف", "آلاف", "الف", "الاف"),
+    1_000_000: ("مليون", "ملايين", "مليونان", "مليونين"),
+    1_000_000_000: ("مليار", "مليارات", "ملياران", "مليارين"),
+}.items():
+    for _form in _forms:
+        _ARABIC_SCALE_WORDS[arabic_text.normalized_match_text(_form)] = _scale
+
 _ARABIC_SMALL_NUMBERS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
                          if 1 <= value <= 9}
 _ARABIC_TENS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
                 if 20 <= value <= 90 and value % 10 == 0}
 
 
+_NUMBER_VOCABULARY = (set(_ARABIC_NUMBER_WORD_VALUES)
+                      | set(_ARABIC_SCALE_WORDS))
+
+
 def _content_tokens(text):
-    """Normalized content words (stopwords removed, min length 3)."""
+    """Normalized content words (stopwords + number words removed, min len 3).
+
+    Number words are facts, not topic words: counting "عشرون ألف" as four
+    content tokens made every valid numeric title look unrelated to a clip
+    that states the same amount in digits.
+    """
     out = []
     for token in arabic_text.normalized_match_text(text).split():
         if len(token) < 3:
             continue
-        if token in AR_STOPWORDS:
+        if token in AR_STOPWORDS or token in _NUMBER_VOCABULARY:
             continue
         out.append(token)
     return out
@@ -114,7 +143,23 @@ def contains_clickbait_pattern(title):
 
 
 def _canonical_number(value):
-    cleaned = str(value).replace(",", "").replace("٬", "").replace("٫", ".")
+    """Canonical decimal string for a digit run with separators.
+
+    Separator semantics are decided by the digit-group lengths:
+    ``3٬500`` / ``3,500`` / ``3.500`` are thousands, ``1٫5`` / ``1,5`` are
+    decimals. The old code mapped the Arabic thousands sign to "." and turned
+    a correct ``٣٬٥٠٠`` into 3.5, rejecting the accurate title.
+    """
+    raw = str(value).translate(_DIGIT_ONLY_TRANSLATION)
+    parts = [part for part in _NUMBER_SEP_RE.split(raw) if part != ""]
+    if len(parts) <= 1:
+        cleaned = raw
+    elif all(len(part) == 3 for part in parts[1:]):
+        cleaned = "".join(parts)
+    elif len(parts) == 2 and 1 <= len(parts[1]) <= 2:
+        cleaned = parts[0] + "." + parts[1]
+    else:
+        cleaned = "".join(parts)
     try:
         return format(Decimal(cleaned).normalize(), "f")
     except InvalidOperation:
@@ -122,6 +167,13 @@ def _canonical_number(value):
 
 
 def _arabic_number_words(text):
+    """Values expressed as Arabic number words, including scale composites.
+
+    ``عشرون ألف`` → 20000, ``ثلاثة ملايين`` → 3000000, ``خمسة وعشرون ألف`` →
+    25000. A bare scale word (``مليون``) is a value too. This is what lets an
+    accurate numeric title be compared with an equally accurate word form
+    instead of being rejected as an invented number.
+    """
     tokens = arabic_text.normalized_match_text(str(text or "")).split()
     normalized = []
     for token in tokens:
@@ -136,6 +188,14 @@ def _arabic_number_words(text):
         if normalized[index] == "و" and index + 1 < len(normalized):
             index += 1
             continue
+        if normalized[index] in _ARABIC_SCALE_WORDS:
+            previous = normalized[index - 1] if index > 0 else ""
+            # "20 ألف" is a digit-scale composite handled by
+            # ``_number_mentions``; do not also count the bare scale as 1000.
+            if not previous.isdigit():
+                values.add(str(_ARABIC_SCALE_WORDS[normalized[index]]))
+            index += 1
+            continue
         first = None
         phrase_length = 0
         for length in (2, 1):
@@ -148,30 +208,64 @@ def _arabic_number_words(text):
             index += 1
             continue
 
+        value = first
+        consumed = phrase_length
         next_index = index + phrase_length
         if next_index < len(normalized) and normalized[next_index] == "و":
             next_index += 1
         second = (_ARABIC_NUMBER_WORD_VALUES.get(normalized[next_index])
                   if next_index < len(normalized) else None)
         if second == 10 and first in _ARABIC_SMALL_NUMBERS:
-            values.add(str(first + 10))
-            index = next_index + 1
+            value = first + 10
+            consumed = next_index + 1 - index
         elif second in _ARABIC_TENS and first in _ARABIC_SMALL_NUMBERS:
-            values.add(str(first + second))
-            index = next_index + 1
+            value = first + second
+            consumed = next_index + 1 - index
         elif first in _ARABIC_TENS and second in _ARABIC_SMALL_NUMBERS:
-            values.add(str(first + second))
-            index = next_index + 1
-        else:
-            values.add(str(first))
-            index += phrase_length
+            value = first + second
+            consumed = next_index + 1 - index
+
+        scale_index = index + consumed
+        if scale_index < len(normalized) and normalized[scale_index] == "و":
+            scale_index += 1
+        scale = _ARABIC_SCALE_WORDS.get(
+            normalized[scale_index]) if scale_index < len(normalized) else None
+        if scale:
+            value *= scale
+            consumed = scale_index + 1 - index
+
+        values.add(str(value))
+        index += consumed
     return values
 
 
+_DIGIT_SCALE_RE = re.compile(
+    r"(?<!\w)([0-9٠-٩۰-۹]+(?:[٬,٫.\u066B][0-9٠-٩۰-۹]+)*)\s*"
+    r"(ألف|آلاف|الف|الاف|مليون|ملايين|مليار|مليارات)")
+
+
 def _number_mentions(text):
-    normalized = arabic_text.normalize_digits(str(text or ""))
-    digits = {_canonical_number(match.group(0)) for match in _NUMBER_RE.finditer(normalized)}
-    return digits | _arabic_number_words(text)
+    raw = str(text or "")
+    scale_matches = list(_DIGIT_SCALE_RE.finditer(raw))
+    scale_spans = [(match.start(1), match.end(1)) for match in scale_matches]
+    digits = set()
+    for match in _NUMBER_RE.finditer(raw):
+        # A digit that is the base of "20 ألف" must not also be counted as a
+        # standalone 20 — the composite already represents the same fact.
+        if any(start <= match.start() and match.end() <= end
+               for start, end in scale_spans):
+            continue
+        digits.add(_canonical_number(match.group(0)))
+    # Digit + scale word: "20 ألف" is 20000, not {20, 1000}.
+    for match in scale_matches:
+        base = _canonical_number(match.group(1))
+        scale = _ARABIC_SCALE_WORDS.get(
+            arabic_text.normalized_match_text(match.group(2)), 1)
+        try:
+            digits.add(format(Decimal(base) * scale, "f"))
+        except InvalidOperation:
+            continue
+    return digits | _arabic_number_words(raw)
 
 
 def title_numbers(title):
@@ -305,19 +399,69 @@ def seo_score(title):
         return 50.0
 
 
-def language_match_score(title, content_language):
+def _dominant_script(text):
+    """Dominant writing system of a text: 'ar' | 'en' | 'mixed' | 'none'."""
+    arabic = len(re.findall(r"[\u0600-\u06FF]", str(text or "")))
+    latin = len(re.findall(r"[A-Za-z]", str(text or "")))
+    if arabic == 0 and latin == 0:
+        return "none"
+    if arabic >= latin * 1.5:
+        return "ar"
+    if latin >= arabic * 1.5:
+        return "en"
+    return "mixed"
+
+
+def _opening_script(text):
+    """Script that establishes the clip's language (first strong character).
+
+    Algerian Darija mixes Arabic with French loanwords, so a raw character
+    count can call an Arabic-spoken clip "Latin-dominant". The opening words
+    are what set the audience's language; a code-switching clip that opens in
+    Arabic must not accept an all-French title.
+    """
+    for char in str(text or ""):
+        if re.match(r"[\u0600-\u06FF]", char):
+            return "ar"
+        if char.isascii() and char.isalpha():
+            return "en"
+    return "none"
+
+
+def language_match_score(title, content_language, window_text=None):
     """Title language vs the clip's spoken language.
 
-    * exact match → 100; 'mixed' on either side → 70 (bilingual tolerated);
-    * 'none' (digits/emoji only) → 60 (neutral);
-    * 'ar' vs 'en' mismatch → 10 (audience mismatch).
+    A ``mixed`` clip must not disable the gate: Algerian Arabic with French
+    code-switching used to report "mixed", which accepted a title written
+    entirely in French. The title now has to match the clip's DOMINANT script.
+
+    * exact match → 100; mixed title on a mixed clip → 70;
+    * wrong dominant script → 10 (audience mismatch);
+    * 'none' (digits/emoji only) → 60 (neutral).
     """
     content_language = str(content_language or "").strip().lower()
     title_script = detect_text_script(str(title or ""))
+    if content_language in ("", "auto") and window_text:
+        content_language = detect_text_script(str(window_text))
     if content_language in ("", "auto", "none") or title_script == "none":
         return 60.0
-    if content_language == "mixed" or title_script == "mixed":
-        return 70.0
+    if content_language == "mixed":
+        if not window_text:
+            return 70.0
+        expected = _opening_script(window_text)
+        if expected in ("mixed", "none"):
+            return 70.0
+        if title_script == "mixed":
+            # A bilingual title is acceptable when it actually contains the
+            # clip's establishing script (e.g. an Arabic title naming an
+            # English brand), not when the expected script is absent.
+            pattern = r"[\u0600-\u06FF]" if expected == "ar" else r"[A-Za-z]"
+            return 100.0 if re.search(pattern, title) else 10.0
+        return 100.0 if _dominant_script(title) == expected else 10.0
+    if title_script == "mixed":
+        if window_text and _dominant_script(title) == content_language:
+            return 100.0
+        return 70.0 if not window_text else 10.0
     if content_language == title_script:
         return 100.0
     return 10.0
@@ -330,7 +474,7 @@ def score_title_candidate(title, window_text, content_language="auto"):
     clarity = clarity_score(title)
     curiosity = curiosity_score(title)
     seo = seo_score(title)
-    language = language_match_score(title, content_language)
+    language = language_match_score(title, content_language, window_text)
     clickbait_penalty = 0.0
     if contains_clickbait_pattern(title):
         clickbait_penalty += 30.0
@@ -358,7 +502,7 @@ def validate_title(title, window_text, content_language="auto",
     title = str(title or "").strip()
     unsupported = hallucinated_facts(title, window_text)
     factual = factual_accuracy_score(title, window_text)
-    language = language_match_score(title, content_language)
+    language = language_match_score(title, content_language, window_text)
     clickbait = contains_clickbait_pattern(title)
     return {
         "matches_transcript": factual >= 60.0 and not unsupported,
@@ -411,6 +555,29 @@ def fallback_titles(window_analysis, content_language="auto", max_count=3):
     last = str(analysis.get("last_sentence") or "").strip()
     text = str(analysis.get("text") or "").strip()
     candidates = []
+
+    def _clean_source(value):
+        """A fallback may only quote words that are inside the clip window."""
+        value = str(value or "").strip()
+        if not value:
+            return ""
+        if not _content_tokens(value):
+            return ""
+        if text and not _content_tokens(value) <= _content_tokens(text):
+            return ""
+        if value.endswith(("...", "…", "،", ",", "و")):
+            return ""
+        return value
+
+    first = _clean_source(first)
+    last = _clean_source(last)
+    # A clip that starts mid-sentence or on a bare connector cannot be quoted
+    # as-is: the fallback used to ship "ب السبب الحقيقي…" fragments as a
+    # "verified" title.
+    if analysis.get("starts_mid_sentence") or analysis.get("starts_with_connector"):
+        first = ""
+    if analysis.get("ends_mid_sentence") or analysis.get("ends_incomplete"):
+        last = ""
     if first:
         candidates.append({"text": _trim_words(first), "style": "direct"})
     if last and last != first:
@@ -431,7 +598,17 @@ def fallback_titles(window_analysis, content_language="auto", max_count=3):
         if len(unique) >= max_count:
             break
     if not unique and text:
-        unique.append({"text": _trim_words(text), "style": "direct"})
+        # Last resort: the window itself, with a dangling connector opener
+        # removed. Shipping the raw text kept fragments such as
+        # "ب السبب الحقيقي…" as a "safe" title.
+        words = text.split()
+        while words and words[0].strip("،,") in {
+                "ب", "و", "ف", "ل", "ك", "لكن", "ثم", "فإذا", "وهذا", "فهو",
+                "and", "but", "so"}:
+            words.pop(0)
+        cleaned = " ".join(words).strip()
+        if cleaned:
+            unique.append({"text": _trim_words(cleaned), "style": "direct"})
     return unique
 
 
@@ -670,9 +847,17 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
     window_tokens = set(_content_tokens(window_text))
     title_tokens = set(_content_tokens(title_text))
 
+    window_latin_tokens = _latin_tokens(window_text)
     unsupported_entities = sorted(
         token for token in _latin_tokens(title_text)
-        if token not in _latin_tokens(window_text))
+        if token not in window_latin_tokens)
+    # An Arabic ASR transcript writes brands transliterated ("الآيفون"), so a
+    # Latin brand in the title cannot be proven false when the window has no
+    # Latin text at all. Keep it for human review instead of rejecting an
+    # accurate title; when the window DOES contain Latin names, an unknown
+    # token is a genuine invented entity.
+    hard_entities = unsupported_entities if window_latin_tokens else []
+    soft_entities = [] if window_latin_tokens else unsupported_entities
     unsupported_numbers = sorted(
         number for number in title_numbers(title_text)
         if number not in _text_numbers(window_text))
@@ -680,7 +865,7 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
 
     factual = factual_accuracy_score(title_text, window_text)
     relevance = transcript_relevance_score(title_text, window_text)
-    language_score = language_match_score(title_text, language)
+    language_score = language_match_score(title_text, language, window_text)
     language_matches = language_score >= 60.0
 
     clickbait = contains_clickbait_pattern(title_text)
@@ -699,8 +884,8 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
     # --- deterministic gate -------------------------------------------------
     reasons = []
     rejected = False
-    if unsupported_entities:
-        reasons.append("unsupported_entity: " + ", ".join(unsupported_entities))
+    if hard_entities:
+        reasons.append("unsupported_entity: " + ", ".join(hard_entities))
         rejected = True
     if unsupported_numbers:
         reasons.append("unsupported_number: " + ", ".join(unsupported_numbers))
@@ -744,6 +929,9 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
     elif not title_text:
         status = "review"
         reasons.append("empty_title")
+    elif soft_entities:
+        status = "review"
+        reasons.append("unverified_entity: " + ", ".join(soft_entities))
     elif not has_verifiable_content:
         status = "review"
         reasons.append("title_has_no_verifiable_content")
@@ -761,6 +949,7 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
         "hallucinated_facts": sorted(
             set(unsupported_entities) | set(unsupported_numbers)),
         "unsupported_entities": unsupported_entities,
+        "unverified_entities": soft_entities,
         "unsupported_numbers": unsupported_numbers,
         "claims": claims,
         "language_score": language_score,
@@ -841,26 +1030,31 @@ def validate_all_title_candidates(recommended_title, alt_titles, window_text,
     options = dict(kwargs)
     limit = int(options.get("max_length", PUBLISH_TITLE_LIMIT))
 
-    primary_text = fit_publish_title(str(recommended_title or "").strip(), limit)
+    primary_raw = str(recommended_title or "").strip()
+    # Validate BEFORE truncation: a fabricated claim beyond the 100-char
+    # publish limit used to disappear before the fact check ran.
     primary_validation = validate_title_vs_clip(
-        primary_text, window_text, language, **options)
+        primary_raw, window_text, language, **options)
+    primary_text = fit_publish_title(primary_raw, limit)
 
     alternatives = []
     rejected = []
     seen = set()
     if primary_text:
         seen.add(primary_text.casefold())
-    if primary_text and primary_validation["status"] == "rejected":
-        rejected.append({"text": primary_text, "validation": primary_validation})
+    if primary_raw and primary_validation["status"] == "rejected":
+        # Keep the RAW string in the audit list: the fitted text may have cut
+        # off the very claim that caused the rejection.
+        rejected.append({"text": primary_raw, "validation": primary_validation})
 
     order = 0
     for index, candidate in enumerate(list(alt_titles or [])):
         text, style = _candidate_text_and_style(candidate, index)
+        validation = validate_title_vs_clip(text, window_text, language, **options)
         text = fit_publish_title(text, limit)
         if not text or text.casefold() in seen:
             continue
         seen.add(text.casefold())
-        validation = validate_title_vs_clip(text, window_text, language, **options)
         if validation["status"] == "rejected":
             rejected.append({"text": text, "validation": validation})
             continue
@@ -880,11 +1074,13 @@ def validate_all_title_candidates(recommended_title, alt_titles, window_text,
         fallbacks = fallback_titles(
             _window_analysis_from_text(window_text), language, max_count=5)
         for index, item in enumerate(fallbacks):
-            text = fit_publish_title(str(item.get("text") or ""), limit)
+            raw_text = str(item.get("text") or "").strip()
+            validation = validate_title_vs_clip(
+                raw_text, window_text, language, **options)
+            text = fit_publish_title(raw_text, limit)
             if not text or text.casefold() in seen:
                 continue
             seen.add(text.casefold())
-            validation = validate_title_vs_clip(text, window_text, language, **options)
             if validation["status"] == "rejected":
                 continue
             alternatives.append({
@@ -947,19 +1143,20 @@ def build_title_data(recommended_title, alt_titles, window_text,
     pool = []
     seen = set()
     for index, candidate in enumerate([recommended_title] + list(alt_titles or [])):
-        text, style = _candidate_text_and_style(candidate, index)
-        text = fit_publish_title(text, PUBLISH_TITLE_LIMIT)
+        raw_text, style = _candidate_text_and_style(candidate, index)
+        validation = validate_title_vs_clip(
+            raw_text, window_text, language, **options)
+        text = fit_publish_title(raw_text, PUBLISH_TITLE_LIMIT)
         if not text or text.casefold() in seen:
             continue
         seen.add(text.casefold())
-        scores = score_title_candidate(text, window_text, language)
+        scores = score_title_candidate(raw_text, window_text, language)
         pool.append({
             "text": text,
             "style": style,
             "score": scores["final_title_score"],
             "scores": scores,
-            "validation": validate_title_vs_clip(
-                text, window_text, language, **options),
+            "validation": validation,
         })
 
     verified = [item for item in pool
@@ -981,18 +1178,22 @@ def build_title_data(recommended_title, alt_titles, window_text,
         if not fallbacks:
             fallbacks = [{"text": "Viral Segment", "style": "direct"}]
         for index, item in enumerate(fallbacks):
-            text = fit_publish_title(str(item.get("text") or ""), PUBLISH_TITLE_LIMIT)
-            if not text:
+            raw_text = str(item.get("text") or "").strip()
+            if not raw_text:
                 continue
-            scores = score_title_candidate(text, window_text, language)
+            validation = validate_title_vs_clip(
+                raw_text, window_text, language, **options)
+            text = fit_publish_title(raw_text, PUBLISH_TITLE_LIMIT)
+            if not text or validation["status"] == "rejected":
+                continue
+            scores = score_title_candidate(raw_text, window_text, language)
             fallback_pool.append({
                 "text": text,
                 "style": str(item.get("style") or _ALT_TITLE_STYLES[
                     index % len(_ALT_TITLE_STYLES)]),
                 "score": scores["final_title_score"],
                 "scores": scores,
-                "validation": validate_title_vs_clip(
-                    text, window_text, language, **options),
+                "validation": validation,
             })
         if not fallback_pool:
             scores = score_title_candidate("Viral Segment", window_text, language)
@@ -1006,7 +1207,44 @@ def build_title_data(recommended_title, alt_titles, window_text,
             })
         verified_fallbacks = [item for item in fallback_pool
                               if item["validation"]["status"] == "verified"]
-        best = verified_fallbacks[0] if verified_fallbacks else fallback_pool[0]
+        acceptable_fallbacks = [item for item in fallback_pool
+                               if item["validation"]["status"] != "rejected"]
+        if verified_fallbacks:
+            best = verified_fallbacks[0]
+        elif acceptable_fallbacks:
+            best = acceptable_fallbacks[0]
+        else:
+            # Nothing so far is even review-worthy. Build a title from the
+            # clip's own opening words: every token is inside the window, so
+            # it cannot invent a fact. Never ship a rejected literal like
+            # "Viral Segment" as if it were validated.
+            window_title = _trim_words(" ".join(str(window_text).split()[:14]), 70)
+            conservative = None
+            if window_title:
+                scores = score_title_candidate(window_title, window_text, language)
+                validation = validate_title_vs_clip(
+                    window_title, window_text, language, **options)
+                if validation["status"] != "rejected":
+                    conservative = {
+                        "text": window_title,
+                        "style": "direct",
+                        "score": scores["final_title_score"],
+                        "scores": scores,
+                        "validation": validation,
+                    }
+                    fallback_pool.append(conservative)
+            if conservative is not None:
+                best = conservative
+            else:
+                best = fallback_pool[0]
+                # An unverifiable fallback is still a human-review item, not
+                # a "rejected" title silently shipped to the publish field.
+                review_validation = dict(best["validation"])
+                review_validation["status"] = "review"
+                review_validation["reasons"] = list(
+                    review_validation.get("reasons") or []) + ["no_verifiable_title"]
+                best = dict(best, validation=review_validation)
+                fallback_pool[-1] = best
         confidence = 35.0  # ambiguous/unsupported transcript → low confidence
 
     all_items = pool + fallback_pool

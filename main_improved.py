@@ -836,7 +836,14 @@ def main():
             requested_count_hint = args.segments
             if args.force_new_segments:
                 use_existing_json = 'no'  # explicit regeneration (WebUI checkbox)
-            elif requested_count_hint and existing_count and int(existing_count) != int(requested_count_hint):
+            elif (not project_path_arg
+                  and requested_count_hint and existing_count
+                  and int(existing_count) != int(requested_count_hint)):
+                # Only a fresh run uses the requested count. For an EXISTING
+                # project the reviewed file is authoritative: the review tab
+                # deliberately keeps fewer clips than the Start tab's count,
+                # and treating that as a cache miss regenerated (and
+                # overwrote) the user's selection and A/B titles.
                 use_existing_json = 'no'
                 print(i18n("Existing segments count ({}) differs from requested count ({}); generating fresh segments.").format(existing_count, requested_count_hint))
             else:
@@ -1393,8 +1400,14 @@ def main():
         # Enforce the user's requested final count after safety filtering.
         # AI selection intentionally asks for spare candidates; only safe,
         # distinct clips are exported, never blocked clips.
-        requested_count = max(1, int(num_segments or args.segments or 1))
         safe_segments = list((viral_segments or {}).get("segments", []))
+        if project_path_arg:
+            # An existing project's reviewed file is the selection. Trimming
+            # to the Start tab's "Number of Clips" silently discarded clips
+            # the reviewer had deliberately kept.
+            requested_count = max(1, len(safe_segments))
+        else:
+            requested_count = max(1, int(num_segments or args.segments or 1))
         if len(safe_segments) > requested_count:
             # v7.31: export the top-N in the SAME editorial order the review
             # table shows (candidate_rank from the diversity ranking, then

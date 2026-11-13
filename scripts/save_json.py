@@ -20,6 +20,17 @@ except Exception:
         _segment_validator = None
 
 
+def _annotate_payload(data):
+    """Attach final validation on every write path, not only overwrite."""
+    if _segment_validator is not None and isinstance(data, dict):
+        try:
+            return _segment_validator.annotate_segment_validation(
+                data, require_title=False)
+        except Exception:
+            return data
+    return data
+
+
 def _atomic_write_json(path, data):
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
@@ -46,13 +57,7 @@ def save_viral_segments(segments_data=None, project_folder="tmp", overwrite=Fals
         # v7.41: validate every window before persisting (spec F — the final
         # validator runs before saving viral_segments.txt). Annotation only
         # adds audit fields; it never changes the window itself.
-        if _segment_validator is not None and isinstance(segments_data, dict):
-            try:
-                segments_data = _segment_validator.annotate_segment_validation(
-                    segments_data, require_title=False)
-            except Exception:
-                pass
-        _atomic_write_json(output_txt_file, segments_data)
+        _atomic_write_json(output_txt_file, _annotate_payload(segments_data))
         print(i18n("Viral segments saved to {}").format(output_txt_file) + "\n")
         return
 
@@ -74,7 +79,7 @@ def save_viral_segments(segments_data=None, project_folder="tmp", overwrite=Fals
                     # Valida se o formato está correto
                     if "segments" in segments_data and isinstance(segments_data["segments"], list):
                         # Salva os dados em um arquivo JSON
-                        _atomic_write_json(output_txt_file, segments_data)
+                        _atomic_write_json(output_txt_file, _annotate_payload(segments_data))
                         print(i18n("Viral segments saved to {}").format(output_txt_file))
                         break
                     else:
@@ -84,7 +89,7 @@ def save_viral_segments(segments_data=None, project_folder="tmp", overwrite=Fals
                 print(i18n("Please try again."))
         else:
             # Caso os segmentos tenham sido gerados, salva automaticamente
-            _atomic_write_json(output_txt_file, segments_data)
+            _atomic_write_json(output_txt_file, _annotate_payload(segments_data))
             print(i18n("Viral segments saved to {}").format(output_txt_file) + "\n")
     else:
         print(i18n("The file {} already exists. No additional input needed.").format(output_txt_file))

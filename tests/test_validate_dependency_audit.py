@@ -22,7 +22,7 @@ def _report(name="Pillow", version="12.3.0", vuln_ids=None):
 
 
 def test_accepts_only_listed_pillow_advisories_before_expiry():
-    assert len(ALLOWED_IDS) == 55
+    assert len(ALLOWED_IDS) == 58
     assert validate_report(_report(), EXPIRES - timedelta(days=1)) == []
 
 

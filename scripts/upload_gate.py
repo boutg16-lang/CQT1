@@ -112,21 +112,49 @@ def _segment_review_reasons(project_folder, index):
     ``title_review_required`` (no factually verifiable title). Refusing them
     here is what "must not be exported automatically" means in practice.
     """
-    entry = _load_segment_entry(project_folder, index)
-    if not entry:
-        return []
-    if entry.get("export_blocked"):
-        detail = "segment failed final validation; export blocked"
-    elif entry.get("requires_review") or entry.get("title_review_required"):
-        detail = "segment requires manual review before publishing ({})".format(
-            entry.get("publish_blocked_reason") or "manual_review_required")
+    entries = []
+    if index is None:
+        # A project-wide upload must still honour every segment's flags.
+        path = os.path.join(project_folder, VIRAL_SEGMENTS_FILE)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            segments = payload.get("segments") if isinstance(payload, dict) else None
+            if isinstance(segments, list):
+                entries = [(i, seg) for i, seg in enumerate(segments)
+                           if isinstance(seg, dict)]
+        except Exception:
+            entries = []
     else:
-        return []
-    return [{
-        "source": "segment_validation",
-        "detail": detail,
-        "severity": "high",
-    }]
+        entry = _load_segment_entry(project_folder, index)
+        if entry is None:
+            # An index was supplied but its evidence cannot be read. Failing
+            # open here let ``export_blocked`` clips through; fail closed.
+            path = os.path.join(project_folder, VIRAL_SEGMENTS_FILE)
+            if os.path.exists(path):
+                return [{
+                    "source": "segment_validation",
+                    "detail": "clip #{} selection evidence could not be read; refusing upload".format(index),
+                    "severity": "high",
+                }]
+            return []
+        entries = [(index, entry)]
+
+    reasons = []
+    for entry_index, entry in entries:
+        if entry.get("export_blocked"):
+            detail = "clip #{} failed final validation; export blocked".format(entry_index)
+        elif entry.get("requires_review") or entry.get("title_review_required"):
+            detail = "clip #{} requires manual review before publishing ({})".format(
+                entry_index, entry.get("publish_blocked_reason") or "manual_review_required")
+        else:
+            continue
+        reasons.append({
+            "source": "segment_validation",
+            "detail": detail,
+            "severity": "high",
+        })
+    return reasons
 
 
 class UploadGateError(Exception):
@@ -225,10 +253,21 @@ def _blocklist_reasons(project_folder, index):
     data = _load_json_dict(project_folder, PUBLISH_BLOCKLIST)
     if not data:
         return reasons
-    for entry in data.get("blocked", []):
+    blocked = data.get("blocked", [])
+    if isinstance(blocked, dict):
+        blocked = list(blocked.values())
+    if not isinstance(blocked, list):
+        blocked = []
+    for entry in blocked:
+        if not isinstance(entry, dict):
+            continue
         if index is not None and entry.get("index") != index:
             continue
-        score = (entry.get("axes") or {}).get("reuse", {}).get("score")
+        axes = entry.get("axes")
+        axes = axes if isinstance(axes, dict) else {}
+        reuse = axes.get("reuse")
+        reuse = reuse if isinstance(reuse, dict) else {}
+        score = reuse.get("score")
         why = "high overall risk" if score is None else "reused-content score ~{:.0f}%".format(score)
         reasons.append({
             "source": "publish_blocklist",
@@ -494,7 +533,11 @@ def _quality_reasons(project_folder, index, title=""):
     if not isinstance(title_data, dict):
         title_data = {}
     validation = entry.get("title_validation") or title_data.get("title_validation") or {}
-    if not isinstance(validation, dict) or str(validation.get("status", "")).lower() != "verified":
+    validation_status = (str(validation.get("status", "")).lower()
+                         if isinstance(validation, dict) else "")
+    # Accept the documented synonyms the validator/legacy producers emit.
+    verified_status = validation_status in {"verified", "ok", "valid", "pass", "approved"}
+    if not verified_status:
         add("title_quality", "clip #{} has no verified factual title".format(index))
     if entry.get("title_review_required") or title_data.get("title_review_required"):
         add("title_quality", "clip #{} title is flagged for manual review".format(index))
@@ -509,6 +552,12 @@ def _quality_reasons(project_folder, index, title=""):
 
     approved_title = str(entry.get("recommended_title") or entry.get("title") or "").strip()
     actual_title = str(title or "").strip()
+    try:
+        from scripts.title_text import fit_publish_title
+        approved_title = fit_publish_title(approved_title, 100)
+        actual_title = fit_publish_title(actual_title, 100)
+    except Exception:
+        pass
     transcript_text = str(entry.get("transcript_text") or "").strip()
     if not approved_title:
         add("title_quality", "clip #{} has no approved title to compare with the upload".format(index))
@@ -558,6 +607,15 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
     and transcript evidence for any edited title; missing evidence fails closed.
     """
     reasons = []
+    # Vet the exact string the uploader will send. Platform uploaders truncate
+    # to 100/150 chars; doing it after the gate meant a longer title passed
+    # validation and shipped with its factual qualifier cut off.
+    try:
+        from scripts.title_text import fit_publish_title
+        platform_limit = 150 if str(platform or "").lower() == "tiktok" else 100
+        title = fit_publish_title(str(title or ""), platform_limit)
+    except Exception:
+        pass
     guard_verdict = {"allowed": True, "reasons": [], "evidence": {}}
     try:
         guard_verdict = content_guard.assess_clip(

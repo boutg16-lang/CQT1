@@ -2405,13 +2405,25 @@ with gr.Blocks(**_blocks_kwargs) as demo:
 
             def apply_review_selection(project_name, df):
                 if not project_name:
-                    return i18n("Error: No project selected.")
+                    return None, i18n("Error: No project selected.")
                 project_path = _project_path_for_name(project_name)
+                titles_changed, title_errors = segments_review.apply_title_edits(
+                    project_path, df)
                 kept, total, cuts_cleared = segments_review.apply_selection(project_path, df)
                 msg = i18n("Applied: {} of {} segments selected.").format(kept, total)
+                if titles_changed:
+                    msg += " " + i18n("{} title(s) saved.").format(titles_changed)
                 if cuts_cleared:
                     msg += " " + i18n("Stale cuts cleared — they will be re-cut on render.")
-                return msg
+                if title_errors:
+                    msg += "\n\n⛔ " + i18n("Rejected title edits (not saved):") + "\n- " + "\n- ".join(title_errors)
+                # Refresh the table: leaving the pre-trim rows visible made the
+                # next Render re-apply a stale checkbox list and drop an extra
+                # clip, and shifted every A/B row number.
+                segments = segments_review.load_segments(project_path)
+                rows = segments_review.rows_from_segments(
+                    segments, segments_review.load_safety_map(project_path))
+                return rows, msg
 
             def restore_review_segments(project_name):
                 if not project_name:
@@ -2426,15 +2438,31 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 if project_name and df is not None:
                     project_path = _project_path_for_name(project_name)
                     try:
-                        segments_review.apply_selection(project_path, df)
-                    except Exception:
-                        pass
+                        # Apply only when the table still describes the file
+                        # exactly; a stale/shorter table would zip by position
+                        # and silently drop the wrong clips.
+                        if len(segments_review._rows_to_bool_list(df)) == len(
+                                segments_review.load_segments(project_path)):
+                            segments_review.apply_title_edits(project_path, df)
+                            segments_review.apply_selection(project_path, df)
+                    except Exception as exc:
+                        print("[review] selection apply skipped: {}".format(exc))
                 yield from run_viral_cutter("Existing Project", project_name, *rest)
 
-            def export_review_metadata(project_name):
+            def export_review_metadata(project_name, df=None):
                 if not project_name:
                     return i18n("Error: No project selected.")
                 project_path = _project_path_for_name(project_name)
+                # Export what the reviewer sees: apply checked rows and title
+                # edits first, otherwise the file exported rejected clips.
+                if df is not None:
+                    try:
+                        if len(segments_review._rows_to_bool_list(df)) == len(
+                                segments_review.load_segments(project_path)):
+                            segments_review.apply_title_edits(project_path, df)
+                            segments_review.apply_selection(project_path, df)
+                    except Exception:
+                        pass
                 path, text = segments_review.export_publish_metadata(project_path)
                 if not path:
                     return i18n("No viral segments found in this project.")
@@ -2490,8 +2518,16 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                                              review_ab_title, review_df],
                                      outputs=[review_df, review_ab_status])
 
+            def clear_review_state(project_name):
+                """Never carry one project's rows/checkboxes into another."""
+                return None, None, "", "", i18n("Project changed — load its segments.")
+
             review_refresh_btn.click(library.refresh_projects, outputs=review_project_dropdown)
             review_load_btn.click(load_review_segments, inputs=review_project_dropdown, outputs=[review_df, review_status])
+            review_project_dropdown.change(
+                clear_review_state, inputs=[review_project_dropdown],
+                outputs=[review_df, review_ab_title, review_status,
+                         review_ab_status, review_export_out])
             def load_risk_scorecard(project_name, save_html=False):
                 if not project_name:
                     return '<div style="color:#f87171;">❌ ' + i18n("Error: No project selected.") + '</div>'
@@ -2514,9 +2550,9 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             review_risk_btn.click(lambda p: load_risk_scorecard(p, False), inputs=review_project_dropdown, outputs=review_risk_out)
             review_risk_html_btn.click(lambda p: load_risk_scorecard(p, True), inputs=review_project_dropdown, outputs=review_risk_out)
 
-            review_apply_btn.click(apply_review_selection, inputs=[review_project_dropdown, review_df], outputs=review_status)
+            review_apply_btn.click(apply_review_selection, inputs=[review_project_dropdown, review_df], outputs=[review_df, review_status])
             review_restore_btn.click(restore_review_segments, inputs=review_project_dropdown, outputs=[review_df, review_status])
-            review_export_btn.click(export_review_metadata, inputs=review_project_dropdown, outputs=review_export_out)
+            review_export_btn.click(export_review_metadata, inputs=[review_project_dropdown, review_df], outputs=review_export_out)
 
         with gr.Tab("✍️ " + i18n("Subtitle Editor")):
             gr.Markdown("### " + i18n("Edit Subtitles (Smart Mode)"))

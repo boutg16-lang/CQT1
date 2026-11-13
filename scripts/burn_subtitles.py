@@ -4,18 +4,21 @@ import subprocess
 
 def _detect_best_encoder():
     try:
+        from scripts.ffmpeg_toolchain import encoder_works
+    except Exception:
+        def encoder_works(_codec):
+            return False
+    try:
         result = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
         output = result.stdout or ""
-        if "h264_nvenc" in output:
-            return "h264_nvenc", "p1"
-        if "h264_amf" in output:
-            return "h264_amf", "quality"
-        if "h264_qsv" in output:
-            return "h264_qsv", "veryfast"
-        if "h264_videotoolbox" in output:
-            return "h264_videotoolbox", "default"
     except Exception:
-        pass
+        output = ""
+    # Prove the encoder runs; a compiled-in h264_nvenc without a GPU fails.
+    for codec, preset in (("h264_nvenc", "p1"), ("h264_amf", "quality"),
+                          ("h264_qsv", "veryfast"),
+                          ("h264_videotoolbox", "default")):
+        if codec in output and encoder_works(codec):
+            return codec, preset
     return "libx264", "ultrafast"
 
 

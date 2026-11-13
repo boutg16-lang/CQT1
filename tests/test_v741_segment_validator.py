@@ -154,12 +154,14 @@ def test_duration_below_min_rejected():
 
 
 def test_below_min_transcript_limited_is_warning_and_ok():
-    for flag in ("transcript_limited", "under_min"):
-        result = sv.validate_final_segment(_segment(**{flag: True}), min_duration=60.0)
-        assert result["ok"] is True
-        assert "duration_below_min" not in _codes(result)
-        assert "duration_below_min_transcript_limited" in _warning_codes(result)
-        assert result["checks"]["duration_within_min"] is False
+    # Only a proven source limit excuses an under-min window. ``under_min``
+    # merely records that the window is short; a failed extension in a long
+    # transcript must still fail validation.
+    result = sv.validate_final_segment(_segment(transcript_limited=True), min_duration=60.0)
+    assert result["ok"] is True
+    result = sv.validate_final_segment(_segment(under_min=True), min_duration=60.0)
+    assert result["ok"] is False
+    assert any(item["code"] == "duration_below_min" for item in result["errors"])
 
 
 def test_duration_above_max_rejected():

@@ -148,17 +148,18 @@ def test_recommended_title_about_whole_video_is_rejected():
 # ---------------------------------------------------------------------------
 
 def test_short_clip_is_not_extended_with_unrelated_speech():
+    # The transcript is 45 s long but the only connected material is a 2 s
+    # moment followed by unrelated speech at 35 s. Extending into that
+    # material would fabricate a clip, and an under-min clip is not
+    # publishable, so the candidate is rejected instead of neither
+    # exported nor silently mislabelled as "transcript-limited".
     transcript = [
         {"start": 0.0, "end": 2.0, "text": "موضوع اول هنا"},
         {"start": 35.0, "end": 45.0, "text": "شيء مختلف تماما عن السابق"},
     ]
     raw = [_candidate("Short", 0.0, 2.0, score=90)]
     result = cvs.process_segments(raw, transcript, 15, 60)
-    assert result["segments"], "candidate must stay (transcript-limited), not vanish"
-    seg = result["segments"][0]
-    assert seg["duration"] < 15.0
-    assert seg["transcript_limited"] is True
-    assert seg["end_time"] <= 3.0          # no jump into the 35s material
+    assert result["segments"] == []
 
 
 # ---------------------------------------------------------------------------

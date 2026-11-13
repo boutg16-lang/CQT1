@@ -358,11 +358,23 @@ def test_process_segments_recommended_title_prefers_actual_window_words():
     assert result["segments"][0]["recommended_title"] == "patience"
 
 
-def test_process_segments_keeps_explicit_recommended_title_verbatim():
+def test_process_segments_replaces_unsupported_recommended_title():
+    # An explicit title that the clip transcript does not support must NOT be
+    # shipped verbatim: the validator's chosen primary becomes the title, and
+    # the original is kept for audit.
     raw = [dict(_hallucinated_segment(), start_time=2, end_time=12,
                 recommended_title="editorial pick")]
     result = process_segments(raw, _HALLUCINATION_TRANSCRIPT, 5, 30)
-    assert result["segments"][0]["recommended_title"] == "editorial pick"
+    seg = result["segments"][0]
+    assert seg["recommended_title"] == "patience"
+    assert seg["title_data"]["llm_title_replaced"] == "editorial pick"
+
+
+def test_process_segments_keeps_supported_recommended_title_verbatim():
+    raw = [dict(_hallucinated_segment(), start_time=2, end_time=12,
+                recommended_title="patience")]
+    result = process_segments(raw, _HALLUCINATION_TRANSCRIPT, 5, 30)
+    assert result["segments"][0]["recommended_title"] == "patience"
 def test_clean_json_response_logs_malformed_payload_without_echoing_it(caplog):
     payload = 'private transcript fragment: no valid segments'
     assert clean_json_response(payload) == {"segments": []}

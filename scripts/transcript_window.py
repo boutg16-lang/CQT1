@@ -94,6 +94,8 @@ UNRESOLVED_OPENERS_EN = {"he", "she", "it", "they", "this", "that", "these", "th
 # sentence boundary when punctuation is missing (Whisper often drops Arabic
 # punctuation entirely).
 SENTENCE_PAUSE_SECONDS = 0.60
+# Hard cap for a sentence unit when the ASR gives no punctuation.
+MAX_SENTENCE_UNIT_SECONDS = 12.0
 
 # Shorter pauses before a discourse connector can mark a sentence boundary.
 CONNECTOR_PAUSE_SECONDS = 0.18
@@ -365,10 +367,17 @@ def _group_sentence_events(events):
                            and context_words >= 3
                            and _starts_with_connector(preview))
         split_before = bool(event.get("connector_boundary"))
+        # A unit may not grow without bound. Arabic/Darija ASR often emits
+        # minutes of speech with no punctuation and sub-pause gaps, which
+        # merged the ENTIRE transcript into one "sentence": every clip then
+        # looked mid-sentence, first/last_sentence covered the whole video,
+        # and title relevance was measured against all of it.
+        too_long = (event["end"] - current["start"]) > MAX_SENTENCE_UNIT_SECONDS
         if (_TERMINAL_RE.search(current["text"])
                 or gap >= SENTENCE_PAUSE_SECONDS
                 or connector_pause
-                or split_before):
+                or split_before
+                or (too_long and (gap >= 0.02 or context_words >= 4))):
             units.append({key: current[key] for key in ("start", "end", "text")})
             current = dict(event)
         else:
@@ -579,16 +588,38 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
     if inside_units:
         result["first_sentence"] = inside_units[0]["text"]
         result["last_sentence"] = inside_units[-1]["text"]
-        # Mid-sentence start: the cut starts strictly AFTER the first unit's
-        # own start (tolerance 150 ms for ASR jitter).
-        result["starts_mid_sentence"] = start_time > inside_units[0]["start"] + 0.15
-        # Mid-sentence end: the cut ends strictly BEFORE the last unit's end.
-        result["ends_mid_sentence"] = end_time < inside_units[-1]["end"] - 0.15
+        # A cut that lands exactly on an ASR line edge is the best boundary
+        # the source offers — even when the merged "sentence unit" is longer
+        # and the language has no punctuation. Only a cut STRICTLY INSIDE a
+        # line is a mid-sentence truncation; flagging every line start made
+        # every unpunctuated Arabic clip fail final validation.
+        starts_on_line = any(abs(start_time - line["start"]) <= 0.15
+                             for line in inside)
+        ends_on_line = any(abs(end_time - line["end"]) <= 0.15
+                           for line in inside)
+        result["starts_mid_sentence"] = (
+            not starts_on_line and start_time > inside_units[0]["start"] + 0.15)
+        result["ends_mid_sentence"] = (
+            not ends_on_line and end_time < inside_units[-1]["end"] - 0.15)
 
     if text:
         first = _first_word(text)
         last = _last_word(text)
         result["starts_with_connector"] = _starts_with_connector(text)
+        if not result["starts_with_connector"] and inside_units:
+            # Arabic ASR without punctuation splits mid-sentence lines. A unit
+            # that opens with a "و…" word while the previous unit has no
+            # terminal punctuation is a continuation ("وإتقانها…"), not a new
+            # hook; starting there cuts the idea in half.
+            first_index = units.index(inside_units[0])
+            previous = units[first_index - 1] if first_index > 0 else None
+            token = _normalized_tokens(text)[0] if _normalized_tokens(text) else ""
+            if (previous is not None
+                    and not _TERMINAL_RE.search(previous["text"])
+                    and start_time - previous["end"] <= 0.6
+                    and token.startswith("و")
+                    and len(token) >= 3):
+                result["starts_with_connector"] = True
         result["opens_with_unresolved_reference"] = (
             first in UNRESOLVED_OPENERS_AR or first.lower() in UNRESOLVED_OPENERS_EN)
         result["ends_incomplete"] = (
@@ -648,18 +679,33 @@ def repair_connector_start(start_time, end_time, transcript_segments,
     """
     if not analysis.get("starts_with_connector"):
         return start_time, None
-    units = split_sentence_units(transcript_segments, words=words)
-    previous = None
-    for unit in units:
-        if unit["end"] <= start_time + 0.05:
-            previous = unit
-        else:
-            break
-    if previous is None:
+    # Repair at ASR-LINE granularity. Sentence units can merge several lines
+    # into an 18 s block, and walking back to that block's start prepended
+    # unrelated material; the immediately preceding line is the antecedent
+    # the connector refers to.
+    boundaries = []
+    for segment in transcript_segments or []:
+        if not isinstance(segment, dict):
+            continue
+        try:
+            boundaries.append(float(segment.get("start", 0.0) or 0.0))
+        except (TypeError, ValueError):
+            continue
+    # A connector can sit mid-line ("...صبر بصح الاستمرارية") when the ASR
+    # emitted one long block; sentence units then hold the real boundary.
+    for unit in split_sentence_units(transcript_segments, words=words):
+        try:
+            boundaries.append(float(unit["start"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    boundaries = sorted({round(value, 3) for value in boundaries
+                         if value < start_time - 0.01})
+    if not boundaries:
         return start_time, None
-    if start_time - previous["end"] > CONNECTOR_LOOKBACK_SECONDS:
+    previous_start = boundaries[-1]
+    if start_time - previous_start > CONNECTOR_LOOKBACK_SECONDS:
         return start_time, None
-    new_start = max(float(transcript_start or 0.0), previous["start"])
+    new_start = max(float(transcript_start or 0.0), previous_start)
     if end_time - new_start > max_duration:
         return start_time, None
     if new_start < start_time - 0.01:

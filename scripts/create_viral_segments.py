@@ -1089,10 +1089,12 @@ def segments_manifest_fingerprint(segments):
     for item in list(segments or []):
         if not isinstance(item, dict):
             continue
+        # Titles are metadata, not footage. Including them here made every
+        # title/A-B edit invalidate the manifest and force a full re-cut of
+        # clips whose windows had not moved.
         payload.append({
             "start_time": round(_parse_segment_time(item.get("start_time"), 0.0), 3),
             "end_time": round(_parse_segment_time(item.get("end_time"), 0.0), 3),
-            "title": str(item.get("title") or item.get("recommended_title") or ""),
         })
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -1420,6 +1422,19 @@ def _windows_are_near_duplicates(left, right):
 # A pause of this length (seconds) between transcript lines marks a
 # sentence boundary. Cuts snapped to these boundaries never split a word.
 PAUSE_BOUNDARY_SECONDS = 0.35
+# A boundary snap may only nudge a cut; it must never relocate the clip.
+# ASR lines are often separated by <0.35 s gaps, so an unbounded "speech
+# block" can span the entire video and drag every candidate onto the same
+# window. 4 s is enough to reach a real sentence edge without changing which
+# moment the clip covers.
+MAX_BOUNDARY_SHIFT_SECONDS = 4.0
+# Extending forward to finish a sentence may legitimately take longer than
+# trimming silence; it is still bounded so a long ASR block cannot swallow
+# the rest of the video.
+MAX_END_EXTEND_SECONDS = 8.0
+# A speech block at most this long is a real sentence: its edges are safe.
+# Longer "blocks" are ASR runs that merely lack pauses; use line edges.
+MAX_SENTENCE_BLOCK_SECONDS = 12.0
 
 
 def _speech_blocks(transcript_segments):
@@ -1440,7 +1455,11 @@ def _speech_blocks(transcript_segments):
     for seg in ordered[1:]:
         start = float(seg.get("start", block_end))
         end = float(seg.get("end", start))
-        if start - block_end >= PAUSE_BOUNDARY_SECONDS:
+        # Split BEFORE the line that would push the block past the cap, so a
+        # "block" never exceeds it (checking the accumulated length after
+        # adding the line left 18 s blocks).
+        would_exceed = (end - block_start) > MAX_SENTENCE_BLOCK_SECONDS
+        if start - block_end >= PAUSE_BOUNDARY_SECONDS or would_exceed:
             blocks.append((block_start, block_end))
             block_start, block_end = start, end
         else:
@@ -1450,7 +1469,7 @@ def _speech_blocks(transcript_segments):
 
 
 def snap_segment_boundaries(start_time, end_time, transcript_segments, words=None):
-    """Snap BOTH cut points to speech-block edges so cuts never split a word.
+    """Snap BOTH cut points to nearby speech/sentence edges.
 
     * Start → the beginning of the speech block containing it (never jumps
       forward past the hook; a start inside a long pause stays untouched).
@@ -1458,15 +1477,18 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments, words=Non
       or the previous block's end when the raw end lands inside a pause
       (trim the silence instead of cutting the next sentence's first word).
 
-    Previously only the start was snapped — the end could stay mid-word
-    whenever the window was produced by duration clamping or a failed text
-    match. Returns the raw window unchanged when nothing usable overlaps
-    (word-level, missing, or AI-only transcripts).
+    The move is bounded by ``MAX_BOUNDARY_SHIFT_SECONDS``: when the enclosing
+    block is longer than that (typical unpunctuated Arabic ASR), the nearest
+    transcript LINE edge inside the budget is used instead, and otherwise the
+    raw edge is kept. This is what stops a clip from silently becoming the
+    whole video. Returns the raw window unchanged when nothing usable
+    overlaps (word-level, missing, or AI-only transcripts).
     """
     start_time = max(0.0, float(start_time))
     end_time = max(start_time + 0.1, float(end_time))
     if not transcript_segments:
         return start_time, end_time
+    ordered = sorted(transcript_segments, key=lambda item: float(item.get("start", 0.0)))
     blocks = []
     if words and transcript_window is not None:
         try:
@@ -1479,17 +1501,40 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments, words=Non
     if not blocks:
         return start_time, end_time
 
+    def _nearest_line_start(limit):
+        best = None
+        for line in ordered:
+            value = float(line.get("start", 0.0))
+            if value <= start_time + 0.05 and start_time - value <= limit:
+                best = value
+        return best
+
+    def _nearest_line_end(limit):
+        best = None
+        for line in ordered:
+            value = float(line.get("end", line.get("start", 0.0)))
+            if value >= end_time - 0.05 and value - end_time <= limit:
+                best = value if best is None else min(best, value)
+        return best
+
     snapped_start = start_time
     for block_start, block_end in blocks:
         if block_start - 0.05 > start_time:
             break
         if start_time <= block_end:
-            snapped_start = block_start
+            block_is_sentence = (block_end - block_start) <= MAX_SENTENCE_BLOCK_SECONDS
+            if block_is_sentence and start_time - block_start <= MAX_BOUNDARY_SHIFT_SECONDS:
+                snapped_start = block_start
+            else:
+                line_start = _nearest_line_start(MAX_BOUNDARY_SHIFT_SECONDS)
+                if line_start is not None:
+                    snapped_start = line_start
             break
 
     snapped_end = end_time
     prev_block_end = None
     for block_start, block_end in blocks:
+        block_is_sentence = (block_end - block_start) <= MAX_SENTENCE_BLOCK_SECONDS
         if abs(end_time - block_start) <= 0.05:
             # The end already sits exactly on a block boundary: it is
             # word-safe, so keep it byte-exact instead of pulling in the next
@@ -1498,20 +1543,31 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments, words=Non
             break
         if end_time < block_start:
             # End lands inside a pause: trim back to the sentence that
-            # already finished instead of leaking into the next one.
+            # already finished instead of leaking into the next one — but
+            # never jump back farther than the snap budget.
             if prev_block_end is not None:
-                snapped_end = prev_block_end
+                if end_time - prev_block_end <= MAX_BOUNDARY_SHIFT_SECONDS:
+                    snapped_end = prev_block_end
+                else:
+                    line_end = _nearest_line_end(MAX_BOUNDARY_SHIFT_SECONDS)
+                    if line_end is not None:
+                        snapped_end = line_end
             break
         if block_start < end_time <= block_end:
             # End lands mid-sentence: extend to the sentence end so the
-            # punchline is complete (the caller rejects snaps that would
-            # violate the max-duration budget).
-            snapped_end = block_end
+            # punchline is complete, but only within the shift budget.
+            if block_is_sentence and block_end - end_time <= MAX_BOUNDARY_SHIFT_SECONDS:
+                snapped_end = block_end
+            else:
+                line_end = _nearest_line_end(MAX_END_EXTEND_SECONDS)
+                if line_end is not None:
+                    snapped_end = line_end
             break
         prev_block_end = block_end
     else:
         # End beyond the last spoken word: trim the trailing silence.
-        snapped_end = blocks[-1][1]
+        if end_time - blocks[-1][1] <= MAX_BOUNDARY_SHIFT_SECONDS:
+            snapped_end = blocks[-1][1]
 
     # A snap that destroys the window is worse than no snap at all.
     if snapped_end <= snapped_start + 0.1:
@@ -1695,12 +1751,45 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         return None
     window_text = _transcript_text_between(transcript_segments, start_time, end_time)
 
+    def _bounded_end(unit_end):
+        """Grow to the minimum, never to the far edge of a long unit.
+
+        Unpunctuated Arabic ASR can merge minutes of speech into one
+        "sentence unit"; jumping to ``unit_end`` would turn a 2 s candidate
+        into a 40 s clip of unrelated material. Grow to the smallest amount
+        that satisfies the minimum, and only past that to a line edge inside
+        a small post-roll budget.
+        """
+        target = start_time + min_duration
+        if unit_end <= target + 0.01:
+            return unit_end
+        # The unit continues past the minimum: stop at the minimum, then
+        # take the nearest line end within 2.5 s so the cut is word-safe.
+        best = target
+        for line in transcript_segments:
+            line_end = float(line.get("end", line.get("start", 0.0)))
+            if target - 0.05 <= line_end <= target + 2.5:
+                best = line_end if best == target else min(best, line_end)
+        return best
+
+    def _bounded_start(unit_start):
+        target = end_time - min_duration
+        if unit_start >= target - 0.01:
+            return unit_start
+        best = target
+        for line in transcript_segments:
+            line_start = float(line.get("start", 0.0))
+            if target - 2.5 <= line_start <= target + 0.05:
+                best = line_start if best == target else max(best, line_start)
+        return best
+
     for unit in units:
         unit_start = float(unit["start"])
         unit_end = float(unit["end"])
         if unit_end <= end_time - 0.05:
             continue
-        new_end = min(max(unit_end, start_time + min_duration), float(transcript_end))
+        new_end = min(max(_bounded_end(unit_end), start_time + min_duration),
+                      float(transcript_end))
         if new_end - start_time < min_duration - 0.01:
             continue
         if new_end - start_time > float(max_duration) + 0.01:
@@ -1725,7 +1814,8 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         unit_end = float(unit["end"])
         if unit_start >= start_time + 0.05:
             continue
-        new_start = max(min(unit_start, end_time - min_duration), float(transcript_start))
+        new_start = max(min(_bounded_start(unit_start), end_time - min_duration),
+                        float(transcript_start))
         if end_time - new_start < min_duration - 0.01:
             continue
         if end_time - new_start > float(max_duration) + 0.01:
@@ -1773,6 +1863,30 @@ FATAL_VALIDATION_CODES = frozenset({
     "duration_below_min", "duration_above_max", "out_of_media_bounds",
     "empty_transcript",
 })
+
+
+def _transcript_is_limiting(start_time, end_time, min_duration,
+                            transcript_start, transcript_end):
+    """True only when the SOURCE has no more material for this clip.
+
+    A short window is defensible when the whole transcript is already shorter
+    than the minimum, or when the window is pinned to both edges of the
+    available media. Any other under-min window is a failed extension and must
+    be rejected by ``_validate_segment_window`` instead of exported as
+    "transcript_limited".
+    """
+    try:
+        total_span = float(transcript_end) - float(transcript_start)
+        start_time = float(start_time)
+        end_time = float(end_time)
+        min_duration = float(min_duration)
+    except (TypeError, ValueError):
+        return False
+    if total_span <= min_duration + 0.05:
+        return True
+    at_start = start_time <= float(transcript_start) + 0.1
+    at_end = end_time >= float(transcript_end) - 0.1
+    return at_start and at_end
 
 
 def _validate_segment_window(start_time, end_time, min_duration, analysis):
@@ -2077,23 +2191,29 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # Some providers return numeric start_time instead of the
             # documented ``start_time_ref``. Never silently convert that case
             # to (0s), otherwise every title is cut from the first seconds.
+            # ``(0s)`` is the model's documented "no timestamp found"
+            # sentinel, so it must not count as a real anchor either.
+            has_reliable_ref = ref_time_str not in (None, "", "(0s)")
             if ref_time_str in (None, "", "(0s)") and seg.get("start_time") not in (None, ""):
                 ref_time_str = seg.get("start_time")
+                has_reliable_ref = True
             ref_time_val = _parse_segment_time(ref_time_str, default=0.0)
 
             # Find segment index closest to ref_time
-            start_idx = 0
+            anchor_idx = 0
             min_diff = 999999
             for i, s in enumerate(transcript_segments):
                 diff = abs(s['start'] - ref_time_val)
                 if diff < min_diff:
                     min_diff = diff
-                    start_idx = i
+                    anchor_idx = i
                 if s['start'] > ref_time_val + 10: 
                     break
             
-            # Backtrack
-            start_idx = max(0, start_idx - 5)
+            # Backtrack only for the TEXT SEARCH window. The anchor line is
+            # kept separately: using the backtracked index as the cut point
+            # started clips ~5 lines (up to 50 s) before the model's moment.
+            start_idx = max(0, anchor_idx - 5)
             
             # 2-3. Prefer explicit numeric timestamps. They are the only
             # reliable identity when an LLM returns several different titles
@@ -2124,9 +2244,37 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 if start_text_target and best_similarity >= 0.55:
                     final_start_time = transcript_segments[best_index]['start']
                     match_start_idx = best_index
+                if final_start_time == -1 and start_text_target:
+                    # The paraphrase may sit outside the local window (or the
+                    # ref tag may be missing). Search the whole transcript
+                    # before giving up; a fabricated head-of-video window is
+                    # never an acceptable fallback.
+                    global_hit = _align_text_time(
+                        transcript_segments, start_text_target, 0)
+                    if global_hit is not None:
+                        match_start_idx = global_hit[0]
+                        final_start_time = global_hit[1]
+                if final_start_time == -1 and not has_reliable_ref \
+                        and not start_text_target \
+                        and seg.get("end_time") not in (None, ""):
+                    # A numeric end is a documented anchor on its own: derive
+                    # the start from the minimum duration and the nearest line.
+                    end_anchor = _parse_segment_time(seg.get("end_time"), 0.0)
+                    final_start_time = max(transcript_start_time,
+                                           end_anchor - tempo_minimo)
+                    match_start_idx = min(
+                        range(len(transcript_segments)),
+                        key=lambda i: abs(float(transcript_segments[i].get("start", 0.0))
+                                          - final_start_time),
+                        default=0)
                 if final_start_time == -1:
-                    final_start_time = transcript_segments[start_idx]['start'] if start_idx < len(transcript_segments) else ref_time_val
-                    match_start_idx = start_idx
+                    if not has_reliable_ref:
+                        print("[WARN] Skipping candidate '{}': no reliable "
+                              "start anchor (missing ref and unmatched "
+                              "start_text).".format(seg.get('title', 'Untitled')))
+                        continue
+                    final_start_time = transcript_segments[anchor_idx]['start'] if anchor_idx < len(transcript_segments) else ref_time_val
+                    match_start_idx = anchor_idx
 
             if explicit_end:
                 final_end_time = _parse_segment_time(
@@ -2232,6 +2380,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # timestamps are no longer trusted just because they are numeric;
             # a boundary that lands inside a word is always repaired, while an
             # already word-aligned edge in silence stays byte-exact.
+            # ``validated_*`` is the last window known to be inside the media
+            # and inside the duration budget; a repair that later overruns the
+            # media bounds is reverted to it instead of dropping the clip.
+            validated_start_time = final_start_time
+            validated_end_time = final_end_time
             refinement_notes = []
             if extension_note:
                 refinement_notes.append(extension_note)
@@ -2286,6 +2439,23 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     duration = final_end_time - final_start_time
                     refinement_notes.append("word_boundary_snap")
 
+            # No repair stage is allowed to leave the media. ASR routinely
+            # overshoots the last line by a few hundred ms; an un-clamped snap
+            # then trips the validator's fatal out_of_media_bounds and the
+            # candidate disappears. Clamp to the media (or revert the repair
+            # when clamping would break the minimum duration).
+            clamped_start = min(max(final_start_time, transcript_start_time), media_end)
+            clamped_end = min(max(final_end_time, clamped_start + 0.1), media_end)
+            if (clamped_start, clamped_end) != (final_start_time, final_end_time):
+                if clamped_end - clamped_start >= tempo_minimo - 0.01:
+                    final_start_time, final_end_time = clamped_start, clamped_end
+                    duration = final_end_time - final_start_time
+                    refinement_notes.append("media_bounds_clamp")
+                else:
+                    final_start_time, final_end_time = validated_start_time, validated_end_time
+                    duration = final_end_time - final_start_time
+                    refinement_notes.append("refinement_reverted_media_bounds")
+
             # Construct Final Segment
             hashtags = seg.get('hashtags', [])
             if isinstance(hashtags, str):
@@ -2322,7 +2492,10 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 "hashtags": hashtags,
                 # A/B titles/captions (Roadmap 5.3): kept when the AI
                 # returned them, otherwise fall back to the main title.
-                "alt_titles": seg.get('alt_titles') or [seg.get('title', '')],
+                # An empty list is honest: the topic ``title`` is not an
+                # alternative title, and duplicating it made A/B testing a
+                # no-op. Validated alternatives replace this below.
+                "alt_titles": seg.get('alt_titles') or [],
                 "alt_captions": seg.get('alt_captions') or [seg.get('caption', '')],
                 "recommended_title": recommended,
                 "title_quality_score": _title_quality_score(recommended),
@@ -2342,13 +2515,15 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             else:
                 segment_entry["quality_status"] = "verified"
             if duration < tempo_minimo:
-                # The whole transcript is shorter than the requested minimum
-                # (or the window is pinned against the transcript edge), so
-                # the under-min clip is transcript-limited, not a bug. Flag it
-                # so downstream stages can decide instead of silently emitting
-                # an under-length clip.
+                # Under-min is only legitimate when the SOURCE cannot supply
+                # the minimum (whole transcript shorter, or the window is
+                # pinned to both source edges). A short clip in the middle of a
+                # long transcript is a failed extension, not a "transcript
+                # limit", and must be rejected rather than exported.
                 segment_entry["under_min"] = True
-                segment_entry["transcript_limited"] = True
+                segment_entry["transcript_limited"] = _transcript_is_limiting(
+                    final_start_time, final_end_time, tempo_minimo,
+                    transcript_start_time, media_end)
 
             # --- v7.40: exact-window analysis, validation, factual titles ---
             if transcript_window is not None:
@@ -2403,14 +2578,18 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     recommended, segment_entry.get("alt_titles") or [],
                     raw_window_text, analysis, content_language,
                     clip_ratio=clip_ratio)
-                if title_data.get("fallback_used") and title_data.get("primary_title"):
-                    # The LLM title failed factual validation: ship the
-                    # conservative transcript-derived title instead and keep
-                    # the original visible for audit.
+                primary_title = str(title_data.get("primary_title") or "").strip()
+                if primary_title and primary_title != recommended:
+                    # The validator may choose a VERIFIED alternative even
+                    # when the LLM's own title only needed review. The chosen
+                    # primary must always become the shipped title: leaving
+                    # ``recommended_title`` untouched published a title the
+                    # validator had already replaced (the audit block said
+                    # "verified" while the hallucinated title shipped).
                     title_data["llm_title_replaced"] = recommended
-                    segment_entry["recommended_title"] = title_data["primary_title"]
+                    segment_entry["recommended_title"] = primary_title
                     segment_entry["title_quality_score"] = _title_quality_score(
-                        title_data["primary_title"])
+                        primary_title)
                 segment_entry["title_data"] = title_data
                 segment_entry["title_validation"] = title_data.get("title_validation") or {}
                 # Only factually validated alternatives may be offered to the
@@ -2419,8 +2598,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     item.get("text") for item in (title_data.get("alternative_titles") or [])
                     if item.get("text")
                 ]
-                if validated_alts:
-                    segment_entry["alt_titles"] = validated_alts
+                # Always replace the raw LLM list: a rejected A/B title must
+                # never remain selectable just because every alternative was
+                # rejected (the old truthiness guard kept the hallucinated
+                # originals in that case).
+                segment_entry["alt_titles"] = validated_alts
                 if title_data.get("title_review_required"):
                     segment_entry["title_review_required"] = True
 
@@ -2498,7 +2680,13 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
 
     # v7.40: semantic repetition penalties — candidates expressing the same
     # idea as an already stronger candidate in different words lose points
-    # BEFORE the editorial gate and de-duplication run.
+    # BEFORE the editorial gate and de-duplication run. The penalty pass
+    # compares each candidate only against earlier entries, so the list must
+    # be ordered strongest-first; otherwise the penalty can land on the better
+    # clip and make deduplication keep the weaker paraphrase.
+    processed_segments.sort(
+        key=lambda candidate: float(candidate.get("selection_score") or 0.0),
+        reverse=True)
     _apply_semantic_repetition_penalties(processed_segments, selection_weights)
 
     # v7.40: optional editorial floor — a thin video yields FEWER clips
@@ -3000,7 +3188,11 @@ OUTPUT JSON ONLY:
 
     # Chunking
     chunk_size = int(current_chunk_size)
-    overlap_size = max(1000, int(chunk_size * 0.1))
+    # Overlap must never approach the chunk size: with 1000-char overlap on a
+    # 500-char chunk the window advanced one character per iteration and a
+    # 30k-char transcript produced ~30k LLM calls. Cap at a quarter chunk and
+    # guarantee at least half-chunk forward progress.
+    overlap_size = max(200, min(int(chunk_size * 0.1), max(1, chunk_size // 4)))
     
     chunks = []
     start = 0
@@ -3019,7 +3211,9 @@ OUTPUT JSON ONLY:
             chunks.append(chunk_text)
         if end >= content_len:
             break
-        next_start = max(start + 1, end - overlap_size)
+        next_start = max(start + max(1, chunk_size // 2), end - overlap_size)
+        if next_start >= end:
+            next_start = end
         safe_space = content.rfind(' ', start, next_start)
         if safe_space != -1:
             start = safe_space + 1

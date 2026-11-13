@@ -2,6 +2,7 @@ import hashlib
 import json
 import zipfile
 
+import app_version
 from scripts.package_release import package_release
 
 
@@ -46,12 +47,12 @@ def test_release_package_includes_source_and_examples_but_excludes_local_state(t
     with zipfile.ZipFile(archive_path) as archive:
         assert archive.testzip() is None
         names = set(archive.namelist())
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/main.py" in names
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/.env.example" in names
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/api_config.example.json" in names
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/client_secrets.example.json" in names
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/tests/fixtures/stream_ar.srt" in names
-        assert "OUSSAMA-Cutter-8.0.0-ultimate/keys/update.pub" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/main.py" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/.env.example" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/api_config.example.json" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/client_secrets.example.json" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/tests/fixtures/stream_ar.srt" in names
+        assert "OUSSAMA-Cutter-" + app_version.__version__ + "/keys/update.pub" in names
         assert not any(name.endswith(("/.env", "/.env.production", "/production.env",
                                      "/api-key.txt", "/service-account.yaml",
                                      "/api_config.json", ".mp4", ".key")) for name in names)
@@ -63,7 +64,7 @@ def test_release_package_includes_source_and_examples_but_excludes_local_state(t
 
         assert not any("/VIRALS/" in name or "/gpu_profile.json" in name for name in names)
         assert b"GEMINI_API_KEY=secret" not in archive.read(
-            "OUSSAMA-Cutter-8.0.0-ultimate/main.py")
+            "OUSSAMA-Cutter-" + app_version.__version__ + "/main.py")
 
     assert manifest["file_count"] == 6
     assert manifest["sha256"] == hashlib.sha256(archive_path.read_bytes()).hexdigest()

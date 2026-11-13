@@ -81,19 +81,26 @@ def get_best_encoder():
         # Check available encoders
         result = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], capture_output=True, text=True)
         output = result.stdout
-        
-        # Priority: NVENC (NVIDIA) > AMF (AMD) > QSV (Intel) > CPU
-        if "h264_nvenc" in output:
+
+        try:
+            from scripts.ffmpeg_toolchain import encoder_works
+        except Exception:
+            def encoder_works(_codec):
+                return False
+
+        # Priority: NVENC (NVIDIA) > AMF (AMD) > QSV (Intel) > CPU.
+        # A compiled-in encoder must still pass a real one-frame encode.
+        if "h264_nvenc" in output and encoder_works("h264_nvenc"):
             print("Encoder Detected: NVIDIA (h264_nvenc)")
             CACHED_ENCODER = ("h264_nvenc", "fast") # p1-p7 presets could be used but 'fast' maps well
             return CACHED_ENCODER
         
-        if "h264_amf" in output:
+        if "h264_amf" in output and encoder_works("h264_amf"):
             print("Encoder Detected: AMD (h264_amf)")
             CACHED_ENCODER = ("h264_amf", "speed") # quality, speed, balanced
             return CACHED_ENCODER
             
-        if "h264_qsv" in output:
+        if "h264_qsv" in output and encoder_works("h264_qsv"):
              print("Encoder Detected: Intel QSV (h264_qsv)")
              CACHED_ENCODER = ("h264_qsv", "veryfast")
              return CACHED_ENCODER

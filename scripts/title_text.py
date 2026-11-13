@@ -159,6 +159,14 @@ ELLIPSIS = "\u2026"
 # deliberately left out.
 _TITLE_WS_RE = re.compile(r"[\s\u200B]+")
 
+_DANGLING_TAIL = {
+    "من", "في", "إلى", "الى", "على", "عن", "و", "ف", "ب", "ل", "ك",
+    "أن", "ان", "التي", "الذي", "الذين", "مع", "ثم", "أو", "او", "لكن",
+    "هذا", "هذه", "ذلك", "تلك", "كل", "بعد", "قبل", "حتى", "عند",
+    "of", "the", "to", "and", "or", "in", "on", "at", "for", "with",
+    "a", "an", "by", "from", "that", "this", "is", "was",
+}
+
 
 def fit_publish_title(text, limit=100):
     """Longest prefix of `text` that fits `limit` characters on a word boundary.
@@ -202,6 +210,15 @@ def fit_publish_title(text, limit=100):
         else:
             break
     if last_boundary >= 0:
-        return text[:last_boundary] + ELLIPSIS
+        prefix = text[:last_boundary].rstrip()
+        words = prefix.split()
+        # Never end a truncated title on a bare function word: Arabic
+        # "…العظيم من…" reads as a broken sentence, exactly what the prompt
+        # forbids. Drop trailing connectors before the ellipsis.
+        while words and words[-1].casefold().strip(".,،") in _DANGLING_TAIL:
+            words.pop()
+        if words:
+            return " ".join(words) + ELLIPSIS
+        return text[: last_boundary] + ELLIPSIS
     # Single token longer than the budget: no word boundary to honor.
     return text[: limit - 1] + ELLIPSIS

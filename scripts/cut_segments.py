@@ -28,11 +28,11 @@ def _has_stored_transcript(segment):
 
 
 def _parse_time_value(value, treat_int_as_ms=False):
+    # ``treat_int_as_ms`` is accepted for backward compatibility but no longer
+    # reinterprets magnitudes. The pipeline stores SECONDS; dividing a valid
+    # ``start_time: 90`` by 1000 sought to 0.09 s, and a 1500 s clip was cut
+    # to 1.5 s — silent wrong cuts that no validator caught.
     if isinstance(value, (int, float)):
-        if treat_int_as_ms and isinstance(value, int):
-            return value / 1000.0
-        if isinstance(value, (int, float)) and value >= 1000 and treat_int_as_ms:
-            return float(value) / 1000.0
         return float(value)
 
     try:
@@ -50,7 +50,7 @@ def _parse_time_value(value, treat_int_as_ms=False):
 
 def _duration_to_seconds(duration):
     if isinstance(duration, (int, float)):
-        return float(duration) / 1000.0 if float(duration) >= 1000 else float(duration)
+        return float(duration)
     try:
         return float(duration)
     except Exception:
@@ -59,25 +59,54 @@ def _duration_to_seconds(duration):
 
 def _detect_best_encoder():
     try:
+        from scripts.ffmpeg_toolchain import encoder_works
+    except Exception:
+        def encoder_works(_codec):
+            return False
+
+    try:
         result = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
         output = result.stdout or ""
-        if "h264_nvenc" in output:
-            print("Encoder Detected: NVIDIA (h264_nvenc)")
-            return "h264_nvenc", "p1", ["-b:v", "5M"]
-        if "h264_amf" in output:
-            print("Encoder Detected: AMD (h264_amf)")
-            return "h264_amf", "quality", ["-b:v", "5M"]
-        if "h264_qsv" in output:
-            print("Encoder Detected: Intel QSV (h264_qsv)")
-            return "h264_qsv", "veryfast", ["-b:v", "5M"]
-        if "h264_videotoolbox" in output:
-            print("Encoder Detected: Apple VideoToolbox (h264_videotoolbox)")
-            return "h264_videotoolbox", "default", ["-b:v", "5M"]
     except Exception as e:
         print(f"Error checking encoders: {e}")
+        output = ""
+
+    # A compiled-in encoder is not a usable encoder. Probe each one with a
+    # one-frame encode so a GPU-less machine never selects h264_nvenc.
+    candidates = [
+        ("h264_nvenc", "p1", ["-b:v", "5M"], "NVIDIA"),
+        ("h264_amf", "quality", ["-b:v", "5M"], "AMD"),
+        ("h264_qsv", "veryfast", ["-b:v", "5M"], "Intel QSV"),
+        ("h264_videotoolbox", "default", ["-b:v", "5M"], "Apple VideoToolbox"),
+    ]
+    for codec, preset, extra, label in candidates:
+        if codec in output and encoder_works(codec):
+            print("Encoder Detected: {} ({})".format(label, codec))
+            return codec, preset, extra
 
     print("Encoder Detected: CPU (libx264)")
     return "libx264", "ultrafast", ["-crf", "23"]
+
+
+def segment_window_seconds(segment):
+    """(start, duration) for a segment, with the window authoritative.
+
+    ``duration`` goes stale whenever a scene snap rewrites start/end (or a
+    hand-edited file disagrees); cutting by it produced clips that did not
+    match the validated window. Returns ``(start, 0.0)`` when unusable.
+    """
+    if not isinstance(segment, dict):
+        return 0.0, 0.0
+    start = _parse_time_value(segment.get("start_time", segment.get("start", 0.0)))
+    end_raw = segment.get("end_time", segment.get("end"))
+    if end_raw not in (None, ""):
+        try:
+            end = _parse_time_value(end_raw)
+            if end > start:
+                return start, end - start
+        except (TypeError, ValueError):
+            pass
+    return start, _duration_to_seconds(segment.get("duration", 0))
 
 
 def _safe_duration(start_seconds, duration_seconds):
@@ -107,9 +136,49 @@ def _accept_scene_snap(original_duration, new_duration):
     return lower <= new_duration <= upper
 
 
+def _persist_cut_validation(project_folder, allowed_segments, allowed, refused):
+    """Store the pre-cut verdict on every segment, preserving file order.
+
+    A refusal used to exist only in this process: ``viral_segments.txt`` kept
+    ``final_validation.ok=true``, the review table still listed the clip and
+    the publish audit reported it as allowed. Writes atomically and leaves the
+    file untouched when it does not match the in-memory list.
+    """
+    import tempfile
+    path = os.path.join(project_folder, "viral_segments.txt")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, dict) or not isinstance(payload.get("segments"), list):
+            return
+        merged = [seg for _, seg in sorted(list(allowed) + list(refused),
+                                           key=lambda pair: pair[0])]
+        if len(merged) != len(payload["segments"]):
+            return
+        payload["segments"] = merged
+        directory = os.path.dirname(os.path.abspath(path)) or "."
+        fd, temp_path = tempfile.mkstemp(prefix=".cut_validation.", suffix=".tmp",
+                                         dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False, indent=4)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, path)
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
+    except Exception as exc:
+        print("[WARN] Could not persist cut validation: {}".format(exc))
+
 def _process_segment(segment_index, segment, project_folder, input_file, cuts_folder, subs_folder, skip_video, video_codec, video_preset, video_extra_args):
     start_time = segment.get("start_time", segment.get("start", "00:00:00"))
-    duration = segment.get("duration", 0)
     title = segment.get("title", f"Segment_{segment_index}")
     safe_title = "".join([c for c in title if c.isalnum() or c in " _-"]).strip().replace(" ", "_")[:60]
     base_name = f"{segment_index:03d}_{safe_title}"
@@ -119,8 +188,11 @@ def _process_segment(segment_index, segment, project_folder, input_file, cuts_fo
     json_output_filename = f"{base_name}_processed.json"
     json_output_path = os.path.join(subs_folder, json_output_filename)
 
-    start_time_seconds = _parse_time_value(start_time, treat_int_as_ms=True)
-    duration_seconds = _duration_to_seconds(duration)
+    start_time_seconds, duration_seconds = segment_window_seconds(segment)
+    if duration_seconds <= 0:
+        return {"ok": False, "index": segment_index, "segment": segment,
+                "error": "non-positive duration (start={}, end={})".format(
+                    start_time, segment.get("end_time", segment.get("end")))}
     start_time_seconds, duration_seconds = _safe_duration(start_time_seconds, duration_seconds)
     start_time_str = f"{start_time_seconds:.3f}"
     duration_str = f"{duration_seconds:.3f}"
@@ -314,10 +386,11 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                     media_duration = float(probe_report.get("duration") or 0) or None
             except Exception:
                 media_duration = None
-            allowed = []
-            for seg in segments_list:
+            allowed = []  # (original_index, segment)
+            refused = []  # (original_index, segment)
+            for original_index, seg in enumerate(segments_list):
                 if not isinstance(seg, dict):
-                    allowed.append(seg)
+                    allowed.append((original_index, seg))
                     continue
                 report = segment_validator.validate_final_segment(
                     seg, media_duration=media_duration, require_title=False)
@@ -335,11 +408,20 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                     print("[cut] Refusing to cut invalid segment '{}': {}".format(
                         seg.get("title", "Untitled"),
                         "; ".join(str(item.get("message")) for item in fatal)))
+                    seg["cut_status"] = "refused"
+                    seg["export_blocked"] = True
+                    seg["requires_review"] = True
+                    refused.append((original_index, seg))
                     continue
-                allowed.append(seg)
-            segments_list = allowed
+                seg["cut_status"] = "allowed"
+                allowed.append((original_index, seg))
+            segments_list = [seg for _, seg in allowed]
             if not segments_list:
+                _persist_cut_validation(project_folder, segments_list, allowed, refused)
                 raise ValueError("No safe segments to process.")
+            # Keep the refusal evidence on disk so the publish gate can refuse
+            # the same segment later (the in-memory flag died with the run).
+            _persist_cut_validation(project_folder, segments_list, allowed, refused)
 
         if not skip_video:
             # A rerun must reflect the current safe segment list, not stale cuts
@@ -359,6 +441,22 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                     print(f"[WARN] Could not remove stale subtitle JSON {name}: {exc}")
             if stale_cuts or stale_subs:
                 print(f"[cut] Cleared {len(stale_cuts)} stale video cut(s) and {len(stale_subs)} stale subtitle file(s).")
+        else:
+            # skip_video reruns must still drop stale artifacts of segments
+            # that are now refused; otherwise the publish stage can upload a
+            # previously rendered video under the new (blocked) segment.
+            for original_index, _seg in refused:
+                prefix = f"{original_index:03d}_"
+                for folder, suffix in ((cuts_folder, "_original_scale.mp4"),
+                                       (subs_folder, "_processed.json")):
+                    if not os.path.isdir(folder):
+                        continue
+                    for name in os.listdir(folder):
+                        if name.startswith(prefix) and name.endswith(suffix):
+                            try:
+                                os.remove(os.path.join(folder, name))
+                            except OSError as exc:
+                                print(f"[WARN] Could not remove stale {name}: {exc}")
 
         if workers is None or workers <= 0:
             cpu_count = os.cpu_count() or 4
@@ -370,13 +468,13 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
         results = []
 
         if workers == 1 or len(segments_list) == 1:
-            for i, segment in enumerate(segments_list):
+            for i, segment in allowed:
                 result = _process_segment(i, segment, project_folder, input_file, cuts_folder, subs_folder, skip_video, video_codec, video_preset, video_extra_args)
                 results.append(result)
                 if result.get("ok"):
                     print("\n" + "=" * 50 + "\n")
                 else:
-                    print(f"Segment {i + 1} failed: {result.get('error', 'Unknown error')}")
+                    print(f"Segment {i} failed: {result.get('error', 'Unknown error')}")
         else:
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {
@@ -393,7 +491,7 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                         video_preset,
                         video_extra_args,
                     ): i
-                    for i, segment in enumerate(segments_list)
+                    for i, segment in allowed
                 }
 
                 for future in as_completed(futures):

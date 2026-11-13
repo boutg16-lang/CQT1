@@ -198,7 +198,7 @@ def rows_from_segments(segments, safety_map=None):
             # The AI shipped no editorial self-evaluation; hook/clarity/…
             # values are copies of the virality score. Say so where the
             # reviewer looks, instead of letting them read as measurements.
-            marker = i18n("⚠️ التقييم التحريري من الذكاء الاصطناعي مفقود — القيم منسوخة من درجة الانتشار.")
+            marker = i18n("⚠️ التقييم التحريري من الذكاء الاصطناعي مفقود — قوة الخطاف والوضوح غير مقيسة.")
             reasoning = (reasoning + "\n" if reasoning else "") + marker
         rows.append([
             True,
@@ -301,13 +301,17 @@ def apply_selection(project_path, rows):
     payload["segments"] = kept_segments
     _write_payload(project_path, payload)
 
-    # Invalidate stale cuts so the next render respects the new selection
+    # Invalidate stale cuts AND rendered/polished outputs. Clearing only
+    # ``cuts`` left final/ clips for deselected segments, and the publish tab
+    # lists final_polished → final → cuts, so rejected clips stayed uploadable
+    # (and their index-derived title no longer matched).
     cuts_invalidated = False
     if changed:
-        cuts_dir = os.path.join(project_path, "cuts")
-        if os.path.isdir(cuts_dir):
-            shutil.rmtree(cuts_dir, ignore_errors=True)
-            cuts_invalidated = True
+        for folder_name in ("cuts", "final", "final_polished"):
+            folder = os.path.join(project_path, folder_name)
+            if os.path.isdir(folder):
+                shutil.rmtree(folder, ignore_errors=True)
+                cuts_invalidated = True
 
     return len(kept_segments), len(segments), cuts_invalidated
 
@@ -443,13 +447,96 @@ def choose_title(project_path, index, title):
         return False, i18n("No viral segments file for this project.")
     payload["segments"][index]["recommended_title"] = title
     # Keep the *chosen* title visible everywhere the reviewer looks next.
+    # ``title`` feeds clip filenames; leaving it stale made published listings
+    # show the rejected name.
+    payload["segments"][index]["title"] = title
     payload["segments"][index]["title_chosen"] = title
     if validation is not None:
         payload["segments"][index]["title_validation"] = validation
-        payload["segments"][index]["title_review_required"] = (
-            validation.get("status") != "verified")
+        verified = validation.get("status") == "verified"
+        payload["segments"][index]["title_review_required"] = not verified
+        if verified and not payload["segments"][index].get("export_blocked"):
+            payload["segments"][index]["requires_review"] = False
+            payload["segments"][index]["publish_blocked_reason"] = ""
+    else:
+        # No clip transcript: the new title cannot be verified. Do not leave
+        # the PREVIOUS title's "verified" record attached to a different
+        # string — that is how an unchecked title passed the gate.
+        payload["segments"][index]["title_validation"] = {
+            "status": "review",
+            "reasons": ["no_clip_transcript_for_title_validation"],
+        }
+        payload["segments"][index]["title_review_required"] = True
+        payload["segments"][index]["requires_review"] = True
+        payload["segments"][index]["publish_blocked_reason"] = "manual_review_required"
     _write_payload(project_path, payload)
     return True, i18n("Title saved: {}").format(title)
+
+
+def apply_title_edits(project_path, rows):
+    """Persist titles edited directly in the review table.
+
+    Returns ``(changed, errors)``. Each edited cell is validated against the
+    exact clip transcript; a factually rejected title is NOT written (the
+    error names the segment), so an edit can never silently ship a claim the
+    clip does not support. Edits with no transcript are accepted but flagged
+    for review.
+    """
+    segments = load_segments(project_path)
+    if not segments or rows is None:
+        return 0, []
+    edited_titles = []
+    if hasattr(rows, "iloc"):
+        try:
+            edited_titles = [str(value or "").strip()
+                             for value in rows.iloc[:, 1].tolist()]
+        except Exception:
+            edited_titles = []
+    else:
+        try:
+            edited_titles = [str(row[1] or "").strip()
+                             for row in rows]
+        except Exception:
+            edited_titles = []
+    if len(edited_titles) != len(segments):
+        return 0, []
+
+    payload = _read_payload(project_path)
+    if payload is None:
+        return 0, []
+    changed = 0
+    errors = []
+    from scripts import title_factual
+    for index, (segment, edited) in enumerate(zip(payload["segments"], edited_titles, strict=False)):
+        current = str(segment.get("recommended_title") or segment.get("title") or "").strip()
+        if not edited or edited == current:
+            continue
+        window_text = str(segment.get("transcript_text") or "").strip()
+        if window_text:
+            try:
+                validation = title_factual.validate_title_vs_clip(
+                    edited, window_text,
+                    str((segment.get("title_data") or {}).get("title_language") or "auto"))
+            except Exception as exc:
+                errors.append("#{}: validation failed ({})".format(index + 1, type(exc).__name__))
+                continue
+            if validation.get("status") == "rejected":
+                errors.append("#{}: {}".format(
+                    index + 1, "; ".join(validation.get("reasons") or ["not supported by clip"])))
+                continue
+            segment["title_validation"] = validation
+            segment["title_review_required"] = validation.get("status") != "verified"
+        else:
+            segment["title_validation"] = {"status": "review",
+                                           "reasons": ["no_clip_transcript"]}
+            segment["title_review_required"] = True
+        segment["recommended_title"] = edited
+        segment["title"] = edited
+        segment["title_chosen"] = edited
+        changed += 1
+    if changed:
+        _write_payload(project_path, payload)
+    return changed, errors
 
 
 def export_publish_metadata(project_path):

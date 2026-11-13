@@ -102,6 +102,38 @@ def _finite_number(value):
     return number
 
 
+def _time_seconds(value):
+    """Seconds from a number or a ``mm:ss`` / ``hh:mm:ss`` string.
+
+    The cutter has always accepted clock strings; the validator used to call
+    them "invalid_start_time" and drop the clip. One parser now feeds both.
+    """
+    number = _finite_number(value)
+    if number is not None:
+        return number
+    if isinstance(value, str):
+        parts = value.strip().split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + float(parts[1])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _is_true(value):
+    """Boolean-ish flag: True, 1, "true", "yes", "1"."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
 def _as_dict(value):
     """Return ``value`` when it is a dict, else an empty dict."""
     return value if isinstance(value, dict) else {}
@@ -305,8 +337,8 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
     end_present = "end_time" in data and data.get("end_time") is not None
     start_raw = data.get("start_time")
     end_raw = data.get("end_time")
-    start_time = _finite_number(start_raw)
-    end_time = _finite_number(end_raw)
+    start_time = _time_seconds(start_raw)
+    end_time = _time_seconds(end_raw)
 
     if not start_present:
         errors.append(_issue("missing_start_time", "segment has no start_time", "start_time"))
@@ -352,7 +384,10 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
         checks["duration_within_min"] = duration >= min_value
         checks["duration_within_max"] = duration <= max_value
         if duration > 0:
-            transcript_limited = bool(data.get("transcript_limited")) or bool(data.get("under_min"))
+            # ``under_min`` only says the window is short; it is not proof
+            # the SOURCE is short. Trusting it let every failed extension
+            # export an under-length clip.
+            transcript_limited = bool(data.get("transcript_limited"))
             if duration < min_value:
                 if transcript_limited:
                     warnings.append(_issue(
@@ -509,10 +544,10 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
 
     # --- duplication -------------------------------------------------------
     duplicate_of = data.get("duplicate_of")
-    semantic_duplicate = data.get("semantic_duplicate") is True or (
+    semantic_duplicate = _is_true(data.get("semantic_duplicate")) or (
         duplicate_of is not None and str(duplicate_of).strip() != ""
     )
-    temporal_duplicate = data.get("temporal_duplicate") is True
+    temporal_duplicate = _is_true(data.get("temporal_duplicate"))
     if semantic_duplicate:
         errors.append(_issue(
             "semantic_duplicate",
@@ -615,13 +650,21 @@ def annotate_segment_validation(payload, **kwargs):
         copy = dict(segment)
         report = validate_final_segment(copy, **kwargs)
         copy["final_validation"] = report
-        if not report["ok"]:
-            copy["requires_review"] = True
-            copy.setdefault("publish_blocked_reason", "manual_review_required")
-            fatal = [item for item in report["errors"]
-                     if item.get("code") in FATAL_ERROR_CODES]
-            if fatal:
-                copy["export_blocked"] = True
+        # Recompute the review flags from the CURRENT verdict. They used to be
+        # only ever set (setdefault), so a segment could never leave review
+        # even after its title/window was fixed.
+        approved = _is_true(copy.get("manual_review_approved"))
+        needs_review = (not report["ok"]
+                        or _is_true(copy.get("title_review_required")))
+        fatal = [item for item in report["errors"]
+                 if item.get("code") in FATAL_ERROR_CODES]
+        if approved:
+            needs_review = False
+            fatal = []
+        copy["requires_review"] = bool(needs_review)
+        copy["publish_blocked_reason"] = (
+            "manual_review_required" if needs_review else "")
+        copy["export_blocked"] = bool(fatal)
         new_segments.append(copy)
     annotated["segments"] = new_segments
     return annotated

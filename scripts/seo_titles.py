@@ -24,7 +24,6 @@ result when the network is unavailable.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import urllib.parse
@@ -211,19 +210,23 @@ def score_title(title: str, keywords: list[str] | None = None) -> dict[str, Any]
 # Generation
 # ---------------------------------------------------------------------------
 
+# Topic-only templates must not invent numbers or promises. The old set
+# shipped "{topic} في {number} خطوات" (a random 3-10, presented as fact) and
+# clickbait hooks ("لا أحد يخبرك بهذا", "النتيجة صدمتني") which the WebUI
+# offered as one-click publish titles for clips those claims do not support.
 _TEMPLATES = [
     "{topic} — {hook}",
     "طريقة {topic} خطوة بخطوة",
     "{topic}: {benefit}",
-    "لماذا {topic}؟ الجواب سيفاجئك",
-    "{topic} في {number} خطوات فقط",
-    "أفضل نصيحة عن {topic}",
+    "لماذا {topic} مهم؟",
+    "{topic} بأبسط طريقة",
+    "نصائح عملية عن {topic}",
     "ما الذي يجب أن تعرفه عن {topic}؟",
-    "اعتراف مهم عن {topic}",
+    "تجربة عملية مع {topic}",
 ]
 
-_HOOKS = ["هذه الطريقة تعمل فعلاً", "لا أحد يخبرك بهذا", "اكتشفت السر",
-          "بعد تجربة طويلة", "النتيجة صدمتني"]
+_HOOKS = ["شرح واضح ومباشر", "تجربة عملية", "نصائح مفيدة",
+          "خطوات بسيطة", "دليل مختصر"]
 _BENEFITS = ["وفّر وقتك وجهدك", "النتائج من أول مرة", "بلا أخطاء شائعة",
              "بأبسط طريقة ممكنة"]
 
@@ -302,18 +305,11 @@ def generate_titles(topic: str, keywords: list[str] | None = None,
 
     topic = _topic_token(topic)
     candidates = []
-    import random
-    # Deterministic ACROSS processes: the builtin hash() is salted per
-    # interpreter (PYTHONHASHSEED), so the "same topic, same titles"
-    # contract used to break on every restart.
-    seed = int(hashlib.sha256(topic.casefold().encode("utf-8")).hexdigest()[:8], 16)
-    rng = random.Random(seed)
     for i, template in enumerate(_TEMPLATES):
         title = template.format(
             topic=topic,
             hook=_HOOKS[i % len(_HOOKS)],
             benefit=_BENEFITS[i % len(_BENEFITS)],
-            number=str(rng.randint(3, 10)),
         )
         title = re.sub(r"\s+", " ", title).strip()
         if title.casefold().startswith("كيف كيف"):

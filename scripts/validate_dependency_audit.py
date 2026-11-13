@@ -52,6 +52,11 @@ ALLOWED_IDS = {
     "CVE-2026-112398",
     # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0,
     # blocked by Gradio's pillow<13 pin (pyproject.toml). Re-check when Gradio lifts the cap.
+    # PYSEC-2026-4363 (2026-11-12 refresh): same package/version ceiling; 12.3.0 is
+    # the newest release Gradio accepts, so there is no installable fixed build.
+    "PYSEC-2026-4363",
+    "CVE-2026-128066",
+    "CVE-2026-128067",
     "PYSEC-2026-4326",
     "PYSEC-2026-4327",
     "PYSEC-2026-4328",

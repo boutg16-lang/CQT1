@@ -26,7 +26,12 @@ def test_save_viral_segments_writes_file(tmp_path, capsys):
     out = os.path.join(project, "viral_segments.txt")
     assert os.path.exists(out)
     saved = json.loads(open(out, encoding="utf-8").read())
-    assert saved == data
+    # The payload is preserved and every write path now also carries the
+    # final validation (so the publish gate has evidence on first save).
+    assert saved["segments"][0]["start"] == 0
+    assert saved["segments"][0]["end"] == 5
+    assert saved["segments"][0]["text"] == "hi"
+    assert "final_validation" in saved["segments"][0]
 
 
 def test_save_viral_segments_does_not_overwrite(tmp_path):
