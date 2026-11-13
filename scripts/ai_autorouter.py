@@ -158,15 +158,18 @@ def _url_key(url: str) -> str:
 def _openai_candidates(config: dict | None, timeout: float) -> list[Candidate]:
     section = (config or {}).get("openai") if isinstance(config, dict) else {}
     section = section if isinstance(section, dict) else {}
-    urls = []
+    explicit = []
     for value in (
         os.getenv("VIRALCUTTER_OPENAI_BASE_URL", "").strip(),
         os.getenv("OPENAI_BASE_URL", "").strip(),
         str(section.get("base_url") or "").strip(),
-        openai_compat.DEFAULT_BASE_URL,
     ):
-        if value and value.rstrip("/") not in {url.rstrip("/") for url in urls}:
-            urls.append(value)
+        if value and value.rstrip("/") not in {url.rstrip("/") for url in explicit}:
+            explicit.append(value)
+    # Probe the local default only when the operator named no endpoint:
+    # an explicit OpenRouter/Groq URL must not be silently outranked by an
+    # Ollama instance that happens to be running on the same machine.
+    urls = explicit or [openai_compat.DEFAULT_BASE_URL]
     key = (os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
            or os.getenv("OPENAI_API_KEY", "").strip()
            or str(section.get("api_key") or "").strip())
@@ -191,7 +194,8 @@ def _openai_candidates(config: dict | None, timeout: float) -> list[Candidate]:
         # The configured model wins when it exists on this server; otherwise
         # rank the server's own list.
         configured = str(section.get("model") or "").strip()
-        if configured and configured in models:
+        if (configured and configured in models
+                and not _EMBEDDING_NAME_RE.search(configured)):
             model = configured
         else:
             model = select_model(models)

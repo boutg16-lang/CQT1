@@ -189,3 +189,22 @@ def test_create_uses_the_openai_backend(tmp_path, monkeypatch):
     assert captured["model"] == "qwen2.5:7b"
     assert captured["raw"][0]["title"] == "الصبر"
     assert captured["llm_config"]["openai"]["base_url"]
+
+
+def test_embedding_endpoint_with_a_non_object_entry_is_rejected(monkeypatch):
+    def fake_post(*args, **kwargs):
+        return FakeResponse(200, {"data": ["not-an-object"]})
+
+    monkeypatch.setattr(openai_compat.requests, "post", fake_post)
+    with pytest.raises(openai_compat.OpenAICompatError):
+        openai_compat.embed(["x"])
+
+
+def test_auto_backend_never_persists_a_provider_key_as_gemini(tmp_path):
+    from webui import settings_store
+
+    ok, error = settings_store.save_ui_settings(
+        ai_backend="auto", api_keys=["sk-or-secret-value"], base_dir=str(tmp_path))
+    assert ok, error
+    text = (tmp_path / "api_config.json").read_text(encoding="utf-8")
+    assert "sk-or-secret-value" not in text

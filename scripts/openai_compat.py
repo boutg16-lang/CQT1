@@ -269,10 +269,19 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
             raise OpenAICompatError(
                 "embedding endpoint returned {} vectors for {} inputs".format(
                     len(entries) if isinstance(entries, list) else 0, len(batch)))
-        ordered = sorted(enumerate(entries), key=lambda pair: (
-            pair[1].get("index", pair[0]) if isinstance(pair[1], dict) else pair[0]))
+        ordered = []
+        for position, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                raise OpenAICompatError(
+                    "embedding endpoint returned a non-object entry")
+            try:
+                index = int(entry.get("index", position))
+            except (TypeError, ValueError):
+                index = position
+            ordered.append((index, entry))
+        ordered.sort(key=lambda pair: pair[0])
         for _index, entry in ordered:
-            vector = entry.get("embedding") if isinstance(entry, dict) else None
+            vector = entry.get("embedding")
             if not isinstance(vector, list) or not vector:
                 raise OpenAICompatError("embedding vector is malformed")
             try:

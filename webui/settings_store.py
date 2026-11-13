@@ -169,13 +169,20 @@ def load_ui_settings(base_dir=None):
         model = resolve_gemini_model(model)
     if backend == "auto":
         model = "Auto"
-    if backend == "openai":
-        # Local servers need no key; hosted ones read OPENAI_API_KEY.
-        key = (os.getenv("OPENAI_API_KEY", "").strip()
-               or os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
-               or str(openai_cfg.get("api_key") or "").strip())
-        if key:
-            source = KEY_SOURCE_ENV if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY") else KEY_SOURCE_FILE
+    if backend in {"openai", "auto"}:
+        # Local servers need no key; hosted ones read OPENAI_API_KEY. In auto
+        # mode the OpenAI key is shown when present, otherwise the saved
+        # Gemini key remains visible (auto may legitimately use Gemini).
+        openai_key = (os.getenv("OPENAI_API_KEY", "").strip()
+                      or os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
+                      or str(openai_cfg.get("api_key") or "").strip())
+        if openai_key:
+            key = openai_key
+            source = (KEY_SOURCE_ENV
+                      if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY")
+                      else KEY_SOURCE_FILE)
+        elif backend == "openai":
+            key = ""
     default_chunk = (20000 if backend == "gemini"
                      else 12000 if backend in {"openai", "auto"} else 2000)
     chunk = _coerce_chunk(backend_cfg.get("chunk_size"), default_chunk)
@@ -212,7 +219,7 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
                 loaded = json.load(f)
             if not isinstance(loaded, dict):
                 return False, "ملف الإعدادات ليس كائن JSON صالحاً؛ لم يتم تغييره."
-            for section in ("gemini", "g4f"):
+            for section in ("gemini", "g4f", "openai"):
                 if section in loaded and not isinstance(loaded[section], dict):
                     return False, "بنية ملف الإعدادات غير صالحة؛ لم يتم تغييره."
             config.update(loaded)
@@ -248,7 +255,7 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
     # that provider, not to Gemini. Only persist it when it clearly looks like
     # a Gemini key, otherwise the runner receives it through the environment
     # for the current run and nothing is written to disk.
-    openai_backend = backend == "openai"
+    openai_backend = backend in {"openai", "auto"}
     if openai_backend:
         clean_keys = [key for key in clean_keys
                       if key.startswith(GEMINI_KEY_PREFIX)]

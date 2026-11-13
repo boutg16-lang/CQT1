@@ -156,3 +156,45 @@ def test_detect_does_not_probe_the_same_url_twice(monkeypatch):
     chain = ai_autorouter.detect({"openai": {"base_url": "http://127.0.0.1:11434/v1"}})
     assert len(chain) == 1
     assert calls.count("http://127.0.0.1:11434/v1") == 1
+
+
+def test_configured_embedding_model_is_never_used_for_chat(monkeypatch):
+    def fake_models(config=None, timeout=None, base_url=None, api_key=None):
+        return ["bge-m3", "qwen2.5:7b"]
+
+    monkeypatch.setattr(ai_autorouter.openai_compat, "list_models", fake_models)
+    chain = ai_autorouter.detect(
+        {"openai": {"base_url": "http://localhost:11434/v1", "model": "bge-m3"}})
+    assert chain and chain[0].model == "qwen2.5:7b"
+
+
+def test_explicit_url_disables_the_local_default_probe(monkeypatch):
+    calls = []
+
+    def fake_models(config=None, timeout=None, base_url=None, api_key=None):
+        calls.append(base_url)
+        return ["qwen2.5:7b"]
+
+    monkeypatch.setenv("VIRALCUTTER_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setattr(ai_autorouter.openai_compat, "list_models", fake_models)
+    ai_autorouter.detect({"openai": {"base_url": "https://openrouter.ai/api/v1"}})
+    assert calls == ["https://openrouter.ai/api/v1"]
+
+
+def test_auto_embedding_detection_is_cached_per_server(monkeypatch):
+    semantic_embeddings.reset_cache()
+    monkeypatch.delenv("VIRALCUTTER_EMBEDDINGS", raising=False)
+    monkeypatch.setattr(semantic_embeddings.openai_compat, "resolve_settings",
+                        lambda cfg: {"base_url": cfg["openai"]["base_url"]})
+    responses = {
+        "http://localhost:11434/v1": ["qwen2.5:7b", "bge-m3"],
+        "http://localhost:9999/v1": ["qwen2.5:7b"],
+    }
+    monkeypatch.setattr(semantic_embeddings.openai_compat, "list_models",
+                        lambda config=None, timeout=None: responses[
+                            config["openai"]["base_url"]])
+    first = {"openai": {"base_url": "http://localhost:11434/v1"}}
+    second = {"openai": {"base_url": "http://localhost:9999/v1"}}
+    assert semantic_embeddings.enabled(first, allow_auto=True) is True
+    assert semantic_embeddings.model_name(first) == "bge-m3"
+    assert semantic_embeddings.enabled(second, allow_auto=True) is False

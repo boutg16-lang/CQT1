@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 _CACHE: dict[tuple[str, str], list[float]] = {}
 _CACHE_LIMIT = 1024
 _DISABLED_REASON = ""
-_AUTO_MODEL = ""
+_AUTO_MODELS: dict[str, str] = {}   # base_url -> detected embedding model
+_AUTO_FAILED: set[str] = set()      # base_url -> no embedding model
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
@@ -46,25 +47,43 @@ def _is_local_url(url: str) -> bool:
         str(url or ""), __import__("re").IGNORECASE))
 
 
+def _auto_key(config: dict | None) -> str:
+    try:
+        return openai_compat.resolve_settings(config)["base_url"]
+    except Exception:
+        return ""
+
+
 def _auto_enable(config: dict | None) -> bool:
-    """Enable embeddings automatically for a LOCAL server that has a model."""
-    global _AUTO_MODEL
-    if _AUTO_MODEL:
-        return True
+    """Enable embeddings automatically for a LOCAL server that has a model.
+
+    Detection is cached per base URL: a second project pointing at another
+    server must not reuse the first server's embedding model name.
+    """
     if not config:
         return False
+    base_url = _auto_key(config)
+    if not base_url:
+        return False
+    if base_url in _AUTO_MODELS:
+        return True
+    if base_url in _AUTO_FAILED:
+        return False
     try:
-        settings = openai_compat.resolve_settings(config)
-        if not _is_local_url(settings["base_url"]):
+        if not _is_local_url(base_url):
+            _AUTO_FAILED.add(base_url)
             return False
         models = openai_compat.list_models(config=config, timeout=2.0)
     except Exception:
+        _AUTO_FAILED.add(base_url)
         return False
     matches = [model for model in models if _EMBEDDING_NAME_RE.search(model)]
     if not matches:
+        _AUTO_FAILED.add(base_url)
         return False
-    _AUTO_MODEL = sorted(matches, key=len, reverse=True)[0]
-    logger.info("Auto-enabled semantic embeddings with %s", _AUTO_MODEL)
+    _AUTO_MODELS[base_url] = sorted(matches, key=len, reverse=True)[0]
+    logger.info("Auto-enabled semantic embeddings with %s on %s",
+                _AUTO_MODELS[base_url], base_url)
     return True
 
 
@@ -97,8 +116,15 @@ def enabled(config: dict | None = None, *, allow_auto: bool = False) -> bool:
 
 
 def model_name(config: dict | None = None) -> str:
-    if _AUTO_MODEL:
-        return _AUTO_MODEL
+    section = (config or {}).get("openai") if isinstance(config, dict) else {}
+    section = section if isinstance(section, dict) else {}
+    explicit = (os.getenv("VIRALCUTTER_EMBEDDING_MODEL", "").strip()
+                or str(section.get("embedding_model") or "").strip())
+    if explicit:
+        return explicit
+    detected = _AUTO_MODELS.get(_auto_key(config))
+    if detected:
+        return detected
     return openai_compat.resolve_settings(config)["embedding_model"]
 
 
@@ -165,10 +191,11 @@ def similarity(left_vector, right_vector) -> float:
 
 def reset_cache() -> None:
     """Test hook / memory release between projects."""
-    global _DISABLED_REASON, _AUTO_MODEL
+    global _DISABLED_REASON
     _CACHE.clear()
     _DISABLED_REASON = ""
-    _AUTO_MODEL = ""
+    _AUTO_MODELS.clear()
+    _AUTO_FAILED.clear()
 
 
 def disabled_reason() -> str:

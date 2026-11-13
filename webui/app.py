@@ -1849,7 +1849,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                             new_choices = ai_model_input.choices or []
                             new_val = ai_model_input.value
                             new_chunk = chunk_size_input.value
-                        return gr.update(visible=show_api), gr.update(choices=new_choices, value=new_val, visible=(backend != "manual")), gr.update(visible=show_refresh), gr.update(value=new_chunk)
+                        return gr.update(visible=show_api), gr.update(choices=new_choices, value=new_val, visible=(backend not in {"manual", "auto"})), gr.update(visible=show_refresh), gr.update(value=new_chunk)
 
                     def refresh_local_models():
                         models = get_local_models()

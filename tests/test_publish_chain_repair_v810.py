@@ -106,10 +106,17 @@ def test_review_flags_are_recomputed_and_approvable():
     blocked = _segment("still-bad", 0, 20, export_blocked=True)
     approved = _segment("approved", 0, 20, requires_review=True,
                         export_blocked=True, manual_review_approved=True)
+    # Approval clears editorial review, never a structural fatality: this
+    # window ends before it starts, so no human click can make it exportable.
+    fatal_but_approved = _segment("fatal", 10, 5, requires_review=True,
+                                  manual_review_approved=True)
     annotated = segment_validator.annotate_segment_validation(
-        {"segments": [blocked, approved]}, require_title=False)
+        {"segments": [blocked, approved, fatal_but_approved]},
+        require_title=False)
     assert annotated["segments"][1]["requires_review"] is False
     assert annotated["segments"][1]["export_blocked"] is False
+    assert annotated["segments"][2]["requires_review"] is False
+    assert annotated["segments"][2]["export_blocked"] is True
 
 
 def test_blocklist_of_the_wrong_shape_does_not_crash(tmp_path):

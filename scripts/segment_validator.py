@@ -659,8 +659,10 @@ def annotate_segment_validation(payload, **kwargs):
         fatal = [item for item in report["errors"]
                  if item.get("code") in FATAL_ERROR_CODES]
         if approved:
+            # Approval clears editorial REVIEW, never a structural fatality.
+            # An out-of-media window or a missing end_time cannot be made
+            # exportable by clicking "approve".
             needs_review = False
-            fatal = []
         copy["requires_review"] = bool(needs_review)
         copy["publish_blocked_reason"] = (
             "manual_review_required" if needs_review else "")
