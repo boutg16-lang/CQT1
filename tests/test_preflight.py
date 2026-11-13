@@ -680,7 +680,7 @@ def test_ensure_api_config_creates_template(tmp_path):
         p = tmp_path / "api_config.json"
         assert p.exists()
         data = json.loads(p.read_text())
-        assert data["selected_api"] == "gemini"
+        assert data["selected_api"] == "auto"
         assert "api_key" in data["gemini"]
     finally:
         preflight._app_dir = old

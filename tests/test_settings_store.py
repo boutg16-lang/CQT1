@@ -220,7 +220,7 @@ def test_env_key_wins_over_file(tmp_path, monkeypatch):
 
 def test_load_defaults_when_no_config(tmp_path):
     loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
-    assert loaded["ai_backend"] == "gemini"
+    assert loaded["ai_backend"] == "auto"
     assert loaded["api_key"] == ""
     assert loaded["key_source"] == settings_store.KEY_SOURCE_NONE
     assert isinstance(loaded["chunk_size"], int)

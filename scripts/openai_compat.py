@@ -67,15 +67,23 @@ def _clean_base_url(value: str) -> str:
     return value
 
 
-def resolve_settings(config: dict | None = None) -> dict:
-    """Resolve base URL, key, model and embedding model from env + config."""
+def resolve_settings(config: dict | None = None,
+                     override: dict | None = None) -> dict:
+    """Resolve base URL, key, model and embedding model from env + config.
+
+    ``override`` is used by the auto-router when it probes several explicit
+    endpoints: an env default must not hijack the URL being tested.
+    """
     section = _section(config)
+    override = override if isinstance(override, dict) else {}
     return {
         "base_url": _clean_base_url(
-            _first_env("VIRALCUTTER_OPENAI_BASE_URL", "OPENAI_BASE_URL")
+            override.get("base_url")
+            or _first_env("VIRALCUTTER_OPENAI_BASE_URL", "OPENAI_BASE_URL")
             or section.get("base_url")
             or DEFAULT_BASE_URL),
-        "api_key": _first_env("VIRALCUTTER_OPENAI_KEY", "OPENAI_API_KEY")
+        "api_key": str(override.get("api_key") or "").strip()
+        or _first_env("VIRALCUTTER_OPENAI_KEY", "OPENAI_API_KEY")
         or str(section.get("api_key") or "").strip(),
         "model": _first_env("VIRALCUTTER_OPENAI_MODEL")
         or str(section.get("model") or "").strip()
@@ -274,9 +282,12 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
     return vectors
 
 
-def list_models(*, config: dict | None = None, timeout: float | None = None) -> list[str]:
+def list_models(*, config: dict | None = None, timeout: float | None = None,
+                base_url: str | None = None,
+                api_key: str | None = None) -> list[str]:
     """Return the server's model ids (``/v1/models``)."""
-    settings = resolve_settings(config)
+    settings = resolve_settings(
+        config, override={"base_url": base_url, "api_key": api_key})
     timeout = _timeout(timeout or settings["timeout"])
     if requests is None:
         raise OpenAICompatError("requests is not installed")

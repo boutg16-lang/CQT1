@@ -462,6 +462,9 @@ def _model_choices_for(backend, saved_model):
         choices = list(OPENAI_MODEL_SUGGESTIONS)
         default = "llama3.1"
         model_visible, refresh_visible, api_visible = True, False, True
+    elif backend == "auto":
+        choices, default = ["Auto"], "Auto"
+        model_visible, refresh_visible, api_visible = False, False, True
     else:
         choices, default = [], saved_model or ""
         model_visible, refresh_visible, api_visible = False, False, False
@@ -515,7 +518,7 @@ def on_backend_change(backend, key1, key2, key3, key_mode, model, chunk):
     if backend == "manual":
         chunk_upd = gr.update(value=chunk)
     status = _save_and_status(backend, key1, key2, key3, key_mode, model, chunk)
-    hidden = gr.update(visible=bool(show_api.value) if hasattr(show_api, "value") else backend in {"gemini", "openai"})
+    hidden = gr.update(visible=bool(show_api.value) if hasattr(show_api, "value") else backend in {"gemini", "openai", "auto"})
     return hidden, hidden, hidden, hidden, model_upd, refresh_upd, chunk_upd, status
 
 
@@ -530,6 +533,16 @@ def save_settings_click(backend, key1, key2, key3, key_mode, model, chunk):
 
 def test_api_connection(backend, key1, key2, key3, key_mode, model):
     """Test the selected key without printing its value."""
+    if backend == "auto":
+        try:
+            from scripts import ai_autorouter
+            from scripts.secure_config import load_api_config
+            candidates = ai_autorouter.detect(load_api_config())
+        except Exception as exc:
+            return "❌ " + i18n("Connection failed:") + " " + type(exc).__name__
+        if candidates:
+            return "✅ " + i18n("Auto routing ready:") + " " + ai_autorouter.describe(candidates)
+        return "❌ " + i18n("No AI provider found. Start Ollama or configure a key.")
     if backend == "openai":
         try:
             from scripts import openai_compat
@@ -940,11 +953,11 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                 env.setdefault("VIRALCUTTER_GEMINI_KEY", _resolved_keys[0])
             elif _resolved_key:
                 env.setdefault("VIRALCUTTER_GEMINI_KEY", _resolved_key)
-        elif ai_backend == "openai":
+        elif ai_backend in {"openai", "auto"}:
             # Local servers need no key; hosted providers get the field value
             # for THIS run only (never persisted to the plaintext config).
             _openai_key = str(api_key or "").strip()
-            if _openai_key:
+            if _openai_key.startswith("sk-"):
                 env.setdefault("OPENAI_API_KEY", _openai_key)
             try:
                 _saved_openai = settings_store.load_ui_settings()
@@ -953,6 +966,22 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                                or "http://localhost:11434/v1")
             except Exception:
                 pass
+            if ai_backend == "auto":
+                # Auto may legitimately pick Gemini; hand it the saved keys.
+                try:
+                    _saved_auto = settings_store.load_ui_settings()
+                    _auto_keys = [str(key).strip() for key in
+                                  _saved_auto.get("api_keys", [])
+                                  if str(key or "").strip()][:3]
+                    if _auto_keys:
+                        env.setdefault("VIRALCUTTER_GEMINI_KEYS",
+                                       json.dumps(_auto_keys, ensure_ascii=False))
+                        env.setdefault("VIRALCUTTER_GEMINI_KEY", _auto_keys[0])
+                    elif str(api_key or "").startswith("AIza"):
+                        env.setdefault("VIRALCUTTER_GEMINI_KEY",
+                                       str(api_key).strip())
+                except Exception:
+                    pass
         # mask the API key in the echoed command — never print secrets to
         # the visible log (v6.9 fix: keys leaked into screenshots/logs before)
         def _mask_cmd(cmd_list):
@@ -1774,7 +1803,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     gr.Markdown("### 🤖 " + i18n("AI"))
                     gr.Markdown("**اختيار عملي:** استخدم Auto لاختيار CUDA عند توفر NVIDIA، وأضف حتى ثلاثة مفاتيح Gemini لتدويرها تلقائياً عند نفاد الحصة.", elem_classes=["vc-help-card"])
                     with gr.Row():
-                        ai_backend_input = gr.Dropdown(choices=[(i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("OpenAI-compatible (Ollama / LM Studio / OpenRouter)"), "openai"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="gemini", scale=2)
+                        ai_backend_input = gr.Dropdown(choices=[(i18n("Auto (recommended)"), "auto"), (i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("OpenAI-compatible (Ollama / LM Studio / OpenRouter)"), "openai"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="auto", scale=2)
                         api_key_input = gr.Textbox(label=i18n("API Key 1 (Gemini / OpenAI-compatible)"), type="password", scale=3)
                     with gr.Row():
                         api_key_2_input = gr.Textbox(label=i18n("Gemini API Key 2"), type="password", visible=True, scale=3)
@@ -1793,7 +1822,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         chunk_size_input = gr.Number(label=i18n("Chunk Size"), value=70000, precision=0, scale=2)
 
                     def update_ai_ui(backend):
-                        show_api = backend in {"gemini", "openai"}
+                        show_api = backend in {"gemini", "openai", "auto"}
                         show_refresh = (backend == "local")
                         if backend == "gemini":
                             new_choices = list(GEMINI_MODELS)
@@ -1811,6 +1840,10 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         elif backend == "openai":
                             new_choices = list(OPENAI_MODEL_SUGGESTIONS)
                             new_val = "llama3.1"
+                            new_chunk = 12000
+                        elif backend == "auto":
+                            new_choices = ["Auto"]
+                            new_val = "Auto"
                             new_chunk = 12000
                         else:
                             new_choices = ai_model_input.choices or []

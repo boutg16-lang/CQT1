@@ -44,6 +44,12 @@ try:
 except Exception:
     semantic_embeddings = None
 
+# Automatic provider/model selection with failover.
+try:
+    from scripts import ai_autorouter
+except Exception:
+    ai_autorouter = None
+
 # v7.40: centralized clip-quality modules (stdlib-only, deterministic).
 # Arabic normalization lives canonically in scripts/arabic_text and is
 # re-exported below under the historical private names so existing callers
@@ -2175,7 +2181,7 @@ def _editor_review_call(ai_mode, api_key, model_name):
     return None
 
 
-def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None):
+def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None, allow_auto_embeddings=False):
     """
     Aligns raw AI segments (with reference tags) to actual transcript timestamps.
     Applies constraints, validation, and deduplication.
@@ -2743,7 +2749,9 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         try:
             texts = [str(candidate.get("transcript_text") or "")
                      for candidate in processed_segments]
-            vectors = semantic_embeddings.embed_texts(texts, config=llm_config)
+            vectors = semantic_embeddings.embed_texts(
+                texts, config=llm_config,
+                allow_auto=allow_auto_embeddings)
             if vectors:
                 for candidate, vector in zip(processed_segments, vectors, strict=False):
                     candidate["_embedding"] = vector
@@ -3229,6 +3237,43 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         cfg_model = config["g4f"].get("model", "gpt-4o-mini")
         model_name = model_name_arg if model_name_arg else cfg_model
 
+    elif ai_mode == "auto":
+        if ai_autorouter is None or openai_compat is None:
+            print("[ERRO] Automatic AI mode is unavailable (missing modules).")
+            return {"segments": []}
+        try:
+            from scripts.secure_config import resolve_api_keys
+            _gemini_keys = resolve_api_keys(warn=False)
+        except Exception:
+            _gemini_keys = []
+        _gemini_model = resolve_gemini_model(
+            config["gemini"].get("model") or DEFAULT_GEMINI_MODEL)
+        _candidates = ai_autorouter.detect(config)
+        if not _candidates:
+            print("[ERRO] No AI provider found. Start Ollama, add a Gemini key, "
+                  "or choose a backend explicitly. Checked: OpenAI-compatible "
+                  "servers, Gemini, g4f.")
+            return {"segments": []}
+
+        def _auto_openai(candidate, prompt):
+            return openai_compat.chat(prompt, model=candidate.model,
+                                      config=candidate.config)
+
+        def _auto_gemini(candidate, prompt):
+            return call_gemini(prompt, _gemini_keys, model_name=candidate.model)
+
+        def _auto_g4f(candidate, prompt):
+            return call_g4f(prompt, model_name=candidate.model)
+
+        router = ai_autorouter.AutoRouter(_candidates, {
+            "openai": _auto_openai,
+            "gemini": _auto_gemini,
+            "g4f": _auto_g4f,
+        })
+        current_chunk_size = router.chunk_size
+        model_name = router.model
+        print("[auto] provider chain: " + ai_autorouter.describe(_candidates))
+
     elif ai_mode == "openai":
         cfg_chunk = config["openai"].get("chunk_size", 12000)
         current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
@@ -3463,6 +3508,15 @@ OUTPUT JSON ONLY:
             except openai_compat.OpenAICompatError as exc:
                 print("[ERRO] OpenAI-compatible provider failed: {}".format(exc))
                 response_text = "{}"
+        elif ai_mode == "auto":
+            try:
+                response_text = router.chat(prompt)
+                print("Chunk {}/{} answered by {}.".format(
+                    i + 1, len(output_texts),
+                    router.used.describe() if router.used else "auto"))
+            except Exception as exc:
+                print("[ERRO] Automatic routing failed: {}".format(exc))
+                response_text = "{}"
         elif ai_mode == "local" and local_llm_instance:
             print(f"Processing chunk {i+1} with Local LLM...")
             try:
@@ -3508,6 +3562,12 @@ OUTPUT JSON ONLY:
         tempo_maximo, 
         output_count=candidate_target,
         project_folder=project_folder,
-        editor_review_llm=_editor_review_call(ai_mode, api_key, model_name),
+        editor_review_llm=(
+            router.chat if ai_mode == "auto" and router is not None
+            and os.environ.get("VIRALCUTTER_EDITOR_REVIEW", "").strip().lower()
+            in ("1", "true", "yes", "on")
+            and _editor_review_module is not None
+            else _editor_review_call(ai_mode, api_key, model_name)),
         llm_config=config,
+        allow_auto_embeddings=ai_mode in {"openai", "auto"},
     )

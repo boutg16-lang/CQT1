@@ -37,7 +37,7 @@ GEMINI_KEY_PREFIX = "AIza"
 
 # placeholders that mean "no real key" in api_config.json
 FAKE_KEYS = {"", "SUA_KEY_AQUI", "YOUR_KEY_HERE"}
-VALID_BACKENDS = {"gemini", "g4f", "local", "manual", "openai"}
+VALID_BACKENDS = {"gemini", "g4f", "local", "manual", "openai", "auto"}
 MIN_CHUNK_SIZE = 1
 MAX_CHUNK_SIZE = 200000
 
@@ -86,7 +86,7 @@ def _coerce_chunk(value, default):
 
 def _defaults():
     return {
-        "selected_api": "gemini",
+        "selected_api": "auto",
         "gemini": {
             "api_key": "",
             "api_keys": [],
@@ -158,6 +158,8 @@ def load_ui_settings(base_dir=None):
         backend_cfg = gemini
     elif backend == "openai":
         backend_cfg = openai_cfg
+    elif backend == "auto":
+        backend_cfg = {}
     else:
         backend_cfg = config.get("g4f") or {}
     if not isinstance(backend_cfg, dict):
@@ -165,6 +167,8 @@ def load_ui_settings(base_dir=None):
     model = backend_cfg.get("model") or gemini.get("model") or ""
     if backend == "gemini":
         model = resolve_gemini_model(model)
+    if backend == "auto":
+        model = "Auto"
     if backend == "openai":
         # Local servers need no key; hosted ones read OPENAI_API_KEY.
         key = (os.getenv("OPENAI_API_KEY", "").strip()
@@ -172,7 +176,8 @@ def load_ui_settings(base_dir=None):
                or str(openai_cfg.get("api_key") or "").strip())
         if key:
             source = KEY_SOURCE_ENV if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY") else KEY_SOURCE_FILE
-    default_chunk = 20000 if backend == "gemini" else (12000 if backend == "openai" else 2000)
+    default_chunk = (20000 if backend == "gemini"
+                     else 12000 if backend in {"openai", "auto"} else 2000)
     chunk = _coerce_chunk(backend_cfg.get("chunk_size"), default_chunk)
     if backend == "openai" and not model:
         model = str(openai_cfg.get("model") or "llama3.1")
@@ -259,8 +264,8 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
 
     section = (config["gemini"] if backend == "gemini"
                else config["openai"] if backend == "openai"
-               else config["g4f"])
-    if ai_model:
+               else config["g4f"] if backend == "g4f" else None)
+    if ai_model and section is not None:
         if backend == "gemini":
             supported_model = resolve_gemini_model(ai_model)
             if supported_model != str(ai_model).strip():
@@ -268,7 +273,7 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
             section["model"] = supported_model
         else:
             section["model"] = str(ai_model).strip()
-    if chunk_size is not None:
+    if chunk_size is not None and section is not None:
         default_chunk = (20000 if backend == "gemini"
                          else 12000 if backend == "openai" else 2000)
         section["chunk_size"] = _coerce_chunk(chunk_size, default_chunk)

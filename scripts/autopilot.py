@@ -57,11 +57,37 @@ def check_readiness(args: Any, ai_backend: str, api_key: str | None = None) -> d
             issues.append({"code": "missing_visual_model", "detail": "A local ONNX visual safety model is required when visual safety is strict."})
 
     backend = str(ai_backend or "").lower()
-    if backend not in {"gemini", "g4f", "openai-moderation"}:
-        issues.append({"code": "missing_ai_backend", "detail": "Autopilot requires Gemini, G4F, or OpenAI moderation for contextual policy review."})
+    if backend not in {"gemini", "g4f", "openai-moderation", "openai", "auto"}:
+        issues.append({"code": "missing_ai_backend", "detail": "Autopilot requires Gemini, G4F, an OpenAI-compatible provider, or automatic routing for contextual policy review."})
     if backend in {"gemini", "openai-moderation"} and not str(api_key or "").strip():
         label = "Gemini" if backend == "gemini" else "OpenAI moderation"
         issues.append({"code": "missing_ai_key", "detail": "{} API key is missing.".format(label)})
+    if backend == "auto":
+        try:
+            from scripts import ai_autorouter
+            from scripts.secure_config import load_api_config
+            candidates = ai_autorouter.detect(load_api_config())
+        except Exception as exc:
+            candidates = []
+            warnings.append({"code": "auto_probe_failed",
+                             "detail": "Automatic provider probe failed: {}".format(type(exc).__name__)})
+        if not candidates:
+            issues.append({"code": "missing_ai_provider",
+                           "detail": "Automatic routing found no provider. Start Ollama or configure a Gemini/OpenAI-compatible key."})
+        else:
+            warnings.append({"code": "auto_chain", "detail": "Automatic chain: " + ai_autorouter.describe(candidates)})
+    if backend == "openai":
+        try:
+            from scripts import openai_compat
+            from scripts.secure_config import load_api_config
+            models = openai_compat.list_models(config=load_api_config(), timeout=3.0)
+        except Exception as exc:
+            models = []
+            warnings.append({"code": "openai_probe_failed",
+                             "detail": "OpenAI-compatible probe failed: {}".format(type(exc).__name__)})
+        if not models:
+            issues.append({"code": "missing_ai_provider",
+                           "detail": "The OpenAI-compatible server returned no models; start it or check the base URL."})
     if not binaries["fpcalc"]:
         warnings.append({"code": "missing_fpcalc", "detail": "Music fingerprinting will remain unavailable until fpcalc is installed."})
 

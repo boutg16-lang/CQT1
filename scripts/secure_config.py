@@ -231,7 +231,7 @@ def load_api_config(base_dir=None):
     resolved key injected so downstream code needs no changes."""
     path = legacy_config_path(base_dir)
     config = {
-        "selected_api": "gemini",
+        "selected_api": "auto",
         "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL,
                    "chunk_size": 20000},
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},

@@ -22,7 +22,7 @@ def build_parser():
     parser.add_argument("--model", default="large-v3-turbo", help="Whisper model to use")
     parser.add_argument("--transcription-device", choices=["auto", "cpu", "cuda"], default="auto", help="WhisperX device: auto, cpu, or cuda")
     
-    parser.add_argument("--ai-backend", choices=["manual", "gemini", "g4f", "local", "openai"], help="AI backend for viral analysis (openai = any OpenAI-compatible server: Ollama, LM Studio, vLLM, OpenRouter, Groq); moderation is selected separately with --safety-backend")
+    parser.add_argument("--ai-backend", choices=["manual", "gemini", "g4f", "local", "openai", "auto"], help="AI backend for viral analysis (auto = probe local OpenAI-compatible servers, then Gemini/G4F; openai = a specific OpenAI-compatible server); moderation is selected separately with --safety-backend")
     parser.add_argument("--openai-base-url", default="", help="Base URL for the OpenAI-compatible server, e.g. http://localhost:11434/v1 (default: env VIRALCUTTER_OPENAI_BASE_URL or Ollama local)")
     parser.add_argument("--api-key", help="API key for the selected viral-analysis backend")
     

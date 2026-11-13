@@ -369,6 +369,14 @@ def resolve_safety_backend(requested, ai_backend, api_key=None):
     gemini_key = str(api_key or "").strip() if ai_backend == "gemini" else os.getenv("GEMINI_API_KEY", "").strip()
 
     if requested == "auto":
+        # A custom OpenAI-compatible server (Ollama/LM Studio/OpenRouter) is
+        # not guaranteed to expose /moderations, so those backends never
+        # auto-select it. A plain OPENAI_API_KEY still does for manual/gemini/
+        # g4f runs, preserving the documented behaviour.
+        if ai_backend in {"openai", "auto"}:
+            if ai_backend == "auto" and (gemini_key or api_key):
+                return "gemini", gemini_key or api_key
+            return "local", None
         if openai_key:
             return "openai-moderation", openai_key
         if ai_backend in {"gemini", "g4f"}:

@@ -133,7 +133,7 @@ PINNED_RULES = [
 ASSETS = list(RUNTIME_ASSETS)
 
 API_CONFIG_TEMPLATE = {
-    "selected_api": "gemini",
+    "selected_api": "auto",
     "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL, "chunk_size": 20000},
     "openai": {"base_url": "http://localhost:11434/v1", "api_key": "",
                "model": "llama3.1", "chunk_size": 12000},
@@ -465,12 +465,14 @@ def check_api_config():
         return {"name": "api_config.json", "status": FAIL,
                 "detail": "invalid Gemini configuration structure"}
     backend = str(data.get("selected_api") or "gemini").strip().lower()
-    if backend in {"g4f", "local", "manual", "openai"}:
+    if backend in {"g4f", "local", "manual", "openai", "auto"}:
         detail = "not required for selected backend: %s" % backend
         if backend == "openai":
             base_url = str((data.get("openai") or {}).get("base_url")
                            or "http://localhost:11434/v1")
             detail += " (OpenAI-compatible server: %s)" % base_url
+        elif backend == "auto":
+            detail += " (providers are probed automatically at run time)"
         return {"name": "Gemini API key", "status": OK, "detail": detail}
 
     if env_present and resolved_keys:

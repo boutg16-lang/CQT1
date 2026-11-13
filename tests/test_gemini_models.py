@@ -46,6 +46,7 @@ def test_cli_config_migrates_a_retired_model_without_changing_app_version(tmp_pa
 def test_webui_settings_migrate_and_reject_unknown_models(tmp_path):
     config = tmp_path / "api_config.json"
     config.write_text(json.dumps({
+        "selected_api": "gemini",
         "gemini": {"model": "gemini-2.5-flash-lite-preview-09-2025"},
     }), encoding="utf-8")
 

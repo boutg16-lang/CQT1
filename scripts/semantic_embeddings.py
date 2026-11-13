@@ -29,26 +29,76 @@ logger = logging.getLogger(__name__)
 _CACHE: dict[tuple[str, str], list[float]] = {}
 _CACHE_LIMIT = 1024
 _DISABLED_REASON = ""
+_AUTO_MODEL = ""
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
+FALSE_VALUES = {"0", "false", "no", "off"}
+
+# Model families that are actually embedding models. Auto-detection only
+# enables the feature when the local server advertises one of these.
+_EMBEDDING_NAME_RE = __import__("re").compile(
+    r"(embed|bge|gte|e5[-_]|nomic|mxbai|paraphrase|all-minilm)", __import__("re").IGNORECASE)
 
 
-def enabled(config: dict | None = None) -> bool:
-    """True when the user explicitly opted into embeddings."""
+def _is_local_url(url: str) -> bool:
+    return bool(__import__("re").search(
+        r"^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|/)",
+        str(url or ""), __import__("re").IGNORECASE))
+
+
+def _auto_enable(config: dict | None) -> bool:
+    """Enable embeddings automatically for a LOCAL server that has a model."""
+    global _AUTO_MODEL
+    if _AUTO_MODEL:
+        return True
+    if not config:
+        return False
+    try:
+        settings = openai_compat.resolve_settings(config)
+        if not _is_local_url(settings["base_url"]):
+            return False
+        models = openai_compat.list_models(config=config, timeout=2.0)
+    except Exception:
+        return False
+    matches = [model for model in models if _EMBEDDING_NAME_RE.search(model)]
+    if not matches:
+        return False
+    _AUTO_MODEL = sorted(matches, key=len, reverse=True)[0]
+    logger.info("Auto-enabled semantic embeddings with %s", _AUTO_MODEL)
+    return True
+
+
+def enabled(config: dict | None = None, *, allow_auto: bool = False) -> bool:
+    """True when embeddings should run.
+
+    Explicit ``VIRALCUTTER_EMBEDDINGS=1|0`` always wins. Otherwise an explicit
+    api_config.openai.embeddings value wins. With neither set, ``allow_auto``
+    enables the feature only for a LOCAL OpenAI-compatible server that
+    advertises a real embedding model — cloud providers are never probed or
+    billed without an explicit opt-in.
+    """
     env = os.getenv("VIRALCUTTER_EMBEDDINGS", "").strip().lower()
-    if env:
-        return env in TRUE_VALUES
+    if env in TRUE_VALUES:
+        return True
+    if env in FALSE_VALUES:
+        return False
     section = (config or {}).get("openai")
     if isinstance(section, dict):
         value = section.get("embeddings")
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.strip().lower() in TRUE_VALUES
-    return False
+            text = value.strip().lower()
+            if text in TRUE_VALUES:
+                return True
+            if text in FALSE_VALUES:
+                return False
+    return _auto_enable(config) if allow_auto else False
 
 
 def model_name(config: dict | None = None) -> str:
+    if _AUTO_MODEL:
+        return _AUTO_MODEL
     return openai_compat.resolve_settings(config)["embedding_model"]
 
 
@@ -56,14 +106,15 @@ def _cache_key(text: str, config: dict | None) -> tuple[str, str]:
     return model_name(config), text
 
 
-def embed_texts(texts, config: dict | None = None) -> list[list[float]] | None:
+def embed_texts(texts, config: dict | None = None, *,
+                allow_auto: bool = False) -> list[list[float]] | None:
     """Embed the texts, or return None (never raise) when unavailable.
 
     The caller is expected to fall back to lexical similarity on None.
     """
     global _DISABLED_REASON
     items = [str(text or "").strip() for text in (texts or [])]
-    if not items or not enabled(config):
+    if not items or not enabled(config, allow_auto=allow_auto):
         return None
     if _DISABLED_REASON:
         return None
@@ -114,9 +165,10 @@ def similarity(left_vector, right_vector) -> float:
 
 def reset_cache() -> None:
     """Test hook / memory release between projects."""
-    global _DISABLED_REASON
+    global _DISABLED_REASON, _AUTO_MODEL
     _CACHE.clear()
     _DISABLED_REASON = ""
+    _AUTO_MODEL = ""
 
 
 def disabled_reason() -> str:
