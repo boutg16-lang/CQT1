@@ -30,6 +30,7 @@ LEGACY_NEUTRAL_SCORE = 50.0
 MAX_VIRALITY_WEIGHT = 0.10
 MAX_SHIFT = 0.10
 MIN_SAMPLES = 3
+FULL_CONFIDENCE_SAMPLES = 5
 
 # Content-style learning bounds (v7.33.3). A style must beat the channel
 # average by at least STYLE_MIN_DELTA_PCT before it moves the needle, and no
@@ -162,7 +163,15 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     samples = int(insights.get("with_metrics", 0) or 0)
     result["samples"] = samples
     if samples < MIN_SAMPLES:
+        result["needed_samples"] = max(0, MIN_SAMPLES - samples)
         return result
+
+    # Small samples move the weights only part of the way. n=5+ is full
+    # strength; 3-4 measured clips get 60-80% of the shift, so one lucky
+    # upload cannot rewrite the editorial core.
+    confidence = min(1.0, samples / float(FULL_CONFIDENCE_SAMPLES))
+    result["confidence"] = round(confidence, 2)
+    result["needed_samples"] = max(0, FULL_CONFIDENCE_SAMPLES - samples)
 
     # Content-style learning rides on the same insights file (>=3 measured
     # clips) — it must apply even when no numeric correlation reached the
@@ -177,7 +186,8 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
         value = (entry or {}).get("vs_views")
         if component is None or value is None:
             continue
-        shift = max(-MAX_SHIFT, min(MAX_SHIFT, 0.15 * float(value)))
+        shift = max(-MAX_SHIFT, min(MAX_SHIFT,
+                                    0.15 * float(value) * confidence))
         if abs(shift) < 0.01:
             continue
         weights[component] = weights.get(component, 0.0) + shift
@@ -190,11 +200,13 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     title_quality = correlations.get("title_quality_score") or {}
     title_r = title_quality.get("vs_views")
     if title_r is not None and abs(float(title_r)) >= 0.2:
-        result["title_boost"] = round(max(-0.15, min(0.15, 0.2 * float(title_r))), 3)
+        result["title_boost"] = round(max(-0.15, min(0.15,
+                                                  0.2 * float(title_r) * confidence)), 3)
     duration = correlations.get("duration") or {}
     duration_r = duration.get("vs_views")
     if duration_r is not None and abs(float(duration_r)) >= 0.2:
-        result["duration_bonus"] = round(max(-0.15, min(0.15, 0.2 * float(duration_r))), 3)
+        result["duration_bonus"] = round(max(-0.15, min(0.15,
+                                                     0.2 * float(duration_r) * confidence)), 3)
 
     drift = sum(weights.values()) - 1.0
     if abs(drift) > 1e-9:

@@ -800,6 +800,14 @@ def _upload_worker(project_path, platform, video_path, title, caption,
                                title=title, result=result,
                                privacy_status=resolved_privacy, publish_at=publish_at,
                                extra=record_extra)
+        # Close the loop automatically: the next Learn/Insights refresh will
+        # re-query YouTube even if the TTL has not expired.
+        try:
+            from scripts import performance_loop
+            if str(result.get("status") or "").lower() in {"uploaded", "scheduled"}:
+                performance_loop.mark_refresh_due(project_path)
+        except Exception:
+            pass
         try:
             from webui import project_store
             project_store.update_manifest(

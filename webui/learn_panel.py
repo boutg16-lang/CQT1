@@ -208,13 +208,26 @@ def run_analytics(kind, days=28, project_name=None):
             from webui import library
             root = library.VIRALS_DIR
             project_path = os.path.join(root, project_name) if project_name else root
-            report = performance_loop.analyze(project_path)
-            performance_loop.write_report(project_path, report)
+            # Automatic: refresh only when the history changed or the TTL
+            # expired; a failed analytics fetch keeps the previous good report.
+            status = performance_loop.auto_refresh(project_path)
+            report = status.get("report") or {}
+            reason = {
+                "updated": "تم التحديث الآن",
+                "fresh": "التقرير حديث — لم يُعد الاستعلام",
+                "no_published_videos": "لا توجد فيديوهات منشورة بعد",
+                "kept_previous_metrics": "تعذّر جلب الأرقام — أبقيت التقرير السابق",
+            }.get(status.get("reason"), status.get("reason") or "")
             lines = [
-                "🔮 Performance loop — published: {} · with metrics: {}".format(
-                    report["published_count"], report["with_metrics"]),
+                "🔮 Performance loop — المنشور: {} · المقاس: {} · النافذة: {} يوماً".format(
+                    report.get("published_count", 0), report.get("with_metrics", 0),
+                    report.get("window_days", performance_loop.DEFAULT_WINDOW_DAYS)),
+                "الحالة: {}".format(reason),
+                "طريقة الارتباط: Spearman rank (مقاومة للمقطع الشاذ).",
             ]
-            lines += ["  • " + insight for insight in report["insights"]]
+            lines += ["  • " + insight for insight in report.get("insights", [])]
+            if status.get("markdown"):
+                lines.append("ملف الدروس: {}".format(status["markdown"]))
             return "\n".join(lines)
         except Exception as e:
             return "❌ Performance loop failed: %s" % e

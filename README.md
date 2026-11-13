@@ -1,6 +1,6 @@
 # OUSSAMA Cutter
 
-**Current Version:** 8.3.0-ultimate
+**Current Version:** 8.4.0-ultimate
 
 OUSSAMA Cutter turns long videos into short clips with transcription, AI-assisted selection, editing, Arabic captions, and publishing checks.
 
@@ -10,7 +10,7 @@ Choose the guide for your language:
 - [العربية](README_ar.md)
 
 Development and contribution notes: [README_DEV.md](README_DEV.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
-Release notes: [8.3.0 Auto (Arabic)](docs/RELEASE_NOTES_8.3.0_AR.md)
+Release notes: [8.4.0 Learning loop (Arabic)](docs/RELEASE_NOTES_8.4.0_AR.md)
 Secure Gemini-key storage: [Arabic setup guide](docs/SECURE_API_KEYS_AR.md)
 
 Live-stream safety guide: [StreamGuard (Arabic)](docs/STREAM_GUARD_AR.md).
