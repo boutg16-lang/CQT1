@@ -187,3 +187,19 @@ def test_auto_refresh_without_published_videos_is_a_noop(tmp_path):
     status = pl.auto_refresh(str(project))
     assert status["refreshed"] is False
     assert status["reason"] == "no_published_videos"
+
+
+def test_style_bonus_shrinks_with_small_samples():
+    content = {
+        "with_metrics": 3,
+        "content_insights": {
+            "overall_avg_views": 500.0,
+            "categories": {"hook_type": [
+                {"value": "question", "samples": 3, "avg_views": 1000.0,
+                 "delta_pct": 100.0}]},
+        },
+    }
+    full = pw.style_bonuses(dict(content, with_metrics=5), 1.0)
+    small = pw.style_bonuses(content, 0.6)
+    assert full["hook_type"]["question"] == 3.0
+    assert small["hook_type"]["question"] == 1.8

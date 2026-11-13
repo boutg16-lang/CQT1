@@ -696,7 +696,11 @@ def auto_refresh(project_folder: str, *, force: bool = False) -> dict[str, Any]:
         except OSError:
             pass
     report = analyze(folder, fetch_live=True)
-    if report.get("with_metrics", 0) == 0 and previous.get("with_metrics", 0):
+    try:
+        previous_metrics = int(previous.get("with_metrics") or 0)
+    except (TypeError, ValueError):
+        previous_metrics = 0
+    if report.get("with_metrics", 0) == 0 and previous_metrics > 0:
         return {"refreshed": False, "reason": "kept_previous_metrics",
                 "report": previous}
     report_path = write_report(folder, report)

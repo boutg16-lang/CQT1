@@ -64,7 +64,7 @@ def _style_bonus(delta_pct) -> float:
                                            float(delta_pct) / 25.0)), 2)
 
 
-def style_bonuses(insights) -> dict[str, Any]:
+def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
     """Content-insights -> per-value style bonuses (empty when unmeasured).
 
     Only values with >=2 measured clips and a >=15% delta vs the channel
@@ -82,7 +82,8 @@ def style_bonuses(insights) -> dict[str, Any]:
             if int(row.get("samples") or 0) < 2:
                 continue
             value = str(row.get("value") or "")
-            bonus = _style_bonus(float(row.get("delta_pct") or 0.0))
+            bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0))
+                          * confidence, 2)
             if value and bonus:
                 by_value[value] = bonus
         if by_value:
@@ -91,7 +92,8 @@ def style_bonuses(insights) -> dict[str, Any]:
         marker = str(row.get("style") or "")
         if marker not in {"title_question", "title_number", "title_hook_word"}:
             continue
-        bonus = _style_bonus(float(row.get("delta_pct") or 0.0))
+        bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0))
+                      * confidence, 2)
         if bonus:
             style[marker] = bonus
     return style
@@ -176,7 +178,7 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     # Content-style learning rides on the same insights file (>=3 measured
     # clips) — it must apply even when no numeric correlation reached the
     # reporting threshold yet.
-    style = style_bonuses(insights)
+    style = style_bonuses(insights, confidence)
     if style:
         result["style"] = style
 
