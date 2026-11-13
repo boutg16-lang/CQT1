@@ -2181,7 +2181,7 @@ def _editor_review_call(ai_mode, api_key, model_name):
     return None
 
 
-def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None, allow_auto_embeddings=False):
+def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None, allow_auto_embeddings=False, selection_meta=None):
     """
     Aligns raw AI segments (with reference tags) to actual transcript timestamps.
     Applies constraints, validation, and deduplication.
@@ -2204,6 +2204,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     all_segments = list(raw_segments)
     tempo_minimo = min_duration
     tempo_maximo = max_duration
+    embeddings_used = None
 
     # v7.41: real media duration (when known) is the last word on whether a
     # window is valid — transcript bounds alone cannot catch an out-of-range
@@ -2755,9 +2756,9 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             if vectors:
                 for candidate, vector in zip(processed_segments, vectors, strict=False):
                     candidate["_embedding"] = vector
+                embeddings_used = semantic_embeddings.model_name(llm_config)
                 print("[DEBUG] Embedded {} clip windows for semantic similarity "
-                      "(model: {}).".format(len(vectors),
-                                            semantic_embeddings.model_name(llm_config)))
+                      "(model: {}).".format(len(vectors), embeddings_used))
         except Exception as exc:
             print("[WARN] Embedding pass skipped: {}".format(type(exc).__name__))
 
@@ -2832,6 +2833,14 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             "weights_fingerprint": selection_weights_fingerprint(),
             "transcript_fingerprint": transcript_fingerprint(transcript_segments),
         }
+        # Audit trail: which provider/model actually produced this list.
+        # Auto mode may legitimately reuse a reviewed list across providers,
+        # so these fields document the run instead of participating in the
+        # cache fingerprint.
+        if isinstance(selection_meta, dict):
+            final_result["selection_config"].update(selection_meta)
+        if embeddings_used:
+            final_result["selection_config"]["embeddings_model"] = embeddings_used
 
     # v7.41: ONE reusable final validator, called here before the segments can
     # be saved/cut/published. Structured errors (not just a bool) are attached
@@ -3205,6 +3214,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
     # Config Vars
     current_chunk_size = 15000
     model_name = ""
+    router = None
     
     if ai_mode == "gemini":
         cfg_chunk = config["gemini"].get("chunk_size", 15000)
@@ -3555,6 +3565,15 @@ OUTPUT JSON ONLY:
 
     # Call the alignment / processing logic (the editor-review call is None
     # unless VIRALCUTTER_EDITOR_REVIEW=1 opted in — see _editor_review_call)
+    selection_meta = {
+        "ai_backend": ai_mode,
+        "ai_model": model_name,
+    }
+    if ai_mode == "auto" and router is not None:
+        selection_meta["ai_chain"] = [candidate.describe()
+                                      for candidate in router.candidates]
+        selection_meta["ai_used"] = (router.used.describe()
+                                     if router.used else "")
     return process_segments(
         all_raw_segments, 
         transcript_segments, 
@@ -3570,4 +3589,5 @@ OUTPUT JSON ONLY:
             else _editor_review_call(ai_mode, api_key, model_name)),
         llm_config=config,
         allow_auto_embeddings=ai_mode in {"openai", "auto"},
+        selection_meta=selection_meta,
     )

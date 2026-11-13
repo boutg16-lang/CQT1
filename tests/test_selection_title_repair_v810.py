@@ -234,3 +234,17 @@ def test_speech_blocks_are_capped():
     assert len(blocks) >= 3
     assert all(end - start <= cvs.MAX_SENTENCE_BLOCK_SECONDS + 0.01
                for start, end in blocks[:-1])
+
+
+def test_selection_config_records_the_ai_route():
+    transcript = _lines(6)
+    result = cvs.process_segments(
+        [_candidate("Route", 6, 18)], transcript, 5, 30,
+        selection_meta={"ai_backend": "auto", "ai_model": "qwen2.5:7b",
+                        "ai_chain": ["qwen2.5:7b (local)"],
+                        "ai_used": "qwen2.5:7b (local)"})
+    config = result["selection_config"]
+    assert config["ai_backend"] == "auto"
+    assert config["ai_model"] == "qwen2.5:7b"
+    assert config["ai_chain"] == ["qwen2.5:7b (local)"]
+    assert config["ai_used"] == "qwen2.5:7b (local)"
