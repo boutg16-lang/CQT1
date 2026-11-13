@@ -886,6 +886,11 @@ def main():
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'api_config.json')
     api_config = secure_config.load_api_config()
 
+    # The OpenAI-compatible base URL may come from the CLI; export it so the
+    # selection module (which resolves provider settings itself) sees it.
+    if str(getattr(args, "openai_base_url", "") or "").strip():
+        os.environ["VIRALCUTTER_OPENAI_BASE_URL"] = str(args.openai_base_url).strip()
+
     if not viral_segments:
         num_segments = args.segments
         if not num_segments:

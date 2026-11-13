@@ -307,6 +307,7 @@ def factual_accuracy_score(title, window_text):
     if not title:
         return 0.0
     window_tokens = set(_content_tokens(window_text))
+    window_stems = {arabic_text.light_stem(token) for token in window_tokens}
     title_tokens = _content_tokens(title)
     unsupported = hallucinated_facts(title, window_text)
     checks = 0.0
@@ -320,10 +321,11 @@ def factual_accuracy_score(title, window_text):
         checks += 2.0
         if token in _latin_tokens(window_text):
             passed += 2.0
-    # Content words — weight 1 each.
+    # Content words — weight 1 each. A light stem match counts: «إتقان» in a
+    # title is the same claim as «وإتقانها» in the clip transcript.
     for token in title_tokens:
         checks += 1.0
-        if token in window_tokens:
+        if token in window_tokens or arabic_text.light_stem(token) in window_stems:
             passed += 1.0
     if checks == 0.0:
         # Title is pure stopwords/short words: nothing verifiable — mediocre,
@@ -344,8 +346,11 @@ def transcript_relevance_score(title, window_text):
     window_tokens = set(_content_tokens(window_text))
     if not window_tokens:
         return 0.0
-    overlap = len(title_tokens & window_tokens) / len(title_tokens)
-    return round(100.0 * overlap, 1)
+    window_stems = {arabic_text.light_stem(token) for token in window_tokens}
+    matched = sum(
+        1 for token in title_tokens
+        if token in window_tokens or arabic_text.light_stem(token) in window_stems)
+    return round(100.0 * matched / len(title_tokens), 1)
 
 
 def clarity_score(title):

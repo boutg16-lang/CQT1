@@ -78,6 +78,56 @@ def normalized_match_text(value) -> str:
     ).strip()
 
 
+# ---------------------------------------------------------------------------
+# Light stemming (comparison only)
+# ---------------------------------------------------------------------------
+
+# Conservative Arabic light stemmer: strips a leading conjunction/definite
+# article and one pronominal/plural suffix, never below a 3-letter stem.
+# It is intentionally NOT a full morphological analyser — the goal is to let
+# «إتقان» match «وإتقانها» and «النجاح» match «بالنجاح» in factual title
+# checks without inventing roots that would make unrelated words equal.
+# Bare ب/ك/ل are deliberately absent: they collide with root letters
+# (برنامج، كتاب، لغة) and would corrupt more words than they normalise.
+_STEM_PREFIXES = ("وال", "بال", "كال", "فال", "لل", "ال", "و", "ف")
+# (suffix, minimum letters that must remain). Plural/dual endings need a
+# 4-letter stem so a masdar like «إتقان» is not reduced to «اتق» and stops
+# matching «وإتقانها».
+_STEM_SUFFIXES = (
+    ("هما", 3), ("كما", 3), ("ها", 3), ("هم", 3), ("هن", 3),
+    ("كم", 3), ("كن", 3), ("نا", 3), ("ني", 3),
+    ("ات", 4), ("ون", 4), ("ين", 4), ("ان", 4),
+    ("ه", 3), ("ي", 3), ("ك", 3),
+)
+_ARABIC_LETTER_RE = re.compile(r"[\u0600-\u06FF]")
+
+
+def light_stem(word) -> str:
+    """Return a conservative comparison stem for one Arabic word.
+
+    Non-Arabic input is returned lowercased and otherwise unchanged, so
+    Latin brands and numbers keep their exact identity.
+    """
+    text = normalize_arabic_orthography(str(word or "").strip().lower())
+    if not text or not _ARABIC_LETTER_RE.search(text):
+        return text
+    for prefix in _STEM_PREFIXES:
+        if text.startswith(prefix) and len(text) - len(prefix) >= 4:
+            text = text[len(prefix):]
+            break
+    for suffix, minimum in _STEM_SUFFIXES:
+        if text.endswith(suffix) and len(text) - len(suffix) >= minimum:
+            text = text[:-len(suffix)]
+            break
+    return text
+
+
+def stemmed_tokens(text) -> list[str]:
+    """Stems of the word tokens in ``text`` (comparison only)."""
+    return [light_stem(token) for token in normalized_match_text(text).split()
+            if token]
+
+
 def collapse_spaces(text) -> str:
     """Collapse repeated whitespace (incl. Arabic ZWSP runs) to single spaces."""
     return re.sub(r"[\s​]+", " ", str(text or "")).strip()

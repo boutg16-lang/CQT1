@@ -231,6 +231,19 @@ G4F_MODELS = [
 ]
 
 
+# Suggested ids for the OpenAI-compatible backend. Free text is allowed, so
+# any model the server exposes can be typed in.
+OPENAI_MODEL_SUGGESTIONS = [
+    "llama3.1",
+    "qwen2.5:7b",
+    "qwen2.5:14b",
+    "gpt-oss:20b",
+    "mistral-nemo",
+    "gemma3:12b",
+    "deepseek-r1:14b",
+]
+
+
 def get_local_models():
     """List .gguf models in the models/ folder (local LLM backend)."""
     models_dir = os.path.join(WORKING_DIR, "models")
@@ -445,6 +458,10 @@ def _model_choices_for(backend, saved_model):
         choices = models if models else [i18n("No models found")]
         default = choices[0]
         model_visible, refresh_visible, api_visible = True, True, False
+    elif backend == "openai":
+        choices = list(OPENAI_MODEL_SUGGESTIONS)
+        default = "llama3.1"
+        model_visible, refresh_visible, api_visible = True, False, True
     else:
         choices, default = [], saved_model or ""
         model_visible, refresh_visible, api_visible = False, False, False
@@ -498,7 +515,7 @@ def on_backend_change(backend, key1, key2, key3, key_mode, model, chunk):
     if backend == "manual":
         chunk_upd = gr.update(value=chunk)
     status = _save_and_status(backend, key1, key2, key3, key_mode, model, chunk)
-    hidden = gr.update(visible=bool(show_api.value) if hasattr(show_api, "value") else backend == "gemini")
+    hidden = gr.update(visible=bool(show_api.value) if hasattr(show_api, "value") else backend in {"gemini", "openai"})
     return hidden, hidden, hidden, hidden, model_upd, refresh_upd, chunk_upd, status
 
 
@@ -513,8 +530,23 @@ def save_settings_click(backend, key1, key2, key3, key_mode, model, chunk):
 
 def test_api_connection(backend, key1, key2, key3, key_mode, model):
     """Test the selected key without printing its value."""
+    if backend == "openai":
+        try:
+            from scripts import openai_compat
+            settings = settings_store.load_ui_settings()
+            config = {"openai": {
+                "base_url": settings.get("openai_base_url"),
+                "api_key": str(key1 or "").strip(),
+                "model": str(model or "llama3.1"),
+            }}
+            ok, message = openai_compat.probe(config)
+        except Exception as exc:
+            return "❌ " + i18n("Connection failed:") + " " + type(exc).__name__
+        if ok:
+            return "✅ " + i18n("Connection OK — the selected key works.") + " (" + message + ")"
+        return "❌ " + i18n("Connection failed:") + " " + str(message)[:300]
     if backend != "gemini":
-        return "ℹ️ " + i18n("Connection test is only available for Gemini.")
+        return "ℹ️ " + i18n("Connection test is only available for Gemini and OpenAI-compatible backends.")
     keys = [str(key or "").strip() for key in (key1, key2, key3) if str(key or "").strip()]
     if key_mode in {"1", "2", "3"}:
         selected = keys[int(key_mode) - 1] if int(key_mode) <= len(keys) else ""
@@ -908,6 +940,19 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                 env.setdefault("VIRALCUTTER_GEMINI_KEY", _resolved_keys[0])
             elif _resolved_key:
                 env.setdefault("VIRALCUTTER_GEMINI_KEY", _resolved_key)
+        elif ai_backend == "openai":
+            # Local servers need no key; hosted providers get the field value
+            # for THIS run only (never persisted to the plaintext config).
+            _openai_key = str(api_key or "").strip()
+            if _openai_key:
+                env.setdefault("OPENAI_API_KEY", _openai_key)
+            try:
+                _saved_openai = settings_store.load_ui_settings()
+                env.setdefault("VIRALCUTTER_OPENAI_BASE_URL",
+                               _saved_openai.get("openai_base_url")
+                               or "http://localhost:11434/v1")
+            except Exception:
+                pass
         # mask the API key in the echoed command — never print secrets to
         # the visible log (v6.9 fix: keys leaked into screenshots/logs before)
         def _mask_cmd(cmd_list):
@@ -1729,8 +1774,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     gr.Markdown("### 🤖 " + i18n("AI"))
                     gr.Markdown("**اختيار عملي:** استخدم Auto لاختيار CUDA عند توفر NVIDIA، وأضف حتى ثلاثة مفاتيح Gemini لتدويرها تلقائياً عند نفاد الحصة.", elem_classes=["vc-help-card"])
                     with gr.Row():
-                        ai_backend_input = gr.Dropdown(choices=[(i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="gemini", scale=2)
-                        api_key_input = gr.Textbox(label=i18n("Gemini API Key 1"), type="password", scale=3)
+                        ai_backend_input = gr.Dropdown(choices=[(i18n("Gemini"), "gemini"), (i18n("G4F"), "g4f"), (i18n("Local (GGUF)"), "local"), (i18n("OpenAI-compatible (Ollama / LM Studio / OpenRouter)"), "openai"), (i18n("Manual"), "manual")], label=i18n("AI Backend"), value="gemini", scale=2)
+                        api_key_input = gr.Textbox(label=i18n("API Key 1 (Gemini / OpenAI-compatible)"), type="password", scale=3)
                     with gr.Row():
                         api_key_2_input = gr.Textbox(label=i18n("Gemini API Key 2"), type="password", visible=True, scale=3)
                         api_key_3_input = gr.Textbox(label=i18n("Gemini API Key 3"), type="password", visible=True, scale=3)
@@ -1743,12 +1788,12 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         test_key_btn = gr.Button("🔌 " + i18n("Test Connection"), variant="secondary", size="sm", scale=1)
                         settings_hint = gr.Markdown("💡 " + i18n("Add up to 3 keys. Set VIRALCUTTER_CONFIG_PASSPHRASE to enable encrypted storage. Automatic rotation switches after quota or key errors; status masks the keys."))
                     with gr.Row():
-                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=DEFAULT_GEMINI_MODEL, allow_custom_value=False, visible=True, scale=5)
+                        ai_model_input = gr.Dropdown(choices=GEMINI_MODELS, label=i18n("AI Model"), value=DEFAULT_GEMINI_MODEL, allow_custom_value=True, visible=True, scale=5)
                         refresh_models_btn = gr.Button("🔄", size="sm", visible=False, scale=0, min_width=50)
                         chunk_size_input = gr.Number(label=i18n("Chunk Size"), value=70000, precision=0, scale=2)
 
                     def update_ai_ui(backend):
-                        show_api = (backend == "gemini")
+                        show_api = backend in {"gemini", "openai"}
                         show_refresh = (backend == "local")
                         if backend == "gemini":
                             new_choices = list(GEMINI_MODELS)
@@ -1763,6 +1808,10 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                             new_choices = models if models else [i18n("No models found")]
                             new_val = new_choices[0]
                             new_chunk = 30000
+                        elif backend == "openai":
+                            new_choices = list(OPENAI_MODEL_SUGGESTIONS)
+                            new_val = "llama3.1"
+                            new_chunk = 12000
                         else:
                             new_choices = ai_model_input.choices or []
                             new_val = ai_model_input.value

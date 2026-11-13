@@ -235,6 +235,14 @@ def load_api_config(base_dir=None):
         "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL,
                    "chunk_size": 20000},
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
+        "openai": {
+            "base_url": "http://localhost:11434/v1",
+            "api_key": "",
+            "model": "llama3.1",
+            "chunk_size": 12000,
+            "embedding_model": "bge-m3",
+            "embeddings": False,
+        },
     }
     if os.path.exists(path):
         try:
@@ -247,6 +255,8 @@ def load_api_config(base_dir=None):
                         config["gemini"].update(loaded["gemini"])
                     if isinstance(loaded.get("g4f"), dict):
                         config["g4f"].update(loaded["g4f"])
+                    if isinstance(loaded.get("openai"), dict):
+                        config["openai"].update(loaded["openai"])
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
             logger.warning("Could not read api_config.json (%s); using defaults.", type(exc).__name__)
     requested_model = config["gemini"].get("model")

@@ -57,3 +57,23 @@
 [5]: https://github.com/ggml-org/whisper.cpp "ggml-org/whisper.cpp"
 
 [6]: https://github.com/facebookresearch/demucs "facebookresearch/demucs"
+
+## تقييم 13 نوفمبر 2026 — طبقة المزوّدين والتضمينات
+
+روجعت أربعة مشاريع إضافية بعد إصلاح 8.1:
+
+| المشروع | ما يقدمه | القرار |
+|---|---|---|
+| openshorts (MIT) | كشف لحظات متعدد الوسائط، ترتيب، ترجمة، دبلجة | أفكار فقط؛ البنية مختلفة والكود لا يُنسخ |
+| SupoClip | بديل OpusClip مفتوح | لا دمج؛ يكرر وظائف موجودة |
+| Clips Kitty | Ollama/OpenRouter لكشف اللحظات | أكد أولوية دعم OpenAI-compatible؛ أُخذت الطبقة لا الكود |
+| Tashaphyne (GPL) | تجريد صرفي عربي | المبدأ نُفّذ داخلياً بلا اعتماد إضافي |
+
+**المنفَّذ في 8.2.0:** `scripts/openai_compat.py` (Ollama, LM Studio, vLLM,
+llama.cpp server, OpenRouter, Groq, Together, DeepSeek)، و`semantic_embeddings.py`
+لتضمينات اختيارية، و`arabic_text.light_stem` لفحص العناوين. لا اعتماد جديد:
+`requests` موجود أصلاً.
+
+**ما لم يُدمج بعد:** Silero VAD (يحتاج benchmark عربي قبل تغيير قرار القص)،
+pyannote (نماذج منفصلة الترخيص)، Demucs (مؤرشف وثقيل)، whisper.cpp (يحتاج
+إدارة binary ونماذج على Windows). هذه تبقى في الترتيب الأصلي أعلاه.

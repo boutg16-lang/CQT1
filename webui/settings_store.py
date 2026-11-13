@@ -37,7 +37,7 @@ GEMINI_KEY_PREFIX = "AIza"
 
 # placeholders that mean "no real key" in api_config.json
 FAKE_KEYS = {"", "SUA_KEY_AQUI", "YOUR_KEY_HERE"}
-VALID_BACKENDS = {"gemini", "g4f", "local", "manual"}
+VALID_BACKENDS = {"gemini", "g4f", "local", "manual", "openai"}
 MIN_CHUNK_SIZE = 1
 MAX_CHUNK_SIZE = 200000
 
@@ -95,6 +95,14 @@ def _defaults():
             "chunk_size": 20000,
         },
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
+        "openai": {
+            "base_url": "http://localhost:11434/v1",
+            "api_key": "",
+            "model": "llama3.1",
+            "chunk_size": 12000,
+            "embedding_model": "bge-m3",
+            "embeddings": False,
+        },
     }
 
 
@@ -143,14 +151,31 @@ def load_ui_settings(base_dir=None):
             source = KEY_SOURCE_FILE
     key = keys[0] if keys else ""
 
-    backend_cfg = gemini if backend == "gemini" else (config.get("g4f") or {})
+    openai_cfg = config.get("openai") or {}
+    if not isinstance(openai_cfg, dict):
+        openai_cfg = {}
+    if backend == "gemini":
+        backend_cfg = gemini
+    elif backend == "openai":
+        backend_cfg = openai_cfg
+    else:
+        backend_cfg = config.get("g4f") or {}
     if not isinstance(backend_cfg, dict):
         backend_cfg = {}
     model = backend_cfg.get("model") or gemini.get("model") or ""
     if backend == "gemini":
         model = resolve_gemini_model(model)
-    default_chunk = 20000 if backend == "gemini" else 2000
+    if backend == "openai":
+        # Local servers need no key; hosted ones read OPENAI_API_KEY.
+        key = (os.getenv("OPENAI_API_KEY", "").strip()
+               or os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
+               or str(openai_cfg.get("api_key") or "").strip())
+        if key:
+            source = KEY_SOURCE_ENV if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY") else KEY_SOURCE_FILE
+    default_chunk = 20000 if backend == "gemini" else (12000 if backend == "openai" else 2000)
     chunk = _coerce_chunk(backend_cfg.get("chunk_size"), default_chunk)
+    if backend == "openai" and not model:
+        model = str(openai_cfg.get("model") or "llama3.1")
 
     return {
         "ai_backend": backend,
@@ -160,6 +185,14 @@ def load_ui_settings(base_dir=None):
         "key_source": source,
         "ai_model": model,
         "chunk_size": chunk,
+        "openai_base_url": str(
+            os.getenv("VIRALCUTTER_OPENAI_BASE_URL", "").strip()
+            or os.getenv("OPENAI_BASE_URL", "").strip()
+            or openai_cfg.get("base_url") or "http://localhost:11434/v1"),
+        "embedding_model": str(openai_cfg.get("embedding_model") or "bge-m3"),
+        "embeddings": bool(openai_cfg.get("embeddings")) or str(
+            os.getenv("VIRALCUTTER_EMBEDDINGS", "")).strip().lower() in {
+                "1", "true", "yes", "on"},
     }
 
 
@@ -183,7 +216,7 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
                            type(exc).__name__)
             return False, "تعذّرت قراءة ملف الإعدادات؛ لم يتم تغييره."
 
-    for section in ("gemini", "g4f"):
+    for section in ("gemini", "g4f", "openai"):
         if not isinstance(config.get(section), dict):
             config[section] = {}
 
@@ -206,6 +239,14 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
             clean_keys.append(value)
         if len(clean_keys) >= 3:
             break
+    # A key typed while the OpenAI-compatible backend is selected belongs to
+    # that provider, not to Gemini. Only persist it when it clearly looks like
+    # a Gemini key, otherwise the runner receives it through the environment
+    # for the current run and nothing is written to disk.
+    openai_backend = backend == "openai"
+    if openai_backend:
+        clean_keys = [key for key in clean_keys
+                      if key.startswith(GEMINI_KEY_PREFIX)]
     if clean_keys and not env_keys:
         config["gemini"]["api_keys"] = clean_keys
         config["gemini"]["api_key"] = clean_keys[0]
@@ -216,18 +257,20 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
     if key_mode in {"auto", "1", "2", "3"}:
         config["gemini"]["key_mode"] = key_mode
 
+    section = (config["gemini"] if backend == "gemini"
+               else config["openai"] if backend == "openai"
+               else config["g4f"])
     if ai_model:
-        section = config["gemini"] if backend == "gemini" else config["g4f"]
         if backend == "gemini":
             supported_model = resolve_gemini_model(ai_model)
             if supported_model != str(ai_model).strip():
                 return False, "Gemini model is unavailable; choose one of the listed models."
             section["model"] = supported_model
         else:
-            section["model"] = ai_model
+            section["model"] = str(ai_model).strip()
     if chunk_size is not None:
-        section = config["gemini"] if backend == "gemini" else config["g4f"]
-        default_chunk = 20000 if backend == "gemini" else 2000
+        default_chunk = (20000 if backend == "gemini"
+                         else 12000 if backend == "openai" else 2000)
         section["chunk_size"] = _coerce_chunk(chunk_size, default_chunk)
 
     stored = config["gemini"].get("api_keys") or [config["gemini"].get("api_key", "")]

@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.1.0-ultimate — repaired clip selection and title validation: bounded boundary snapping, correct anchors, factual titles that actually ship, and an intact cut-to-publish chain
+**Current Version**: 8.2.0-ultimate — any OpenAI-compatible provider (Ollama, LM Studio, vLLM, OpenRouter, Groq), optional embedding-based semantic de-duplication, and Arabic stem-aware factual title checks
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

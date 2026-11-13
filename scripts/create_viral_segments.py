@@ -30,6 +30,20 @@ try:
 except Exception:
     performance_weights = None
 
+# OpenAI-compatible providers (Ollama, LM Studio, vLLM, OpenRouter, Groq…).
+# Imported defensively so a missing optional dependency never blocks the
+# existing Gemini/g4f/local/manual paths.
+try:
+    from scripts import openai_compat
+except Exception:
+    openai_compat = None
+
+# Optional embeddings for semantic de-duplication (off unless opted in).
+try:
+    from scripts import semantic_embeddings
+except Exception:
+    semantic_embeddings = None
+
 # v7.40: centralized clip-quality modules (stdlib-only, deterministic).
 # Arabic normalization lives canonically in scripts/arabic_text and is
 # re-exported below under the historical private names so existing callers
@@ -985,8 +999,8 @@ def _rank_segments_with_diversity(segments, limit=None):
                         continue
                     if _windows_are_near_duplicates(candidate, prior):
                         continue
-                    similarity = transcript_window.guarded_semantic_similarity(
-                        candidate_text, prior_text)
+                    similarity = _pair_similarity(
+                        candidate, prior, candidate_text, prior_text)
                     if similarity >= 0.45:
                         semantic_penalty = max(semantic_penalty, min(6.0, (similarity - 0.35) * 10.0))
             # v7.52: graded temporal-overlap penalty. The duplicate gate has
@@ -1269,6 +1283,26 @@ def _load_word_timings(project_folder):
         return []
 
 
+def _pair_similarity(left, right, left_text, right_text):
+    """Semantic similarity for a candidate pair.
+
+    Uses the configured embedding vectors when both candidates carry one,
+    otherwise the deterministic lexical similarity. Never raises.
+    """
+    if semantic_embeddings is not None:
+        left_vector = left.get("_embedding") if isinstance(left, dict) else None
+        right_vector = right.get("_embedding") if isinstance(right, dict) else None
+        if left_vector and right_vector:
+            try:
+                return max(0.0, min(1.0, semantic_embeddings.similarity(
+                    left_vector, right_vector)))
+            except Exception:
+                pass
+    if transcript_window is None:
+        return 0.0
+    return transcript_window.guarded_semantic_similarity(left_text, right_text)
+
+
 def deduplicate_segments(segments, semantic_threshold=None):
     """Keep the highest-scoring candidate for each source window / idea.
 
@@ -1315,13 +1349,32 @@ def _is_semantic_duplicate(candidate, existing, threshold=None):
     candidate_text = str(candidate.get("transcript_text") or "").strip()
     if not candidate_text:
         return False
-    if len(candidate_text.split()) < transcript_window.MIN_SEMANTIC_WORDS:
+    # Vectors carry meaning in a few words; lexical similarity needs the
+    # longer guard because short overlapping phrases are usually coincidence.
+    has_vectors = bool(candidate.get("_embedding"))
+    min_words = 3 if has_vectors else transcript_window.MIN_SEMANTIC_WORDS
+    if len(candidate_text.split()) < min_words:
         return False
     if threshold is None:
         threshold = transcript_window.semantic_duplicate_threshold()
     for other in existing:
         other_text = str(other.get("transcript_text") or "").strip()
-        if not other_text or len(other_text.split()) < transcript_window.MIN_SEMANTIC_WORDS:
+        other_min = 3 if other.get("_embedding") else transcript_window.MIN_SEMANTIC_WORDS
+        if not other_text or len(other_text.split()) < other_min:
+            continue
+        candidate_vector = candidate.get("_embedding")
+        other_vector = other.get("_embedding")
+        if candidate_vector and other_vector:
+            # Keep the stated-number guard: two clips that quote different
+            # amounts are different facts even if the wording is similar.
+            try:
+                if transcript_window._number_set(candidate_text) != \
+                        transcript_window._number_set(other_text):
+                    continue
+            except Exception:
+                pass
+            if _pair_similarity(candidate, other, candidate_text, other_text) >= threshold:
+                return True
             continue
         is_dup, _sim = transcript_window.are_semantic_duplicates(
             candidate_text, other_text, threshold)
@@ -2070,7 +2123,8 @@ def _apply_semantic_repetition_penalties(segments, weights=None):
             # the penalty gradient is for the same IDEA at DIFFERENT times.
             if _windows_are_near_duplicates(candidate, segments[prior]):
                 continue
-            similarity = transcript_window.guarded_semantic_similarity(texts[index], texts[prior])
+            similarity = _pair_similarity(
+                candidate, segments[prior], texts[index], texts[prior])
             if similarity >= threshold:
                 worst = max(worst, slope)
             elif similarity >= lower_bound:
@@ -2113,11 +2167,15 @@ def _editor_review_call(ai_mode, api_key, model_name):
         def review_call(prompt):
             return call_g4f(prompt, model_name=model_name)
         return review_call
+    if ai_mode == "openai" and openai_compat is not None:
+        def review_call(prompt):
+            return openai_compat.chat(prompt, model=model_name)
+        return review_call
     print("[editor-review] no review call for backend '{}' — pass disabled".format(ai_mode))
     return None
 
 
-def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None):
+def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None):
     """
     Aligns raw AI segments (with reference tags) to actual transcript timestamps.
     Applies constraints, validation, and deduplication.
@@ -2678,6 +2736,23 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     candidate["selection_breakdown"]["style_bonus"] = round(style_bonus, 2)
                     candidate["selection_breakdown"]["style_basis"] = style_map.get("basis", "content_insights")
 
+    # Optional embedding pass: one batched request for every unique window
+    # text, attached to the candidate for de-duplication and repetition
+    # penalties. Failure is non-fatal — the lexical path stays in place.
+    if semantic_embeddings is not None and processed_segments:
+        try:
+            texts = [str(candidate.get("transcript_text") or "")
+                     for candidate in processed_segments]
+            vectors = semantic_embeddings.embed_texts(texts, config=llm_config)
+            if vectors:
+                for candidate, vector in zip(processed_segments, vectors, strict=False):
+                    candidate["_embedding"] = vector
+                print("[DEBUG] Embedded {} clip windows for semantic similarity "
+                      "(model: {}).".format(len(vectors),
+                                            semantic_embeddings.model_name(llm_config)))
+        except Exception as exc:
+            print("[WARN] Embedding pass skipped: {}".format(type(exc).__name__))
+
     # v7.40: semantic repetition penalties — candidates expressing the same
     # idea as an already stronger candidate in different words lose points
     # BEFORE the editorial gate and de-duplication run. The penalty pass
@@ -2725,6 +2800,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         all_segments = _rank_segments_with_diversity(all_segments, output_count)
     else:
         all_segments = _rank_segments_with_diversity(all_segments)
+
+    # Embeddings are a ranking aid, not segment data: never persist them.
+    for segment in all_segments:
+        if isinstance(segment, dict):
+            segment.pop("_embedding", None)
 
     final_result = {"segments": all_segments}
 
@@ -3090,6 +3170,14 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         "g4f": {
             "model": "gpt-4o-mini",
             "chunk_size": 2000
+        },
+        "openai": {
+            "base_url": "http://localhost:11434/v1",
+            "api_key": "",
+            "model": "llama3.1",
+            "chunk_size": 12000,
+            "embedding_model": "bge-m3",
+            "embeddings": False
         }
     }
 
@@ -3100,6 +3188,8 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
                 if "gemini" in loaded_config: config["gemini"].update(loaded_config["gemini"])
                 config["gemini"]["api_keys"] = config["gemini"].get("api_keys") or ([config["gemini"].get("api_key")] if config["gemini"].get("api_key") else [])
                 if "g4f" in loaded_config: config["g4f"].update(loaded_config["g4f"])
+                if isinstance(loaded_config.get("openai"), dict):
+                    config["openai"].update(loaded_config["openai"])
                 if "selected_api" in loaded_config: config["selected_api"] = loaded_config["selected_api"]
         except Exception as e:
             print(f"Erro ao ler api_config.json: {e}")
@@ -3138,6 +3228,19 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
         cfg_model = config["g4f"].get("model", "gpt-4o-mini")
         model_name = model_name_arg if model_name_arg else cfg_model
+
+    elif ai_mode == "openai":
+        cfg_chunk = config["openai"].get("chunk_size", 12000)
+        current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
+        # The explicit CLI/UI model wins, then api_config, then the provider's
+        # default. Base URL and key are resolved by openai_compat from env and
+        # api_config (the key is never taken from argv).
+        model_name = (model_name_arg
+                      or str(config["openai"].get("model") or "").strip())
+        if openai_compat is None:
+            print("[ERRO] OpenAI-compatible backend requested but the client "
+                  "module is unavailable.")
+            return {"segments": []}
 
     elif ai_mode == "local":
         current_chunk_size = _safe_chunk_size(chunk_size_arg, 3000)
@@ -3351,6 +3454,15 @@ OUTPUT JSON ONLY:
         elif ai_mode == "g4f":
             print(f"Enviando chunk {i+1} para o G4F (Model: {model_name})...")
             response_text = call_g4f(prompt, model_name=model_name)
+        elif ai_mode == "openai":
+            print("Sending chunk {}/{} to the OpenAI-compatible provider (model: {})...".format(
+                i + 1, len(output_texts), model_name))
+            try:
+                response_text = openai_compat.chat(
+                    prompt, model=model_name, config=config)
+            except openai_compat.OpenAICompatError as exc:
+                print("[ERRO] OpenAI-compatible provider failed: {}".format(exc))
+                response_text = "{}"
         elif ai_mode == "local" and local_llm_instance:
             print(f"Processing chunk {i+1} with Local LLM...")
             try:
@@ -3397,4 +3509,5 @@ OUTPUT JSON ONLY:
         output_count=candidate_target,
         project_folder=project_folder,
         editor_review_llm=_editor_review_call(ai_mode, api_key, model_name),
+        llm_config=config,
     )

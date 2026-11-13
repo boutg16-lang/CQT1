@@ -8,5 +8,13 @@
     "g4f": {
         "model": "gpt-4o-mini",
         "chunk_size": 2000
+    },
+    "openai": {
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "",
+        "model": "llama3.1",
+        "chunk_size": 12000,
+        "embedding_model": "bge-m3",
+        "embeddings": false
     }
 }
