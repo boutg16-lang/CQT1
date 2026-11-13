@@ -525,7 +525,16 @@ def apply_title_edits(project_path, rows):
                     index + 1, "; ".join(validation.get("reasons") or ["not supported by clip"])))
                 continue
             segment["title_validation"] = validation
-            segment["title_review_required"] = validation.get("status") != "verified"
+            verified = validation.get("status") == "verified"
+            segment["title_review_required"] = not verified
+            # The table edit replaces the old title's verdict. Leaving a stale
+            # requires_review flag blocked a clip whose new title verifies.
+            if verified and not segment.get("export_blocked"):
+                segment["requires_review"] = False
+                segment["publish_blocked_reason"] = ""
+            elif not verified:
+                segment["requires_review"] = True
+                segment["publish_blocked_reason"] = "manual_review_required"
         else:
             segment["title_validation"] = {"status": "review",
                                            "reasons": ["no_clip_transcript"]}
