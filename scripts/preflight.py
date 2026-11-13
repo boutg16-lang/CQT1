@@ -135,6 +135,8 @@ ASSETS = list(RUNTIME_ASSETS)
 API_CONFIG_TEMPLATE = {
     "selected_api": "gemini",
     "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL, "chunk_size": 20000},
+    "openai": {"base_url": "http://localhost:11434/v1", "api_key": "",
+               "model": "llama3.1", "chunk_size": 12000},
     "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
 }
 
@@ -463,9 +465,13 @@ def check_api_config():
         return {"name": "api_config.json", "status": FAIL,
                 "detail": "invalid Gemini configuration structure"}
     backend = str(data.get("selected_api") or "gemini").strip().lower()
-    if backend in {"g4f", "local", "manual"}:
-        return {"name": "Gemini API key", "status": OK,
-                "detail": "not required for selected backend: %s" % backend}
+    if backend in {"g4f", "local", "manual", "openai"}:
+        detail = "not required for selected backend: %s" % backend
+        if backend == "openai":
+            base_url = str((data.get("openai") or {}).get("base_url")
+                           or "http://localhost:11434/v1")
+            detail += " (OpenAI-compatible server: %s)" % base_url
+        return {"name": "Gemini API key", "status": OK, "detail": detail}
 
     if env_present and resolved_keys:
         key = resolved_keys[0]
@@ -491,7 +497,7 @@ def check_api_config():
                 if str(value or "").strip()), "")
     if not key:
         return {"name": "Gemini API key", "status": WARN,
-                "detail": "empty - set an environment key or encrypted store, or use --ai-backend manual/g4f/local"}
+                "detail": "empty - set an environment key or encrypted store, or use --ai-backend manual/g4f/local/openai"}
     if not key.startswith("AIza"):
         return {"name": "Gemini API key", "status": WARN,
                 "detail": "legacy file key does not look like a Gemini key"}

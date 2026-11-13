@@ -180,6 +180,18 @@ def test_check_api_config_missing(monkeypatch, tmp_path):
     assert "optional" in r["detail"]
 
 
+def test_check_api_config_openai_backend_needs_no_gemini_key(tmp_path, monkeypatch):
+    monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
+    (tmp_path / "api_config.json").write_text(json.dumps({
+        "selected_api": "openai",
+        "openai": {"base_url": "http://localhost:11434/v1", "model": "llama3.1"},
+    }), encoding="utf-8")
+    result = preflight.check_api_config()
+    assert result["status"] == preflight.OK
+    assert "openai" in result["detail"]
+    assert "localhost:11434" in result["detail"]
+
+
 def test_check_api_config_accepts_encrypted_key(tmp_path, monkeypatch):
     passphrase = "unit-test-preflight-passphrase"
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
