@@ -691,8 +691,11 @@ _UNIT_GROUPS = {
 # part of the source (clip_ratio < 0.5) and the window itself does not frame
 # the whole video. صياغات تُوهم بأن العنوان يغطي الفيديو كاملًا.
 _SCOPE_MARKERS = (
-    "في هذا الفيديو", "هذا الفيديو", "الفيديو", "الفيديو كامل",
-    "المقطع كامل", "كل الفيديو", "الحلقة",
+    # Explicit whole-source framing only. A bare "الفيديو" / "الحلقة" in the
+    # window used to disable scope detection for an obviously whole-video
+    # title like "كل الفيديو في دقيقة".
+    "في هذا الفيديو", "هذا الفيديو", "الفيديو كامل", "الفيديو كله",
+    "المقطع كامل", "كل الفيديو", "الحلقة كاملة",
     "in this video", "this video", "the whole video", "whole video",
     "full video",
 )
