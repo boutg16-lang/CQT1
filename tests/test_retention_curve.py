@@ -229,3 +229,21 @@ def test_hook_weight_falls_back_to_views_without_a_curve(tmp_path):
     weights = pw.load_weights(str(project))
     assert weights["shifted"][0]["signal"] == "views"
     assert weights["weights"]["hook"] < pw.DEFAULT_WEIGHTS["hook"]
+
+
+def test_flat_curves_do_not_report_a_fake_drop(tmp_path, monkeypatch):
+    metrics = _metrics(4)
+    for item in metrics.values():
+        item["retention_curve"] = {
+            "hook_ratio": 0.9, "mid_ratio": 0.9, "end_ratio": 0.9,
+            "max_drop_at": None, "max_drop_pct": 0.0, "points": 100,
+        }
+    monkeypatch.setattr(pl, "_fetch_real_metrics",
+                        lambda ids, project_folder=None: metrics)
+    report = pl.analyze(_project(tmp_path, 4), fetch_live=True)
+    assert report["retention_curve"]["worst"] == {}
+    assert any("no sharp drop" in line for line in report["insights"])
+    markdown = open(pl.write_markdown(report["project"], report),
+                    encoding="utf-8").read()
+    assert "لا هبوط حاد" in markdown
+    assert "عند 0%" not in markdown

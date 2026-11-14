@@ -75,7 +75,7 @@ python -m scripts.performance_loop --project "VIRALS/my_project" --auto --force
 
 ## 7. التحقق
 
-- `tests/test_retention_curve.py` — 10 اختبارات: حساب الخطاف/الهبوط، رفض
+- `tests/test_retention_curve.py` — 11 اختباراً: حساب الخطاف/الهبوط، رفض
   المنحنيات الناقصة، استعلام التقرير الصحيح، الكاش وإعادة الجلب بعد الصلاحية،
   نجاة فشل فيديو واحد، التعطيل، ارتباط الخطاف، قسم Markdown، وأفضلية
   `hook_retention` في الأوزان.

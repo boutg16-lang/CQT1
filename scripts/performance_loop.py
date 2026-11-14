@@ -376,18 +376,22 @@ def _retention_curve_insights(measured: list[dict[str, Any]]) -> dict[str, Any] 
                   if curve.get(key) is not None]
         return round(statistics.fmean(values), 4) if values else None
 
-    worst_item, worst_curve = max(
-        rows, key=lambda pair: float(pair[1].get("max_drop_pct") or 0.0))
-    duration = worst_item.get("features", {}).get("duration")
-    drop_at = worst_curve.get("max_drop_at")
-    worst = {
-        "video_id": worst_item.get("video_id"),
-        "title": worst_item.get("title"),
-        "max_drop_at": drop_at,
-        "max_drop_pct": worst_curve.get("max_drop_pct"),
-    }
-    if duration and drop_at is not None:
-        worst["drop_seconds"] = round(float(duration) * float(drop_at), 1)
+    drops = [(item, curve) for item, curve in rows
+             if curve.get("max_drop_at") is not None]
+    worst = {}
+    if drops:
+        worst_item, worst_curve = max(
+            drops, key=lambda pair: float(pair[1].get("max_drop_pct") or 0.0))
+        duration = worst_item.get("features", {}).get("duration")
+        drop_at = worst_curve.get("max_drop_at")
+        worst = {
+            "video_id": worst_item.get("video_id"),
+            "title": worst_item.get("title"),
+            "max_drop_at": drop_at,
+            "max_drop_pct": worst_curve.get("max_drop_pct"),
+        }
+        if duration and drop_at is not None:
+            worst["drop_seconds"] = round(float(duration) * float(drop_at), 1)
     return {
         "samples": len(rows),
         "avg_hook_ratio": _avg("hook_ratio"),
@@ -643,13 +647,21 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
     curve_summary = _retention_curve_insights(measured)
     if curve_summary:
         report["retention_curve"] = curve_summary
-        report["insights"].append(
-            "Retention curve: first 10% holds {:.1f}% on average; biggest drop at "
-            "{}% of the clip (-{} points, {} curves).".format(
-                (curve_summary.get("avg_hook_ratio") or 0) * 100,
-                round((curve_summary.get("worst", {}).get("max_drop_at") or 0) * 100),
-                curve_summary.get("worst", {}).get("max_drop_pct"),
-                curve_summary.get("samples", 0)))
+        worst = curve_summary.get("worst") or {}
+        if worst:
+            report["insights"].append(
+                "Retention curve: first 10% holds {:.1f}% on average; biggest drop at "
+                "{}% of the clip (-{} points, {} curves).".format(
+                    (curve_summary.get("avg_hook_ratio") or 0) * 100,
+                    round((worst.get("max_drop_at") or 0) * 100),
+                    worst.get("max_drop_pct"),
+                    curve_summary.get("samples", 0)))
+        else:
+            report["insights"].append(
+                "Retention curve: first 10% holds {:.1f}% on average; no sharp "
+                "drop detected ({} curves).".format(
+                    (curve_summary.get("avg_hook_ratio") or 0) * 100,
+                    curve_summary.get("samples", 0)))
         if (curve_summary.get("avg_hook_ratio") or 1.0) < 0.85:
             report["insights"].append(
                 "Hook warning: the first 10% loses {:.1f}% of viewers — "
@@ -755,12 +767,15 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
             (curve.get("avg_mid_ratio") or 0) * 100,
             (curve.get("avg_end_ratio") or 0) * 100))
         worst = curve.get("worst") or {}
-        where = ""
-        if worst.get("drop_seconds") is not None:
-            where = " (≈{} ثانية)".format(worst["drop_seconds"])
-        lines.append("- أكبر هبوط: عند {}% من المقطع{} بخصم {} نقطة — «{}».".format(
-            round((worst.get("max_drop_at") or 0) * 100), where,
-            worst.get("max_drop_pct"), worst.get("title") or worst.get("video_id")))
+        if worst:
+            where = ""
+            if worst.get("drop_seconds") is not None:
+                where = " (≈{} ثانية)".format(worst["drop_seconds"])
+            lines.append("- أكبر هبوط: عند {}% من المقطع{} بخصم {} نقطة — «{}».".format(
+                round((worst.get("max_drop_at") or 0) * 100), where,
+                worst.get("max_drop_pct"), worst.get("title") or worst.get("video_id")))
+        else:
+            lines.append("- لا هبوط حاد في المنحنيات المقاسة.")
         if (curve.get("avg_hook_ratio") or 1.0) < 0.85:
             lines.append("- ⚠️ الخطاف يخسر {:.1f}% في أول 10% — قوِّ أول جملة وأول لقطة.".format(
                 (1.0 - curve["avg_hook_ratio"]) * 100))

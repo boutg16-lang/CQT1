@@ -18,7 +18,7 @@
 - `python -m scripts.analytics --retention VIDEO_ID` لفحص منحنى واحد.
 
 ### الاختبارات
-- `tests/test_retention_curve.py`: 10 اختبارات تغطي الحساب، الاستعلام، الكاش/الصلاحية، الفشل الجزئي، التعطيل، الارتباط، Markdown، وأفضلية الاحتفاظ المبكر.
+- `tests/test_retention_curve.py`: 11 اختباراً تغطي الحساب، الاستعلام، الكاش/الصلاحية، الفشل الجزئي، التعطيل، الارتباط، Markdown، وأفضلية الاحتفاظ المبكر.
 
 
 ## OUSSAMA Cutter 8.4.0-ultimate — 2026-11-13
