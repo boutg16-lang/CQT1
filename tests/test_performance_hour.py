@@ -28,7 +28,7 @@ def test_publish_hour_joins_features(tmp_path, monkeypatch):
         "timestamp": "2026-08-01T18:00:00Z",
     }) + "\n", encoding="utf-8")
     monkeypatch.setattr(performance_loop, "_fetch_real_metrics",
-                        lambda ids: {"abc": {"views": 10, "avg_view_duration": 5.0,
+                        lambda ids, project_folder=None: {"abc": {"views": 10, "avg_view_duration": 5.0,
                                              "likes": 0, "shares": 0}})
     report = performance_loop.analyze(str(tmp_path), fetch_live=True)
     clip = report["clips"][0]

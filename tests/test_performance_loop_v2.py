@@ -80,7 +80,7 @@ def test_spearman_handles_ties():
 
 def test_analyze_reports_the_shared_window_and_retention(tmp_path, monkeypatch):
     project = _project(tmp_path, 6)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: _metrics(6))
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(6))
     report = pl.analyze(project, fetch_live=True)
     assert report["window_days"] == pl.DEFAULT_WINDOW_DAYS
     hook = report["correlations"]["hook_strength"]
@@ -97,7 +97,7 @@ def test_analyze_reports_the_shared_window_and_retention(tmp_path, monkeypatch):
 
 def test_window_days_is_env_tunable_and_clamped(tmp_path, monkeypatch):
     project = _project(tmp_path, 3)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: _metrics(3))
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(3))
     monkeypatch.setenv("VIRALCUTTER_PERF_WINDOW_DAYS", "90")
     assert pl.analyze(project, fetch_live=True)["window_days"] == 90
     monkeypatch.setenv("VIRALCUTTER_PERF_WINDOW_DAYS", "1")
@@ -128,7 +128,7 @@ def test_weights_shrink_small_samples(tmp_path):
 
 def test_auto_refresh_writes_reports_and_then_skips_fresh(tmp_path, monkeypatch):
     project = _project(tmp_path, 5)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: _metrics(5))
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(5))
     first = pl.auto_refresh(project)
     assert first["refreshed"] is True
     assert os.path.exists(os.path.join(project, pl.REPORT_NAME))
@@ -146,7 +146,7 @@ def test_refresh_due_forces_a_new_query(tmp_path, monkeypatch):
     project = _project(tmp_path, 5)
     calls = []
 
-    def fetch(ids):
+    def fetch(ids, project_folder=None):
         calls.append(1)
         return _metrics(5)
 
@@ -164,14 +164,14 @@ def test_refresh_due_forces_a_new_query(tmp_path, monkeypatch):
 
 def test_failed_analytics_never_overwrites_good_metrics(tmp_path, monkeypatch):
     project = _project(tmp_path, 4)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: _metrics(4))
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(4))
     pl.auto_refresh(project, force=True)
     good = json.loads(open(os.path.join(project, pl.REPORT_NAME),
                            encoding="utf-8").read())
     assert good["with_metrics"] == 4
 
     # A later OAuth/network failure returns no metrics.
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: {})
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: {})
     status = pl.auto_refresh(project, force=True)
     assert status["refreshed"] is False
     assert status["reason"] == "kept_previous_metrics"

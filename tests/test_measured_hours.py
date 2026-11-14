@@ -29,7 +29,7 @@ def test_analyze_report_exposes_best_hours(tmp_path, monkeypatch):
     os.environ["TZ"] = "UTC"
     if hasattr(time, "tzset"):
         time.tzset()
-    monkeypatch.setattr(performance_loop, "_fetch_real_metrics", lambda ids: {
+    monkeypatch.setattr(performance_loop, "_fetch_real_metrics", lambda ids, project_folder=None: {
         "v0": {"views": 100}, "v1": {"views": 200},
         "v2": {"views": 900}, "v3": {"views": 1100},
     })

@@ -143,6 +143,82 @@ def fetch_top_videos(ya, yt, days=28, limit=10):
     return {"days": days, "top": out}
 
 
+def summarize_retention(points):
+    """Turn an elapsed-time retention curve into editor-readable numbers.
+
+    audienceWatchRatio is the share of viewers still watching at that point
+    (1.0 = everyone). The first 10% is the hook, the middle is the body, the
+    last 10% is the ending. max_drop_at is the fraction of the clip where the
+    curve falls fastest — the moment to cut or re-hook in future edits.
+    """
+    clean = []
+    for point in points or []:
+        try:
+            ratio = float(point.get("ratio"))
+            watch = float(point.get("watch"))
+        except (TypeError, ValueError):
+            continue
+        if 0.0 <= ratio <= 1.0 and watch >= 0.0:
+            clean.append((ratio, watch))
+    clean.sort()
+    if len(clean) < 5:
+        return None
+
+    def _mean(low, high):
+        values = [watch for ratio, watch in clean if low <= ratio <= high]
+        return sum(values) / len(values) if values else None
+
+    hook = _mean(0.0, 0.10)
+    mid = _mean(0.40, 0.60)
+    end = _mean(0.90, 1.0)
+    # A 3-bucket moving average prevents one noisy second from being called
+    # "the drop"; the reported point is the centre of the worst segment.
+    smoothed = []
+    for index in range(len(clean)):
+        window = clean[max(0, index - 1):index + 2]
+        smoothed.append((clean[index][0],
+                         sum(watch for _r, watch in window) / len(window)))
+    max_drop = 0.0
+    drop_at = None
+    for index in range(1, len(smoothed)):
+        drop = smoothed[index - 1][1] - smoothed[index][1]
+        if drop > max_drop:
+            max_drop = drop
+            drop_at = smoothed[index][0]
+    return {
+        "hook_ratio": round(hook, 4) if hook is not None else None,
+        "mid_ratio": round(mid, 4) if mid is not None else None,
+        "end_ratio": round(end, 4) if end is not None else None,
+        "max_drop_at": round(drop_at, 3) if drop_at is not None else None,
+        "max_drop_pct": round(max_drop * 100.0, 1),
+        "points": len(clean),
+    }
+
+
+def fetch_retention_curve(ya, video_id, days=28):
+    """Per-video audience-retention curve (elapsedVideoTimeRatio report)."""
+    start, end = _date_range(days)
+    resp = ya.reports().query(
+        ids="channel==MINE",
+        startDate=start, endDate=end,
+        metrics="audienceWatchRatio,relativeRetentionPerformance",
+        dimensions="elapsedVideoTimeRatio",
+        filters="video=={}".format(video_id),
+        sort="elapsedVideoTimeRatio",
+        maxResults=200,
+    ).execute()
+    points = []
+    for row in resp.get("rows") or []:
+        try:
+            points.append({"ratio": float(row[0]),
+                           "watch": float(row[1]),
+                           "relative": float(row[2]) if row[2] is not None else None})
+        except (TypeError, ValueError, IndexError):
+            continue
+    return {"video_id": video_id, "days": days, "start": start, "end": end,
+            "points": points, "summary": summarize_retention(points)}
+
+
 def fetch_trends(ya, days=28):
     start, end = _date_range(days)
     resp = ya.reports().query(
@@ -206,6 +282,29 @@ def format_trends(trends):
     return "\n".join(lines)
 
 
+def format_retention(curve, limit=20):
+    summary = curve.get("summary") or {}
+    if not summary:
+        return "📉 Retention: no curve for %s yet (video too new or no views)." % (
+            curve.get("video_id"))
+    lines = ["📉 Retention curve — %s (%d buckets)" % (
+        curve.get("video_id"), summary.get("points", 0)),
+        "  hook (first 10%%):  %.1f%%" % ((summary.get("hook_ratio") or 0) * 100),
+        "  middle (40-60%%):   %.1f%%" % ((summary.get("mid_ratio") or 0) * 100),
+        "  ending (last 10%%): %.1f%%" % ((summary.get("end_ratio") or 0) * 100),
+        "  biggest drop:      %s%% of the clip (-%.1f points)" % (
+            round((summary.get("max_drop_at") or 0) * 100, 1),
+            summary.get("max_drop_pct") or 0.0)]
+    points = curve.get("points") or []
+    if points:
+        lines.append("  curve (ratio → watch):")
+        step = max(1, len(points) // max(1, int(limit)))
+        for point in points[::step]:
+            lines.append("    %5.1f%% → %5.1f%%" % (
+                point["ratio"] * 100, point["watch"] * 100))
+    return "\n".join(lines)
+
+
 def build_report(summary=None, top=None, trends=None):
     report = {}
     if summary is not None:
@@ -227,6 +326,8 @@ def main(argv=None):
     parser.add_argument("--summary", action="store_true", help="channel totals")
     parser.add_argument("--top", action="store_true", help="top videos")
     parser.add_argument("--trends", action="store_true", help="daily views")
+    parser.add_argument("--retention", default=None, metavar="VIDEO_ID",
+                        help="audience-retention curve for one video")
     parser.add_argument("--days", type=int, default=28, help="lookback days (default 28)")
     parser.add_argument("--limit", type=int, default=10, help="top N videos (default 10)")
     parser.add_argument("--export", default=None, help="also write the report JSON to this path")
@@ -246,7 +347,7 @@ def main(argv=None):
             print("❌ setup check failed: %s" % e)
             return 1
 
-    if not (args.summary or args.top or args.trends):
+    if not (args.summary or args.top or args.trends or args.retention):
         parser.print_help()
         return 0
 
@@ -255,6 +356,8 @@ def main(argv=None):
         summary = fetch_summary(ya, args.days) if args.summary else None
         top = fetch_top_videos(ya, yt, args.days, args.limit) if args.top else None
         trends = fetch_trends(ya, args.days) if args.trends else None
+        curve = (fetch_retention_curve(ya, args.retention, args.days)
+                 if args.retention else None)
     except Exception as e:
         print("❌ analytics failed: %s" % e)
         return 1
@@ -267,9 +370,14 @@ def main(argv=None):
         print()
     if trends:
         print(format_trends(trends))
+        print()
+    if curve:
+        print(format_retention(curve, args.limit))
 
     if args.export:
         report = build_report(summary=summary, top=top, trends=trends)
+        if curve:
+            report["retention"] = curve
         with open(args.export, "w", encoding="utf-8") as fh:
             json.dump(report, fh, ensure_ascii=False, indent=2)
         print("💾 report saved → %s" % args.export)

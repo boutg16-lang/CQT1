@@ -15,6 +15,7 @@ import os
 import re
 import statistics
 import tempfile
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -24,6 +25,7 @@ HISTORY_NAME = "publish_history.jsonl"
 REPORT_NAME = "performance_insights.json"
 MARKDOWN_NAME = "performance_insights.md"
 DUE_NAME = "performance_refresh_due.json"
+RETENTION_CACHE_NAME = "retention_curves.json"
 
 # All clips are measured over the SAME recent window. A 365-day total gives
 # an old clip 300 days of views and a new one 10 — the "learning" then mostly
@@ -50,6 +52,98 @@ def _window_days() -> int:
     except (TypeError, ValueError):
         return DEFAULT_WINDOW_DAYS
     return max(MIN_WINDOW_DAYS, min(MAX_WINDOW_DAYS, value))
+
+
+def _retention_limit() -> int:
+    """How many curves to fetch per refresh (0 disables the extra API calls)."""
+    try:
+        value = int(float(os.getenv("VIRALCUTTER_RETENTION_CURVES", "")))
+    except (TypeError, ValueError):
+        return 20
+    return max(0, min(100, value))
+
+
+def _retention_ttl_hours() -> float:
+    try:
+        value = float(os.getenv("VIRALCUTTER_RETENTION_TTL_HOURS", ""))
+    except (TypeError, ValueError):
+        return 72.0
+    return max(1.0, min(720.0, value))
+
+
+def _load_retention_cache(project_folder: str) -> dict[str, Any]:
+    path = os.path.join(project_folder, RETENTION_CACHE_NAME)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _save_retention_cache(project_folder: str, cache: dict[str, Any]) -> None:
+    path = os.path.join(project_folder, RETENTION_CACHE_NAME)
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=".retention-", suffix=".tmp",
+                                         dir=os.path.dirname(path))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(cache, handle, ensure_ascii=False)
+        os.replace(temporary, path)
+    except OSError:
+        logger.debug("Could not persist the retention curve cache.", exc_info=True)
+
+
+def attach_retention_curves(metrics: dict[str, dict[str, Any]],
+                            project_folder: str | None,
+                            video_ids: list[str],
+                            fetcher=None) -> dict[str, dict[str, Any]]:
+    """Attach per-clip retention summaries, cached by video for a few days.
+
+    YouTube needs one report call per video for the elapsed-time curve, so the
+    loop bounds the work (VIRALCUTTER_RETENTION_CURVES, default 20) and reuses
+    a curve for 72h. Every failure is local: metrics stay usable without it.
+    """
+    if not metrics or not project_folder or fetcher is None:
+        return metrics
+    limit = _retention_limit()
+    if limit <= 0:
+        return metrics
+    cache = _load_retention_cache(project_folder)
+    now = time.time()
+    ttl = _retention_ttl_hours() * 3600.0
+    changed = False
+    seen = 0
+    for video_id in video_ids:
+        if video_id not in metrics:
+            continue
+        if seen >= limit:
+            break
+        seen += 1
+        entry = cache.get(video_id) if isinstance(cache.get(video_id), dict) else {}
+        summary = entry.get("summary") if isinstance(entry.get("summary"), dict) else None
+        try:
+            fresh = summary is not None and (now - float(entry.get("fetched_ts") or 0)) < ttl
+        except (TypeError, ValueError):
+            fresh = False
+        if fresh:
+            metrics[video_id]["retention_curve"] = summary
+            continue
+        try:
+            curve = fetcher(video_id)
+        except Exception as exc:  # API/quota/OAuth: keep the rest of the report
+            logger.debug("Retention curve unavailable for %s (%s).",
+                         video_id, type(exc).__name__)
+            continue
+        summary = (curve or {}).get("summary") if isinstance(curve, dict) else None
+        if not isinstance(summary, dict):
+            continue
+        metrics[video_id]["retention_curve"] = summary
+        cache[video_id] = {"summary": summary, "fetched_ts": now,
+                           "fetched_at": _now()}
+        changed = True
+    if changed:
+        _save_retention_cache(project_folder, cache)
+    return metrics
 
 
 def _read_history(project_folder: str) -> list[dict[str, Any]]:
@@ -154,7 +248,8 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fetch_real_metrics(video_ids: list[str]) -> dict[str, dict[str, float]]:
+def _fetch_real_metrics(video_ids: list[str],
+                        project_folder: str | None = None) -> dict[str, dict[str, Any]]:
     """Pull views/retention via scripts.analytics. Empty when unavailable."""
     try:
         from scripts import analytics as analytics_mod
@@ -187,6 +282,11 @@ def _fetch_real_metrics(video_ids: list[str]) -> dict[str, dict[str, float]]:
                 "shares": int(shares or 0),
                 "subscribers_gained": int(subs or 0),
             }
+    if metrics and project_folder:
+        attach_retention_curves(
+            metrics, project_folder, video_ids,
+            fetcher=lambda vid: analytics_mod.fetch_retention_curve(
+                ya, vid, _window_days()))
     return metrics
 
 
@@ -255,6 +355,47 @@ def _strength(value: float | None) -> str:
     if magnitude >= 0.2:
         return "weak"
     return "negligible"
+
+
+def _retention_curve_insights(measured: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Aggregate the per-clip curves into one actionable sentence.
+
+    Averages hide the shape: 80% average retention can be 100% then a cliff,
+    or a slow bleed. The curve says where viewers leave.
+    """
+    rows = []
+    for item in measured:
+        curve = (item.get("metrics") or {}).get("retention_curve")
+        if isinstance(curve, dict) and curve.get("hook_ratio") is not None:
+            rows.append((item, curve))
+    if len(rows) < 2:
+        return None
+
+    def _avg(key):
+        values = [float(curve[key]) for _item, curve in rows
+                  if curve.get(key) is not None]
+        return round(statistics.fmean(values), 4) if values else None
+
+    worst_item, worst_curve = max(
+        rows, key=lambda pair: float(pair[1].get("max_drop_pct") or 0.0))
+    duration = worst_item.get("features", {}).get("duration")
+    drop_at = worst_curve.get("max_drop_at")
+    worst = {
+        "video_id": worst_item.get("video_id"),
+        "title": worst_item.get("title"),
+        "max_drop_at": drop_at,
+        "max_drop_pct": worst_curve.get("max_drop_pct"),
+    }
+    if duration and drop_at is not None:
+        worst["drop_seconds"] = round(float(duration) * float(drop_at), 1)
+    return {
+        "samples": len(rows),
+        "avg_hook_ratio": _avg("hook_ratio"),
+        "avg_mid_ratio": _avg("mid_ratio"),
+        "avg_end_ratio": _avg("end_ratio"),
+        "avg_max_drop_pct": _avg("max_drop_pct"),
+        "worst": worst,
+    }
 
 
 def _best_hours(measured: list[dict[str, Any]], *, min_samples: int = 2,
@@ -416,7 +557,7 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         return report
 
     video_ids = [item["video_id"] for item in published]
-    metrics = _fetch_real_metrics(video_ids) if fetch_live else {}
+    metrics = _fetch_real_metrics(video_ids, project_folder) if fetch_live else {}
     for item in published:
         item["metrics"] = metrics.get(item["video_id"])
         report["clips"].append(item)
@@ -437,12 +578,20 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
             (item["features"].get(feature), item["metrics"].get("retention"))
             for item in measured]
         retention = _spearman(retention_pairs)
+        hook_pairs = [
+            (item["features"].get(feature),
+             (item["metrics"].get("retention_curve") or {}).get("hook_ratio"))
+            for item in measured]
+        hook_retention = _spearman(hook_pairs)
         correlations[feature] = {
             "vs_views": value,
             "vs_retention": retention,
+            "vs_hook_retention": hook_retention,
             "samples": len([1 for x, y in pairs if x is not None and y is not None]),
             "retention_samples": len([1 for x, y in retention_pairs
                                       if x is not None and y is not None]),
+            "hook_retention_samples": len([1 for x, y in hook_pairs
+                                           if x is not None and y is not None]),
             "method": "spearman",
             "strength": _strength(value),
         }
@@ -490,6 +639,22 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
             report["insights"].append(
                 "hashtag count vs views: r={} ({})".format(
                     hashtag["r"], hashtag["strength"]))
+
+    curve_summary = _retention_curve_insights(measured)
+    if curve_summary:
+        report["retention_curve"] = curve_summary
+        report["insights"].append(
+            "Retention curve: first 10% holds {:.1f}% on average; biggest drop at "
+            "{}% of the clip (-{} points, {} curves).".format(
+                (curve_summary.get("avg_hook_ratio") or 0) * 100,
+                round((curve_summary.get("worst", {}).get("max_drop_at") or 0) * 100),
+                curve_summary.get("worst", {}).get("max_drop_pct"),
+                curve_summary.get("samples", 0)))
+        if (curve_summary.get("avg_hook_ratio") or 1.0) < 0.85:
+            report["insights"].append(
+                "Hook warning: the first 10% loses {:.1f}% of viewers — "
+                "strengthen the opening line and the first visual.".format(
+                    (1.0 - curve_summary["avg_hook_ratio"]) * 100))
 
     best_hours = _best_hours(measured)
     if best_hours:
@@ -581,6 +746,26 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
         lines.append("## أفضل ساعات النشر (محلي)")
         lines.append("- " + ", ".join(str(hour) for hour in report["best_hours"]))
         lines.append("")
+    curve = report.get("retention_curve")
+    if curve:
+        lines.append("## منحنى الاحتفاظ")
+        lines.append("- المقاطع ذات المنحنى: {}.".format(curve.get("samples")))
+        lines.append("- أول 10%: {:.1f}% · المنتصف: {:.1f}% · النهاية: {:.1f}%.".format(
+            (curve.get("avg_hook_ratio") or 0) * 100,
+            (curve.get("avg_mid_ratio") or 0) * 100,
+            (curve.get("avg_end_ratio") or 0) * 100))
+        worst = curve.get("worst") or {}
+        where = ""
+        if worst.get("drop_seconds") is not None:
+            where = " (≈{} ثانية)".format(worst["drop_seconds"])
+        lines.append("- أكبر هبوط: عند {}% من المقطع{} بخصم {} نقطة — «{}».".format(
+            round((worst.get("max_drop_at") or 0) * 100), where,
+            worst.get("max_drop_pct"), worst.get("title") or worst.get("video_id")))
+        if (curve.get("avg_hook_ratio") or 1.0) < 0.85:
+            lines.append("- ⚠️ الخطاف يخسر {:.1f}% في أول 10% — قوِّ أول جملة وأول لقطة.".format(
+                (1.0 - curve["avg_hook_ratio"]) * 100))
+        lines.append("")
+
     try:
         from scripts import performance_weights
         weights = performance_weights.load_weights(

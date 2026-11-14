@@ -1,5 +1,26 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.5.0-ultimate — 2026-11-13
+
+منحنى الاحتفاظ: أين يغادر المشاهد، ووزن خطاف مبني على أول 10%.
+
+### المنحنى
+- جلب `elapsedVideoTimeRatio` مع `audienceWatchRatio` و`relativeRetentionPerformance` لكل فيديو، وتلخيصه إلى `hook_ratio` و`mid_ratio` و`end_ratio` و`max_drop_at` و`max_drop_pct` بتنعيم ثلاثي يمنع تسمية ضوضاء ثانية واحدة انهياراً.
+- كاش `retention_curves.json` بصلاحية 72 ساعة، وحد أقصى 20 منحنى لكل تحديث (`VIRALCUTTER_RETENTION_CURVES`، و`0` للتعطيل).
+- فشل منحنى فيديو واحد (حصة/OAuth) لا يُسقط بقية التقرير.
+
+### التعلّم
+- وزن `hook` يُتعلَّم من `vs_hook_retention` عند توفره، ويرجع إلى `vs_views` بلا منحنى. كل إزاحة تذكر `signal` الذي بُنيت عليه.
+- التقرير يحمل `retention_curve` المجمّع وأسوأ مقطع مع `drop_seconds`، وكل مقطع يحمل منحناه.
+- Markdown: قسم «منحنى الاحتفاظ» وتحذير خطاف صريح عند خسارة >15% في أول 10%.
+
+### الأدوات
+- `python -m scripts.analytics --retention VIDEO_ID` لفحص منحنى واحد.
+
+### الاختبارات
+- `tests/test_retention_curve.py`: 10 اختبارات تغطي الحساب، الاستعلام، الكاش/الصلاحية، الفشل الجزئي، التعطيل، الارتباط، Markdown، وأفضلية الاحتفاظ المبكر.
+
+
 ## OUSSAMA Cutter 8.4.0-ultimate — 2026-11-13
 
 حلقة أداء مغلقة: قياس عادل، ارتباط رتبي، احتفاظ، وثقة عينة.

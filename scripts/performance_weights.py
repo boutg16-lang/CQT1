@@ -185,7 +185,16 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     total_shift = 0.0
     for feature, entry in correlations.items():
         component = feature_to_component(feature)
-        value = (entry or {}).get("vs_views")
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("vs_views")
+        signal = "views"
+        # The hook is the first seconds. Judge it by what actually happens in
+        # the first 10% of the retention curve, not by total views (which the
+        # algorithm and the topic also move).
+        if component == "hook" and entry.get("vs_hook_retention") is not None:
+            value = entry.get("vs_hook_retention")
+            signal = "hook_retention"
         if component is None or value is None:
             continue
         shift = max(-MAX_SHIFT, min(MAX_SHIFT,
@@ -196,7 +205,7 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
         total_shift += shift
         result["shifted"].append(
             {"feature": feature, "component": component, "r": value,
-             "shift": round(shift, 3)})
+             "signal": signal, "shift": round(shift, 3)})
 
     # Keep the total weight mass at 1.0 so the score scale is unchanged.
     title_quality = correlations.get("title_quality_score") or {}

@@ -25,7 +25,7 @@ def test_links_published_events_with_scorecard_features(tmp_path, monkeypatch):
         {"video_id": "xyz", "status": "failed", "video": "clip_003.mp4"},
     ])
     monkeypatch.setattr(performance_loop, "_fetch_real_metrics",
-                        lambda ids: {"abc": {"views": 120, "avg_view_duration": 33.0,
+                        lambda ids, project_folder=None: {"abc": {"views": 120, "avg_view_duration": 33.0,
                                              "likes": 5, "shares": 1}})
     report = performance_loop.analyze(str(tmp_path), fetch_live=True)
     assert report["published_count"] == 1
@@ -41,7 +41,7 @@ def test_insights_reported_when_metrics_missing(tmp_path, monkeypatch):
     _history(tmp_path, [{"video_id": "abc", "status": "uploaded",
                          "video": "clip_001.mp4", "title": "T",
                          "platform": "youtube", "timestamp": "2026-08-01T18:00:00Z"}])
-    monkeypatch.setattr(performance_loop, "_fetch_real_metrics", lambda ids: {})
+    monkeypatch.setattr(performance_loop, "_fetch_real_metrics", lambda ids, project_folder=None: {})
     report = performance_loop.analyze(str(tmp_path), fetch_live=True)
     assert report["published_count"] == 1
     assert report["with_metrics"] == 0

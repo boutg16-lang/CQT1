@@ -66,7 +66,7 @@ def test_content_markers_extraction():
 def test_analyze_reports_content_insights(tmp_path, monkeypatch):
     project = _project(tmp_path)
     # Question-hook videos massively outperform the story one.
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: {
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: {
         "vid-q1": {"views": 1000, "avg_view_duration": 30.0, "likes": 10, "shares": 2},
         "vid-q2": {"views": 900, "avg_view_duration": 28.0, "likes": 8, "shares": 1},
         "vid-n1": {"views": 100, "avg_view_duration": 15.0, "likes": 1, "shares": 0},
@@ -114,7 +114,7 @@ def test_analyze_without_content_markers_is_clean(tmp_path, monkeypatch):
               "w", encoding="utf-8") as handle:
         for event in events:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids: {
+    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: {
         "v1": {"views": 50, "avg_view_duration": 10.0, "likes": 1, "shares": 0},
         "v2": {"views": 60, "avg_view_duration": 11.0, "likes": 1, "shares": 0},
         "v3": {"views": 70, "avg_view_duration": 12.0, "likes": 1, "shares": 0},
