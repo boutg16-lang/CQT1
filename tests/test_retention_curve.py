@@ -247,3 +247,25 @@ def test_flat_curves_do_not_report_a_fake_drop(tmp_path, monkeypatch):
                     encoding="utf-8").read()
     assert "لا هبوط حاد" in markdown
     assert "عند 0%" not in markdown
+
+
+def test_batch_metrics_filter_uses_commas_between_video_ids(monkeypatch):
+    calls = []
+
+    class _Reports:
+        def query(self, **kwargs):
+            calls.append(kwargs)
+            return self
+
+        def execute(self):
+            return {"rows": [["vid0", 10, 5.0, 50.0, 1, 0, 0],
+                             ["vid1", 20, 6.0, 60.0, 2, 1, 1]]}
+
+    ya = type("YA", (), {"reports": lambda self: _Reports()})()
+    monkeypatch.setattr(analytics, "_build_services", lambda: (ya, object()))
+    metrics = pl._fetch_real_metrics(["vid0", "vid1"], None)
+    assert calls, "no analytics request was made"
+    assert calls[0]["filters"] == "video==vid0,vid1"
+    assert ";" not in calls[0]["filters"]
+    assert set(metrics) == {"vid0", "vid1"}
+    assert metrics["vid1"]["retention"] == 60.0

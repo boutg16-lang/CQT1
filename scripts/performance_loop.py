@@ -260,7 +260,11 @@ def _fetch_real_metrics(video_ids: list[str],
     start, end = analytics_mod._date_range(_window_days())
     for index in range(0, len(video_ids), 40):
         chunk = video_ids[index:index + 40]
-        filters = "video==" + ";".join(chunk)
+        # Analytics filters: commas separate multiple values of ONE dimension
+        # (video==a,b,c); semicolons separate DIFFERENT dimensions
+        # (video==a;country==IT). Semicolon-joining IDs produced an invalid
+        # filter and silently returned zero rows for every batch.
+        filters = "video==" + ",".join(chunk)
         try:
             resp = ya.reports().query(
                 ids="channel==MINE", startDate=start, endDate=end,

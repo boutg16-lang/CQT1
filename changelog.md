@@ -4,6 +4,9 @@
 
 منحنى الاحتفاظ: أين يغادر المشاهد، ووزن خطاف مبني على أول 10%.
 
+### إصلاح
+- فلتر دفعة الفيديوهات كان `video==a;b;c` (فاصلة منقوطة تفصل فلاتر مختلفة في YouTube Analytics) فيرجع صفر صفوف لأي دفعة أكبر من فيديو واحد. صار `video==a,b,c` مع اختبار انحدار.
+
 ### المنحنى
 - جلب `elapsedVideoTimeRatio` مع `audienceWatchRatio` و`relativeRetentionPerformance` لكل فيديو، وتلخيصه إلى `hook_ratio` و`mid_ratio` و`end_ratio` و`max_drop_at` و`max_drop_pct` بتنعيم ثلاثي يمنع تسمية ضوضاء ثانية واحدة انهياراً.
 - كاش `retention_curves.json` بصلاحية 72 ساعة، وحد أقصى 20 منحنى لكل تحديث (`VIRALCUTTER_RETENTION_CURVES`، و`0` للتعطيل).
@@ -18,7 +21,7 @@
 - `python -m scripts.analytics --retention VIDEO_ID` لفحص منحنى واحد.
 
 ### الاختبارات
-- `tests/test_retention_curve.py`: 11 اختباراً تغطي الحساب، الاستعلام، الكاش/الصلاحية، الفشل الجزئي، التعطيل، الارتباط، Markdown، وأفضلية الاحتفاظ المبكر.
+- `tests/test_retention_curve.py`: 12 اختباراً تغطي الحساب، الاستعلام، الكاش/الصلاحية، الفشل الجزئي، التعطيل، الارتباط، Markdown، وأفضلية الاحتفاظ المبكر.
 
 
 ## OUSSAMA Cutter 8.4.0-ultimate — 2026-11-13
