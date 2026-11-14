@@ -221,13 +221,23 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     title_quality = correlations.get("title_quality_score") or {}
     title_r = title_quality.get("vs_views")
     if title_r is not None and abs(float(title_r)) >= 0.2:
-        result["title_boost"] = round(max(-0.15, min(0.15,
-                                                  0.2 * float(title_r) * confidence)), 3)
+        if title_quality.get("vs_views_significant") is False:
+            result["suppressed"].append(
+                {"feature": "title_quality_score", "component": "title",
+                 "r": title_r, "signal": "views", "reason": "ci_includes_zero"})
+        else:
+            result["title_boost"] = round(max(-0.15, min(0.15,
+                                                      0.2 * float(title_r) * confidence)), 3)
     duration = correlations.get("duration") or {}
     duration_r = duration.get("vs_views")
     if duration_r is not None and abs(float(duration_r)) >= 0.2:
-        result["duration_bonus"] = round(max(-0.15, min(0.15,
-                                                     0.2 * float(duration_r) * confidence)), 3)
+        if duration.get("vs_views_significant") is False:
+            result["suppressed"].append(
+                {"feature": "duration", "component": "duration",
+                 "r": duration_r, "signal": "views", "reason": "ci_includes_zero"})
+        else:
+            result["duration_bonus"] = round(max(-0.15, min(0.15,
+                                                         0.2 * float(duration_r) * confidence)), 3)
 
     drift = sum(weights.values()) - 1.0
     if abs(drift) > 1e-9:

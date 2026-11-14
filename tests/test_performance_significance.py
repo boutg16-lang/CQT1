@@ -151,3 +151,20 @@ def test_hook_metric_ignores_the_constant_first_bucket():
     points += [{"ratio": index / 100.0, "watch": 0.50} for index in range(20, 30)]
     summary = analytics.summarize_retention(points)
     assert summary["hook_ratio"] == 0.7
+
+
+def test_title_and_duration_boosts_are_gated_too(tmp_path):
+    project = tmp_path / "w"
+    project.mkdir()
+    (project / "performance_insights.json").write_text(json.dumps({
+        "with_metrics": 6,
+        "correlations": {
+            "title_quality_score": {"vs_views": 0.8, "vs_views_significant": False},
+            "duration": {"vs_views": 0.7, "vs_views_significant": False},
+        },
+    }), encoding="utf-8")
+    weights = pw.load_weights(str(project))
+    assert weights["title_boost"] == 0.0
+    assert weights["duration_bonus"] == 0.0
+    components = {item["component"] for item in weights["suppressed"]}
+    assert components == {"title", "duration"}
