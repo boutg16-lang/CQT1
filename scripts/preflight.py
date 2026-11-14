@@ -77,6 +77,19 @@ REQ_FILES = {
                                  "optional; the offline 'file' provider needs nothing"),
 }
 
+# Packages whose failure degrades a feature but must not block the WebUI.
+# They are listed in requirements.txt for a full install, yet the app has a
+# documented fallback when they are missing or broken.
+DEGRADABLE_DISTS = {
+    "mediapipe": "face fallback: insightface/Haar still work",
+    "insightface": "face model falls back to mediapipe/Haar",
+    "google-genai": "Gemini provider only; other AI backends still work",
+    "g4f": "last-resort provider only",
+    "onnxruntime": "visual safety check only",
+    "scenedetect": "scene detection only",
+    "cryptography": "API-key encryption only",
+}
+
 # Distribution name -> import module. Covers the dotted-import packages.
 DIST_TO_MODULE = {
     "yt-dlp": "yt_dlp",
@@ -338,6 +351,12 @@ def check_writable(path, label):
 
 
 def check_dependency(dist, raw_line, critical):
+    optional_reason = DEGRADABLE_DISTS.get(dist)
+    if optional_reason:
+        # A broken optional integration is a warning: the documented fallback
+        # keeps the pipeline running. Blocking startup here stranded users on
+        # a WebUI that could boot fine without Gemini or MediaPipe.
+        critical = False
     module = _import_name(dist)
     if dist == "websockets" and ensure_websockets.needs_repair():
         installed = _dist_installed(dist)
@@ -356,6 +375,8 @@ def check_dependency(dist, raw_line, critical):
             detail = "installed but import failed (%s; %s)" % (
                 module, _import_failure_detail(module),
             )
+        if optional_reason:
+            detail += " — optional: " + optional_reason
         return {"name": dist, "status": FAIL if critical else WARN, "detail": detail}
     version = _version(dist)
     if version == "?":
@@ -371,6 +392,85 @@ def check_dependency(dist, raw_line, critical):
             "detail": "import succeeded; distribution version metadata unavailable",
         }
     return {"name": dist, "status": OK, "detail": version}
+
+
+def _site_packages_dirs():
+    import sysconfig
+    paths = []
+    for key in ("purelib", "platlib"):
+        try:
+            path = sysconfig.get_paths().get(key)
+        except Exception:
+            path = None
+        if path and os.path.isdir(path) and path not in paths:
+            paths.append(path)
+    return paths
+
+
+def find_incomplete_dist_info(site_packages=None):
+    """Return [(root, name), ...] for *.dist-info folders with no METADATA."""
+    roots = [site_packages] if site_packages else _site_packages_dirs()
+    found = []
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        try:
+            names = sorted(os.listdir(root))
+        except OSError:
+            continue
+        for name in names:
+            if not name.endswith(".dist-info"):
+                continue
+            path = os.path.join(root, name)
+            if not os.path.isdir(path):
+                continue
+            metadata = os.path.join(path, "METADATA")
+            broken = not os.path.exists(metadata)
+            if not broken:
+                try:
+                    broken = os.path.getsize(metadata) == 0
+                except OSError:
+                    broken = True
+            if broken:
+                found.append((root, name))
+    return found
+
+
+def repair_incomplete_dist_info(site_packages=None, dry_run=False):
+    """Remove *.dist-info folders that have no (or an empty) METADATA file.
+
+    A half-written install leaves the directory without METADATA. uv/pip then
+    abort while reading the environment ("Failed to read metadata"), so they
+    cannot repair the very package that blocks them. Removing the broken
+    metadata folder makes the package look uninstalled and the next install
+    rewrites it cleanly.
+
+    Returns (removed_names, [(name, error), ...]). Never raises.
+    """
+    removed = []
+    failed = []
+    for root, name in find_incomplete_dist_info(site_packages):
+        if dry_run:
+            removed.append(name)
+            continue
+        try:
+            shutil.rmtree(os.path.join(root, name))
+            removed.append(name)
+        except OSError as exc:
+            failed.append((name, str(exc)))
+    return removed, failed
+
+
+def check_venv_metadata():
+    """Proactively surface a venv that the next uv/pip install cannot read."""
+    broken = find_incomplete_dist_info()
+    if not broken:
+        return {"name": "venv metadata", "status": OK,
+                "detail": "all installed packages have readable metadata"}
+    names = [name for _root, name in broken]
+    detail = "%d incomplete metadata folder(s): %s" % (
+        len(names), ", ".join(names[:3]) + (" …" if len(names) > 3 else ""))
+    return {"name": "venv metadata", "status": FAIL, "detail": detail}
 
 
 def check_pin(dist, rule, note=None):
@@ -917,7 +1017,7 @@ def collect_checks():
     checks += [check_disk_space(_app_dir()),
                check_writable(_app_dir(), "Working dir writable")]
     checks += [check_api_config(), check_assets(), check_safety_blocklist_freshness(),
-               check_models_dir(), check_telegram_config()]
+               check_models_dir(), check_telegram_config(), check_venv_metadata()]
 
     # dependency checks per requirements file
     seen_dists = set()
@@ -952,6 +1052,16 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
     """Apply fixes. mode: 'fix' (interactive) or 'auto-fix' (non-interactive).
     Returns (fixed_report, remaining_critical, remaining_warn)."""
     fixed = []
+
+    # 0) a half-written install poisons every later install; clean its
+    #    METADATA-less dist-info folders before asking pip/uv to do anything.
+    removed, metadata_failed = repair_incomplete_dist_info()
+    for name in removed:
+        fixed.append({"name": "metadata " + name, "status": OK,
+                      "detail": "removed incomplete .dist-info (no METADATA)"})
+    for name, error in metadata_failed:
+        fixed.append({"name": "metadata " + name, "status": FAIL,
+                      "detail": "could not remove: " + error})
 
     # 1) cheap fixes: dirs + config
     for rel, ok, detail in ensure_dirs():
@@ -1121,6 +1231,8 @@ def main(argv=None):
     mode.add_argument("--fix", action="store_true", help="interactive repair")
     mode.add_argument("--auto-fix", action="store_true", help="non-interactive repair")
     mode.add_argument("--off", action="store_true", help="skip everything, exit 0")
+    parser.add_argument("--repair-metadata", action="store_true",
+                        help="remove incomplete *.dist-info folders and exit")
     parser.add_argument("--ensure-upload", action="store_true",
                         help="auto-install YouTube OAuth/upload dependencies")
     parser.add_argument("--json", action="store_true", help="machine-readable report")
@@ -1129,6 +1241,14 @@ def main(argv=None):
 
     if args.off:
         return 0
+    if args.repair_metadata:
+        removed, failed = repair_incomplete_dist_info()
+        for name in removed:
+            print("removed incomplete metadata: %s" % name)
+        for name, error in failed:
+            print("could not remove %s: %s" % (name, error))
+        print("metadata repair: %d removed, %d failed" % (len(removed), len(failed)))
+        return 0 if not failed else 1
     # Safe default: plain `python -m scripts.preflight` is READ-ONLY.
     # Auto-install only happens on explicit --auto-fix / --fix (the run
     # scripts and the app launcher pass it explicitly).

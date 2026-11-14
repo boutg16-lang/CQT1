@@ -70,6 +70,7 @@ if errorlevel 1 goto VENV_FAILED
 if not exist ".venv\Scripts\python.exe" goto VENV_FAILED
 set "PYTHON=.venv\Scripts\python.exe"
 "%PYTHON%" --version
+call :REPAIR_VENV
 
 if "%INSTALL_TRANSCRIBE%"=="1" goto INSTALL_TRANSCRIPTION_RUNTIME
 goto INSTALL_CORE
@@ -97,8 +98,14 @@ goto INSTALL_CORE
 :INSTALL_CORE
 echo.
 echo [3/6] Installing core WebUI dependencies...
+call :REPAIR_VENV
+uv pip install --python "%PYTHON%" --no-cache -r requirements.txt
+if not errorlevel 1 goto CORE_INSTALLED
+echo [WARNING] Core installation failed; repairing incomplete metadata and retrying once...
+call :REPAIR_VENV
 uv pip install --python "%PYTHON%" --no-cache -r requirements.txt
 if errorlevel 1 goto CORE_FAILED
+:CORE_INSTALLED
 uv pip install --python "%PYTHON%" --no-cache --upgrade "yt-dlp[default]"
 if errorlevel 1 echo [WARNING] yt-dlp[default] installation failed; YouTube may need manual EJS setup.
 where deno >nul 2>&1
@@ -212,6 +219,12 @@ if "%VIRALCUTTER_NO_PAUSE%"=="1" goto CLEAN_DONE
 pause
 :CLEAN_DONE
 rmdir /s /q ".installer-tmp" >nul 2>&1
+exit /b 0
+
+:REPAIR_VENV
+if not exist "scripts\repair_venv_metadata.ps1" exit /b 0
+if not exist "%PYTHON%" exit /b 0
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\repair_venv_metadata.ps1" -PythonPath "%PYTHON%"
 exit /b 0
 
 :UPLOAD_INSTALL_FAILED

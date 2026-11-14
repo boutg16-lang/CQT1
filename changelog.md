@@ -1,5 +1,20 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.1-ultimate — 2026-11-14
+
+إنقاذ تثبيت Windows: metadata تالفة وحزم اختيارية.
+
+### الإصلاح
+- `scripts/repair_venv_metadata.ps1` + `preflight --repair-metadata`: يحذف `*.dist-info` بلا METADATA أو بملف فارغ، وهو ما كان يمنع uv من قراءة البيئة وإصلاحها.
+- `install_dependencies.bat` ينظّف قبل التثبيت ويعيد المحاولة مرة واحدة عند الفشل؛ `run_webui.bat` ينظّف عند كل تشغيل.
+- فحص `venv metadata` في preflight يكشف الحالة قبل أن يصل uv إلى طريق مسدود.
+- `mediapipe`, `insightface`, `google-genai`, `g4f`, `onnxruntime`, `scenedetect`, `cryptography` صارت WARN مع سبب وبديل، لا FAIL يمنع الواجهة؛ الحزم الأساسية بقيت حرجة.
+- لا يخفي الإصلاح عطلاً أساسياً: requests/gradio/fastapi/websockets ما زالت توقف التشغيل.
+
+### الاختبارات
+- `tests/test_preflight_metadata.py`: 6 اختبارات (حذف الناقص فقط، dry-run، مسار مفقود، تمييز الاختياري عن الأساسي، كشف وإصلاح).
+
+
 ## OUSSAMA Cutter 8.6.0-ultimate — 2026-11-13
 
 تعلّم مشروط بالدليل: فترة ثقة Bootstrap وبوابة دلالة.

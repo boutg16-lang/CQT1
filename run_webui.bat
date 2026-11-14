@@ -16,6 +16,8 @@ set "UV_NO_CACHE=1"
 
 if exist "bin\ffmpeg.exe" set "PATH=%CD%\bin;%PATH%"
 
+if exist "scripts\repair_venv_metadata.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\repair_venv_metadata.ps1" -PythonPath "%PYTHON%"
+
 echo.
 echo [preflight] Checking WebSockets compatibility...
 "%PYTHON%" scripts/ensure_websockets.py --check
