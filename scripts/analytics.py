@@ -150,6 +150,9 @@ def summarize_retention(points):
     (1.0 = everyone). The first 10% is the hook, the middle is the body, the
     last 10% is the ending. max_drop_at is the fraction of the clip where the
     curve falls fastest — the moment to cut or re-hook in future edits.
+
+    The hook average starts at 2% on purpose: the 0% bucket is 1.0 by
+    construction and would dilute every video toward the same number.
     """
     clean = []
     for point in points or []:
@@ -168,7 +171,9 @@ def summarize_retention(points):
         values = [watch for ratio, watch in clean if low <= ratio <= high]
         return sum(values) / len(values) if values else None
 
-    hook = _mean(0.0, 0.10)
+    hook = _mean(0.02, 0.10)
+    if hook is None:
+        hook = _mean(0.0, 0.10)
     mid = _mean(0.40, 0.60)
     end = _mean(0.90, 1.0)
     # A 3-bucket moving average prevents one noisy second from being called

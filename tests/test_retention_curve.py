@@ -121,7 +121,7 @@ def test_fetch_retention_curve_queries_the_right_report():
     assert request["filters"] == "video==abc123"
     assert curve["video_id"] == "abc123"
     assert len(curve["points"]) == 6
-    assert curve["summary"]["hook_ratio"] == 0.95
+    assert curve["summary"]["hook_ratio"] == 0.9
 
 
 def test_attach_retention_curves_caches_per_video(tmp_path):

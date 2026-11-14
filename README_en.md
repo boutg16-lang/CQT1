@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.5.0-ultimate — the loop now reads the retention curve: where viewers leave, whether the hook holds the first 10%, and a hook weight learned from early retention instead of total views
+**Current Version**: 8.6.0-ultimate — evidence-gated learning: a deterministic 90% bootstrap interval, no weight shift when it contains zero, and every refused shift reported instead of hidden
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

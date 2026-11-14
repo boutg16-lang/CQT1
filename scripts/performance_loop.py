@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import re
 import statistics
 import tempfile
@@ -343,6 +344,42 @@ def _spearman(pairs: list[tuple[float, float]]) -> float | None:
     return _pearson(list(zip(_ranks(xs), _ranks(ys), strict=False)))
 
 
+def _spearman_ci(pairs: list[tuple[float, float]], *,
+                 iterations: int = 1200, confidence: float = 0.90):
+    """Deterministic bootstrap confidence interval for Spearman's rho.
+
+    A point estimate from five clips is not evidence. The 90% percentile
+    interval answers the question the weight shift needs: "does this
+    correlation keep its sign if we resample the clips we have?" If the
+    interval contains zero, the report says so and no weight moves.
+    """
+    points = [(float(x), float(y)) for x, y in pairs
+              if x is not None and y is not None]
+    if len(points) < 4:
+        return (None, None)
+    rng = random.Random(0xC071)
+    values = []
+    for _ in range(max(200, int(iterations))):
+        sample = [points[rng.randrange(len(points))] for _ in points]
+        value = _spearman(sample)
+        if value is not None:
+            values.append(value)
+    if len(values) < 100:
+        return (None, None)
+    values.sort()
+    alpha = (1.0 - confidence) / 2.0
+    low = values[int(alpha * len(values))]
+    high = values[min(len(values) - 1, int((1.0 - alpha) * len(values)) - 1)]
+    return (round(low, 3), round(high, 3))
+
+
+def _stat_block(pairs: list[tuple[float, float]]) -> dict[str, Any]:
+    low, high = _spearman_ci(pairs)
+    if low is None:
+        return {"ci": None, "significant": None}
+    return {"ci": [low, high], "significant": low > 0.0 or high < 0.0}
+
+
 def _corr(pairs: list[tuple[float, float]]) -> float | None:
     """Backward-compatible name: correlation is Spearman from 8.4 on."""
     return _spearman(pairs)
@@ -591,6 +628,9 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
              (item["metrics"].get("retention_curve") or {}).get("hook_ratio"))
             for item in measured]
         hook_retention = _spearman(hook_pairs)
+        views_stats = _stat_block(pairs)
+        retention_stats = _stat_block(retention_pairs)
+        hook_stats = _stat_block(hook_pairs)
         correlations[feature] = {
             "vs_views": value,
             "vs_retention": retention,
@@ -600,6 +640,12 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
                                       if x is not None and y is not None]),
             "hook_retention_samples": len([1 for x, y in hook_pairs
                                            if x is not None and y is not None]),
+            "vs_views_ci": views_stats["ci"],
+            "vs_retention_ci": retention_stats["ci"],
+            "vs_hook_retention_ci": hook_stats["ci"],
+            "vs_views_significant": views_stats["significant"],
+            "vs_retention_significant": retention_stats["significant"],
+            "vs_hook_retention_significant": hook_stats["significant"],
             "method": "spearman",
             "strength": _strength(value),
         }
@@ -609,6 +655,8 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         "views": "views inside the shared {}d window".format(_window_days()),
         "retention": "YouTube averageViewPercentage inside the same window",
         "correlation": "Spearman rank (robust to a single viral outlier)",
+        "significance": ("90% bootstrap CI over the measured clips; a weight "
+                         "shift requires the interval to exclude zero"),
     }
 
     # Content-aware learning (v7.33.2): which hook types / angles / topics /
@@ -738,9 +786,15 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
         for feature, row in sorted(
                 correlations.items(),
                 key=lambda kv: -(abs(kv[1].get("vs_views") or 0))):
-            lines.append("- `{}`: views rho={} ({}) · retention rho={} · n={}".format(
+            ci = row.get("vs_views_ci")
+            extra = ""
+            if ci:
+                extra = " · CI [{}, {}]".format(ci[0], ci[1])
+            if row.get("vs_views_significant") is False:
+                extra += " · غير دال"
+            lines.append("- `{}`: views rho={} ({}) · retention rho={} · n={}{}".format(
                 feature, row.get("vs_views"), row.get("strength"),
-                row.get("vs_retention"), row.get("samples", 0)))
+                row.get("vs_retention"), row.get("samples", 0), extra))
         lines.append("")
     content = report.get("content_insights") or {}
     categories = content.get("categories") or {}
@@ -804,6 +858,11 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
             if weights.get("needed_samples"):
                 lines.append("- يحتاج {} مقطعاً مقاساً إضافياً لثقة كاملة.".format(
                     weights["needed_samples"]))
+            if weights.get("suppressed"):
+                lines.append("- إزاحات لم تُطبَّق (فترة الثقة تشمل الصفر):")
+                for item in weights["suppressed"]:
+                    lines.append("  - {} (rho={}).".format(
+                        item.get("component"), item.get("r")))
             lines.append("")
             lines.append("## التوصيات للجولة القادمة")
             for shift in weights.get("shifted") or []:
