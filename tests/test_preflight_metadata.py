@@ -93,3 +93,27 @@ def test_check_venv_metadata_detects_and_repairs(tmp_path, monkeypatch):
     assert removed == ["charset_normalizer-3.5.2.dist-info"]
     assert failed == []
     assert preflight.check_venv_metadata()["status"] == preflight.OK
+
+
+def test_pyannote_vad_is_checked_when_whisperx_is_installed(monkeypatch):
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: True)
+
+    def broken(module):
+        if module == "asteroid_filterbanks":
+            raise ModuleNotFoundError("No module named 'asteroid_filterbanks'")
+        return object()
+
+    result = preflight.check_pyannote_vad(import_module=broken)
+    assert result["status"] == preflight.WARN
+    assert "asteroid-filterbanks" in result["detail"]
+
+    result = preflight.check_pyannote_vad(import_module=lambda module: object())
+    assert result["status"] == preflight.OK
+
+
+def test_pyannote_vad_is_skipped_without_whisperx(monkeypatch):
+    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: False)
+    result = preflight.check_pyannote_vad(
+        import_module=lambda module: (_ for _ in ()).throw(AssertionError()))
+    assert result["status"] == preflight.OK
+    assert "not installed" in result["detail"]

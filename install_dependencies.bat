@@ -120,8 +120,14 @@ goto CHECK_FFMPEG
 echo.
 echo [4/6] Installing optional WhisperX stack...
 rem Resolve the pinned WhisperX/Hugging Face stack without upgrading the selected Torch wheel.
-uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "ctranslate2>=4.4.0,<4.9.0" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=84.1.0,<85" "numpy<2"
+uv pip install --python "%PYTHON%" --no-cache "whisperx==3.3.1" "pyannote.audio==3.3.2" "asteroid-filterbanks>=0.4" "einops>=0.6.0" "omegaconf>=2.1,<3.0" "pyannote.core>=5.0.0" "pyannote.database>=5.0.1" "pyannote.metrics>=3.2" "pyannote.pipeline>=3.0.1" "pytorch-metric-learning>=2.1.0" "rich>=12.0.0" "semver>=3.0.0" "soundfile>=0.12.1" "speechbrain>=1.0.0" "tensorboardX>=2.6" "torch-audiomentations>=0.11.0" "torchmetrics>=0.11.0" "ctranslate2>=4.4.0,<4.9.0" "transformers>=5.14.1,<5.16" "huggingface-hub>=1.16.0,<2.0" "tokenizers>=0.22.2,<0.23.1" "setuptools>=84.1.0,<85" "numpy<2"
 if errorlevel 1 set "TRANSCRIPTION_FAILED=1"
+"%PYTHON%" -c "import asteroid_filterbanks; from pyannote.audio.models.segmentation import PyanNet" >nul 2>&1
+if errorlevel 1 (
+    set "TRANSCRIPTION_FAILED=1"
+    echo [ERROR] pyannote VAD is incomplete: asteroid_filterbanks is missing.
+    echo [INFO] Run: uv pip install --python ".venv\Scripts\python.exe" "asteroid-filterbanks>=0.4" "einops>=0.6.0" "omegaconf>=2.1,<3.0" "soundfile>=0.12.1"
+)
 if /I "%GPU_MODE%"=="cuda" goto RESTORE_CUDA_TORCH
 goto VERIFY_TRANSCRIPTION
 

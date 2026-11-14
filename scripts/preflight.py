@@ -461,6 +461,31 @@ def repair_incomplete_dist_info(site_packages=None, dry_run=False):
     return removed, failed
 
 
+def check_pyannote_vad(import_module=None):
+    """Verify the WhisperX VAD stack, not just `import whisperx`.
+
+    WhisperX imports pyannote lazily at model-load time. A venv can pass
+    `import whisperx` and still die minutes later with
+    "No module named 'asteroid_filterbanks'". Check the actual VAD import.
+    """
+    if not _dist_installed("whisperx"):
+        return {"name": "pyannote VAD", "status": OK,
+                "detail": "whisperx not installed (optional stack)"}
+    import_module = import_module or importlib.import_module
+    try:
+        import_module("asteroid_filterbanks")
+        import_module("pyannote.audio.models.segmentation.PyanNet")
+    except Exception as exc:
+        return {
+            "name": "pyannote VAD", "status": WARN,
+            "detail": ("incomplete (%s: %s) — install asteroid-filterbanks, "
+                       "einops, omegaconf and soundfile" % (
+                           type(exc).__name__, exc)),
+        }
+    return {"name": "pyannote VAD", "status": OK,
+            "detail": "asteroid_filterbanks + PyanNet import cleanly"}
+
+
 def check_venv_metadata():
     """Proactively surface a venv that the next uv/pip install cannot read."""
     broken = find_incomplete_dist_info()
@@ -1017,7 +1042,8 @@ def collect_checks():
     checks += [check_disk_space(_app_dir()),
                check_writable(_app_dir(), "Working dir writable")]
     checks += [check_api_config(), check_assets(), check_safety_blocklist_freshness(),
-               check_models_dir(), check_telegram_config(), check_venv_metadata()]
+               check_models_dir(), check_telegram_config(), check_venv_metadata(),
+               check_pyannote_vad()]
 
     # dependency checks per requirements file
     seen_dists = set()

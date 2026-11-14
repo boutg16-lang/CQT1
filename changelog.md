@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.2-ultimate — 2026-11-14
+
+تبعيات VAD المفقودة (asteroid_filterbanks).
+
+### الإصلاح
+- `requirements-transcribe.txt` يضم الآن `pyannote.audio==3.3.2` وتبعياته الصريحة: `asteroid-filterbanks`, `einops`, `omegaconf`, `soundfile`, `pyannote.core/database/metrics/pipeline`, `pytorch-metric-learning`, `speechbrain`, `torchmetrics`, `torch-audiomentations`, `rich`, `semver`, `tensorboardX`.
+- `install_dependencies.bat` يثبّت أهمها صراحةً ويتحقق من `import asteroid_filterbanks; from pyannote.audio.models.segmentation import PyanNet` بعد التثبيت؛ الفشل يطبع الأمر العلاجي ويعلّم التفريغ غير مكتمل.
+- `preflight` يضيف فحص `pyannote VAD`: WARN عند نقص التبعيات مع اسم الحزمة، OK إذا لم يكن WhisperX مثبتاً.
+
+### الاختبارات
+- اختباران جديدان: VAD ناقص → WARN، VAD سليم → OK، وWhisperX غير مثبت → تجاهل.
+
+
 ## OUSSAMA Cutter 8.6.1-ultimate — 2026-11-14
 
 إنقاذ تثبيت Windows: metadata تالفة وحزم اختيارية.

@@ -450,5 +450,5 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 - **RTX 3060 ومراقبة المجلد**: `setup_rtx3060.bat` يضبط بيئة GPU، ثم `watch_folder_rtx3060.bat` يعالج ملفات `INBOX` محلياً؛ لا يرفع أو ينشر تلقائياً. [إعداد GPU](docs/RTX3060_SETUP_AR.md) · [المراقبة](docs/WATCH_FOLDER_RTX3060_AR.md)
 - **تجميع المقاطع**: [ملاحظات مخطط الحزمة](docs/RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
 
-**الإصدار الحالي**: 8.6.1-ultimate — تثبيت Windows يُصلح نفسه: يحذف metadata الـvenv التالفة قبل أن يقرأها uv، ويرفض أن تمنع الحزم الاختيارية تشغيل الواجهة. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.6.1_AR.md)
+**الإصدار الحالي**: 8.6.2-ultimate — حزمة WhisperX VAD تثبّت تبعيات pyannote صراحةً (asteroid-filterbanks وغيره)، والتثبيت يتحقق من استيراد VAD الحقيقي لا من `import whisperx` فقط. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.6.2_AR.md)
 *OUSSAMA Cutter: لأن المقاطع الفيروسية لا يجب أن تكلّف ثروة.*
