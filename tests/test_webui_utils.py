@@ -229,3 +229,31 @@ def test_huggingface_conflict_hint_recommends_supported_hub_range():
     )
     assert "1.16.0" in hint
     assert "2.0" in hint
+
+
+def test_huggingface_path_in_traceback_is_not_a_version_conflict():
+    from webui.utils import summarize_error
+    text = (
+        "Traceback (most recent call last):\n"
+        '  File "D:\\OS\\.venv\\Lib\\site-packages\\huggingface_hub\\utils\\_http.py", line 1, in <module>\n'
+        "    ...\n"
+        "GatedRepoError: 401 Client Error. Cannot access gated repo for URL https://huggingface.co/pyannote/segmentation-3.0\n"
+    )
+    title, _, hint = summarize_error(text)
+    assert title.startswith("GatedRepoError")
+    assert "HF_TOKEN" in hint
+    assert ">=1.16.0" not in hint
+
+
+def test_use_auth_token_hint_is_specific():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "TypeError: hf_hub_download() got an unexpected keyword argument 'use_auth_token'")
+    assert "use_auth_token" in hint
+
+
+def test_huggingface_version_conflict_still_recognized():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0")
+    assert "1.16.0" in hint and "2.0" in hint

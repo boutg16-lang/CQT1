@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.5-ultimate — 2026-11-14
+
+الخطأ الحقيقي بدل «تعارض إصدارات» وهمي.
+
+### الإصلاح
+- `summarize_error` يعرض آخر سطر استثناء كعنوان، ولا يعتبر مسار `huggingface_hub` في تتبّع تعارضاً؛ تعارض الإصدار لا يُدّعى إلا عند ذكر `required`/`found`/`no matching distribution`/`version`.
+- تلميحات جديدة: `GatedRepoError`/401 (HF_TOKEN وقبول الشروط)، `use_auth_token` (شيم Hub 1.x)، `checksum does not match` و`model file not found` (إعادة تثبيت whisperx).
+- أي استثناء أثناء بناء WhisperX (VAD/pyannote/hub/ملفات النموذج) يتحول إلى faster-whisper بسبب `load`، بدل إظهار خطأ مضلل أو التوقف.
+
+### الاختبارات
+- 3 اختبارات لتشخيص الأخطاء واختبار تحويل فشل التحميل العام.
+
+
 ## OUSSAMA Cutter 8.6.4-ultimate — 2026-11-14
 
 خطأ YouTube 500 العابر لا يوقف القص.

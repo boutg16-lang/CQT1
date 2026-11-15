@@ -249,6 +249,10 @@ def _transcribe_via_fallback(input_file, model_name, project_folder,
         print("[transcribe] pyannote VAD is unavailable — switching to the "
               "independent faster-whisper backend (its own Silero VAD; "
               "word-alignment step skipped).", flush=True)
+    elif reason == "load":
+        print("[transcribe] WhisperX could not load its model stack — "
+              "switching to the independent faster-whisper backend "
+              "(word-alignment step skipped).", flush=True)
     else:
         print("[transcribe] WhisperX could not fit in memory — switching to the "
               "lighter faster-whisper backend (word-alignment step skipped).",
@@ -1007,29 +1011,28 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                         continue
                     raise
                 except Exception as load_err:
-                    if _is_vad_dependency_error(load_err):
-                        print("[transcribe] WhisperX VAD dependency failed: "
-                              "{}".format(load_err), flush=True)
-                        try:
-                            return _transcribe_via_fallback(
-                                input_file, model_name, project_folder,
-                                srt_file, tsv_file, json_file, cache_path, device,
-                                reason="vad")
-                        except Exception as fallback_err:
-                            raise TranscriptionUnavailableError(
-                                build_error_message(
-                                    whisperx_error=str(load_err),
-                                    base_dir=project_folder)
-                                + "\nfaster-whisper fallback failed: {}".format(
-                                    fallback_err)
-                            ) from load_err
-                    conflict = str(load_err).lower()
-                    if ("huggingface-hub" in conflict or "huggingface_hub" in conflict
-                            or "tokenizers" in conflict):
+                    # Any failure while constructing the WhisperX pipeline
+                    # (VAD, pyannote, huggingface_hub, bundled model files)
+                    # is an environment problem, not bad audio. The
+                    # independent faster-whisper backend can still transcribe.
+                    reason = ("vad" if _is_vad_dependency_error(load_err)
+                              else "load")
+                    print("[transcribe] WhisperX model load failed: {} — "
+                          "switching to the independent faster-whisper "
+                          "backend.".format(load_err), flush=True)
+                    try:
+                        return _transcribe_via_fallback(
+                            input_file, model_name, project_folder,
+                            srt_file, tsv_file, json_file, cache_path, device,
+                            reason=reason)
+                    except Exception as fallback_err:
                         raise TranscriptionUnavailableError(
-                            build_error_message(whisperx_error=str(load_err), base_dir=project_folder)
+                            build_error_message(
+                                whisperx_error=str(load_err),
+                                base_dir=project_folder)
+                            + "\nfaster-whisper fallback failed: {}".format(
+                                fallback_err)
                         ) from load_err
-                    raise
             if model is None:
                 raise last_load_err or ValueError(
                     "No usable Whisper model size for '{}'".format(model_name))

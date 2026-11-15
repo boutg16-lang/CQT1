@@ -167,11 +167,23 @@ def _html_escape(text):
 # cards with a friendly hint, instead of dumping 30 raw lines.
 # ---------------------------------------------------------------------------
 
+_HF_VERSION_HINT = i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")
+_HF_GATED_HINT = i18n("Hugging Face blocked the model download (401/gated): accept the model terms on huggingface.co, set HF_TOKEN, or let CQT1 use faster-whisper.")
+_HF_AUTH_HINT = i18n("Hugging Face Hub 1.x removed use_auth_token. CQT1 shims it for pyannote; if this persists, update CQT1 or reinstall huggingface-hub 1.16-2.0.")
+
+
 KNOWN_ERROR_HINTS = [
     # --- Transcription dependency conflicts must outrank generic YouTube hints ---
-    ("cannot import name 'is_offline_mode' from 'huggingface_hub'", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
-    ("huggingface-hub", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
-    ("huggingface_hub", i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")),
+    ("cannot import name 'is_offline_mode' from 'huggingface_hub'", _HF_VERSION_HINT),
+    ("gatedrepoerror", _HF_GATED_HINT),
+    ("gated repo", _HF_GATED_HINT),
+    ("401 client error", _HF_GATED_HINT),
+    ("403 client error", _HF_GATED_HINT),
+    ("awaiting a review", _HF_GATED_HINT),
+    ("access to model", _HF_GATED_HINT),
+    ("use_auth_token", _HF_AUTH_HINT),
+    ("checksum does not match", i18n("The bundled WhisperX VAD asset is corrupted. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
+    ("model file not found", i18n("WhisperX VAD asset is missing. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
     ("tokenizers", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
     ("0.23.1", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
     # --- Gemini API errors first: common when keys expire or quota ends (v6.9) ---
@@ -218,11 +230,22 @@ def summarize_error(text, max_title=160):
     text = (text or "").strip()
     lines = [ln for ln in text.splitlines() if ln.strip()]
     title = lines[0] if lines else i18n("Unknown error")
-    for ln in lines:
-        low = ln.lower()
-        if low.startswith("error") or "error:" in low[:40]:
-            title = ln
+    # The root cause is the LAST exception line, not the first traceback line.
+    for ln in reversed(lines):
+        stripped = ln.strip()
+        if stripped.startswith(("File ", "Traceback", "During handling",
+                                "The above exception")):
+            continue
+        if re.match(r"^[A-Za-z_][\w.]*(?:Error|Exception|Warning)\s*:", stripped,
+                    re.IGNORECASE):
+            title = stripped
             break
+    else:
+        for ln in lines:
+            low = ln.lower()
+            if low.startswith("error") or "error:" in low[:40]:
+                title = ln
+                break
     hint = ""
     # prefer matching the hint against the TITLE line first (the real error),
     # so older messages in the log tail don't hijack the hint
@@ -237,6 +260,13 @@ def summarize_error(text, max_title=160):
             if key in low_text:
                 hint = msg
                 break
+        # A bare huggingface_hub path in a traceback is NOT a version conflict.
+        # Only claim one when the message actually talks about requirements.
+        if not hint and "huggingface" in low_text and any(
+                marker in low_text for marker in (
+                    "required", "no matching distribution",
+                    "found 0.", "found 1.", "version")):
+            hint = _HF_VERSION_HINT
     return title[:max_title], text[:3000], hint
 
 
