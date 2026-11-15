@@ -217,23 +217,55 @@ def _load_whisperx_model(candidate, device, compute_type, requested_device):
             compute_type = "float32"
 
 
-def _transcribe_via_fallback(input_file, model_name, project_folder,
-                             srt_file, tsv_file, json_file, cache_path, device):
-    """Memory-exhausted rescue: run the lightweight faster-whisper backend.
+def _is_vad_dependency_error(exc):
+    """True when WhisperX cannot load because pyannote/VAD is incomplete.
 
-    Called when WhisperX (+pyannote VAD) cannot fit in RAM/VRAM. Output files
-    keep the exact same names the WhisperX path would write, so every
-    downstream stage is unaffected. Word-level wav2vec2 alignment is skipped
-    in this degraded mode (faster-whisper still emits per-word timestamps).
+    These are environment failures (asteroid_filterbanks, pyannote, a broken
+    import chain), not bad audio or a bad model name. The lightweight
+    faster-whisper backend has its own Silero VAD and can still transcribe.
+    """
+    text = ("%s: %s" % (type(exc).__name__, exc)).lower()
+    if isinstance(exc, (ImportError, ModuleNotFoundError)):
+        return True
+    return any(marker in text for marker in (
+        "asteroid_filterbanks", "asteroid-filterbanks", "pyannote",
+        "no module named", "cannot import name",
+    ))
+
+
+def _transcribe_via_fallback(input_file, model_name, project_folder,
+                             srt_file, tsv_file, json_file, cache_path, device,
+                             reason="memory"):
+    """Degraded-mode rescue: run the lightweight faster-whisper backend.
+
+    Called when WhisperX (+pyannote VAD) cannot fit in RAM/VRAM, or when its
+    VAD dependency chain is broken. Output files keep the exact same names the
+    WhisperX path would write, so every downstream stage is unaffected.
+    Word-level wav2vec2 alignment is skipped (faster-whisper still emits
+    per-word timestamps).
     """
     _log_memory_state("before faster-whisper fallback")
-    print("[transcribe] WhisperX could not fit in memory — switching to the "
-          "lighter faster-whisper backend (word-alignment step skipped).",
-          flush=True)
+    if reason == "vad":
+        print("[transcribe] pyannote VAD is unavailable — switching to the "
+              "independent faster-whisper backend (its own Silero VAD; "
+              "word-alignment step skipped).", flush=True)
+    else:
+        print("[transcribe] WhisperX could not fit in memory — switching to the "
+              "lighter faster-whisper backend (word-alignment step skipped).",
+              flush=True)
     from scripts import transcription_fallback
-    result = transcription_fallback.transcribe(
-        input_file, model_name, device=str(device or "auto"),
-        progress=lambda msg: print(msg, flush=True))
+    try:
+        result = transcription_fallback.transcribe(
+            input_file, model_name, device=str(device or "auto"),
+            progress=lambda msg: print(msg, flush=True))
+    except Exception as exc:
+        if str(device).lower() != "cuda" or not _is_cuda_runtime_error(exc):
+            raise
+        print("[transcribe] faster-whisper CUDA runtime is unavailable ({}); "
+              "retrying on CPU.".format(exc), flush=True)
+        result = transcription_fallback.transcribe(
+            input_file, model_name, device="cpu",
+            progress=lambda msg: print(msg, flush=True))
     transcription_fallback.write_outputs(result, srt_file, tsv_file, json_file)
     try:
         _save_transcription_cache(cache_path, input_file, model_name,
@@ -975,6 +1007,22 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                         continue
                     raise
                 except Exception as load_err:
+                    if _is_vad_dependency_error(load_err):
+                        print("[transcribe] WhisperX VAD dependency failed: "
+                              "{}".format(load_err), flush=True)
+                        try:
+                            return _transcribe_via_fallback(
+                                input_file, model_name, project_folder,
+                                srt_file, tsv_file, json_file, cache_path, device,
+                                reason="vad")
+                        except Exception as fallback_err:
+                            raise TranscriptionUnavailableError(
+                                build_error_message(
+                                    whisperx_error=str(load_err),
+                                    base_dir=project_folder)
+                                + "\nfaster-whisper fallback failed: {}".format(
+                                    fallback_err)
+                            ) from load_err
                     conflict = str(load_err).lower()
                     if ("huggingface-hub" in conflict or "huggingface_hub" in conflict
                             or "tokenizers" in conflict):

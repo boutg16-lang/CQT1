@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.6.2-ultimate — the WhisperX VAD stack installs its pyannote dependencies explicitly (asteroid-filterbanks et al.) and setup verifies the real VAD import, not just `import whisperx`
+**Current Version**: 8.6.3-ultimate — if the WhisperX VAD stack is broken, transcription automatically continues on faster-whisper instead of dying with a raw ModuleNotFoundError
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

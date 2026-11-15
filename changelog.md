@@ -1,5 +1,19 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.3-ultimate — 2026-11-14
+
+التفريغ لا يسقط بسبب VAD.
+
+### الإصلاح
+- `_is_vad_dependency_error` يميّز أعطال بيئة pyannote/VAD (ImportError, ModuleNotFoundError, asteroid_filterbanks, pyannote) عن أخطاء الاستخدام.
+- عندها ينتقل `transcribe()` تلقائياً إلى faster-whisper (VAD خاص به) ويكتب نفس SRT/TSV/JSON، مع طباعة السبب وتخطي محاذاة wav2vec2 فقط.
+- إذا فشل البديل أيضاً، تُرفع `TranscriptionUnavailableError` بالخطأين معاً.
+- الافتراضي `auto` كما هو؛ `whisperx` أو `faster-whisper` صراحةً يمنعان التحويل الصامت.
+
+### الاختبارات
+- `tests/test_transcribe_vad_fallback.py`: تمييز أخطاء VAD، والتحويل الفعلي عند `ModuleNotFoundError: asteroid_filterbanks`.
+
+
 ## OUSSAMA Cutter 8.6.2-ultimate — 2026-11-14
 
 تبعيات VAD المفقودة (asteroid_filterbanks).
