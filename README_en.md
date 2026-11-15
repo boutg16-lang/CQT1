@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.6.5-ultimate — a WhisperX model-stack failure no longer hides behind a fake "hub version conflict": the real error is shown and transcription continues on faster-whisper
+**Current Version**: 8.6.6-ultimate — a tokenizers file path no longer triggers a fake version conflict; the real error is shown, and a runtime tokenizer failure switches to faster-whisper
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

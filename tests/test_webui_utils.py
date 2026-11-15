@@ -257,3 +257,31 @@ def test_huggingface_version_conflict_still_recognized():
     _, _, hint = summarize_error(
         "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0")
     assert "1.16.0" in hint and "2.0" in hint
+
+
+def test_tokenizers_path_in_traceback_is_not_a_version_conflict():
+    from webui.utils import summarize_error
+    text = (
+        "Traceback (most recent call last):\n"
+        '  File "D:\\OS\\.venv\\Lib\\site-packages\\tokenizers\\__init__.py", line 1, in <module>\n'
+        "    ...\n"
+        "ValueError: bad tokenizer json\n"
+    )
+    _, _, hint = summarize_error(text)
+    assert "0.23.0" not in hint
+    assert "tokenizers==0.22.2" not in hint
+
+
+def test_real_tokenizers_version_conflict_is_recognized():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "ImportError: tokenizers>=0.22.0,<=0.23.0 is required; found 0.23.1")
+    assert "0.23.0" in hint
+    assert "0.22.2" in hint
+
+
+def test_tokenizers_native_failure_gets_a_reinstall_hint():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "Exception: tokenizers native extension failed to load (rust panicked)")
+    assert "reinstall" in hint.lower() or "أعد" in hint

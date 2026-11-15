@@ -184,8 +184,7 @@ KNOWN_ERROR_HINTS = [
     ("use_auth_token", _HF_AUTH_HINT),
     ("checksum does not match", i18n("The bundled WhisperX VAD asset is corrupted. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
     ("model file not found", i18n("WhisperX VAD asset is missing. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
-    ("tokenizers", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
-    ("0.23.1", i18n("WhisperX dependency conflict: transformers caps tokenizers at 0.23.0 (and 0.23.0 was never released) — run: uv pip install \"tokenizers==0.22.2\", then restart the app")),
+
     # --- Gemini API errors first: common when keys expire or quota ends (v6.9) ---
     ("api key not valid", i18n("Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings")),
     ("api_key_invalid", i18n("Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings")),
@@ -267,6 +266,22 @@ def summarize_error(text, max_title=160):
                     "required", "no matching distribution",
                     "found 0.", "found 1.", "version")):
             hint = _HF_VERSION_HINT
+        # Same rule for tokenizers: a file path is not a version conflict.
+        if not hint and "tokenizers" in low_text:
+            if any(marker in low_text for marker in (
+                    "0.23.1", "no matching distribution", "required",
+                    "found 0.2")):
+                hint = i18n(
+                    "WhisperX dependency conflict: transformers caps tokenizers "
+                    "at 0.23.0 (0.23.0 was never released). Run: "
+                    "uv pip install \"tokenizers==0.22.2\", then restart the app.")
+            elif any(marker in low_text for marker in (
+                    "panicked", "rust", "native", "failed to load",
+                    "importerror", "typeerror", "exception")):
+                hint = i18n(
+                    "The tokenizers native extension failed. Reinstall it: "
+                    "uv pip install --reinstall \"tokenizers==0.22.2\". "
+                    "If it persists, send the last error line.")
     return title[:max_title], text[:3000], hint
 
 

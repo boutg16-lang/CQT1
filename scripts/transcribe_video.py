@@ -217,6 +217,20 @@ def _load_whisperx_model(candidate, device, compute_type, requested_device):
             compute_type = "float32"
 
 
+def _is_transcription_stack_error(exc):
+    """True for tokenizer/transformers/hub/pyannote failures at runtime.
+
+    These are environment problems. faster-whisper is an independent backend
+    (it does use tokenizers, but not WhisperX's transformers/pyannote layer),
+    so it is worth one attempt before surfacing the error.
+    """
+    text = ("%s: %s" % (type(exc).__name__, exc)).lower()
+    return any(marker in text for marker in (
+        "tokenizers", "transformers", "huggingface", "hf_hub",
+        "pyannote", "asteroid_filterbanks", "sentencepiece",
+    ))
+
+
 def _is_vad_dependency_error(exc):
     """True when WhisperX cannot load because pyannote/VAD is incomplete.
 
@@ -1060,6 +1074,15 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                     break
                 except Exception as exc:
                     if not _is_memory_error(exc):
+                        if _is_transcription_stack_error(exc):
+                            print("[transcribe] WhisperX transcription failed in "
+                                  "its tokenizer/model stack: {} — switching to "
+                                  "faster-whisper.".format(exc), flush=True)
+                            _release_cuda_memory(model, delete_model=True)
+                            return _transcribe_via_fallback(
+                                input_file, model_name, project_folder,
+                                srt_file, tsv_file, json_file, cache_path,
+                                device, reason="load")
                         raise
                     memory_error = exc
                     _log_memory_state("after WhisperX OOM")

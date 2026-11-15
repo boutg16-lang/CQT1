@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.6-ultimate — 2026-11-14
+
+تلميح tokenizers الكاذب.
+
+### الإصلاح
+- حُذف التلميح العام لأي ذكر `tokenizers`; لا يُدّعى تعارض 0.23.0 إلا عند `0.23.1`/`required`/`no matching distribution`/`found 0.2`.
+- فشل الامتداد الأصلي (rust/panicked/native/ImportError/TypeError) يعطي أمر إعادة تثبيت tokenizers==0.22.2.
+- فشل `model.transcribe` بخطأ tokenizers/transformers/hub/pyannote يتحول إلى faster-whisper، لا فقط فشل التحميل.
+
+### الاختبارات
+- 3 اختبارات للتشخيص واختبار تحويل فشل tokenizers أثناء التفريغ.
+
+
 ## OUSSAMA Cutter 8.6.5-ultimate — 2026-11-14
 
 الخطأ الحقيقي بدل «تعارض إصدارات» وهمي.

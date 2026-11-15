@@ -91,3 +91,36 @@ def test_any_model_load_failure_falls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(tv, "_transcribe_via_fallback", fake_fallback)
     tv.transcribe(str(audio), "small", str(tmp_path), "cpu")
     assert called["reason"] == "load"
+
+
+def test_tokenizer_failure_during_transcribe_falls_back(tmp_path, monkeypatch):
+    audio = tmp_path / "input.mp3"
+    audio.write_bytes(b"fake")
+
+    class FakeTorch:
+        __version__ = "2.8.0"
+        cuda = SimpleNamespace(is_available=lambda: False)
+
+    class FakeModel:
+        def transcribe(self, audio, batch_size=16, chunk_size=10):
+            raise RuntimeError("tokenizers native extension failed")
+
+    monkeypatch.setattr(tv, "torch", FakeTorch())
+    monkeypatch.setattr(tv, "whisperx",
+                        SimpleNamespace(load_audio=lambda path: object()))
+    monkeypatch.setattr(tv, "_cache_matches", lambda *a, **k: False)
+    monkeypatch.setattr(tv, "_transcript_artifacts_ok", lambda *a, **k: False)
+    monkeypatch.setattr(tv, "apply_safe_globals_hack", lambda: None)
+    monkeypatch.setattr(tv, "_log_memory_state", lambda *a, **k: None)
+    monkeypatch.setattr(tv, "_load_whisperx_model",
+                        lambda *a, **k: (FakeModel(), "cpu", "float32"))
+    called = {}
+
+    def fake_fallback(input_file, model_name, project_folder, srt_file,
+                      tsv_file, json_file, cache_path, device, reason="memory"):
+        called["reason"] = reason
+        return srt_file, tsv_file
+
+    monkeypatch.setattr(tv, "_transcribe_via_fallback", fake_fallback)
+    tv.transcribe(str(audio), "small", str(tmp_path), "cpu")
+    assert called["reason"] == "load"
