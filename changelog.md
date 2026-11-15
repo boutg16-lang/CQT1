@@ -1,5 +1,19 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.7.0-ultimate — 2026-11-14
+
+طبيب تفريغ ذاتي الإصلاح.
+
+### الإصلاح
+- `transcription_diagnostics --ensure`: يحمّل VAD الحقيقي (لا استيراد فقط)، ويصلح `asteroid_filterbanks`/pyannote أو tokenizers تلقائياً، ثم يعيد الفحص؛ إن فشل، يعيد تثبيت مجموعة التفريغ كاملة.
+- كاش `.transcription_ready.json` ببصمة إصدارات الحزمة: التشغيل التالي يتخطى الفحص الثقيل، وأي تغيير في الإصدارات يبطل الكاش.
+- `run_webui.bat` يشغّل الطبيب بعد preflight وقبل الواجهة؛ الفشل تحذير لا يمنع التشغيل، ويبقى faster-whisper بديلاً.
+- `build_error_message` يقرأ الإصدارات الفعلية ولا يدّعي تعارض tokenizers/Hub إلا إذا كان الإصدار خارج النطاق.
+
+### الاختبارات
+- `tests/test_transcription_doctor.py`: 8 اختبارات (VAD، الكاش، إصلاح pyannote، tokenizers، فشل الإصلاح، الرسائل).
+
+
 ## OUSSAMA Cutter 8.6.6-ultimate — 2026-11-14
 
 تلميح tokenizers الكاذب.

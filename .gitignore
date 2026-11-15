@@ -119,3 +119,5 @@ local.properties
 *.keystore
 *.jks
 captures/
+# Doctor cache: last successful VAD probe fingerprint
+.transcription_ready.json

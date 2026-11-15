@@ -13,11 +13,19 @@ def test_diagnostics_is_json_serializable():
     assert set(report["packages"]) == {
         "torch", "torchaudio", "ctranslate2", "whisperx", "transformers",
         "huggingface_hub", "tokenizers", "setuptools", "faster_whisper",
+        "pyannote.audio", "asteroid_filterbanks",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
 
 
-def test_tokenizers_conflict_message_is_actionable():
+def test_tokenizers_conflict_message_is_actionable(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+    monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: {
+        "packages": {"tokenizers": {"ok": True, "version": "0.23.1"},
+                     "huggingface_hub": {"ok": True, "version": "1.33.0"}},
+        "missing": [], "incompatible": [], "fallback_ready": True,
+        "torch_runtime": {"cuda_available": False},
+    })
     message = build_error_message(
         "ImportError: tokenizers>=0.22.0,<=0.23.0 is required ... but found "
         "tokenizers==0.23.1",
@@ -67,6 +75,8 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
         "tokenizers": "0.22.2",
         "setuptools": "84.2.1",
         "faster_whisper": "1.2.1",
+        "pyannote.audio": "3.3.2",
+        "asteroid_filterbanks": "0.4.0",
     }
     monkeypatch.setattr(
         diagnostics,
@@ -88,7 +98,14 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
     assert report["incompatible"] == ["whisperx", "transformers", "huggingface_hub"]
 
 
-def test_huggingface_conflict_message_is_actionable():
+def test_huggingface_conflict_message_is_actionable(monkeypatch):
+    import scripts.transcription_diagnostics as diagnostics
+    monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: {
+        "packages": {"huggingface_hub": {"ok": True, "version": "0.36.2"},
+                     "tokenizers": {"ok": True, "version": "0.22.2"}},
+        "missing": [], "incompatible": [], "fallback_ready": True,
+        "torch_runtime": {"cuda_available": False},
+    })
     message = build_error_message(
         "cannot import name 'is_offline_mode' from 'huggingface_hub'",
         base_dir=".",
@@ -142,6 +159,8 @@ def test_pkg_resources_is_not_required_for_whisperx_backend(monkeypatch):
         "tokenizers": "0.22.2",
         "setuptools": "84.2.1",
         "faster_whisper": "1.2.1",
+        "pyannote.audio": "3.3.2",
+        "asteroid_filterbanks": "0.4.0",
     }
 
     monkeypatch.setattr(

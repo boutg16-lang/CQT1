@@ -73,6 +73,9 @@ exit /b 1
 echo [WARNING] Optional checks reported warnings. Starting WebUI.
 
 :START_WEBUI
+echo [preflight] Checking the real transcription stack (VAD/tokenizers)...
+"%PYTHON%" -m scripts.transcription_diagnostics --ensure
+if errorlevel 1 echo [WARNING] Transcription stack is not fully ready; the app will use faster-whisper or degrade.
 echo [webui] Starting OUSSAMA Cutter...
 "%PYTHON%" webui\app.py %*
 set "WEBUI_EXIT=%ERRORLEVEL%"

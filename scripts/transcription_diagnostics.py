@@ -135,7 +135,7 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         for name in (
             "torch", "torchaudio", "ctranslate2", "whisperx", "transformers",
             "huggingface_hub", "tokenizers", "setuptools",
-            "faster_whisper",
+            "faster_whisper", "pyannote.audio", "asteroid_filterbanks",
         )
     }
     incompatible = [
@@ -170,6 +170,151 @@ def diagnose(base_dir: Optional[str] = None) -> Dict[str, Any]:
         "packages": probes,
         "torch_runtime": torch_runtime,
         "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def probe_vad(device: str = "cpu", import_module=None) -> Dict[str, Any]:
+    """Actually load WhisperX's bundled VAD model.
+
+    `import whisperx` can pass while the VAD stack is broken (pyannote,
+    asteroid_filterbanks, tokenizers). This probe catches the failure before
+    the user waits for a model download / transcription.
+    """
+    import_module = import_module or importlib.import_module
+    try:
+        prepare_ctranslate2_windows_import()
+        torch = import_module("torch")
+        whisperx = import_module("whisperx")
+        load_vad_model = getattr(whisperx, "load_vad_model", None)
+        if load_vad_model is None:
+            load_vad_model = import_module("whisperx.vad").load_vad_model
+        load_vad_model(torch.device(device))
+        return {"ok": True, "error": "", "device": device}
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": "{}: {}".format(type(exc).__name__, exc),
+            "device": device,
+        }
+
+
+READY_CACHE_NAME = ".transcription_ready.json"
+
+
+def _ready_cache_path() -> str:
+    return os.path.join(APP_ROOT, READY_CACHE_NAME)
+
+
+def _stack_fingerprint(report: Dict[str, Any]) -> str:
+    """Versions that invalidate a previous successful VAD probe."""
+    parts = [sys.executable]
+    for name in ("torch", "whisperx", "tokenizers", "transformers",
+                 "huggingface_hub", "pyannote.audio", "asteroid_filterbanks",
+                 "ctranslate2"):
+        item = (report.get("packages") or {}).get(name) or {}
+        parts.append("{}={}".format(name, item.get("version") or "?"))
+    return "|".join(parts)
+
+
+def _read_ready_cache() -> Dict[str, Any]:
+    try:
+        with open(_ready_cache_path(), "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _write_ready_cache(fingerprint: str) -> None:
+    try:
+        path = _ready_cache_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"fingerprint": fingerprint,
+                       "checked_at": datetime.now(timezone.utc).isoformat()},
+                      handle, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def ensure_ready(auto_repair: bool = True,
+                 base_dir: Optional[str] = None,
+                 force: bool = False) -> Dict[str, Any]:
+    """Probe the real VAD; repair the missing piece once; cache success.
+
+    Returns a JSON-serialisable result. It never raises: a failed repair is a
+    reported state, and the pipeline can still use faster-whisper.
+    """
+    report = diagnose(base_dir=base_dir)
+    packages = report.get("packages") or {}
+    if not packages.get("whisperx", {}).get("ok"):
+        return {
+            "ok": bool(report.get("fallback_ready")),
+            "skipped": True,
+            "reason": "whisperx is not installed; nothing to repair",
+            "diagnostic": report,
+            "steps": [],
+        }
+    fingerprint = _stack_fingerprint(report)
+    if not force:
+        cache = _read_ready_cache()
+        if cache.get("fingerprint") == fingerprint:
+            return {
+                "ok": True,
+                "cached": True,
+                "reason": "VAD already verified for this exact stack",
+                "diagnostic": report,
+                "steps": [],
+            }
+
+    vad = probe_vad()
+    if vad.get("ok"):
+        _write_ready_cache(fingerprint)
+        return {"ok": True, "cached": False, "vad": vad,
+                "diagnostic": report, "steps": []}
+
+    steps = []
+    if auto_repair:
+        error = str(vad.get("error") or "").lower()
+        targeted = None
+        if "asteroid_filterbanks" in error or "pyannote" in error:
+            targeted = [
+                "asteroid-filterbanks>=0.4", "einops>=0.6.0",
+                "omegaconf>=2.1,<3.0", "soundfile>=0.12.1",
+                "pyannote.core>=5.0.0", "pyannote.database>=5.0.1",
+                "pyannote.metrics>=3.2", "pyannote.pipeline>=3.0.1",
+            ]
+        elif "tokenizers" in error:
+            targeted = ["tokenizers==0.22.2"]
+            steps.append(_run_install(_pip_command(
+                ["--force-reinstall", "--no-deps", "tokenizers==0.22.2"])))
+        if targeted and not steps:
+            print("[doctor] repairing VAD dependencies: {}".format(
+                ", ".join(targeted[:4]) + (" ..." if len(targeted) > 4 else "")),
+                flush=True)
+            steps.append(_run_install(_pip_command(["--upgrade", *targeted])))
+        if steps:
+            vad = probe_vad()
+        if not vad.get("ok"):
+            mode = ("gpu" if report.get("torch_runtime", {}).get("cuda_available")
+                    else "cpu")
+            print("[doctor] targeted repair did not fix VAD; repairing the "
+                  "full transcription stack ({})...".format(mode), flush=True)
+            repair_result = repair(mode, base_dir=base_dir)
+            steps.append(repair_result)
+            vad = probe_vad()
+            if vad.get("ok"):
+                report = diagnose(base_dir=base_dir)
+                fingerprint = _stack_fingerprint(report)
+    if vad.get("ok"):
+        _write_ready_cache(fingerprint)
+    return {
+        "ok": bool(vad.get("ok")),
+        "cached": False,
+        "vad": vad,
+        "auto_repaired": bool(steps),
+        "steps": steps,
+        "diagnostic": report if vad.get("ok") else diagnose(base_dir=base_dir),
     }
 
 
@@ -220,17 +365,30 @@ def build_error_message(
             "المجموعة تتطلب setuptools>=84.1.0,<85 ولا تعتمد على pkg_resources. أصلح التفريغ مع الحفاظ على Torch CUDA إذا كان يعمل:",
             "    .\\.venv\\Scripts\\python.exe -m scripts.transcription_diagnostics --repair {}".format(repair_mode),
         ])
-    if "huggingface-hub" in combined_error or "huggingface_hub" in combined_error:
+    hub_version = str((report.get("packages") or {}).get("huggingface_hub", {}).get("version") or "")
+    hub_supported = bool(hub_version) and _version_supported(hub_version, "1.16.0", "2.0.0")
+    if ("huggingface-hub" in combined_error or "huggingface_hub" in combined_error) and not hub_supported:
         lines.extend([
-            "إصدار Hugging Face Hub 0.36.2 لا يصدّر is_offline_mode؛ مجموعة المشروع تتطلب whisperx==3.3.1 وTransformers 5.14–5.15 وHub 1.16+ وtokenizers 0.22.2.",
-            "لا تبدأ الاختبار باستيراد is_offline_mode يدوياً؛ قد يتوقف قبل import whisperx. اختبر WhisperX وTransformers مباشرةً، ولا تغيّر إصدار Torch CUDA إذا كان يعمل.",
-            "نفّذ من مجلد المشروع: uv pip install --python ./.venv/Scripts/python.exe -r requirements-transcribe.txt",
+            "إصدار Hugging Face Hub خارج النطاق المدعوم ({}؛ المطلوب 1.16.0–2.0).".format(hub_version or "غير معروف"),
+            "مجموعة whisperx==3.3.1 تعمل مع Transformers 5.14–5.15 وHub 1.16+.",
+            "لا تبدأ الاختبار باستيراد is_offline_mode يدوياً؛ اختبر WhisperX مباشرة.",
+            "لا تغيّر إصدار Torch CUDA إذا كان يعمل.",
+            "نفّذ: uv pip install --python ./.venv/Scripts/python.exe -r requirements-transcribe.txt",
         ])
-    if "tokenizers" in combined_error:
+    tokenizers_version = str((report.get("packages") or {}).get("tokenizers", {}).get("version") or "")
+    tokenizers_supported = bool(tokenizers_version) and _version_supported(tokenizers_version, "0.22.2", "0.23.1")
+    if "tokenizers" in combined_error and not tokenizers_supported:
         lines.extend([
-            "تعارض إصدارات tokenizers: transformers المثبت يقبل tokenizers>=0.22.0,<=0.23.0 فقط، لكن tokenizers 0.23.1 مثبت.",
-            "ملاحظة: tokenizers 0.23.0 غير موجود على PyPI أصلاً (قفز من 0.22.2 إلى 0.23.1)؛ الإصدار الصحيح هو 0.22.2.",
-            "نفّذ من مجلد المشروع: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade \\\"tokenizers>=0.22.0,<0.23.1\\\"",
+            "تعارض إصدارات tokenizers: المثبت {}، والمطلوب 0.22.2 (0.23.0 لم يصدر أصلاً).".format(
+                tokenizers_version or "غير معروف"),
+            "نفّذ: uv pip install --python ./.venv/Scripts/python.exe --upgrade \"tokenizers>=0.22.0,<0.23.1\"",
+        ])
+    elif "tokenizers" in combined_error:
+        lines.extend([
+            "فشل tokenizers أثناء التشغيل رغم أن الإصدار {} داخل النطاق المدعوم — الخطأ ليس تعارض إصدارات.".format(
+                tokenizers_version or "غير معروف"),
+            "أعد تثبيت الامتداد الأصلي: uv pip install --python ./.venv/Scripts/python.exe --force-reinstall \"tokenizers==0.22.2\"",
+            "إن استمر، أرسل آخر سطر من التتبّع؛ قد يكون ملف tokenizer النموذج تالفاً.",
         ])
     if report.get("fallback_ready"):
         lines.append("يتوفر faster-whisper كمسار احتياطي مستقل؛ شغّل OUSSAMA مجدداً بعد تثبيته لاستخدامه تلقائياً.")
@@ -378,6 +536,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="OUSSAMA Cutter transcription diagnostics")
     parser.add_argument("--repair", choices=["cpu", "gpu"], help="install the WhisperX transcription stack")
     parser.add_argument("--repair-fallback", action="store_true", help="install only the faster-whisper fallback")
+    parser.add_argument("--ensure", action="store_true",
+                        help="load the real VAD stack and repair it once if needed")
+    parser.add_argument("--no-repair", action="store_true",
+                        help="with --ensure: probe only, do not install anything")
     parser.add_argument("--report", help="write JSON report to this folder")
     parser.add_argument("--json", action="store_true", help="print machine-readable output")
     args = parser.parse_args(argv)
@@ -385,8 +547,11 @@ def main(argv=None) -> int:
         result = repair_fallback()
     elif args.repair:
         result = repair(args.repair)
+    elif args.ensure:
+        result = ensure_ready(auto_repair=not args.no_repair)
     else:
-        result = {"ok": diagnose()["ready"], "diagnostic": diagnose()}
+        diagnostic = diagnose()
+        result = {"ok": diagnostic["ready"], "diagnostic": diagnostic}
     if args.report:
         path = write_report(args.report)
         result["report_path"] = path
@@ -397,10 +562,20 @@ def main(argv=None) -> int:
         print("=== {} — فحص التفريغ ===".format(APP_NAME))
         for name, item in diagnostic.get("packages", {}).items():
             print("{} {}: {}".format("✅" if item.get("ok") else "❌", name, item.get("version") or item.get("error")))
+        if args.ensure:
+            vad = result.get("vad") or {}
+            print("{} VAD: {}".format("✅" if vad.get("ok") else "❌",
+                                      vad.get("error") or "loaded"))
+            if result.get("cached"):
+                print("ℹ️ تم التحقق سابقاً لنفس الإصدارات.")
+            elif result.get("auto_repaired"):
+                print("🔧 أُصلحت حزمة التفريغ تلقائياً.")
         if result.get("ok"):
             print("✅ مكوّنات التفريغ جاهزة.")
         elif result.get("error"):
             print(result["error"])
+        elif args.ensure:
+            print("⚠️ VAD غير جاهز؛ سيعمل التطبيق عبر faster-whisper إن توفر.")
     return 0 if result.get("ok") else 1
 
 

@@ -2342,7 +2342,7 @@ wheels = [
 
 [[package]]
 name = "oussama-cutter"
-version = "8.6.6+ultimate"
+version = "8.7.0+ultimate"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
