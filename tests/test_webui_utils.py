@@ -285,3 +285,31 @@ def test_tokenizers_native_failure_gets_a_reinstall_hint():
     _, _, hint = summarize_error(
         "Exception: tokenizers native extension failed to load (rust panicked)")
     assert "reinstall" in hint.lower() or "أعد" in hint
+
+
+def test_native_crash_code_has_a_specific_hint():
+    from webui.utils import native_crash_hint, summarize_error
+    assert "0xC0000409" in native_crash_hint(3221226505)
+    assert "0xC0000409" in native_crash_hint(-1073740791)
+    assert "faster-whisper" in native_crash_hint(3221226505)
+    _, _, hint = summarize_error("3221226505")
+    assert "0xC0000409" in hint
+
+
+def test_whisperx_file_path_is_not_reported_as_missing_package():
+    from webui.utils import summarize_error
+    text = (
+        "Traceback (most recent call last):\n"
+        '  File "D:\\OS\\.venv\\Lib\\site-packages\\whisperx\\asr.py", line 1\n'
+        "ValueError: bad tokenizer json\n"
+    )
+    _, _, hint = summarize_error(text)
+    assert "install_dependencies" not in hint
+    assert "غير مثبّت" not in hint
+
+
+def test_missing_whisperx_package_still_gets_the_install_hint():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "ModuleNotFoundError: No module named 'whisperx'")
+    assert "install_dependencies" in hint

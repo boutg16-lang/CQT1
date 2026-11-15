@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.7.0-ultimate — a startup doctor loads the real VAD, installs the missing pyannote/tokenizers pieces automatically, caches success, and falls back to faster-whisper if repair is impossible
+**Current Version**: 8.7.1-ultimate — a Windows native crash (0xC0000409) is detected at launch, tokenizers is reinstalled, and the run continues on faster-whisper/CPU instead of dying silently
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

@@ -1,5 +1,19 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.7.1-ultimate — 2026-11-14
+
+نجاة من الانهيار الأصلي 0xC0000409.
+
+### الإصلاح
+- `run_webui.bat` يكتشف خروج الطبيب بالرمز 3221226505/-1073740791، يعيد تثبيت tokenizers==0.22.2 بلا تبعيات، ويفعّل faster-whisper + CPU لهذا التشغيل.
+- `transcribe_video` لا يستورد whisperx إطلاقاً عند `VIRALCUTTER_TRANSCRIPTION_BACKEND=faster-whisper`، فلا يموت عند الاستيراد الأصلي.
+- `VIRALCUTTER_TRANSCRIPTION_FORCE_CPU=1` يثبّت CPU في مسار الإنقاذ.
+- تلميح 0xC0000409/0xC0000005/0xC00000FD صار خاصاً؛ ومسار whisperx في تتبّع لم يعد يعني «الحزمة غير مثبتة».
+
+### الاختبارات
+- 3 اختبارات لتلميح الانهيار ودقة تلميح whisperx.
+
+
 ## OUSSAMA Cutter 8.7.0-ultimate — 2026-11-14
 
 طبيب تفريغ ذاتي الإصلاح.

@@ -167,6 +167,32 @@ def _html_escape(text):
 # cards with a friendly hint, instead of dumping 30 raw lines.
 # ---------------------------------------------------------------------------
 
+NATIVE_CRASH_CODES = {
+    3221226505: "0xC0000409 (stack buffer overrun)",
+    -1073740791: "0xC0000409 (stack buffer overrun)",
+    3221225477: "0xC0000005 (access violation)",
+    -1073741819: "0xC0000005 (access violation)",
+    3221225725: "0xC00000FD (stack overflow)",
+    -1073741571: "0xC00000FD (stack overflow)",
+}
+
+
+def native_crash_hint(code) -> str:
+    """Explain a Windows native crash; Python cannot catch these in-process."""
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return ""
+    label = NATIVE_CRASH_CODES.get(code)
+    if not label:
+        return ""
+    return i18n(
+        "Native crash {} in a transcription library (tokenizers/CTranslate2/WhisperX). "
+        "CQT1 will retry with faster-whisper; if it repeats, reinstall tokenizers==0.22.2 "
+        "or use the faster-whisper backend. Do not reinstall the whole project."
+    ).format(label)
+
+
 _HF_VERSION_HINT = i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")
 _HF_GATED_HINT = i18n("Hugging Face blocked the model download (401/gated): accept the model terms on huggingface.co, set HF_TOKEN, or let CQT1 use faster-whisper.")
 _HF_AUTH_HINT = i18n("Hugging Face Hub 1.x removed use_auth_token. CQT1 shims it for pyannote; if this persists, update CQT1 or reinstall huggingface-hub 1.16-2.0.")
@@ -210,7 +236,11 @@ KNOWN_ERROR_HINTS = [
     ("numpy 2.0", i18n("Version conflict: numpy 2.x is incompatible with pyannote/whisperx — run: uv pip install 'numpy<2'")),
     ("invalid model size", i18n("Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list")),
     ("expected one of", i18n("Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list")),
-    ("whisperx", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
+    ("no module named 'whisperx'", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
+    ("whisperx is not installed", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
+    ("3221226505", native_crash_hint(3221226505)),
+    ("3221225477", native_crash_hint(3221225477)),
+    ("3221225725", native_crash_hint(3221225725)),
     ("torch", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
     ("out of memory", i18n("Out of memory — close other programs or use a smaller Whisper model")),
     ("ffmpeg", i18n("FFmpeg not installed or not on PATH — run install_dependencies.bat and choose to download FFmpeg")),

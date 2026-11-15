@@ -75,7 +75,19 @@ echo [WARNING] Optional checks reported warnings. Starting WebUI.
 :START_WEBUI
 echo [preflight] Checking the real transcription stack (VAD/tokenizers)...
 "%PYTHON%" -m scripts.transcription_diagnostics --ensure
-if errorlevel 1 echo [WARNING] Transcription stack is not fully ready; the app will use faster-whisper or degrade.
+if not errorlevel 1 goto TRANSCRIPTION_READY
+echo [WARNING] Transcription stack is not fully ready.
+if "%ERRORLEVEL%"=="3221226505" goto TRANSCRIPTION_NATIVE_CRASH
+if "%ERRORLEVEL%"=="-1073740791" goto TRANSCRIPTION_NATIVE_CRASH
+goto TRANSCRIPTION_FORCE_FALLBACK
+:TRANSCRIPTION_NATIVE_CRASH
+echo [doctor] native crash detected (0xC0000409); reinstalling tokenizers...
+"%PYTHON%" -m pip install --force-reinstall --no-deps "tokenizers==0.22.2"
+:TRANSCRIPTION_FORCE_FALLBACK
+set "VIRALCUTTER_TRANSCRIPTION_BACKEND=faster-whisper"
+set "VIRALCUTTER_TRANSCRIPTION_FORCE_CPU=1"
+echo [doctor] using faster-whisper on CPU for this run to avoid the native crash.
+:TRANSCRIPTION_READY
 echo [webui] Starting OUSSAMA Cutter...
 "%PYTHON%" webui\app.py %*
 set "WEBUI_EXIT=%ERRORLEVEL%"

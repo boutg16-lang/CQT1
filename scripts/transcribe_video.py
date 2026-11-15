@@ -68,18 +68,30 @@ def _install_hub_compat_shim():
         pass
 
 
-try:
-    prepare_ctranslate2_windows_import()
-    _install_hub_compat_shim()
-    import whisperx
-except Exception as _whisperx_err:
-    # NOT just ModuleNotFoundError: a broken optional stack (e.g. a
-    # transformers/tokenizers version conflict) must never kill the WebUI
-    # or the rest of the pipeline — transcription degrades with a clear error.
+_BACKEND_ENV = os.getenv("VIRALCUTTER_TRANSCRIPTION_BACKEND", "").strip().lower()
+if _BACKEND_ENV == "faster-whisper":
+    # Do not even import the native WhisperX/pyannote stack: a broken
+    # tokenizers/CTranslate2 extension can crash the process with
+    # 0xC0000409, which Python cannot catch. The fallback backend is
+    # independent and must stay reachable.
     whisperx = None
-    _WHISPERX_IMPORT_ERROR = str(_whisperx_err)
+    _WHISPERX_IMPORT_ERROR = (
+        "WhisperX import skipped because VIRALCUTTER_TRANSCRIPTION_BACKEND="
+        "faster-whisper")
 else:
-    _WHISPERX_IMPORT_ERROR = ""
+    try:
+        prepare_ctranslate2_windows_import()
+        _install_hub_compat_shim()
+        import whisperx
+    except Exception as _whisperx_err:
+        # NOT just ModuleNotFoundError: a broken optional stack (e.g. a
+        # transformers/tokenizers version conflict) must never kill the WebUI
+        # or the rest of the pipeline — transcription degrades with a clear
+        # error.
+        whisperx = None
+        _WHISPERX_IMPORT_ERROR = str(_whisperx_err)
+    else:
+        _WHISPERX_IMPORT_ERROR = ""
 
 logger = logging.getLogger(__name__)
 
@@ -934,6 +946,13 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
     requested_device = str(device or "auto").strip().lower()
     if requested_device not in {"auto", "cpu", "cuda"}:
         requested_device = "auto"
+    if os.getenv("VIRALCUTTER_TRANSCRIPTION_FORCE_CPU", "").strip().lower() in {
+            "1", "true", "yes", "on"}:
+        # Crash recovery: a native CUDA/CTranslate2 failure cannot be caught
+        # in Python, so the launcher pins CPU for this run.
+        requested_device = "cpu"
+        print("[transcribe] Crash recovery: forcing CPU for this run.",
+              flush=True)
     if requested_device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was selected, but no usable NVIDIA CUDA device is available. Choose CPU or Auto.")
     device = "cuda" if requested_device == "cuda" or (requested_device == "auto" and torch.cuda.is_available()) else "cpu"

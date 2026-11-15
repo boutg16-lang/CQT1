@@ -325,6 +325,7 @@ try:
         PROGRESS_STAGES,
         build_subtitle_config,
         empty_progress_state,
+        native_crash_hint,
         normalize_path,
         render_error_html,
         render_progress_html,
@@ -339,6 +340,7 @@ except ImportError:
         PROGRESS_STAGES,
         build_subtitle_config,
         empty_progress_state,
+        native_crash_hint,
         normalize_path,
         render_error_html,
         render_progress_html,
@@ -1096,6 +1098,10 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
             tail = "\n".join(current_buffer[-30:])
             title, detail, hint = summarize_error(
                 tail or "Process exited with code {}".format(return_code))
+            crash_hint = native_crash_hint(return_code)
+            if crash_hint:
+                hint = crash_hint
+                title = "{} ({})".format(title, return_code)
             error_items.append({"title": title, "detail": detail,
                                 "hint": hint, "code": return_code})
             record_project_state("failed", tail or "process exited with code {}".format(return_code))
