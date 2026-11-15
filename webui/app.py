@@ -69,6 +69,7 @@ from scripts.gemini_models import (
     GEMINI_MODELS,
     resolve_gemini_model,
 )
+from scripts.upload_gate import YouTubeTransientError
 
 i18n = I18nAuto(DEFAULT_LANGUAGE)
 
@@ -833,6 +834,7 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
         # before subtitles, download, transcription or cutting. This lets the
         # circuit breaker use the same durable registry as the target project.
         if require_youtube_connection or auto_upload_after_processing:
+            preflight = None
             try:
                 preflight = prepare_youtube_preflight(
                     project_folder_path,
@@ -843,6 +845,31 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                     schedule_interval_minutes=auto_upload_interval_minutes,
                     expected_clips=segments,
                 )
+            except YouTubeTransientError as exc:
+                # A Google 500 is not a broken OAuth setup. Only an actual
+                # upload (not a dry run) makes it fatal.
+                if auto_upload_after_processing and not auto_upload_dry_run:
+                    yield fail(
+                        "❌ YouTube API أعاد خطأً مؤقتاً من Google (500/503) أثناء التحقق من القناة. "
+                        "لم تُقطَع المقاطع لأن الرفع مطلوب. أعد المحاولة بعد دقيقة، "
+                        "أو أوقف الرفع التلقائي لمعالجة الفيديو محلياً. التفاصيل: {}".format(
+                            str(exc)[:300]))
+                    return
+                emit_log(
+                    "⚠️ تعذر التحقق من قناة YouTube الآن بسبب خطأ مؤقت من Google: {}. "
+                    "تُكمل المعالجة المحلية دون رفع؛ أعد التحقق قبل النشر.".format(
+                        str(exc)[:200]))
+                try:
+                    project_store.append_event(
+                        project_folder_path,
+                        "youtube_preflight_transient",
+                        {"error": str(exc)[:500]})
+                except Exception:
+                    pass
+            except Exception as exc:
+                yield fail("❌ جاهزية YouTube غير مكتملة؛ تم إيقاف المعالجة قبل التقطيع: {}".format(str(exc)[:500]))
+                return
+            if preflight:
                 channel = preflight["channel"]
                 emit_log("[oauth] ✅ قناة YouTube جاهزة قبل بدء التقطيع: {} ({})".format(
                     channel.get("title") or "قناة YouTube", channel.get("id") or "غير متاح"))
@@ -850,9 +877,6 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                     "Dry Run (محاكاة، لا رفع فعلي)" if auto_upload_dry_run else "رفع فعلي بعد نجاح pipeline"))
                 for warning in preflight.get("warnings", []):
                     emit_log("⚠️ " + warning)
-            except Exception as exc:
-                yield fail("❌ جاهزية YouTube غير مكتملة؛ تم إيقاف المعالجة قبل التقطيع: {}".format(str(exc)[:500]))
-                return
 
         subtitle_config_path = None
         if use_custom_subs:

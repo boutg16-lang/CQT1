@@ -157,6 +157,35 @@ def _segment_review_reasons(project_folder, index):
     return reasons
 
 
+class YouTubeTransientError(RuntimeError):
+    """Google returned a retryable error (429/5xx) while verifying the channel.
+
+    This is not a broken OAuth setup: the token and scopes may be fine. The
+    caller can retry later, or continue local processing when no upload was
+    requested.
+    """
+
+
+def _http_status(exc) -> int:
+    resp = getattr(exc, "resp", None)
+    try:
+        return int(getattr(resp, "status", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def is_transient_youtube_error(exc) -> bool:
+    """True for rate limits and Google 5xx errors worth retrying."""
+    status = _http_status(exc)
+    if status in (429, 500, 502, 503, 504):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in (
+        "internal error encountered", "backend error", "rate limit exceeded",
+        "http error 500", "http error 502", "http error 503", "http error 504",
+    ))
+
+
 class UploadGateError(Exception):
     """Raised when a clip must not be published. Carries structured reasons."""
 
@@ -971,9 +1000,34 @@ class YouTubeUploader(_BaseUploader):
             from googleapiclient.discovery import build
         except ImportError:
             raise RuntimeError("YouTube channel verification needs google-api-python-client") from None
+        service = None
         try:
             service = build("youtube", "v3", credentials=creds, cache_discovery=False)
-            response = service.channels().list(part="id,snippet", mine=True).execute()
+            # Google returns transient 500/503 for channels.list(mine=true)
+            # often enough that a single failure must not abort a local run.
+            last_error = None
+            response = None
+            for attempt in range(3):
+                try:
+                    response = service.channels().list(
+                        part="id,snippet", mine=True).execute()
+                    break
+                except Exception as call_error:
+                    last_error = call_error
+                    if not is_transient_youtube_error(call_error):
+                        raise
+                    if attempt < 2:
+                        delay = 1.5 * (2 ** attempt)
+                        logger.warning(
+                            "YouTube channel check failed transiently (%s); "
+                            "retrying in %.1fs.", call_error, delay)
+                        time.sleep(delay)
+            else:
+                raise YouTubeTransientError(
+                    "YouTube API is temporarily unavailable: {}".format(
+                        str(last_error)[:300])) from last_error
+        except YouTubeTransientError:
+            raise
         except Exception as exc:
             detail = str(exc)
             lower = detail.lower()

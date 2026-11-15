@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.6.4-ultimate — 2026-11-14
+
+خطأ YouTube 500 العابر لا يوقف القص.
+
+### الإصلاح
+- `verify_channel` يعيد محاولة `channels.list(mine=true)` 3 مرات عند 429/5xx أو Internal error، بانتظار 1.5 ثم 3 ثوانٍ.
+- بعد الاستنفاد يُرفع `YouTubeTransientError`؛ الواجهة تتوقف فقط إذا كان الرفع الفعلي مطلوباً (وليس Dry Run). المعالجة المحلية تكمل بتحذير وتسجيل `youtube_preflight_transient`.
+- أخطاء 400/403 لا تُعاد؛ 403 الصلاحيات يبقى مسار إعادة تسجيل الدخول.
+
+### الاختبارات
+- `tests/test_youtube_transient_retry.py`: إعادة المحاولة، الفشل الدائم، عدم إعادة 400، وعقد المتابعة المحلية.
+
+
 ## OUSSAMA Cutter 8.6.3-ultimate — 2026-11-14
 
 التفريغ لا يسقط بسبب VAD.
