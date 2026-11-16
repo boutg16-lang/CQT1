@@ -71,6 +71,9 @@ def configure_model_cache(root: str | os.PathLike[str] | None = None,
                           force: bool = False) -> Dict[str, str]:
     """Point HF/Torch caches at the project drive. Idempotent and safe."""
     base = Path(root).expanduser().resolve() if root else models_root()
+    if os.environ.get("VIRALCUTTER_MODELS_DIR", "").strip():
+        # An explicit project root overrides even a custom HF_HOME.
+        force = True
     if not _ensure_writable(base):
         base = _fallback_root()
         _ensure_writable(base)

@@ -88,3 +88,12 @@ def test_migrate_cache_move_removes_the_old_copy(tmp_path):
     assert result["ok"] is True and result["moved"] is True
     assert not source.exists()
     assert (destination / "file.bin").exists()
+
+
+def test_models_dir_override_beats_a_custom_hf_home(tmp_path, monkeypatch):
+    _clear(monkeypatch)
+    target = tmp_path / "forced"
+    monkeypatch.setenv("VIRALCUTTER_MODELS_DIR", str(target))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "custom-hf"))
+    model_paths.configure_model_cache()
+    assert os.environ["HF_HOME"] == str(target / "huggingface")
