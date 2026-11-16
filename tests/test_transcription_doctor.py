@@ -7,13 +7,11 @@ error messages must use the versions actually installed.
 """
 import os
 import sys
-
-import pytest
 from types import SimpleNamespace
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import transcription_diagnostics as td
 
