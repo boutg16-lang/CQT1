@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.8.0-ultimate — 2026-11-14
+
+ذاكرة تكيفية وملف صحة للتفريغ.
+
+### الإصلاح
+- `transcription_fallback` يجرّب نوافذ 300 → 180 → 120 → 90 عند OOM بدل الاستسلام، بنفس النموذج، ويسجل `chunk_seconds`/`chunks` الفعليين.
+- الطبيب يكتب `.transcription_health.json` (backend/force_cpu/chunk_seconds/reason) ويطبّقه `webui/app.py` بـsetdefault عند الإقلاع؛ متغيرات المستخدم تتفوق، والملف ينتهي بعد 7 أيام.
+- حجم النافذة الموصى به يتبع الذاكرة الحرة: 120 أقل من 1.5GB، 180 أقل من 2.5GB، وإلا 300.
+
+### الاختبارات
+- `tests/test_transcription_health.py`: 4 اختبارات، واختبار OOM ladder في chunking.
+
+
 ## OUSSAMA Cutter 8.7.2-ultimate — 2026-11-14
 
 تفريغ الصوت الطويل في نوافذ بلا OOM.

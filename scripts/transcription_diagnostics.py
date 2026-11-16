@@ -237,6 +237,17 @@ def _write_ready_cache(fingerprint: str) -> None:
         pass
 
 
+def _publish_health(backend: str, force_cpu: bool, reason: str) -> None:
+    try:
+        from scripts import transcription_health
+        transcription_health.write_profile(
+            backend=backend, force_cpu=force_cpu,
+            chunk_seconds=transcription_health.recommended_chunk_seconds(),
+            reason=reason)
+    except Exception:
+        pass
+
+
 def ensure_ready(auto_repair: bool = True,
                  base_dir: Optional[str] = None,
                  force: bool = False) -> Dict[str, Any]:
@@ -248,6 +259,8 @@ def ensure_ready(auto_repair: bool = True,
     report = diagnose(base_dir=base_dir)
     packages = report.get("packages") or {}
     if not packages.get("whisperx", {}).get("ok"):
+        _publish_health("faster-whisper", False,
+                        "whisperx is not installed")
         return {
             "ok": bool(report.get("fallback_ready")),
             "skipped": True,
@@ -259,6 +272,8 @@ def ensure_ready(auto_repair: bool = True,
     if not force:
         cache = _read_ready_cache()
         if cache.get("fingerprint") == fingerprint:
+            _publish_health("whisperx", False,
+                            "VAD already verified for this exact stack")
             return {
                 "ok": True,
                 "cached": True,
@@ -270,6 +285,7 @@ def ensure_ready(auto_repair: bool = True,
     vad = probe_vad()
     if vad.get("ok"):
         _write_ready_cache(fingerprint)
+        _publish_health("whisperx", False, "VAD probe succeeded")
         return {"ok": True, "cached": False, "vad": vad,
                 "diagnostic": report, "steps": []}
 
@@ -308,6 +324,10 @@ def ensure_ready(auto_repair: bool = True,
                 fingerprint = _stack_fingerprint(report)
     if vad.get("ok"):
         _write_ready_cache(fingerprint)
+        _publish_health("whisperx", False, "VAD repaired successfully")
+    else:
+        _publish_health("faster-whisper", True,
+                        str(vad.get("error") or "VAD probe failed"))
     return {
         "ok": bool(vad.get("ok")),
         "cached": False,

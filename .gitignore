@@ -121,3 +121,5 @@ local.properties
 captures/
 # Doctor cache: last successful VAD probe fingerprint
 .transcription_ready.json
+# Doctor health profile (backend/CPU/window decision)
+.transcription_health.json

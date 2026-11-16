@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.7.2-ultimate — long audio is transcribed in bounded windows, so a 29-minute file no longer needs a 383 MiB mel array and OOMs on low-RAM machines
+**Current Version**: 8.8.0-ultimate — an adaptive memory ladder shrinks the audio window on OOM, and the doctor persists its backend/CPU/window decision in a health profile the app applies at startup
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

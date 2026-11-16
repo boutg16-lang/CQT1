@@ -1,4 +1,4 @@
 # -*- coding: utf-8 -*-
 """OUSSAMA Cutter version (single source of truth)."""
-__version__ = "8.7.2-ultimate"
+__version__ = "8.8.0-ultimate"
 VERSION = __version__

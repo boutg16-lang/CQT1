@@ -71,3 +71,27 @@ def test_transcribe_keeps_single_shot_for_short_audio(monkeypatch):
     result = tf.transcribe("input.mp4", "small", "cpu")
     assert result["chunks"] == 1
     assert calls == ["input.mp4"]
+
+
+def test_oom_ladder_retries_with_a_smaller_window(monkeypatch):
+    calls = []
+
+    class FakeModel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def transcribe(self, path, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise MemoryError(
+                    "Unable to allocate 383. MiB for an array with shape (1, 174490, 576)")
+            return [SimpleNamespace(start=0.0, end=5.0, text="ok")], \
+                SimpleNamespace(language="ar")
+
+    monkeypatch.setattr(tf, "_module", lambda: SimpleNamespace(WhisperModel=FakeModel))
+    monkeypatch.setattr(tf, "_split_audio", lambda path, folder, seconds: [
+        ("chunk.wav", 0.0)])
+    result = tf.transcribe("input.mp4", "small", "cpu")
+    assert len(calls) == 2
+    assert result["chunk_seconds"] < tf.DEFAULT_CHUNK_SECONDS
+    assert result["segments"][0]["text"] == "ok"

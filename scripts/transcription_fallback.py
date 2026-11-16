@@ -167,26 +167,19 @@ def _shift_segments(segments: List[Dict[str, Any]], offset: float) -> None:
             word["end"] = round(float(word["end"]) + offset, 3)
 
 
-def transcribe(
-    input_file: str,
-    model_name: str = "large-v3",
-    device: str = "auto",
-    progress: Optional[Callable[[str], None]] = None,
-) -> Dict[str, Any]:
-    """Run faster-whisper lazily and return a WhisperX-like result dictionary."""
-    module = _module()
-    if module is None or not callable(getattr(module, "WhisperModel", None)):
-        raise ImportError(
-            "faster-whisper is not installed; install requirements-transcribe-fallback.txt"
-        )
-    runtime_device, compute_type = _resolve_device(device)
-    resolved_model = _MODEL_ALIASES.get(str(model_name or "large-v3").strip(), str(model_name or "large-v3").strip())
-    if progress:
-        progress(f"جاري تحميل faster-whisper ({resolved_model}) على {runtime_device}")
-    model = module.WhisperModel(resolved_model, device=runtime_device, compute_type=compute_type)
-    if progress:
-        progress("جاري التفريغ عبر faster-whisper مع VAD محلي")
-    chunk_seconds = _chunk_seconds()
+def _is_oom(exc: BaseException) -> bool:
+    if isinstance(exc, MemoryError):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in (
+        "unable to allocate", "out of memory", "bad allocation",
+        "cannot allocate memory", "memoryerror",
+    ))
+
+
+def _transcribe_windows(model, input_file: str, chunk_seconds: int,
+                        progress: Optional[Callable[[str], None]]):
+    """Transcribe one audio file using bounded windows; returns merged data."""
     chunk_dir = tempfile.mkdtemp(prefix="cqt1-audio-chunks-")
     try:
         chunks = _split_audio(input_file, chunk_dir, chunk_seconds)
@@ -212,20 +205,64 @@ def transcribe(
                 if language == "unknown":
                     language = str(getattr(info, "language", "") or "unknown")
             normalized.sort(key=lambda segment: float(segment["start"]))
-            chunk_count = len(chunks)
-        else:
-            segments, info = model.transcribe(
-                input_file,
-                beam_size=5,
-                vad_filter=True,
-                word_timestamps=True,
-            )
-            normalized = normalize_segments(segments)
-            language = str(getattr(info, "language", "") or "unknown")
-            chunk_count = 1
+            return normalized, language, len(chunks)
+        segments, info = model.transcribe(
+            input_file,
+            beam_size=5,
+            vad_filter=True,
+            word_timestamps=True,
+        )
+        return (normalize_segments(segments),
+                str(getattr(info, "language", "") or "unknown"), 1)
     finally:
         shutil.rmtree(chunk_dir, ignore_errors=True)
+
+
+def transcribe(
+    input_file: str,
+    model_name: str = "large-v3",
+    device: str = "auto",
+    progress: Optional[Callable[[str], None]] = None,
+) -> Dict[str, Any]:
+    """Run faster-whisper lazily and return a WhisperX-like result dictionary."""
+    module = _module()
+    if module is None or not callable(getattr(module, "WhisperModel", None)):
+        raise ImportError(
+            "faster-whisper is not installed; install requirements-transcribe-fallback.txt"
+        )
+    runtime_device, compute_type = _resolve_device(device)
+    resolved_model = _MODEL_ALIASES.get(str(model_name or "large-v3").strip(), str(model_name or "large-v3").strip())
+    if progress:
+        progress(f"جاري تحميل faster-whisper ({resolved_model}) على {runtime_device}")
+    model = module.WhisperModel(resolved_model, device=runtime_device, compute_type=compute_type)
+    if progress:
+        progress("جاري التفريغ عبر faster-whisper مع VAD محلي")
+    base_chunk = _chunk_seconds()
+    ladder = []
+    for candidate in (base_chunk, 180, 120, 90):
+        if candidate <= base_chunk and candidate not in ladder:
+            ladder.append(candidate)
+    normalized: List[Dict[str, Any]] = []
+    language = "unknown"
+    chunk_count = 1
+    used_chunk = base_chunk
+    last_oom = None
+    for chunk_seconds in ladder:
+        try:
+            normalized, language, chunk_count = _transcribe_windows(
+                model, input_file, chunk_seconds, progress)
+            used_chunk = chunk_seconds
+            break
+        except Exception as exc:
+            if not _is_oom(exc) or chunk_seconds == ladder[-1]:
+                raise
+            last_oom = exc
+            if progress:
+                progress("الذاكرة غير كافية عند نافذة {}ث — إعادة المحاولة بنافذة أصغر.".format(
+                    chunk_seconds))
     if not normalized:
+        if last_oom is not None:
+            raise last_oom
         raise RuntimeError("faster-whisper returned no valid timestamped segments")
     return {
         "segments": normalized,
@@ -235,7 +272,7 @@ def transcribe(
         "compute_type": compute_type,
         "model": resolved_model,
         "chunks": chunk_count,
-        "chunk_seconds": chunk_seconds,
+        "chunk_seconds": used_chunk,
     }
 
 

@@ -63,6 +63,16 @@ else:
     WORKING_DIR = os.path.dirname(MAIN_SCRIPT_PATH)
 sys.path.append(WORKING_DIR)
 
+# Apply the transcription doctor's last verified health profile. Explicit
+# user environment variables always win (the profile uses setdefault).
+try:
+    from scripts.transcription_health import (
+        apply_profile as _apply_transcription_health,
+    )
+    _apply_transcription_health()
+except Exception:
+    pass
+
 from i18n.i18n import DEFAULT_LANGUAGE, I18nAuto
 from scripts.gemini_models import (
     DEFAULT_GEMINI_MODEL,
