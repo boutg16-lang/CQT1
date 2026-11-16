@@ -78,6 +78,15 @@ def configure_model_cache(root: str | os.PathLike[str] | None = None,
         base = _fallback_root()
         _ensure_writable(base)
 
+    # Xet's parallel downloader can stall on Windows behind a proxy or a
+    # filtered network; HTTP is slower but completes. VIRALCUTTER_ENABLE_XET=1
+    # opts back in. Timeouts are raised from 10s because model shards are big.
+    os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
+    if os.environ.get("VIRALCUTTER_ENABLE_XET", "").strip().lower() not in {
+            "1", "true", "yes", "on"}:
+        os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
     hf_home = base / "huggingface"
     hf_hub = hf_home / "hub"
     torch_home = base / "torch"

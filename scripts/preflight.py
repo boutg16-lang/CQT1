@@ -722,12 +722,60 @@ def check_models_dir():
     return {"name": "models/", "status": WARN, "detail": "missing - will be created (optional)"}
 
 
+def _dir_size_gb(path):
+    """Size of a cache tree, capped so preflight cannot walk millions of files."""
+    total = 0
+    seen = 0
+    try:
+        for root, _dirs, files in os.walk(path):
+            for name in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, name))
+                except OSError:
+                    pass
+                seen += 1
+                if seen >= 200000:
+                    return total / (1024 ** 3)
+    except OSError:
+        return 0.0
+    return total / (1024 ** 3)
+
+
+def _model_cache_status(active_hub, legacy_hub):
+    """WARN when the first run would silently re-download, not re-use, models."""
+    active_gb = _dir_size_gb(active_hub)
+    if active_gb > 0.05:
+        return OK, "{:.1f} GB cached globally".format(active_gb)
+    legacy_gb = _dir_size_gb(legacy_hub) if legacy_hub else 0.0
+    if legacy_gb > 0.05:
+        return WARN, (
+            "new cache is empty but the old cache has {:.1f} GB at {}; run "
+            "`python -m scripts.model_paths --migrate` to reuse it instead of "
+            "downloading again".format(legacy_gb, legacy_hub))
+    return OK, (
+        "empty on first run; transcription downloads the Whisper model "
+        "(about 1.6 GB) here. Watch for the ⏳ progress lines.")
+
+
 def check_model_cache():
     """Show where Hugging Face/Torch downloads land (project drive by default)."""
     try:
         from scripts import model_paths
         paths = model_paths.current_paths()
         target = paths.get("hf_home") or ""
+        active_hub = paths.get("hf_hub_cache") or (
+            os.path.join(target, "hub") if target else "")
+        try:
+            legacy_hub = str(model_paths._default_hf_home() / "hub")
+        except Exception:
+            legacy_hub = ""
+        if legacy_hub and active_hub:
+            try:
+                if os.path.realpath(active_hub) == os.path.realpath(legacy_hub):
+                    legacy_hub = ""
+            except OSError:
+                pass
+        status, cache_detail = _model_cache_status(active_hub, legacy_hub)
         free = None
         try:
             free = shutil.disk_usage(target).free / (1024 ** 3)
@@ -736,7 +784,8 @@ def check_model_cache():
         detail = target
         if free is not None:
             detail += " ({:.1f} GB free)".format(free)
-        return {"name": "Model cache", "status": OK, "detail": detail}
+        detail += " — " + cache_detail
+        return {"name": "Model cache", "status": status, "detail": detail}
     except Exception as exc:
         return {"name": "Model cache", "status": WARN,
                 "detail": "could not resolve the cache path: {}".format(exc)}

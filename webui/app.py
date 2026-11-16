@@ -345,6 +345,7 @@ try:
         PROGRESS_STAGES,
         build_subtitle_config,
         empty_progress_state,
+        iter_process_lines,
         native_crash_hint,
         normalize_path,
         render_error_html,
@@ -360,6 +361,7 @@ except ImportError:
         PROGRESS_STAGES,
         build_subtitle_config,
         empty_progress_state,
+        iter_process_lines,
         native_crash_hint,
         normalize_path,
         render_error_html,
@@ -981,6 +983,17 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
+        # Hugging Face/tqdm progress bars rewrite with CR; the log reader now
+        # understands CR, but disabling the bars keeps the log readable and
+        # avoids gigabytes of progress text. Our own heartbeat is the progress.
+        env.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+        env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+        env.setdefault("TQDM_DISABLE", "1")
+        env.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
+        # Xet can stall on Windows behind a proxy; HTTP is slower but reliable.
+        # Set VIRALCUTTER_ENABLE_XET=1 to opt back in.
+        if str(env.get("VIRALCUTTER_ENABLE_XET", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+            env.setdefault("HF_HUB_DISABLE_XET", "1")
         # SECURITY: the API key must never appear in argv/process listings
         # (pipeline.py deliberately omits --api-key). Hand it to the child
         # through its environment instead — but never clobber a key the user
@@ -1059,15 +1072,12 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
         project_folder_path = None
         last_update_time = time.time()
         current_buffer = []
+        last_progress_message = {}
 
-        while True:
-            line = current_process.stdout.readline()
-            if not line and current_process.poll() is not None:
-                break
+        for raw_line in iter_process_lines(current_process.stdout):
+            line = raw_line.rstrip("\r\n")
             if not line:
                 continue
-
-            line = line.rstrip("\n")
             if line.startswith("DEVICE|"):
                 try:
                     _, actual, requested, name = (line.split("|", 3) + [""])[:4]
@@ -1092,9 +1102,15 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
                         progress_state[stage] = {"percent": int(percent), "message": message}
                         progress_state["current"] = message
                         progress_state["overall"] = int(sum(progress_state[s]["percent"] for s in PROGRESS_ORDER) / len(PROGRESS_ORDER))
+                        if message and last_progress_message.get(stage) != message:
+                            last_progress_message[stage] = message
+                            logs.append("⏳ " + message)
                 except Exception as e:
                     error_items.append({"title": "Bad progress line: {}".format(e),
                                          "detail": str(e), "hint": ""})
+                # A PROGRESS line changes the bar even when no ordinary log
+                # line follows; yield here or the 15s heartbeat stays invisible.
+                yield "\n".join(logs), gr.update(visible=True, interactive=False), gr.update(visible=True, interactive=True), None, render_progress_html(progress_state), render_tasks_html(progress_state), render_error_html(error_items)
                 continue
 
             current_buffer.append(line)

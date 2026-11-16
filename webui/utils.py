@@ -356,3 +356,46 @@ def render_error_html(error_items):
             '<div style="font-size:13px;font-weight:600;color:#b00020;">{} {}</div>'
             '{}{}</div>'.format(badge, _html_escape(title), hint_html, detail_html))
     return "<div style='font-family:sans-serif;'>" + "".join(cards) + "</div>"
+
+
+def iter_process_lines(stream, chunk_size=1):
+    """Yield lines from a child process, treating ``\\r`` as a newline.
+
+    Progress bars (Hugging Face, tqdm, ffmpeg) rewrite one line with ``\\r``
+    and only emit ``\\n`` at the end. ``readline()`` therefore hides minutes
+    of download/transcode progress and the UI looks frozen. Splitting on both
+    characters makes the work visible without changing the child.
+
+    ``chunk_size`` stays 1 by default: ``BufferedReader.read(4096)`` waits for
+    a full buffer on a pipe, which would hide live output just like
+    ``readline()`` did. Reading one character is cheap for process logs.
+    """
+    buffer = ""
+    pending_cr = False
+    while True:
+        chunk = stream.read(chunk_size)
+        if not chunk:
+            break
+        buffer += chunk
+        if pending_cr:
+            # A CR ended the previous chunk. Consume the LF of a split CRLF
+            # instead of reporting a phantom blank line.
+            if buffer.startswith("\n"):
+                buffer = buffer[1:]
+            pending_cr = False
+        start = 0
+        index = 0
+        while index < len(buffer):
+            char = buffer[index]
+            if char == "\r" or char == "\n":
+                yield buffer[start:index]
+                if char == "\r":
+                    if index + 1 < len(buffer) and buffer[index + 1] == "\n":
+                        index += 1
+                    elif index + 1 == len(buffer):
+                        pending_cr = True
+                start = index + 1
+            index += 1
+        buffer = buffer[start:]
+    if buffer:
+        yield buffer

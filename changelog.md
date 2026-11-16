@@ -1,5 +1,22 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.10.1-ultimate — 2026-11-14
+
+السجل يعرض التحميل والتفريغ بدل أن يتجمّد.
+
+### الإصلاح
+- قارئ سجل WebUI يفصل على `` و`
+` ويقرأ حرفاً حرفاً: لا ينتظر `readline()` نهاية شريط Hugging Face.
+- كل نبضة `PROGRESS` تُظهر سطر `⏳` وتُحدّث الشريط فوراً.
+- تعطيل أشرطة tqdm/HF في عملية الابن، و`HF_HUB_DOWNLOAD_TIMEOUT=60`.
+- `HF_HUB_DISABLE_XET=1` افتراضياً (تفعيله بـ`VIRALCUTTER_ENABLE_XET=1`).
+
+### preflight
+- يوضّح إن كان الكاش فارغاً (أول تحميل ~1.6 GB) أو قديماً مهجوراً في C: مع أمر `--migrate`.
+
+### الاختبارات
+- `tests/test_webui_log_stream.py` (5)، `tests/test_model_cache_status.py` (3)، و3 إضافية في `tests/test_model_paths.py`.
+
 ## OUSSAMA Cutter 8.10.0-ultimate — 2026-11-14
 
 محدّث آمن لنسخة المصدر.

@@ -97,3 +97,27 @@ def test_models_dir_override_beats_a_custom_hf_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HF_HOME", str(tmp_path / "custom-hf"))
     model_paths.configure_model_cache()
     assert os.environ["HF_HOME"] == str(target / "huggingface")
+
+
+def test_xet_is_disabled_by_default(tmp_path, monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    monkeypatch.delenv("VIRALCUTTER_ENABLE_XET", raising=False)
+    model_paths.configure_model_cache(root=tmp_path, force=True)
+    assert os.environ["HF_HUB_DISABLE_XET"] == "1"
+    assert os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] == "60"
+
+
+def test_xet_can_be_opted_back_in(tmp_path, monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    monkeypatch.setenv("VIRALCUTTER_ENABLE_XET", "1")
+    model_paths.configure_model_cache(root=tmp_path, force=True)
+    assert "HF_HUB_DISABLE_XET" not in os.environ
+
+
+def test_explicit_xet_setting_wins(tmp_path, monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("HF_HUB_DISABLE_XET", "0")
+    model_paths.configure_model_cache(root=tmp_path, force=True)
+    assert os.environ["HF_HUB_DISABLE_XET"] == "0"
