@@ -313,3 +313,12 @@ def test_missing_whisperx_package_still_gets_the_install_hint():
     _, _, hint = summarize_error(
         "ModuleNotFoundError: No module named 'whisperx'")
     assert "install_dependencies" in hint
+
+
+def test_oom_hint_outranks_a_youtube_403_line():
+    from webui.utils import summarize_error
+    _, _, hint = summarize_error(
+        "Unable to allocate 383. MiB for an array with shape (1, 174490, 576)\n"
+        "yt_dlp: HTTP Error 403")
+    assert "yt-dlp" not in hint
+    assert "memory" in hint.lower() or "الذاكرة" in hint

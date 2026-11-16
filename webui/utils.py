@@ -218,6 +218,11 @@ KNOWN_ERROR_HINTS = [
     ("resource_exhausted", i18n("Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key")),
     ("quota exceeded", i18n("Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key")),
     ("rate limit", i18n("YouTube/Gemini is rate-limiting temporarily — wait a minute and retry")),
+    # --- Memory errors must outrank YouTube/download hints ---
+    ("unable to allocate", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
+    ("out of memory", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
+    ("memoryerror", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
+    ("bad allocation", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
     # --- YouTube / download errors ---
     ("private video", i18n("Private video — use browser cookies: from the 🔒 menu or rerun with --cookies-from-browser chrome")),
     ("sign in", i18n("Video requires YouTube sign-in — use your browser cookies from the 🔒 menu")),

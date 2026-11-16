@@ -167,5 +167,5 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 - 🎙️ **Optional dubbing**: install Edge TTS with `uv sync --extra dubbing`. Transcript text is sent to Microsoft only after explicitly enabling network use in the dubbing controls.
 
 
-**Current Version**: 8.7.1-ultimate — a Windows native crash (0xC0000409) is detected at launch, tokenizers is reinstalled, and the run continues on faster-whisper/CPU instead of dying silently
+**Current Version**: 8.7.2-ultimate — long audio is transcribed in bounded windows, so a 29-minute file no longer needs a 383 MiB mel array and OOMs on low-RAM machines
 *ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀

@@ -11,6 +11,8 @@ import importlib
 import json
 import logging
 import os
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -102,6 +104,69 @@ def normalize_segments(segments: Iterable[Any]) -> List[Dict[str, Any]]:
     return normalized
 
 
+DEFAULT_CHUNK_SECONDS = 300
+MIN_CHUNK_SECONDS = 60
+MAX_CHUNK_SECONDS = 900
+
+
+def _chunk_seconds() -> int:
+    """Audio window size; long videos OOM faster-whisper's full mel array."""
+    try:
+        value = int(float(os.getenv("VIRALCUTTER_TRANSCRIBE_CHUNK_SECONDS", "")))
+    except (TypeError, ValueError):
+        return DEFAULT_CHUNK_SECONDS
+    return max(MIN_CHUNK_SECONDS, min(MAX_CHUNK_SECONDS, value))
+
+
+def _audio_duration(path: str) -> Optional[float]:
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=60)
+        if proc.returncode == 0:
+            return float((proc.stdout or "").strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _split_audio(path: str, folder: str, chunk_seconds: int):
+    """Split into 16 kHz mono WAV windows; returns [(file, offset), ...]."""
+    duration = _audio_duration(path)
+    if not duration or duration <= chunk_seconds:
+        return []
+    chunks = []
+    start = 0.0
+    index = 0
+    while start < duration:
+        target = os.path.join(folder, "chunk_{:04d}.wav".format(index))
+        length = min(float(chunk_seconds), duration - start)
+        try:
+            proc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                 "-ss", "{:.3f}".format(start), "-t", "{:.3f}".format(length),
+                 "-i", path, "-ar", "16000", "-ac", "1", target],
+                capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if proc.returncode != 0 or not os.path.isfile(target):
+            return []
+        chunks.append((target, start))
+        start += chunk_seconds
+        index += 1
+    return chunks
+
+
+def _shift_segments(segments: List[Dict[str, Any]], offset: float) -> None:
+    for segment in segments:
+        segment["start"] = round(float(segment["start"]) + offset, 3)
+        segment["end"] = round(float(segment["end"]) + offset, 3)
+        for word in segment.get("words") or []:
+            word["start"] = round(float(word["start"]) + offset, 3)
+            word["end"] = round(float(word["end"]) + offset, 3)
+
+
 def transcribe(
     input_file: str,
     model_name: str = "large-v3",
@@ -121,16 +186,47 @@ def transcribe(
     model = module.WhisperModel(resolved_model, device=runtime_device, compute_type=compute_type)
     if progress:
         progress("جاري التفريغ عبر faster-whisper مع VAD محلي")
-    segments, info = model.transcribe(
-        input_file,
-        beam_size=5,
-        vad_filter=True,
-        word_timestamps=True,
-    )
-    normalized = normalize_segments(segments)
+    chunk_seconds = _chunk_seconds()
+    chunk_dir = tempfile.mkdtemp(prefix="cqt1-audio-chunks-")
+    try:
+        chunks = _split_audio(input_file, chunk_dir, chunk_seconds)
+        if chunks:
+            if progress:
+                progress("الصوت طويل ({} ثانية/نافذة) — تفريغ على {} نافذة لتوفير الذاكرة".format(
+                    chunk_seconds, len(chunks)))
+            normalized: List[Dict[str, Any]] = []
+            language = "unknown"
+            for index, (chunk_path, offset) in enumerate(chunks, start=1):
+                if progress:
+                    progress("تفريغ النافذة {}/{}".format(index, len(chunks)))
+                segments, info = model.transcribe(
+                    chunk_path,
+                    beam_size=5,
+                    vad_filter=True,
+                    word_timestamps=True,
+                    language=None if language == "unknown" else language,
+                )
+                part = normalize_segments(segments)
+                _shift_segments(part, offset)
+                normalized.extend(part)
+                if language == "unknown":
+                    language = str(getattr(info, "language", "") or "unknown")
+            normalized.sort(key=lambda segment: float(segment["start"]))
+            chunk_count = len(chunks)
+        else:
+            segments, info = model.transcribe(
+                input_file,
+                beam_size=5,
+                vad_filter=True,
+                word_timestamps=True,
+            )
+            normalized = normalize_segments(segments)
+            language = str(getattr(info, "language", "") or "unknown")
+            chunk_count = 1
+    finally:
+        shutil.rmtree(chunk_dir, ignore_errors=True)
     if not normalized:
         raise RuntimeError("faster-whisper returned no valid timestamped segments")
-    language = str(getattr(info, "language", "") or "unknown")
     return {
         "segments": normalized,
         "language": language,
@@ -138,6 +234,8 @@ def transcribe(
         "device": runtime_device,
         "compute_type": compute_type,
         "model": resolved_model,
+        "chunks": chunk_count,
+        "chunk_seconds": chunk_seconds,
     }
 
 

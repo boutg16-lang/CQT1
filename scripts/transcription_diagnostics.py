@@ -337,6 +337,10 @@ def build_error_message(
     if whisperx_error:
         lines.append("تفاصيل WhisperX: {}".format(whisperx_error))
     combined_error = "{} {}".format(whisperx_error, torch_error).lower()
+    if "unable to allocate" in combined_error or "out of memory" in combined_error:
+        lines.append(
+            "الذاكرة غير كافية للتفريغ: CQT1 يقسم الصوت الطويل إلى نوافذ تلقائياً. "
+            "أغلق البرامج الثقيلة أو اختر موديل small/medium؛ لا تحتاج إعادة تثبيت الحزم.")
     legacy_pkg_resources_error = "pkg_resources" in combined_error
     ctranslate2_issue = (
         "ctranslate2" in report["missing"]
