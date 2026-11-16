@@ -17,6 +17,17 @@ $env:UV_CACHE_DIR = $UvCache
 $env:UV_NO_CACHE = "1"
 $env:VIRALCUTTER_NO_PAUSE = "1"
 
+# Keep Hugging Face/Torch model downloads on the project drive.
+if (-not $env:HF_HOME) {
+    $env:HF_HOME = Join-Path $Root ".models\huggingface"
+}
+if (-not $env:HUGGINGFACE_HUB_CACHE) {
+    $env:HUGGINGFACE_HUB_CACHE = Join-Path $env:HF_HOME "hub"
+}
+if (-not $env:TORCH_HOME) {
+    $env:TORCH_HOME = Join-Path $Root ".models\torch"
+}
+
 $Launcher = Join-Path $Root "run_webui.bat"
 if (-not (Test-Path $Launcher)) {
     throw "run_webui.bat was not found in $Root"

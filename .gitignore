@@ -123,3 +123,5 @@ captures/
 .transcription_ready.json
 # Doctor health profile (backend/CPU/window decision)
 .transcription_health.json
+# Hugging Face/Torch model cache (project drive)
+.models/

@@ -17,6 +17,13 @@ from datetime import datetime, timezone
 from importlib import metadata
 from typing import Any, Dict, Optional
 
+try:
+    from scripts.model_paths import configure_model_cache as _configure_model_cache
+except Exception:
+    _configure_model_cache = None
+if _configure_model_cache is not None:
+    _configure_model_cache()
+
 
 def prepare_ctranslate2_windows_import() -> None:
     """Load WhisperX's Windows backend without requiring removed pkg_resources."""

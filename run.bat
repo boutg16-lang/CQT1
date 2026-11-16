@@ -13,6 +13,11 @@ if not exist ".venv\Scripts\activate.bat" (
 
 set "PYTHON=%CD%\.venv\Scripts\python.exe"
 
+rem Keep model downloads on the project drive, not C:\Users\...\.cache
+if not defined HF_HOME set "HF_HOME=%CD%\.models\huggingface"
+if not defined HUGGINGFACE_HUB_CACHE set "HUGGINGFACE_HUB_CACHE=%HF_HOME%\hub"
+if not defined TORCH_HOME set "TORCH_HOME=%CD%\.models\torch"
+
 :: FFmpeg installed next to the app by install_dependencies.bat / packaging\install_ffmpeg_windows.bat
 if exist "bin\ffmpeg.exe" set "PATH=%CD%\bin;%PATH%"
 

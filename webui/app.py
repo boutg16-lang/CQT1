@@ -10,6 +10,16 @@ import sys
 import time
 import uuid
 
+_APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _APP_ROOT not in sys.path:
+    sys.path.insert(0, _APP_ROOT)
+try:
+    from scripts.model_paths import configure_model_cache as _configure_model_cache
+except Exception:
+    pass
+else:
+    _configure_model_cache()
+
 import gradio as gr
 import psutil
 

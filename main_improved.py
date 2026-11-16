@@ -23,6 +23,16 @@ import json
 import shutil
 import time
 
+_APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _APP_ROOT not in sys.path:
+    sys.path.insert(0, _APP_ROOT)
+try:
+    from scripts.model_paths import configure_model_cache
+except Exception:
+    pass
+else:
+    configure_model_cache()
+
 from app_brand import APP_NAME
 from i18n.i18n import DEFAULT_LANGUAGE, I18nAuto
 

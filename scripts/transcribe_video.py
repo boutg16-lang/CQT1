@@ -8,6 +8,13 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+try:
+    from scripts.model_paths import configure_model_cache as _configure_model_cache
+except Exception:
+    _configure_model_cache = None
+if _configure_model_cache is not None:
+    _configure_model_cache()
+
 from i18n.i18n import I18nAuto
 from scripts.speechbrain_compat import patch_speechbrain_inspect_compat
 from scripts.transcription_diagnostics import (

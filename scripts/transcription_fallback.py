@@ -17,6 +17,13 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
+try:
+    from scripts.model_paths import configure_model_cache as _configure_model_cache
+except Exception:
+    _configure_model_cache = None
+if _configure_model_cache is not None:
+    _configure_model_cache()
+
 logger = logging.getLogger(__name__)
 
 _MODEL_ALIASES = {

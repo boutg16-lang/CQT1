@@ -7,6 +7,11 @@ cd /d "%~dp0"
 set "PYTHON=%CD%\.venv\Scripts\python.exe"
 if not exist "%PYTHON%" goto NO_PYTHON
 
+rem Keep model downloads on the project drive, not C:\Users\...\.cache
+if not defined HF_HOME set "HF_HOME=%CD%\.models\huggingface"
+if not defined HUGGINGFACE_HUB_CACHE set "HUGGINGFACE_HUB_CACHE=%HF_HOME%\hub"
+if not defined TORCH_HOME set "TORCH_HOME=%CD%\.models\torch"
+
 set "RUNTIME_TMP=%CD%\.runtime-tmp"
 if not exist "%RUNTIME_TMP%" mkdir "%RUNTIME_TMP%" >nul 2>&1
 set "TEMP=%RUNTIME_TMP%"

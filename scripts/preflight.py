@@ -39,6 +39,9 @@ import sys
 from app_assets import RUNTIME_ASSETS
 from scripts import ensure_websockets
 from scripts.gemini_models import DEFAULT_GEMINI_MODEL
+from scripts.model_paths import configure_model_cache
+
+configure_model_cache()
 
 try:
     from app_brand import APP_NAME
@@ -719,6 +722,26 @@ def check_models_dir():
     return {"name": "models/", "status": WARN, "detail": "missing - will be created (optional)"}
 
 
+def check_model_cache():
+    """Show where Hugging Face/Torch downloads land (project drive by default)."""
+    try:
+        from scripts import model_paths
+        paths = model_paths.current_paths()
+        target = paths.get("hf_home") or ""
+        free = None
+        try:
+            free = shutil.disk_usage(target).free / (1024 ** 3)
+        except OSError:
+            pass
+        detail = target
+        if free is not None:
+            detail += " ({:.1f} GB free)".format(free)
+        return {"name": "Model cache", "status": OK, "detail": detail}
+    except Exception as exc:
+        return {"name": "Model cache", "status": WARN,
+                "detail": "could not resolve the cache path: {}".format(exc)}
+
+
 def check_telegram_config(environ=None):
     """Check optional local Telegram settings without importing the WebUI."""
     env = environ if environ is not None else os.environ
@@ -1042,8 +1065,8 @@ def collect_checks():
     checks += [check_disk_space(_app_dir()),
                check_writable(_app_dir(), "Working dir writable")]
     checks += [check_api_config(), check_assets(), check_safety_blocklist_freshness(),
-               check_models_dir(), check_telegram_config(), check_venv_metadata(),
-               check_pyannote_vad()]
+               check_models_dir(), check_model_cache(), check_telegram_config(),
+               check_venv_metadata(), check_pyannote_vad()]
 
     # dependency checks per requirements file
     seen_dists = set()

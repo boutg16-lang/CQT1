@@ -1,5 +1,19 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.9.0-ultimate — 2026-11-14
+
+النماذج على قرص المشروع بدل C:.
+
+### الإصلاح
+- `scripts/model_paths.py` يضبط `HF_HOME`, `HUGGINGFACE_HUB_CACHE`, `HF_HUB_CACHE`, `TRANSFORMERS_CACHE`, `HF_DATASETS_CACHE`, `TORCH_HOME` إلى `<project>/.models` قبل تحميل torch/gradio/transformers، ويحترم أي مسار مخصص صريح.
+- `VIRALCUTTER_MODELS_DIR` يتجاوز الكل؛ preflight يعرض مسار الكاش والمساحة الحرة.
+- سكربتات التشغيل تضبط المتغيرات قبل Python.
+- `--migrate [--move]` ينقل كاش C: القديم إلى D: مع نسخ symlinks أو الملفات.
+
+### الاختبارات
+- `tests/test_model_paths.py`: 7 اختبارات (المسارات، احترام المخصص، نقل الافتراضي، override، الإنشاء، copy/move).
+
+
 ## OUSSAMA Cutter 8.8.0-ultimate — 2026-11-14
 
 ذاكرة تكيفية وملف صحة للتفريغ.
