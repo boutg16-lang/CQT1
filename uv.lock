@@ -152,12 +152,6 @@ wheels = [
 ]
 
 [[package]]
-name = "antlr4-python3-runtime"
-version = "4.9.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/antlr4-python3-runtime-4.9.3.tar.gz", hash = "sha256:f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b", size = 117034, upload-time = "2021-11-06T17:52:23.524Z" }
-
-[[package]]
 name = "anyio"
 version = "4.14.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2132,15 +2126,14 @@ wheels = [
 
 [[package]]
 name = "omegaconf"
-version = "2.3.1"
+version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "antlr4-python3-runtime" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ce/3d/e4b57b8d9008c6ebe0d5eff901f91d5700cf7bdb8c8863df817463a7fd5e/omegaconf-2.3.1.tar.gz", hash = "sha256:e5e7de64aeebeddaf8e6d3f7a783b32ac2a01c0fbd9c878012caecb891a1f42a", size = 3298472, upload-time = "2026-06-11T05:05:12.885Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/10/1cabf3188a4d9684a06568c7fd76f9536eede625733c8399cf1f5337b83e/omegaconf-2.4.0.tar.gz", hash = "sha256:7e219a70bea371da250285b9c01c7db027bc421722799c2cc4ff14bc4a2a753b", size = 3544508, upload-time = "2026-10-09T12:44:02.326Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/0e/152509871bf30df6fc38569f52a2db9b55dd41aae957adae50a053ac7778/omegaconf-2.3.1-py3-none-any.whl", hash = "sha256:3d701d14e9a8828f1edd28bb70b725908b34277cdd72cf7d6a83f94dadc6b6a0", size = 79502, upload-time = "2026-06-11T05:05:09.954Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/bd/0d9f8247b0819385213d09564eda5c52d3673313c2414d51f72883ec24cd/omegaconf-2.4.0-py3-none-any.whl", hash = "sha256:f141a664c777582405e3cc6e0545ecc79429e79f844995b1a6e71c35946a025c", size = 254152, upload-time = "2026-10-09T12:43:59.764Z" },
 ]
 
 [[package]]
@@ -2382,16 +2375,32 @@ otio = [
     { name = "opentimelineio" },
 ]
 transcribe = [
+    { name = "asteroid-filterbanks" },
     { name = "ctranslate2" },
+    { name = "einops" },
     { name = "huggingface-hub" },
     { name = "lightning" },
     { name = "nltk" },
     { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "pyannote-audio" },
+    { name = "pyannote-core" },
+    { name = "pyannote-database" },
+    { name = "pyannote-metrics" },
+    { name = "pyannote-pipeline" },
     { name = "pytorch-lightning" },
+    { name = "pytorch-metric-learning" },
+    { name = "rich" },
+    { name = "semver" },
     { name = "setuptools" },
+    { name = "soundfile" },
+    { name = "speechbrain" },
+    { name = "tensorboardx" },
     { name = "tokenizers" },
     { name = "torch" },
+    { name = "torch-audiomentations" },
     { name = "torchaudio" },
+    { name = "torchmetrics" },
     { name = "transformers" },
     { name = "whisperx" },
 ]
@@ -2406,10 +2415,12 @@ upload = [
 
 [package.metadata]
 requires-dist = [
+    { name = "asteroid-filterbanks", marker = "extra == 'transcribe'", specifier = ">=0.4" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
     { name = "cryptography" },
-    { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.9.0" },
+    { name = "ctranslate2", marker = "extra == 'transcribe'", specifier = ">=4.4.0,<4.5.0" },
     { name = "edge-tts", marker = "extra == 'dubbing'", specifier = ">=7.3.1" },
+    { name = "einops", marker = "extra == 'transcribe'", specifier = ">=0.6.0" },
     { name = "fastapi" },
     { name = "ffmpeg-python" },
     { name = "g4f" },
@@ -2427,6 +2438,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'dev'", specifier = "<2" },
     { name = "numpy", marker = "extra == 'transcribe'", specifier = "<2" },
     { name = "oauthlib", marker = "extra == 'upload'", specifier = ">=4.0.0" },
+    { name = "omegaconf", marker = "extra == 'transcribe'", specifier = ">=2.4.0,<3.0" },
     { name = "onnxruntime", specifier = "<1.24" },
     { name = "opencv-python" },
     { name = "opentelemetry-api", marker = "extra == 'upload'", specifier = ">=1.45.1" },
@@ -2436,15 +2448,28 @@ requires-dist = [
     { name = "pip-licenses", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "psutil" },
     { name = "pyacoustid", marker = "extra == 'upload'" },
+    { name = "pyannote-audio", marker = "extra == 'transcribe'", specifier = "==3.3.2" },
+    { name = "pyannote-core", marker = "extra == 'transcribe'", specifier = ">=5.0.0" },
+    { name = "pyannote-database", marker = "extra == 'transcribe'", specifier = ">=5.0.1" },
+    { name = "pyannote-metrics", marker = "extra == 'transcribe'", specifier = ">=3.2" },
+    { name = "pyannote-pipeline", marker = "extra == 'transcribe'", specifier = ">=3.0.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytorch-lightning", marker = "extra == 'transcribe'", specifier = ">=2.6.6" },
+    { name = "pytorch-metric-learning", marker = "extra == 'transcribe'", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.31,<3" },
+    { name = "rich", marker = "extra == 'transcribe'", specifier = ">=15.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "scenedetect" },
+    { name = "semver", marker = "extra == 'transcribe'", specifier = ">=3.1.1" },
     { name = "setuptools", marker = "extra == 'transcribe'", specifier = ">=84.1.0,<85" },
+    { name = "soundfile", marker = "extra == 'transcribe'", specifier = ">=0.12.1" },
+    { name = "speechbrain", marker = "extra == 'transcribe'", specifier = ">=1.0.0" },
+    { name = "tensorboardx", marker = "extra == 'transcribe'", specifier = ">=2.6" },
     { name = "tokenizers", marker = "extra == 'transcribe'", specifier = ">=0.22.2,<0.23.1" },
     { name = "torch", marker = "extra == 'transcribe'", specifier = "==2.8.0" },
+    { name = "torch-audiomentations", marker = "extra == 'transcribe'", specifier = ">=0.11.0" },
     { name = "torchaudio", marker = "extra == 'transcribe'", specifier = "==2.8.0" },
+    { name = "torchmetrics", marker = "extra == 'transcribe'", specifier = ">=0.11.0" },
     { name = "tqdm" },
     { name = "transformers", marker = "extra == 'transcribe'", specifier = ">=5.14.1,<5.16" },
     { name = "uvicorn" },
@@ -3684,11 +3709,11 @@ wheels = [
 
 [[package]]
 name = "semver"
-version = "3.0.4"
+version = "3.1.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/72/d1/d3159231aec234a59dd7d601e9dd9fe96f3afff15efd33c1070019b26132/semver-3.0.4.tar.gz", hash = "sha256:afc7d8c584a5ed0a11033af086e8af226a9c0b206f313e0301f8dd7b6b589602", size = 269730, upload-time = "2025-01-24T13:19:27.617Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/a0/3d3f51a1304c0e8c93e06a23308f566f2d52d62f92dac903b85ef79dea6f/semver-3.1.2.tar.gz", hash = "sha256:bea193552413194252d33ff26ce0962b76669bd1c6fb17e8e203ac37f072feaf", size = 293659, upload-time = "2026-11-15T17:01:42.931Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/24/4d91e05817e92e3a61c8a21e08fd0f390f5301f1c448b137c57c4bc6e543/semver-3.0.4-py3-none-any.whl", hash = "sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746", size = 17912, upload-time = "2025-01-24T13:19:24.949Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/60/27e29790ff15ea0a485b8dc200d514328294f956e4abc3d43d88c0b5338d/semver-3.1.2-py3-none-any.whl", hash = "sha256:45d107c3fa880910441dfab9d555046cba2829a25feeadfe4a1566439635c510", size = 19100, upload-time = "2026-11-15T17:01:41.321Z" },
 ]
 
 [[package]]

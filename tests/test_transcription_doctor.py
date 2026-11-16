@@ -7,11 +7,21 @@ error messages must use the versions actually installed.
 """
 import os
 import sys
+
+import pytest
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
+
 from scripts import transcription_diagnostics as td
+
+
+@pytest.fixture(autouse=True)
+def _isolate_health_profile(monkeypatch):
+    """Never write the real health profile from tests (it would leak env)."""
+    monkeypatch.setattr(td, "_publish_health", lambda *args, **kwargs: None)
 
 
 def _report(tokenizers="0.22.2", hub="1.33.0", whisperx=True, fallback=True):

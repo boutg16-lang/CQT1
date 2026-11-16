@@ -31,7 +31,7 @@ speechbrain>=1.0.0
 tensorboardX>=2.6
 torch-audiomentations>=0.11.0
 torchmetrics>=0.11.0
-ctranslate2>=4.4.0,<4.9.0
+ctranslate2>=4.4.0,<4.5.0
 torch==2.8.0
 torchaudio==2.8.0
 transformers>=5.14.1,<5.16
