@@ -1,5 +1,18 @@
 # سجل تغييرات OUSSAMA Cutter
 
+## OUSSAMA Cutter 8.10.0-ultimate — 2026-11-14
+
+محدّث آمن لنسخة المصدر.
+
+### الإضافة
+- `scripts/source_updater.py` و`update_project.bat`: fetch/compare/fast-forward فقط، رفض الشجرة الملخبطة والتباعد، تقرير ملفات التبعيات المتغيرة، ورموز خروج واضحة.
+- `--check` و`--json` للفحص بلا تعديل.
+- لا merge ولا reset ولا تثبيت تلقائي للتبعيات.
+
+### الاختبارات
+- `tests/test_source_updater.py`: 5 اختبارات (ليس مستودعاً، محدّث، متأخر مع تبعيات، رفض dirty، fast-forward).
+
+
 ## OUSSAMA Cutter 8.9.0-ultimate — 2026-11-14
 
 النماذج على قرص المشروع بدل C:.

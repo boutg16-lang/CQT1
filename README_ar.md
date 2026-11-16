@@ -450,5 +450,5 @@ Research — مبني على مجموعات موسومة يدوياً من وس�
 - **RTX 3060 ومراقبة المجلد**: `setup_rtx3060.bat` يضبط بيئة GPU، ثم `watch_folder_rtx3060.bat` يعالج ملفات `INBOX` محلياً؛ لا يرفع أو ينشر تلقائياً. [إعداد GPU](docs/RTX3060_SETUP_AR.md) · [المراقبة](docs/WATCH_FOLDER_RTX3060_AR.md)
 - **تجميع المقاطع**: [ملاحظات مخطط الحزمة](docs/RELEASE_NOTES_AR_7.52.0_CLIP_PACKAGE.md)
 
-**الإصدار الحالي**: 8.9.0-ultimate — النماذج تُحمَّل في `<project>/.models` على قرص المشروع لا `C:\Users\...\.cache`، مع أمر لنقل الكاش القديم. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.9.0_AR.md)
+**الإصدار الحالي**: 8.10.0-ultimate — `update_project.bat` يحدّث نسخة المصدر بأمان من `origin/main`، يرفض شجرة العمل الملخبطة، ويبلغك إن تغيّرت التبعيات. [ملاحظات الإصدار](docs/RELEASE_NOTES_8.10.0_AR.md)
 *OUSSAMA Cutter: لأن المقاطع الفيروسية لا يجب أن تكلّف ثروة.*
