@@ -44,3 +44,13 @@ Verified with a real probe (`tests/test_custom_route_auth.py`): before the fix, 
 ## Test results (this machine, Python 3.12, gradio 6.32)
 - `python -m compileall -q .` → clean.
 - `pytest -q` → **2491 passed, 2 skipped, 0 failed** (the one nominally failing packaging test passes once the `build` package is installed, as CI does via `requirements-dev.txt`; heavy deps like torch/mediapipe/insightface were not needed).
+
+## التحقق عبر uv (بعد اكتمال الفرع)
+- `uv sync --extra dev` → نجح (uv.lock يعمل).
+- `uv run ruff check .` → All checks passed.
+- `uv run pytest -q` → 2495 اختباراً: 2494 ناجحاً، فشل 1، تخطي 2.
+  الفشل: `tests/test_ai_autorouter.py::test_detect_does_not_probe_the_same_url_twice`.
+  السبب: `pyproject.toml` يدرج g4f في dev extra، فتُضاف مرشحة g4f الاحتياطية إلى
+  `ai_autorouter.detect()` بينما الاختبار يفترض غيابها. CI لا يتأثر لأن
+  `requirements-dev.txt` لا يثبت g4f. الفشل موجود على `main` أيضاً تحت نفس
+  البيئة (مُتحقق منه) — ليس من هذا الفرع، والمعالجة خارج نطاقه.
