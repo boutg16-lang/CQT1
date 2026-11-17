@@ -506,6 +506,19 @@ fun ClipCardCompact(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (clip.isDemo) {
+                        Surface(
+                            color = AccentGold.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "تجريبي",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AccentGold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Surface(
                         color = PrimaryIndigo.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(6.dp)

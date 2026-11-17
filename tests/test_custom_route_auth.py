@@ -127,3 +127,130 @@ def test_failed_attempts_are_rate_limited(tmp_path):
     # 5 failures allowed within the window, then a 429 throttle.
     assert statuses[:5] == [401] * 5, statuses
     assert statuses[5] == 429, statuses
+
+
+def _capture_launch_app(monkeypatch, webui_app):
+    """Wrap demo.queue().launch so the test gets the real FastAPI app."""
+    captured = {}
+    original_queue = webui_app.demo.queue
+
+    def queue_wrapper(*args, **kwargs):
+        queue_obj = original_queue(*args, **kwargs)
+        original_launch = queue_obj.launch
+
+        def launch_wrapper(*la, **lk):
+            app, local_url, share_url = original_launch(*la, **lk)
+            captured["app"] = app
+            captured["local_url"] = local_url
+            return app, local_url, share_url
+
+        queue_obj.launch = launch_wrapper
+        return queue_obj
+
+    monkeypatch.setattr(webui_app.demo, "queue", queue_wrapper)
+    return captured
+
+
+def _port_from_url(local_url):
+    return int(str(local_url).rsplit(":", 1)[1].rstrip("/"))
+
+
+def _write_viral_secret(webui_app):
+    secret_path = os.path.join(webui_app.VIRALS_DIR, "secret.txt")
+    with open(secret_path, "w", encoding="utf-8") as fh:
+        fh.write("top-secret")
+    return secret_path
+
+
+def _cleanup_viral_secret(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def test_real_launch_windows_branch_protects_virals(monkeypatch, tmp_path):
+    """End-to-end over the REAL Windows branch of _launch().
+
+    CI runs on Linux, so the branch selection itself is forced: is_windows is
+    computed inside _launch as (os.name == 'nt'), and os is the shared stdlib
+    module — monkeypatching os.name flips the branch without touching the
+    filesystem or the OS. demo.block_thread() is no-op'd so _launch returns
+    instead of blocking forever, and webbrowser.open is stubbed because the
+    branch passes inbrowser=True. webui.app is imported BEFORE os.name is
+    patched so module import still sees a POSIX filesystem.
+    """
+    from webui import app as webui_app
+
+    monkeypatch.setenv("VIRALCUTTER_WEBUI_USER", AUTH_USER)
+    monkeypatch.setenv("VIRALCUTTER_WEBUI_PASSWORD", AUTH_PASS)
+    monkeypatch.setenv("VIRALCUTTER_DISABLE_SAFETY_WATCHER", "1")
+    monkeypatch.delenv("VIRALCUTTER_HOST", raising=False)
+    monkeypatch.setattr("os.name", "nt")
+    monkeypatch.setattr("webbrowser.open", lambda *a, **k: None)    # os.name='nt' also flips pathlib.Path() into WindowsPath on Linux, which
+    # crashes on .resolve(). Force the POSIX flavour for the duration of the
+    # launch so the simulation exercises the auth wiring, not the FS flavour.
+    import pathlib
+
+    _orig_path_new = pathlib.Path.__new__
+
+    def _posix_path_new(cls, *args, **kwargs):
+        if cls is pathlib.Path:
+            return pathlib.PosixPath(*args, **kwargs)
+        return _orig_path_new(cls, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "__new__", _posix_path_new)
+
+    monkeypatch.setattr(webui_app.demo, "block_thread", lambda: None)
+    captured = _capture_launch_app(monkeypatch, webui_app)
+
+    secret_path = _write_viral_secret(webui_app)
+    try:
+        result = webui_app._launch(["--preflight", "off"])
+        assert result in (None, 0, 1), result
+        app = captured["app"]
+        assert app is not None, "launch() app was not captured"
+        port = _port_from_url(captured["local_url"])
+
+        status, body = _probe(app, port)
+        assert status == 401, f"UNAUTHENTICATED ACCESS on real Windows branch: HTTP {status}"
+        status, body = _probe(app, port, creds=(AUTH_USER, AUTH_PASS))
+        assert status == 200 and "top-secret" in body, (status, body[:60])
+    finally:
+        _cleanup_viral_secret(secret_path)
+        _shutdown(captured.get("app"))
+
+
+def test_real_launch_colab_branch_protects_virals(monkeypatch):
+    """End-to-end over the --colab branch (OS-independent; runs on Linux CI).
+
+    Before the fix this branch mounted /virals with no basic-auth middleware,
+    so a public --colab share would have leaked the folder. The gradio launch
+    here ignores GRADIO_SERVER_PORT (no server_port kwarg), so the probe port
+    comes from the launch()'s local_url.
+    """
+    from webui import app as webui_app
+
+    monkeypatch.setenv("VIRALCUTTER_WEBUI_USER", AUTH_USER)
+    monkeypatch.setenv("VIRALCUTTER_WEBUI_PASSWORD", AUTH_PASS)
+    monkeypatch.setenv("VIRALCUTTER_DISABLE_SAFETY_WATCHER", "1")
+    monkeypatch.delenv("VIRALCUTTER_HOST", raising=False)
+
+    monkeypatch.setattr(webui_app.demo, "block_thread", lambda: None)
+    captured = _capture_launch_app(monkeypatch, webui_app)
+
+    secret_path = _write_viral_secret(webui_app)
+    try:
+        result = webui_app._launch(["--preflight", "off", "--colab"])
+        assert result in (None, 0, 1), result
+        app = captured["app"]
+        assert app is not None, "launch() app was not captured"
+        port = _port_from_url(captured["local_url"])
+
+        status, body = _probe(app, port)
+        assert status == 401, f"UNAUTHENTICATED ACCESS on real colab branch: HTTP {status}"
+        status, body = _probe(app, port, creds=(AUTH_USER, AUTH_PASS))
+        assert status == 200 and "top-secret" in body, (status, body[:60])
+    finally:
+        _cleanup_viral_secret(secret_path)
+        _shutdown(captured.get("app"))

@@ -186,7 +186,10 @@ object GeminiService {
                 startMs = i * 500L,
                 endMs = (i * 500L) + 480L,
                 isBleeped = w == "***",
-                isHookKeyword = i < 2
+                isHookKeyword = i < 2,
+                // ESTIMATE, not real timing: the Gemini response carries no
+                // word-level timestamps, so words get a fixed 500 ms slot.
+                isTimingEstimated = true
             )
         }
 

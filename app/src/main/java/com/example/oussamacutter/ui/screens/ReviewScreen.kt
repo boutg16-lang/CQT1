@@ -184,6 +184,19 @@ fun ReviewScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
+                                    if (currentClip.isDemo) {
+                                        Surface(
+                                            color = AccentGold.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "تجريبي",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = AccentGold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = if (currentClip.viralScore != null) "${currentClip.viralScore}" else "غير متاح",
                                         style = MaterialTheme.typography.titleMedium,
@@ -491,6 +504,13 @@ fun ReviewScreen(
                                 Icon(Icons.Default.Edit, contentDescription = null, tint = PrimaryLight)
                             }
 
+                            if (currentClip.words.any { it.isTimingEstimated }) {
+                                Text(
+                                    text = "⏱ توقيت تقديري — تُولَّد الأزمنة تلقائياً وليست من تفريغ صوتي حقيقي",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SubtitleYellow.copy(alpha = 0.85f)
+                                )
+                            }
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),

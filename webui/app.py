@@ -4200,6 +4200,10 @@ def _launch(argv=None):
             prevent_thread_lock=True,
             **_launch_theme_kwargs
         )
+        if auth:
+            # Same gap as the Windows branch: gr.launch(auth=...) does not
+            # cover routes mounted after launch, and the share URL is public.
+            _install_basic_auth(app, auth)
         app.mount("/virals", StaticFiles(directory=VIRALS_DIR), name="virals")
         demo.block_thread()
     else:

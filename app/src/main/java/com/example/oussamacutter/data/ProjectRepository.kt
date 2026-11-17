@@ -76,6 +76,7 @@ object ProjectRepository {
         val initialClips = listOf(
             createClip(
                 id = "clip_01",
+                isDemo = true,
                 title = "سر المليون دولار في 30 ثانية",
                 arabicHookTitle = "🔥 هذا ما يخفونه عنك رواد الأعمال!",
                 duration = 38,
@@ -86,6 +87,7 @@ object ProjectRepository {
             ),
             createClip(
                 id = "clip_02",
+                isDemo = true,
                 title = "أكبر صدمة في عالم الذكاء الاصطناعي",
                 arabicHookTitle = "😱 لن تصدق ما تفعله النماذج الجديدة الآن",
                 duration = 44,
@@ -96,6 +98,7 @@ object ProjectRepository {
             ),
             createClip(
                 id = "clip_03",
+                isDemo = true,
                 title = "مواجهة نارية حول أرباح اليوتيوب",
                 arabicHookTitle = "⚠️ هل تراجع دخل صناع المحتوى في 2026؟",
                 duration = 52,
@@ -153,7 +156,8 @@ object ProjectRepository {
         viralScore: Int,
         hookStrength: Int,
         rawTranscript: String,
-        hasViolation: Boolean
+        hasViolation: Boolean,
+        isDemo: Boolean = false
     ): ClipSegment {
         val (evaluatedText, report) = SafetyEngine.evaluateText(
             rawTranscript,
@@ -168,7 +172,10 @@ object ProjectRepository {
                 startMs = (index * 600L),
                 endMs = (index * 600L) + 550L,
                 isBleeped = isBleeped,
-                isHookKeyword = index < 3
+                isHookKeyword = index < 3,
+                // ESTIMATE, not real timing: no word-level timestamps exist
+                // here, so words get a fixed 600 ms slot.
+                isTimingEstimated = true
             )
         }
 
@@ -203,6 +210,7 @@ object ProjectRepository {
             words = wordsList,
             safetyReport = report,
             isApproved = false,
+            isDemo = isDemo,
             targetPlatform = "TikTok & Shorts (9:16)",
             audioSettings = AudioSettings(
                 selectedBgm = "Viral Podcast Beat",
@@ -453,6 +461,7 @@ object ProjectRepository {
         // Simulate new clips generated from processing
         val newClip = createClip(
             id = "clip_" + UUID.randomUUID().toString().take(5),
+            isDemo = true, // بيانات تجريبية مولدة محلياً لا نتيجة تحليل حقيقية
             title = "نصيحة ذهبية لتضاعف إنتاجك",
             arabicHookTitle = "💡 كيف تنجز مهام أسبوع في يومين فقط؟",
             duration = (minDuration + maxDuration) / 2,
