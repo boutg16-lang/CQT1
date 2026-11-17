@@ -133,13 +133,13 @@ data class ClipSegment(
     val title: String,
     val arabicHookTitle: String,
     val durationSeconds: Int,
-    val viralScore: Int, // 0 - 100
-    val hookStrength: Int, // 0 - 100
+    val viralScore: Int? = null, // 0 - 100 أو null عند غياب درجة حقيقية من الذكاء الاصطناعي
+    val hookStrength: Int? = null, // 0 - 100 أو null عند غياب درجة حقيقية
     val words: List<SubtitleWord>,
     val safetyReport: SafetyReport,
     var isApproved: Boolean = false,
     val targetPlatform: String = "TikTok & Shorts (9:16)",
-    val audioLoudnessLUFS: Double = -14.2,
+    val audioLoudnessLUFS: Double? = null, // يُقاس فعلياً فقط؛ يبقى null إن لم يُقس
     val exportXmlReady: Boolean = true,
     val audioSettings: AudioSettings = AudioSettings(),
     val visualEffects: VisualEffects = VisualEffects(),

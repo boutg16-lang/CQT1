@@ -50,6 +50,13 @@ android {
         }
     }
 }
+    testOptions {
+        unitTests {
+            // يسمح لاختبارات JVM باستدعاء android.util.Log دون استثناء "not mocked".
+            isReturnDefaultValues = true
+        }
+    }
+}
 
 dependencies {
     testImplementation("junit:junit:4.13.2")

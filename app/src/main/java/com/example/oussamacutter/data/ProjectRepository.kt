@@ -204,7 +204,6 @@ object ProjectRepository {
             safetyReport = report,
             isApproved = false,
             targetPlatform = "TikTok & Shorts (9:16)",
-            audioLoudnessLUFS = -14.1,
             audioSettings = AudioSettings(
                 selectedBgm = "Viral Podcast Beat",
                 bgmVolume = 0.18f,
@@ -313,7 +312,7 @@ object ProjectRepository {
         maxDuration: Int,
         targetClipsCount: Int,
         onStepUpdate: (String, Float) -> Unit
-    ) {
+    ): Boolean {
         val cleanName = if (sourceUrlOrName.isNotBlank()) sourceUrlOrName else "فيديو_مباشر_${System.currentTimeMillis()}.mp4"
         val jobId = "job_" + UUID.randomUUID().toString().take(6)
 
@@ -334,12 +333,31 @@ object ProjectRepository {
         }
 
         // Real API call to Gemini AI
-        val generatedClips = GeminiService.analyzeAndGenerateViralClips(
+        val analysis = GeminiService.analyzeAndGenerateViralClips(
             sourceUrlOrTranscript = sourceUrlOrName,
             targetClipsCount = targetClipsCount,
             minDurationSec = minDuration,
             maxDurationSec = maxDuration
         )
+
+        val generatedClips = when (analysis) {
+            is GeminiService.AnalysisResult.Success -> analysis.clips
+            is GeminiService.AnalysisResult.InvalidInput,
+            is GeminiService.AnalysisResult.NoApiKey,
+            is GeminiService.AnalysisResult.ApiError -> {
+                val failureMessage = when (analysis) {
+                    is GeminiService.AnalysisResult.InvalidInput -> analysis.message
+                    is GeminiService.AnalysisResult.ApiError -> analysis.message
+                    GeminiService.AnalysisResult.NoApiKey ->
+                        "لم يتم ضبط مفتاح Gemini. أضف مفتاحك من شاشة الإنشاء ثم أعد المحاولة."
+                }
+                _batchQueue.value = _batchQueue.value.map {
+                    if (it.id == jobId) it.copy(status = "فشل", currentStep = failureMessage) else it
+                }
+                onStepUpdate("فشل: $failureMessage", 0.75f)
+                return false
+            }
+        }
 
         onStepUpdate("فحص الأمان ضد الإنذارات وتطبيق نمط هورموزي...", 0.75f)
         _batchQueue.value = _batchQueue.value.map {
@@ -349,7 +367,6 @@ object ProjectRepository {
         val enrichedClips = generatedClips.map { clip ->
             clip.copy(
                 targetPlatform = "TikTok & Shorts (9:16)",
-                audioLoudnessLUFS = -14.0,
                 retentionCurve = listOf(
                     RetentionPoint(0, 100, "بداية الخطاف (Hook 0-3s)"),
                     RetentionPoint(3, 89, "نهاية الزووم البصري"),
@@ -394,6 +411,7 @@ object ProjectRepository {
         )
         _projects.value = listOf(newProj) + _projects.value
         onStepUpdate("اكتمل التقطيع بنجاح!", 1.0f)
+        return true
     }
 
     fun addBatchCutJob(

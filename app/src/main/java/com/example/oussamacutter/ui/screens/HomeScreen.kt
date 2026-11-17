@@ -511,7 +511,7 @@ fun ClipCardCompact(
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = "Viral Score: ${clip.viralScore}",
+                            text = if (clip.viralScore != null) "Viral Score: ${clip.viralScore}" else "Viral Score: غير متاح",
                             style = MaterialTheme.typography.labelSmall,
                             color = PrimaryLight,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

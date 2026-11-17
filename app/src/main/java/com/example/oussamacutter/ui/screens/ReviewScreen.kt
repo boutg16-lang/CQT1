@@ -132,7 +132,7 @@ fun ReviewScreen(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "${clip.viralScore}%",
+                                    text = if (clip.viralScore != null) "${clip.viralScore}%" else "غير متاح",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (isSelected) AccentGold else PrimaryLight,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -185,7 +185,7 @@ fun ReviewScreen(
                                 ) {
                                     Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
                                     Text(
-                                        text = "${currentClip.viralScore}",
+                                        text = if (currentClip.viralScore != null) "${currentClip.viralScore}" else "غير متاح",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = AccentGold,
                                         fontWeight = FontWeight.Bold
@@ -394,7 +394,7 @@ fun ReviewScreen(
                                 }
 
                                 Text(
-                                    text = "🔊 ${currentClip.audioLoudnessLUFS} LUFS",
+                                    text = if (currentClip.audioLoudnessLUFS != null) "🔊 ${currentClip.audioLoudnessLUFS} LUFS" else "🔊 LUFS: غير متاح",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = SuccessGreen
                                 )

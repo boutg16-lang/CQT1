@@ -2,6 +2,7 @@ package com.example.oussamacutter.data
 
 import com.example.oussamacutter.model.RiskLevel
 import com.example.oussamacutter.model.SafetyActionMode
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,5 +35,37 @@ class SafetyEngineTest {
         assertEquals(RiskLevel.SAFE, report.riskLevel)
         assertFalse(report.passedCopyrightCheck)
         assertFalse(report.passedLoudnessQc)
+    }
+
+    @Test
+    fun missingApiKeyReturnsNoApiKeyInsteadOfFakeClips() {
+        GeminiService.setCustomApiKey("")
+
+        val result = runBlocking {
+            GeminiService.analyzeAndGenerateViralClips(
+                sourceUrlOrTranscript = "نص عربي طويل بما يكفي لاجتياز فحص المدخل ويبدأ بحرف وليس برابط",
+                targetClipsCount = 3,
+                minDurationSec = 15,
+                maxDurationSec = 60
+            )
+        }
+
+        assertTrue("Expected NoApiKey but got $result", result is GeminiService.AnalysisResult.NoApiKey)
+    }
+
+    @Test
+    fun urlInputIsRejectedInsteadOfFabricatingTranscript() {
+        GeminiService.setCustomApiKey("")
+
+        val result = runBlocking {
+            GeminiService.analyzeAndGenerateViralClips(
+                sourceUrlOrTranscript = "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                targetClipsCount = 3,
+                minDurationSec = 15,
+                maxDurationSec = 60
+            )
+        }
+
+        assertTrue("Expected InvalidInput but got $result", result is GeminiService.AnalysisResult.InvalidInput)
     }
 }
