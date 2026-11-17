@@ -18,12 +18,15 @@ services:
       - ./models:/app/models
     environment:
       - VIRALCUTTER_HOST=0.0.0.0
+      # Required: HTTP basic auth (fail fast if missing in .env)
+      - VIRALCUTTER_WEBUI_USER=${VIRALCUTTER_WEBUI_USER:?set VIRALCUTTER_WEBUI_USER in .env}
+      - VIRALCUTTER_WEBUI_PASSWORD=${VIRALCUTTER_WEBUI_PASSWORD:?set VIRALCUTTER_WEBUI_PASSWORD in .env}
       # Optional: pass API keys via .env (never commit them)
       # - VIRALCUTTER_GEMINI_KEY=${VIRALCUTTER_GEMINI_KEY:-}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c",
-             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860', timeout=3)"]
+      # يعتبر 200 و401 دليلًا على أن الخادم يعمل (401 = المصادقة مفعّلة وتستقبل الطلب).
+      test: ["CMD", "python3", "/app/healthcheck.py"]
       interval: 30s
       timeout: 5s
       retries: 3
