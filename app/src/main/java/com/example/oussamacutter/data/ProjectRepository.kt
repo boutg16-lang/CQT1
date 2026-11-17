@@ -349,14 +349,14 @@ object ProjectRepository {
         )
 
         val generatedClips = when (analysis) {
-            is GeminiService.AnalysisResult.Success -> analysis.clips
-            is GeminiService.AnalysisResult.InvalidInput,
-            is GeminiService.AnalysisResult.NoApiKey,
-            is GeminiService.AnalysisResult.ApiError -> {
+            is AnalysisResult.Success -> analysis.clips
+            is AnalysisResult.InvalidInput,
+            is AnalysisResult.NoApiKey,
+            is AnalysisResult.ApiError -> {
                 val failureMessage = when (analysis) {
-                    is GeminiService.AnalysisResult.InvalidInput -> analysis.message
-                    is GeminiService.AnalysisResult.ApiError -> analysis.message
-                    GeminiService.AnalysisResult.NoApiKey ->
+                    is AnalysisResult.InvalidInput -> analysis.message
+                    is AnalysisResult.ApiError -> analysis.message
+                    AnalysisResult.NoApiKey ->
                         "لم يتم ضبط مفتاح Gemini. أضف مفتاحك من شاشة الإنشاء ثم أعد المحاولة."
                 }
                 _batchQueue.value = _batchQueue.value.map {

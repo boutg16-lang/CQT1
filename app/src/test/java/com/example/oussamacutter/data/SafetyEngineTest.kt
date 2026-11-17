@@ -50,7 +50,7 @@ class SafetyEngineTest {
             )
         }
 
-        assertTrue("Expected NoApiKey but got $result", result is GeminiService.AnalysisResult.NoApiKey)
+        assertTrue("Expected NoApiKey but got $result", result is AnalysisResult.NoApiKey)
     }
 
     @Test
@@ -66,6 +66,6 @@ class SafetyEngineTest {
             )
         }
 
-        assertTrue("Expected InvalidInput but got $result", result is GeminiService.AnalysisResult.InvalidInput)
+        assertTrue("Expected InvalidInput but got $result", result is AnalysisResult.InvalidInput)
     }
 }
