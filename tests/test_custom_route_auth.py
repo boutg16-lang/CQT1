@@ -9,6 +9,7 @@ credentials. It reports the observed status so the fix can be evidence-based.
 import os
 import socket
 import sys
+import base64
 import urllib.error
 import urllib.request
 
@@ -105,3 +106,24 @@ def test_probe_virals_mount_without_middleware_leaks(tmp_path):
     _shutdown(app)
     print(f"\nBASELINE (no middleware): HTTP {status}, body={body[:40]!r}")
     assert status != 401, "gr.launch(auth=...) started protecting mounted routes"
+
+
+def test_failed_attempts_are_rate_limited(tmp_path):
+    app, port = _launch_windows_style(tmp_path)
+    bad = base64.b64encode(b"tester:wrong-password").decode("ascii")
+    statuses = []
+    for _ in range(6):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/virals/secret.txt")
+        req.add_header("Authorization", f"Basic {bad}")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                statuses.append(resp.status)
+        except urllib.error.HTTPError as e:
+            statuses.append(e.code)
+    try:
+        app.server.close()
+    except Exception:
+        pass
+    # 5 failures allowed within the window, then a 429 throttle.
+    assert statuses[:5] == [401] * 5, statuses
+    assert statuses[5] == 429, statuses

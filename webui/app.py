@@ -4020,10 +4020,22 @@ def _install_basic_auth(fastapi_app, auth):
     before this middleware existed). Install it BEFORE attach_extra_routes.
     """
     import base64 as _b64
+    import hmac
+    import time
+    import threading
 
     from fastapi.responses import JSONResponse
 
     _auth_user, _auth_pass = auth
+    _auth_user_bytes = _auth_user.encode("utf-8")
+    _auth_pass_bytes = _auth_pass.encode("utf-8")
+
+    # In-process brute-force throttle: MAX_AUTH_FAILURES failures per IP
+    # within AUTH_FAILURE_WINDOW seconds are answered with 429.
+    MAX_AUTH_FAILURES = 5
+    AUTH_FAILURE_WINDOW = 60.0
+    _auth_failures = {}
+    _auth_failures_lock = threading.Lock()
 
     class _BasicAuthMiddleware:
         """Pure ASGI middleware so it can also be attached post-startup
@@ -4042,15 +4054,38 @@ def _install_basic_auth(fastapi_app, auth):
                 if key.decode("latin-1").lower() == "authorization":
                     auth_header = value.decode("latin-1")
                     break
+            client_ip = (scope.get("client") or ("unknown", 0))[0] or "unknown"
+            now = time.monotonic()
+            with _auth_failures_lock:
+                window = [t for t in _auth_failures.get(client_ip, []) if now - t < AUTH_FAILURE_WINDOW]
+                if len(window) >= MAX_AUTH_FAILURES:
+                    _auth_failures[client_ip] = window
+                    throttled = True
+                else:
+                    _auth_failures[client_ip] = window
+                    throttled = False
+            if throttled:
+                response = JSONResponse(
+                    {"error": "too many failed attempts; try again later"},
+                    status_code=429,
+                    headers={"Retry-After": str(int(AUTH_FAILURE_WINDOW))},
+                )
+                await response(scope, receive, send)
+                return
+
             ok = False
             if auth_header.lower().startswith("basic "):
                 try:
                     decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
                     u, _, pw = decoded.partition(":")
-                    ok = (u == _auth_user and pw == _auth_pass)
+                    # Constant-time comparison on both fields.
+                    ok = (hmac.compare_digest(u.encode("utf-8"), _auth_user_bytes)
+                          and hmac.compare_digest(pw.encode("utf-8"), _auth_pass_bytes))
                 except Exception:
                     ok = False
             if not ok:
+                with _auth_failures_lock:
+                    _auth_failures.setdefault(client_ip, []).append(now)
                 response = JSONResponse(
                     {"error": "unauthorized"},
                     status_code=401,
