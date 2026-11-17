@@ -358,6 +358,7 @@ object ProjectRepository {
                     is AnalysisResult.ApiError -> analysis.message
                     AnalysisResult.NoApiKey ->
                         "لم يتم ضبط مفتاح Gemini. أضف مفتاحك من شاشة الإنشاء ثم أعد المحاولة."
+                    is AnalysisResult.Success -> "" // غير قابل للوصول: فرع النجاح معالج في when الخارجي
                 }
                 _batchQueue.value = _batchQueue.value.map {
                     if (it.id == jobId) it.copy(status = "فشل", currentStep = failureMessage) else it
