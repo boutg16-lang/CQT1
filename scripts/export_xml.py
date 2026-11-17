@@ -11,7 +11,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     parser.add_argument("--segment", type=int, required=True)
-    parser.add_argument("--format", default="premiere")
+    parser.add_argument("--format", default="premiere", choices=["premiere"])
     args = parser.parse_args()
 
     export_pack(args.project, args.segment, args.format)

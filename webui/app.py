@@ -3,6 +3,7 @@ import base64
 import datetime
 import html as html_lib
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -11,6 +12,9 @@ import time
 import uuid
 
 _APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Export formats actually implemented by scripts/export_xml_lib/exporter.py.
+_SUPPORTED_EXPORT_FORMATS = ("premiere",)
 if _APP_ROOT not in sys.path:
     sys.path.insert(0, _APP_ROOT)
 try:
@@ -4209,7 +4213,7 @@ def _launch(argv=None):
             gr.set_static_paths(paths=allowed_dirs)
         except AttributeError:
             pass
-        from fastapi import BackgroundTasks
+        from fastapi import BackgroundTasks, Query
         from fastapi.responses import FileResponse
 
         def attach_extra_routes(fastapi_app):
@@ -4218,36 +4222,63 @@ def _launch(argv=None):
             install_health_route(fastapi_app)
             fastapi_app.mount("/virals", StaticFiles(directory=VIRALS_DIR), name="virals")
             @fastapi_app.get("/export_xml_api")
-            def export_xml_api(project: str, segment: int, background_tasks: BackgroundTasks, format: str = "premiere"):
+            def export_xml_api(
+                project: str,
+                background_tasks: BackgroundTasks,
+                segment: int = Query(ge=0, le=9999),
+                format: str = "premiere",
+            ):
+                from fastapi.responses import JSONResponse
+
+                _logger = logging.getLogger(__name__)
                 try:
+                    # Input validation: project name is required, segment is
+                    # bounded by the Query(ge=0, le=9999) constraint above.
+                    project = os.path.basename((project or "").strip()) or ""
+                    if not project:
+                        return JSONResponse({"error": "Project name is required."}, status_code=400)
+                    if str(format).strip().lower() not in _SUPPORTED_EXPORT_FORMATS:
+                        return JSONResponse(
+                            {"error": "Unsupported format. Supported: " + ", ".join(_SUPPORTED_EXPORT_FORMATS)},
+                            status_code=400,
+                        )
                     # SECURITY: only serve projects inside VIRALS_DIR. Reject
                     # anything that escapes it via "../" or absolute paths.
-                    project = os.path.basename((project or "").strip()) or ""
                     virals_root = os.path.abspath(VIRALS_DIR)
                     project_path = os.path.abspath(os.path.join(virals_root, project))
-                    if (not project
-                            or os.path.commonpath([project_path, virals_root]) != virals_root
+                    if (os.path.commonpath([project_path, virals_root]) != virals_root
                             or not os.path.isdir(project_path)):
-                        return {"error": "Project not found."}
+                        return JSONResponse({"error": "Project not found."}, status_code=404)
                     # Run the exporter IN-PROCESS — the packaged exe has no
                     # scripts/export_xml.py on disk, so a subprocess is
                     # impossible there; in-process works in both modes.
                     try:
                         from scripts.export_xml_lib.exporter import export_pack
-                    except Exception as e:
-                        return {"error": "Export module unavailable in this build: {}".format(e)}
+                    except Exception:
+                        _logger.exception("export_xml_lib unavailable in this build")
+                        return JSONResponse({"error": "Export module unavailable in this build."}, status_code=500)
                     try:
-                        export_pack(project_path, segment, format)
-                    except Exception as e:
-                        return {"error": "Export failed: {}".format(e)}
+                        zip_result = export_pack(project_path, segment, format)
+                    except ValueError as e:
+                        # Unknown output_format rejected by the exporter.
+                        return JSONResponse({"error": str(e)}, status_code=400)
+                    except Exception:
+                        _logger.exception("export_pack failed for project=%s segment=%s", project, segment)
+                        return JSONResponse({"error": "Export failed due to an internal error."}, status_code=500)
+                    if zip_result is None:
+                        return JSONResponse(
+                            {"error": "Segment not found in this project (no cut video for it)."}, status_code=404
+                        )
                     proj_name = os.path.basename(project_path)
                     zip_filename = f"export_{proj_name}_seg{segment}.zip"
                     file_path = os.path.join(project_path, zip_filename)
                     if os.path.exists(file_path):
                         return FileResponse(file_path, filename=zip_filename, media_type='application/zip')
-                    return {"error": f"File generation failed. Expected: {file_path}"}
-                except Exception as e:
-                    return {"error": str(e)}
+                    _logger.warning("export finished but zip missing: %s", file_path)
+                    return JSONResponse({"error": "File generation failed."}, status_code=500)
+                except Exception:
+                    _logger.exception("Unhandled error in /export_xml_api")
+                    return JSONResponse({"error": "Internal server error."}, status_code=500)
             print(f"Mounted /virals to {VIRALS_DIR}")
 
         if is_windows:

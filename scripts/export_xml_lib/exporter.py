@@ -8,10 +8,23 @@ from .utils import get_video_dims, json_to_srt
 from .xml_generator import create_premiere_xml
 
 
+# The only timeline format currently implemented (create_premiere_xml).
+SUPPORTED_EXPORT_FORMATS = ("premiere",)
+
+
 def export_pack(project_path, segment_index, output_format="premiere"):
     """
     Generates a ZIP Pack for the segment.
+
+    Raises:
+        ValueError: if output_format is not in SUPPORTED_EXPORT_FORMATS.
     """
+    if str(output_format).strip().lower() not in SUPPORTED_EXPORT_FORMATS:
+        raise ValueError(
+            "Unsupported export format: {!r}. Supported: {}".format(
+                output_format, ", ".join(SUPPORTED_EXPORT_FORMATS)
+            )
+        )
     print(f"Starting Export Pack for Project: {os.path.basename(project_path)}, Segment: {segment_index}")
     
     # Paths
