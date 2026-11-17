@@ -4010,7 +4010,68 @@ def _webui_auth():
     return None
 
 
+def _install_basic_auth(fastapi_app, auth):
+    """Install the HTTP basic-auth middleware on a FastAPI/Starlette app.
+
+    Used by BOTH launch branches: Gradio's auth=... only protects the routes
+    Gradio itself serves — routes mounted manually afterwards (/virals,
+    /export_xml_api) are NOT covered, as verified by
+    tests/test_custom_route_auth.py (unauthenticated GET returned HTTP 200
+    before this middleware existed). Install it BEFORE attach_extra_routes.
+    """
+    import base64 as _b64
+
+    from fastapi.responses import JSONResponse
+
+    _auth_user, _auth_pass = auth
+
+    class _BasicAuthMiddleware:
+        """Pure ASGI middleware so it can also be attached post-startup
+        (the Windows branch launches the server with prevent_thread_lock
+        before attach_extra_routes runs)."""
+
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+            auth_header = ""
+            for key, value in scope.get("headers", []):
+                if key.decode("latin-1").lower() == "authorization":
+                    auth_header = value.decode("latin-1")
+                    break
+            ok = False
+            if auth_header.lower().startswith("basic "):
+                try:
+                    decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
+                    u, _, pw = decoded.partition(":")
+                    ok = (u == _auth_user and pw == _auth_pass)
+                except Exception:
+                    ok = False
+            if not ok:
+                response = JSONResponse(
+                    {"error": "unauthorized"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="OUSSAMA Cutter"'},
+                )
+                await response(scope, receive, send)
+                return
+            await self.app(scope, receive, send)
+
+    try:
+        fastapi_app.add_middleware(_BasicAuthMiddleware)
+    except RuntimeError:
+        # gr.launch(prevent_thread_lock=True) has already started serving;
+        # drop the built stack so the next request rebuilds it with auth.
+        fastapi_app.middleware_stack = None
+        fastapi_app.add_middleware(_BasicAuthMiddleware)
+
+
 def _launch(argv=None):
+
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode")
@@ -4169,6 +4230,8 @@ def _launch(argv=None):
                 prevent_thread_lock=True,
                 **_launch_theme_kwargs
             )
+            if webui_auth:
+                _install_basic_auth(app, webui_auth)
             attach_extra_routes(app)
             demo.block_thread()
         else:
@@ -4177,28 +4240,7 @@ def _launch(argv=None):
             _auth = _webui_auth()
             _validate_webui_exposure(_resolve_webui_host(), _auth)
             if _auth:
-                import base64 as _b64
-
-                from fastapi import Request
-                from fastapi.responses import JSONResponse
-                _auth_user, _auth_pass = _auth
-
-                @app.middleware("http")
-                async def _basic_auth_middleware(request: Request, call_next):
-                    auth_header = request.headers.get("authorization", "")
-                    ok = False
-                    if auth_header.lower().startswith("basic "):
-                        try:
-                            decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
-                            u, _, pw = decoded.partition(":")
-                            ok = (u == _auth_user and pw == _auth_pass)
-                        except Exception:
-                            ok = False
-                    if not ok:
-                        return JSONResponse({"error": "unauthorized"}, status_code=401,
-                                            headers={"WWW-Authenticate": 'Basic realm="OUSSAMA Cutter"'})
-                    return await call_next(request)
-
+                _install_basic_auth(app, _auth)
                 print("[webui] HTTP basic auth enabled (VIRALCUTTER_WEBUI_USER).")
             attach_extra_routes(app)
             if _GRADIO_MAJOR >= 6:
