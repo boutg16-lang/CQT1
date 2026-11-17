@@ -49,7 +49,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-}
+
     testOptions {
         unitTests {
             // يسمح لاختبارات JVM باستدعاء android.util.Log دون استثناء "not mocked".
