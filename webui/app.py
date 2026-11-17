@@ -4025,8 +4025,8 @@ def _install_basic_auth(fastapi_app, auth):
     """
     import base64 as _b64
     import hmac
-    import time
     import threading
+    import time
 
     from fastapi.responses import JSONResponse
 

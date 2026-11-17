@@ -7,7 +7,6 @@ from .rendering import render_segmented_overlays
 from .utils import get_video_dims, json_to_srt
 from .xml_generator import create_premiere_xml
 
-
 # The only timeline format currently implemented (create_premiere_xml).
 SUPPORTED_EXPORT_FORMATS = ("premiere",)
 

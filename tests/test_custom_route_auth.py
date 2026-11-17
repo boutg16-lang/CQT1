@@ -6,10 +6,10 @@ attaches /virals + /export_xml_api manually via attach_extra_routes(app).
 This test reproduces that sequence and probes /virals/... with no
 credentials. It reports the observed status so the fix can be evidence-based.
 """
+import base64
 import os
 import socket
 import sys
-import base64
 import urllib.error
 import urllib.request
 

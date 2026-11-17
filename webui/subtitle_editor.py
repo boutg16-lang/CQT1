@@ -1,18 +1,18 @@
 import hashlib
 import json
+import logging
 import math
 import os
 import re
 import subprocess
 import tempfile
 from pathlib import Path
-import logging
-
-logger = logging.getLogger(__name__)
 
 # Import scripts for direct processing
 import scripts.adjust_subtitles as adjust
 import scripts.burn_subtitles as burn
+
+logger = logging.getLogger(__name__)
 
 
 # Helper to format seconds to HH:MM:SS,mmm
