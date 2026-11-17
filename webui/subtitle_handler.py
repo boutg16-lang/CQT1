@@ -308,7 +308,7 @@ def generate_preview_html(font, size, color, highlight, outline, outline_thick, 
                      # print(f"DEBUG_HTML: Sanitized {c} -> {ret}")
                      return ret
             except Exception as e:
-                print(f"DEBUG_HTML: Sanitize Error: {e}")
+                logger.debug("DEBUG_HTML: Sanitize Error: %s", e)
                 pass
         
         # Ensure # prefix for standard hex if missing
@@ -466,7 +466,7 @@ def render_preview_video(font, size, color, highlight, outline, outline_thick, s
     
     json_template = os.path.join(CURRENT_DIR, "preview.json")
     if not os.path.exists(json_template):
-        print(f"Error: {json_template} not found.")
+        logger.warning("Preview template not found: %s", json_template)
         return None
         
     ass_path = os.path.join(preview_dir, "preview.ass")
@@ -550,7 +550,7 @@ def render_preview_video(font, size, color, highlight, outline, outline_thick, s
             return gr.update(value=cache_bust_path, autoplay=True)
             
     except Exception as e:
-        print(f"Preview Gen Error: {e}")
+        logger.warning("Preview Gen Error: %s", e)
         import traceback
         traceback.print_exc()
         

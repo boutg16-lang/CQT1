@@ -12,15 +12,15 @@ android {
         applicationId = "com.aistudio.oussamacutter.vzrk"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "8.0.0-ultimate"
+        versionCode = 2
+        versionName = "8.10.1-ultimate"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "APP_VERSION", "\"8.0.0-ultimate\"")
+        buildConfigField("String", "APP_VERSION", "\"8.10.1-ultimate\"")
     }
 
     buildTypes {

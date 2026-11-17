@@ -30,6 +30,10 @@ def _free_port():
 def base_url():
     os.environ["GRADIO_SERVER_PORT"] = str(_free_port())
     os.environ["VIRALCUTTER_SKIP_PREFLIGHT"] = "1"
+    # Valid credentials: these tests exercise the API contract, not the auth
+    # gate (repeated unauthenticated hits would trip the per-IP throttle).
+    os.environ["VIRALCUTTER_WEBUI_USER"] = AUTH_USER
+    os.environ["VIRALCUTTER_WEBUI_PASSWORD"] = AUTH_PASS
     from webui import app as webui_app
 
     result = {}
@@ -62,9 +66,20 @@ def base_url():
     yield f"http://127.0.0.1:{port}"
 
 
+AUTH_USER = "pytest_runner"
+AUTH_PASS = "pytest-pass-1234"
+
+
 def _get(base_url, query):
+    import base64
+
+    token = base64.b64encode(f"{AUTH_USER}:{AUTH_PASS}".encode()).decode()
+    req = urllib.request.Request(
+        f"{base_url}/export_xml_api?{query}",
+        headers={"Authorization": f"Basic {token}"},
+    )
     try:
-        with urllib.request.urlopen(f"{base_url}/export_xml_api?{query}", timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.status, resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")

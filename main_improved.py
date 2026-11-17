@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import sys
 
@@ -29,7 +30,7 @@ if _APP_ROOT not in sys.path:
 try:
     from scripts.model_paths import configure_model_cache
 except Exception:
-    pass
+    logging.debug("configure_model_cache unavailable; using default cache paths", exc_info=True)
 else:
     configure_model_cache()
 
@@ -300,12 +301,12 @@ def _launch_webui():
                     sys.executable if getattr(sys, "frozen", False) else __file__)),
                 "crash_report.log"))
         except Exception:
-            pass
+            logging.warning("Could not write crash_report.log", exc_info=True)
         if getattr(sys, "frozen", False):
             try:
                 input("Press Enter to close this window...")
             except Exception:
-                pass
+                logging.debug("Could not pause before closing window", exc_info=True)
         return 1
 
 
@@ -684,7 +685,7 @@ def main():
         from app_version import VERSION as _VERSION
         print("{} v{} (check: update the project / see docs)".format(APP_NAME, _VERSION))
     except Exception:
-        pass
+        logging.debug("app_version unavailable", exc_info=True)
 
     # Escape hatch for testing without whisperx/torch (read by transcribe_video)
     if args.allow_placeholder_transcription:
@@ -1098,7 +1099,7 @@ def main():
             try:
                 _interactive_tty = sys.stdin.isatty()
             except Exception:
-                pass
+                logging.debug("stdin isatty check failed", exc_info=True)
             _auth_retried = False
             while True:
                 try:

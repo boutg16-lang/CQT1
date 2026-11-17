@@ -1,4 +1,4 @@
-# Outras dependencias essenciais
+# Core dependencies
 numpy<2  # whisperx/pyannote break on NumPy 2.x (np.NaN removed)
 g4f
 yt-dlp[default]
@@ -10,8 +10,8 @@ insightface
 gradio>=6.7,<7
 opencv-python
 psutil
-fastapi
-uvicorn
+fastapi>=0.115
+uvicorn>=0.30
 tqdm
 requests>=2.31,<3
 
@@ -22,7 +22,7 @@ requests>=2.31,<3
 #   - real API-key encryption (Roadmap 4.4): pip install cryptography
 #   - auto-update builds: pip install pyinstaller  (see packaging/)
 onnxruntime<1.24  # 1.24+ drops Python 3.10 wheels (matches pyproject.toml)
-cryptography
+cryptography>=42.0
 
 # v7.23: thumbnail generator (Pillow) + scene detection (PySceneDetect, BSD-3)
 # Gradio 6.x currently requires Pillow<13; the temporary audit exception expires 2026-12-15.

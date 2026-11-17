@@ -6,6 +6,9 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import scripts for direct processing
 import scripts.adjust_subtitles as adjust
@@ -83,7 +86,7 @@ def load_transcription_for_editor(json_path):
             
         return editor_data
     except Exception as e:
-        print(f"Error loading JSON for editor: {e}")
+        logger.warning("Error loading JSON for editor: %s", e)
         return []
 
 def resolve_video_candidate(json_full_path):
