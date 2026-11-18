@@ -76,6 +76,7 @@ object ProjectRepository {
         val initialClips = listOf(
             createClip(
                 id = "clip_01",
+                isDemo = true,
                 title = "سر المليون دولار في 30 ثانية",
                 arabicHookTitle = "🔥 هذا ما يخفونه عنك رواد الأعمال!",
                 duration = 38,
@@ -86,6 +87,7 @@ object ProjectRepository {
             ),
             createClip(
                 id = "clip_02",
+                isDemo = true,
                 title = "أكبر صدمة في عالم الذكاء الاصطناعي",
                 arabicHookTitle = "😱 لن تصدق ما تفعله النماذج الجديدة الآن",
                 duration = 44,
@@ -96,6 +98,7 @@ object ProjectRepository {
             ),
             createClip(
                 id = "clip_03",
+                isDemo = true,
                 title = "مواجهة نارية حول أرباح اليوتيوب",
                 arabicHookTitle = "⚠️ هل تراجع دخل صناع المحتوى في 2026؟",
                 duration = 52,
@@ -153,7 +156,8 @@ object ProjectRepository {
         viralScore: Int,
         hookStrength: Int,
         rawTranscript: String,
-        hasViolation: Boolean
+        hasViolation: Boolean,
+        isDemo: Boolean = false
     ): ClipSegment {
         val (evaluatedText, report) = SafetyEngine.evaluateText(
             rawTranscript,
@@ -168,7 +172,10 @@ object ProjectRepository {
                 startMs = (index * 600L),
                 endMs = (index * 600L) + 550L,
                 isBleeped = isBleeped,
-                isHookKeyword = index < 3
+                isHookKeyword = index < 3,
+                // ESTIMATE, not real timing: no word-level timestamps exist
+                // here, so words get a fixed 600 ms slot.
+                isTimingEstimated = true
             )
         }
 
@@ -203,8 +210,8 @@ object ProjectRepository {
             words = wordsList,
             safetyReport = report,
             isApproved = false,
+            isDemo = isDemo,
             targetPlatform = "TikTok & Shorts (9:16)",
-            audioLoudnessLUFS = -14.1,
             audioSettings = AudioSettings(
                 selectedBgm = "Viral Podcast Beat",
                 bgmVolume = 0.18f,
@@ -313,7 +320,7 @@ object ProjectRepository {
         maxDuration: Int,
         targetClipsCount: Int,
         onStepUpdate: (String, Float) -> Unit
-    ) {
+    ): Boolean {
         val cleanName = if (sourceUrlOrName.isNotBlank()) sourceUrlOrName else "فيديو_مباشر_${System.currentTimeMillis()}.mp4"
         val jobId = "job_" + UUID.randomUUID().toString().take(6)
 
@@ -334,12 +341,32 @@ object ProjectRepository {
         }
 
         // Real API call to Gemini AI
-        val generatedClips = GeminiService.analyzeAndGenerateViralClips(
+        val analysis = GeminiService.analyzeAndGenerateViralClips(
             sourceUrlOrTranscript = sourceUrlOrName,
             targetClipsCount = targetClipsCount,
             minDurationSec = minDuration,
             maxDurationSec = maxDuration
         )
+
+        val generatedClips = when (analysis) {
+            is AnalysisResult.Success -> analysis.clips
+            is AnalysisResult.InvalidInput,
+            is AnalysisResult.NoApiKey,
+            is AnalysisResult.ApiError -> {
+                val failureMessage = when (analysis) {
+                    is AnalysisResult.InvalidInput -> analysis.message
+                    is AnalysisResult.ApiError -> analysis.message
+                    AnalysisResult.NoApiKey ->
+                        "لم يتم ضبط مفتاح Gemini. أضف مفتاحك من شاشة الإنشاء ثم أعد المحاولة."
+                    is AnalysisResult.Success -> "" // غير قابل للوصول: فرع النجاح معالج في when الخارجي
+                }
+                _batchQueue.value = _batchQueue.value.map {
+                    if (it.id == jobId) it.copy(status = "فشل", currentStep = failureMessage) else it
+                }
+                onStepUpdate("فشل: $failureMessage", 0.75f)
+                return false
+            }
+        }
 
         onStepUpdate("فحص الأمان ضد الإنذارات وتطبيق نمط هورموزي...", 0.75f)
         _batchQueue.value = _batchQueue.value.map {
@@ -349,7 +376,6 @@ object ProjectRepository {
         val enrichedClips = generatedClips.map { clip ->
             clip.copy(
                 targetPlatform = "TikTok & Shorts (9:16)",
-                audioLoudnessLUFS = -14.0,
                 retentionCurve = listOf(
                     RetentionPoint(0, 100, "بداية الخطاف (Hook 0-3s)"),
                     RetentionPoint(3, 89, "نهاية الزووم البصري"),
@@ -394,6 +420,7 @@ object ProjectRepository {
         )
         _projects.value = listOf(newProj) + _projects.value
         onStepUpdate("اكتمل التقطيع بنجاح!", 1.0f)
+        return true
     }
 
     fun addBatchCutJob(
@@ -435,6 +462,7 @@ object ProjectRepository {
         // Simulate new clips generated from processing
         val newClip = createClip(
             id = "clip_" + UUID.randomUUID().toString().take(5),
+            isDemo = true, // بيانات تجريبية مولدة محلياً لا نتيجة تحليل حقيقية
             title = "نصيحة ذهبية لتضاعف إنتاجك",
             arabicHookTitle = "💡 كيف تنجز مهام أسبوع في يومين فقط؟",
             duration = (minDuration + maxDuration) / 2,

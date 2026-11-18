@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -10,6 +11,8 @@ from pathlib import Path
 # Import scripts for direct processing
 import scripts.adjust_subtitles as adjust
 import scripts.burn_subtitles as burn
+
+logger = logging.getLogger(__name__)
 
 
 # Helper to format seconds to HH:MM:SS,mmm
@@ -83,7 +86,7 @@ def load_transcription_for_editor(json_path):
             
         return editor_data
     except Exception as e:
-        print(f"Error loading JSON for editor: {e}")
+        logger.warning("Error loading JSON for editor: %s", e)
         return []
 
 def resolve_video_candidate(json_full_path):

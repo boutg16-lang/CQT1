@@ -506,12 +506,25 @@ fun ClipCardCompact(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (clip.isDemo) {
+                        Surface(
+                            color = AccentGold.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "تجريبي",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AccentGold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Surface(
                         color = PrimaryIndigo.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = "Viral Score: ${clip.viralScore}",
+                            text = if (clip.viralScore != null) "Viral Score: ${clip.viralScore}" else "Viral Score: غير متاح",
                             style = MaterialTheme.typography.labelSmall,
                             color = PrimaryLight,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

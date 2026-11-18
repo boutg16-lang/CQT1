@@ -48,6 +48,7 @@ fun CreateScreen(
 
     var isSubmitting by remember { mutableStateOf(false) }
     var liveStepText by remember { mutableStateOf("جاري التحضير...") }
+    var pipelineErrorMessage by remember { mutableStateOf("") }
     var customApiKeyInput by remember { mutableStateOf(GeminiService.getEffectiveApiKey()) }
     var showApiKeyConfig by remember { mutableStateOf(false) }
 
@@ -531,7 +532,7 @@ fun CreateScreen(
                 onClick = {
                     isSubmitting = true
                     coroutineScope.launch {
-                        ProjectRepository.runRealAiVideoCuttingPipeline(
+                        val ok = ProjectRepository.runRealAiVideoCuttingPipeline(
                             sourceUrlOrName = videoSourceUrl,
                             modelOption = selectedModel,
                             framingMode = selectedFraming,
@@ -541,9 +542,13 @@ fun CreateScreen(
                             targetClipsCount = targetClipsCount
                         ) { step, progress ->
                             liveStepText = step
+                            if (step.startsWith("فشل")) pipelineErrorMessage = step
                         }
                         isSubmitting = false
-                        onProcessingStarted()
+                        if (ok) {
+                            pipelineErrorMessage = ""
+                            onProcessingStarted()
+                        }
                     }
                 },
                 enabled = !isSubmitting,
@@ -568,6 +573,18 @@ fun CreateScreen(
                         color = TextPrimary
                     )
                 }
+            }
+        }
+
+        // رسالة فشل صريحة بدلاً من نتائج وهمية
+        item {
+            if (pipelineErrorMessage.isNotBlank()) {
+                Text(
+                    text = pipelineErrorMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

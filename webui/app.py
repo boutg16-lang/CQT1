@@ -3,6 +3,7 @@ import base64
 import datetime
 import html as html_lib
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -11,6 +12,9 @@ import time
 import uuid
 
 _APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Export formats actually implemented by scripts/export_xml_lib/exporter.py.
+_SUPPORTED_EXPORT_FORMATS = ("premiere",)
 if _APP_ROOT not in sys.path:
     sys.path.insert(0, _APP_ROOT)
 try:
@@ -4010,7 +4014,103 @@ def _webui_auth():
     return None
 
 
+def _install_basic_auth(fastapi_app, auth):
+    """Install the HTTP basic-auth middleware on a FastAPI/Starlette app.
+
+    Used by BOTH launch branches: Gradio's auth=... only protects the routes
+    Gradio itself serves — routes mounted manually afterwards (/virals,
+    /export_xml_api) are NOT covered, as verified by
+    tests/test_custom_route_auth.py (unauthenticated GET returned HTTP 200
+    before this middleware existed). Install it BEFORE attach_extra_routes.
+    """
+    import base64 as _b64
+    import hmac
+    import threading
+    import time
+
+    from fastapi.responses import JSONResponse
+
+    _auth_user, _auth_pass = auth
+    _auth_user_bytes = _auth_user.encode("utf-8")
+    _auth_pass_bytes = _auth_pass.encode("utf-8")
+
+    # In-process brute-force throttle: MAX_AUTH_FAILURES failures per IP
+    # within AUTH_FAILURE_WINDOW seconds are answered with 429.
+    MAX_AUTH_FAILURES = 5
+    AUTH_FAILURE_WINDOW = 60.0
+    _auth_failures = {}
+    _auth_failures_lock = threading.Lock()
+
+    class _BasicAuthMiddleware:
+        """Pure ASGI middleware so it can also be attached post-startup
+        (the Windows branch launches the server with prevent_thread_lock
+        before attach_extra_routes runs)."""
+
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+            auth_header = ""
+            for key, value in scope.get("headers", []):
+                if key.decode("latin-1").lower() == "authorization":
+                    auth_header = value.decode("latin-1")
+                    break
+            client_ip = (scope.get("client") or ("unknown", 0))[0] or "unknown"
+            now = time.monotonic()
+            with _auth_failures_lock:
+                window = [t for t in _auth_failures.get(client_ip, []) if now - t < AUTH_FAILURE_WINDOW]
+                if len(window) >= MAX_AUTH_FAILURES:
+                    _auth_failures[client_ip] = window
+                    throttled = True
+                else:
+                    _auth_failures[client_ip] = window
+                    throttled = False
+            if throttled:
+                response = JSONResponse(
+                    {"error": "too many failed attempts; try again later"},
+                    status_code=429,
+                    headers={"Retry-After": str(int(AUTH_FAILURE_WINDOW))},
+                )
+                await response(scope, receive, send)
+                return
+
+            ok = False
+            if auth_header.lower().startswith("basic "):
+                try:
+                    decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
+                    u, _, pw = decoded.partition(":")
+                    # Constant-time comparison on both fields.
+                    ok = (hmac.compare_digest(u.encode("utf-8"), _auth_user_bytes)
+                          and hmac.compare_digest(pw.encode("utf-8"), _auth_pass_bytes))
+                except Exception:
+                    ok = False
+            if not ok:
+                with _auth_failures_lock:
+                    _auth_failures.setdefault(client_ip, []).append(now)
+                response = JSONResponse(
+                    {"error": "unauthorized"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="OUSSAMA Cutter"'},
+                )
+                await response(scope, receive, send)
+                return
+            await self.app(scope, receive, send)
+
+    try:
+        fastapi_app.add_middleware(_BasicAuthMiddleware)
+    except RuntimeError:
+        # gr.launch(prevent_thread_lock=True) has already started serving;
+        # drop the built stack so the next request rebuilds it with auth.
+        fastapi_app.middleware_stack = None
+        fastapi_app.add_middleware(_BasicAuthMiddleware)
+
+
 def _launch(argv=None):
+
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--colab", action="store_true", help="Run in Google Colab mode")
@@ -4100,6 +4200,10 @@ def _launch(argv=None):
             prevent_thread_lock=True,
             **_launch_theme_kwargs
         )
+        if auth:
+            # Same gap as the Windows branch: gr.launch(auth=...) does not
+            # cover routes mounted after launch, and the share URL is public.
+            _install_basic_auth(app, auth)
         app.mount("/virals", StaticFiles(directory=VIRALS_DIR), name="virals")
         demo.block_thread()
     else:
@@ -4113,7 +4217,7 @@ def _launch(argv=None):
             gr.set_static_paths(paths=allowed_dirs)
         except AttributeError:
             pass
-        from fastapi import BackgroundTasks
+        from fastapi import BackgroundTasks, Query
         from fastapi.responses import FileResponse
 
         def attach_extra_routes(fastapi_app):
@@ -4122,36 +4226,63 @@ def _launch(argv=None):
             install_health_route(fastapi_app)
             fastapi_app.mount("/virals", StaticFiles(directory=VIRALS_DIR), name="virals")
             @fastapi_app.get("/export_xml_api")
-            def export_xml_api(project: str, segment: int, background_tasks: BackgroundTasks, format: str = "premiere"):
+            def export_xml_api(
+                project: str,
+                background_tasks: BackgroundTasks,
+                segment: int = Query(ge=0, le=9999),
+                format: str = "premiere",
+            ):
+                from fastapi.responses import JSONResponse
+
+                _logger = logging.getLogger(__name__)
                 try:
+                    # Input validation: project name is required, segment is
+                    # bounded by the Query(ge=0, le=9999) constraint above.
+                    project = os.path.basename((project or "").strip()) or ""
+                    if not project:
+                        return JSONResponse({"error": "Project name is required."}, status_code=400)
+                    if str(format).strip().lower() not in _SUPPORTED_EXPORT_FORMATS:
+                        return JSONResponse(
+                            {"error": "Unsupported format. Supported: " + ", ".join(_SUPPORTED_EXPORT_FORMATS)},
+                            status_code=400,
+                        )
                     # SECURITY: only serve projects inside VIRALS_DIR. Reject
                     # anything that escapes it via "../" or absolute paths.
-                    project = os.path.basename((project or "").strip()) or ""
                     virals_root = os.path.abspath(VIRALS_DIR)
                     project_path = os.path.abspath(os.path.join(virals_root, project))
-                    if (not project
-                            or os.path.commonpath([project_path, virals_root]) != virals_root
+                    if (os.path.commonpath([project_path, virals_root]) != virals_root
                             or not os.path.isdir(project_path)):
-                        return {"error": "Project not found."}
+                        return JSONResponse({"error": "Project not found."}, status_code=404)
                     # Run the exporter IN-PROCESS — the packaged exe has no
                     # scripts/export_xml.py on disk, so a subprocess is
                     # impossible there; in-process works in both modes.
                     try:
                         from scripts.export_xml_lib.exporter import export_pack
-                    except Exception as e:
-                        return {"error": "Export module unavailable in this build: {}".format(e)}
+                    except Exception:
+                        _logger.exception("export_xml_lib unavailable in this build")
+                        return JSONResponse({"error": "Export module unavailable in this build."}, status_code=500)
                     try:
-                        export_pack(project_path, segment, format)
-                    except Exception as e:
-                        return {"error": "Export failed: {}".format(e)}
+                        zip_result = export_pack(project_path, segment, format)
+                    except ValueError as e:
+                        # Unknown output_format rejected by the exporter.
+                        return JSONResponse({"error": str(e)}, status_code=400)
+                    except Exception:
+                        _logger.exception("export_pack failed for project=%s segment=%s", project, segment)
+                        return JSONResponse({"error": "Export failed due to an internal error."}, status_code=500)
+                    if zip_result is None:
+                        return JSONResponse(
+                            {"error": "Segment not found in this project (no cut video for it)."}, status_code=404
+                        )
                     proj_name = os.path.basename(project_path)
                     zip_filename = f"export_{proj_name}_seg{segment}.zip"
                     file_path = os.path.join(project_path, zip_filename)
                     if os.path.exists(file_path):
                         return FileResponse(file_path, filename=zip_filename, media_type='application/zip')
-                    return {"error": f"File generation failed. Expected: {file_path}"}
-                except Exception as e:
-                    return {"error": str(e)}
+                    _logger.warning("export finished but zip missing: %s", file_path)
+                    return JSONResponse({"error": "File generation failed."}, status_code=500)
+                except Exception:
+                    _logger.exception("Unhandled error in /export_xml_api")
+                    return JSONResponse({"error": "Internal server error."}, status_code=500)
             print(f"Mounted /virals to {VIRALS_DIR}")
 
         if is_windows:
@@ -4169,6 +4300,8 @@ def _launch(argv=None):
                 prevent_thread_lock=True,
                 **_launch_theme_kwargs
             )
+            if webui_auth:
+                _install_basic_auth(app, webui_auth)
             attach_extra_routes(app)
             demo.block_thread()
         else:
@@ -4177,28 +4310,7 @@ def _launch(argv=None):
             _auth = _webui_auth()
             _validate_webui_exposure(_resolve_webui_host(), _auth)
             if _auth:
-                import base64 as _b64
-
-                from fastapi import Request
-                from fastapi.responses import JSONResponse
-                _auth_user, _auth_pass = _auth
-
-                @app.middleware("http")
-                async def _basic_auth_middleware(request: Request, call_next):
-                    auth_header = request.headers.get("authorization", "")
-                    ok = False
-                    if auth_header.lower().startswith("basic "):
-                        try:
-                            decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
-                            u, _, pw = decoded.partition(":")
-                            ok = (u == _auth_user and pw == _auth_pass)
-                        except Exception:
-                            ok = False
-                    if not ok:
-                        return JSONResponse({"error": "unauthorized"}, status_code=401,
-                                            headers={"WWW-Authenticate": 'Basic realm="OUSSAMA Cutter"'})
-                    return await call_next(request)
-
+                _install_basic_auth(app, _auth)
                 print("[webui] HTTP basic auth enabled (VIRALCUTTER_WEBUI_USER).")
             attach_extra_routes(app)
             if _GRADIO_MAJOR >= 6:

@@ -141,7 +141,7 @@ fun PublishScreen(
                                         color = TextPrimary
                                     )
                                     Text(
-                                        text = "${clip.durationSeconds} ثانية • Viral: ${clip.viralScore}%",
+                                        text = if (clip.viralScore != null) "${clip.durationSeconds} ثانية • Viral: ${clip.viralScore}%" else "${clip.durationSeconds} ثانية • Viral: غير متاح",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = TextSecondary
                                     )
