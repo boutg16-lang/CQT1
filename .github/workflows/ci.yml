@@ -91,7 +91,7 @@ jobs:
         run: python -m build --wheel --sdist
       - name: Run deterministic quality benchmark
         run: python -m scripts.quality_benchmark --output quality-benchmark-${{ matrix.python-version }}.json
-      - name: run: pytest -v
+      - name: Run unit tests
         run: pytest -v --cov=scripts --cov=webui --cov=app_version.py --cov-report=term --cov-fail-under=62
       # Upload LAST so a shared artifact-storage quota (issue #26) can never
       # hide the test result — previously this step failed the job before
