@@ -29,10 +29,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps first (layer caching)
-COPY requirements.txt requirements-dev.txt ./
+# Runtime deps only: requirements-dev.txt (pytest/ruff/pip-audit) must NOT
+# ship in the production image — it bloats the image and installs test
+# tooling (incl. opencv-python-headless, which conflicts with the
+# opencv-python in requirements.txt) into a container that only runs the
+# WebUI. Dev tooling belongs in CI (ci.yml) and local `make dev-install`.
+COPY requirements.txt ./
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt \
-    && pip install -r requirements-dev.txt
+    && pip install -r requirements.txt
 
 # App source
 COPY . .
