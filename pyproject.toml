@@ -37,7 +37,15 @@ dependencies = [
     # Keep the supported WhisperX/ONNX stack on the tested compatibility line.
     "onnxruntime<1.24",
     "cryptography",
-    # Gradio 6.31 requires Pillow<13; the temporary audit exception expires 2026-12-15.
+    # Pillow stays at 12.3.0 (latest 12.x) — NOT because of Gradio any more:
+    # Gradio 6.32.0 lifted its cap to pillow<14 (verified 2026-11-18 via
+    # PyPI metadata, a pip resolver dry-run, and a clean-venv import of
+    # gradio 6.32.0 + Pillow 13.0.0; the repo's image-thumbnail tests pass
+    # under Pillow 13). The blocker is now Python 3.10: Pillow 13.0.0
+    # requires Python >=3.11, but this repo still supports 3.10
+    # (requires-python >=3.10, CI matrix includes 3.10). Re-evaluate when
+    # 3.10 support is dropped. Temporary audit exception (see
+    # scripts/validate_dependency_audit.py) renewed to 2027-03-15.
     "Pillow==12.3.0",
     "scenedetect",
 ]

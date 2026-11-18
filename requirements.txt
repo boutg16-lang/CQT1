@@ -25,6 +25,9 @@ onnxruntime<1.24  # 1.24+ drops Python 3.10 wheels (matches pyproject.toml)
 cryptography
 
 # v7.23: thumbnail generator (Pillow) + scene detection (PySceneDetect, BSD-3)
-# Gradio 6.x currently requires Pillow<13; the temporary audit exception expires 2026-12-15.
+# Pillow stays at 12.3.0 (latest 12.x): Gradio 6.32.0 lifted its pillow<13
+# cap (now pillow<14), but Pillow 13.0.0 needs Python >=3.11 while this repo
+# still supports 3.10. Temporary audit exception renewed to 2027-03-15;
+# re-evaluate when 3.10 support is dropped (see pyproject.toml).
 Pillow==12.3.0
 scenedetect

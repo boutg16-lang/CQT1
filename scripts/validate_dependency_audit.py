@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-EXPIRES = date(2026, 12, 15)
+EXPIRES = date(2027, 3, 15)
 PILLOW_VERSION = "12.3.0"
 FILELOCK_VERSION = "4.1.0"
 ALLOWED_IDS = {
@@ -50,10 +50,15 @@ ALLOWED_IDS = {
     "GHSA-78g4-xqwv-q3g8",
     "CVE-2026-114501",
     "CVE-2026-112398",
-    # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0,
-    # blocked by Gradio's pillow<13 pin (pyproject.toml). Re-check when Gradio lifts the cap.
+    # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0.
+    # Gradio lifted its pillow<13 cap in 6.32.0 (now pillow<14, verified
+    # 2026-11-18 via PyPI metadata, a pip resolver dry-run, and a clean-venv
+    # import of gradio 6.32.0 + Pillow 13.0.0); the blocker is now Python
+    # 3.10 — Pillow 13.0.0 needs Python >=3.11 and this repo still supports
+    # 3.10. Re-check when 3.10 support is dropped; exception renewed
+    # 2026-11-18 to 2027-03-15.
     # PYSEC-2026-4363 (2026-11-12 refresh): same package/version ceiling; 12.3.0 is
-    # the newest release Gradio accepts, so there is no installable fixed build.
+    # the newest release installable on Python 3.10, so there is no installable fixed build.
     "PYSEC-2026-4363",
     "CVE-2026-128066",
     "CVE-2026-128067",
