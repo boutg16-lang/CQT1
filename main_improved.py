@@ -3,6 +3,23 @@ import logging
 import os
 import sys
 
+# Module logger for diagnostics. The WebUI streams this process with
+# stderr merged into stdout (webui/app.py: stderr=subprocess.STDOUT), so
+# warnings written here still appear in the live log; stdout itself is
+# reserved for PROGRESS| / DEVICE| lines and user-facing prints, which
+# this logger never touches. The module previously used bare root-logger
+# calls (logging.debug/warning); routing them through this named logger
+# keeps the stream, levels and messages identical while making the source
+# identifiable. propagate=False keeps each record on stderr exactly once
+# if a root handler is ever configured later. No print call is converted:
+# the 8.10.1 live log streaming reads stdout, so prints stay prints.
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    _stderr_handler = logging.StreamHandler(sys.stderr)
+    _stderr_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logger.addHandler(_stderr_handler)
+    logger.propagate = False
+
 # Suppress unnecessary logs before importing heavy libs
 os.environ["ORT_LOGGING_LEVEL"] = "3" 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -30,7 +47,7 @@ if _APP_ROOT not in sys.path:
 try:
     from scripts.model_paths import configure_model_cache
 except Exception:
-    logging.debug("configure_model_cache unavailable; using default cache paths", exc_info=True)
+    logger.debug("configure_model_cache unavailable; using default cache paths", exc_info=True)
 else:
     configure_model_cache()
 
@@ -301,12 +318,12 @@ def _launch_webui():
                     sys.executable if getattr(sys, "frozen", False) else __file__)),
                 "crash_report.log"))
         except Exception:
-            logging.warning("Could not write crash_report.log", exc_info=True)
+            logger.warning("Could not write crash_report.log", exc_info=True)
         if getattr(sys, "frozen", False):
             try:
                 input("Press Enter to close this window...")
             except Exception:
-                logging.debug("Could not pause before closing window", exc_info=True)
+                logger.debug("Could not pause before closing window", exc_info=True)
         return 1
 
 
@@ -685,7 +702,7 @@ def main():
         from app_version import VERSION as _VERSION
         print("{} v{} (check: update the project / see docs)".format(APP_NAME, _VERSION))
     except Exception:
-        logging.debug("app_version unavailable", exc_info=True)
+        logger.debug("app_version unavailable", exc_info=True)
 
     # Escape hatch for testing without whisperx/torch (read by transcribe_video)
     if args.allow_placeholder_transcription:
@@ -1099,7 +1116,7 @@ def main():
             try:
                 _interactive_tty = sys.stdin.isatty()
             except Exception:
-                logging.debug("stdin isatty check failed", exc_info=True)
+                logger.debug("stdin isatty check failed", exc_info=True)
             _auth_retried = False
             while True:
                 try:
