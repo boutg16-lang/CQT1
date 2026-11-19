@@ -18,7 +18,7 @@
 - Subtitle retiming maps timestamps through actual removed intervals, including partial cut intersections; a saved baseline prevents repeated polishing from accumulating timing shifts, manual transcript edits become the next baseline, and malformed tracking state safely resets from the current transcript.
 - Atomic subtitle writes reduce the chance of leaving a truncated transcript after interruption.
 - Opening-hook auto-trim rejects missing, non-numeric, non-finite, negative, zero-duration, reversed, or out-of-order word timings and avoids cutting into the first content word. Up to 50 ms of alignment-rounding overlap is allowed; auto-trim remains opt-in.
-- Regression coverage: `tests/test_editing_modules.py` and `tests/test_hook_autotrim.py`; release validation details are in `docs/RELEASE_NOTES_7.52.2_AR.md`.
+- Regression coverage: `tests/test_editing_modules.py` and `tests/test_hook_autotrim.py`; release validation details are in `docs/archive/RELEASE_NOTES_7.52.2_AR.md`.
 
 # OUSSAMA Cutter 7.52.0-pro candidate
 
@@ -277,7 +277,7 @@ WhisperX وTorch وGPU اختيارية لأنها تعتمد على نظام ا
 - منع الرفع المكرر ببصمة SHA-256 وحاجز Public صريح وDry Run آمن.
 - تشخيص Windows لمسارات D وTEMP وFFmpeg وDeno وTorch/CUDA وWhisperX وOAuth.
 - فحص إعدادات قبل البدء، تنظيم RTL، بطاقة backup/restore، وتحليل publish history المحلي.
-- ملاحظات الإصدار التفصيلية: docs/RELEASE_NOTES_7.12.0_PRO_AR.md.
+- ملاحظات الإصدار التفصيلية: docs/archive/RELEASE_NOTES_7.12.0_PRO_AR.md.
 
 ## 7.45.0-pro — تحصين طبقة السلامة والموثوقية — 29 سبتمبر 2026
 
@@ -306,7 +306,7 @@ WhisperX وTorch وGPU اختيارية لأنها تعتمد على نظام ا
   (`docs/ISSUE_25_workflow_fix.patch` + `docs/ISSUE_25_WORKFLOW_FIX_AR.md`) واختبار
   `test_release_workflow_consistency.py` يقفل العقد بين الـ workflow والـ spec.
 
-الملاحظات التفصيلية: `docs/RELEASE_NOTES_7.45.0_AR.md`. المجموعة الكاملة:
+الملاحظات التفصيلية: `docs/archive/RELEASE_NOTES_7.45.0_AR.md`. المجموعة الكاملة:
 1612 اختباراً ناجحاً (+1 متخطّى)، `ruff check .` نظيف.
 
 ## 7.46.0-pro — فحص قبول Windows + RTX 3060 — 29 سبتمبر 2026

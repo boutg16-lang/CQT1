@@ -3,7 +3,7 @@
 > This file contains historical development notes. Version, test-count, and roadmap statements may be stale; verify them against the current source, `app_version.py`, `changelog.md`, and test suite before relying on them.
 
 ## Done
-- ✅ Test suite: 1414 tests (`tests/`) covering i18n, subtitle helpers, JSON cutting, saving, and WebUI utils. Run with `pytest` (install `requirements-dev.txt`).
+- ✅ Test suite (`tests/`) covering i18n, subtitle helpers, JSON cutting, saving, and WebUI utils. See the current test count and coverage in CI (`.github/workflows/ci.yml`) instead of a hard-coded number here — the count changes with every test added. Run with `pytest` (install `requirements-dev.txt`).
 - ✅ i18n overhaul: `ar_SA.json` fully covers every UI/CLI string; `en_US.json` cleaned (had 71 Arabic values); `pt_BR`/`tr_TR` completed with English fallback. Coverage guarded by `tests/test_i18n_completeness.py`.
 - ✅ Locale loading no longer depends on the current working directory.
 - ✅ Language is configurable: `VIRALCUTTER_LANG` env var (default `ar_SA`).
@@ -78,7 +78,7 @@ The upload path is not an automated guarantee that a video will avoid every copy
 - ✅ WebUI imports now support both `python webui/app.py` and package mode (`python -m webui.app` / `import webui.app`).
 - ✅ Added package initializers for `webui`, `scripts`, and `i18n` so editable and built installations discover all modules reliably.
 - ✅ Added console commands from `pyproject.toml`: `viralcutter` and `viralcutter-webui`.
-- ✅ Corrected the distribution version to valid PEP 440 syntax (`7.0.1+pro`) while preserving the UI version label `7.0.1-pro`.
+- ✅ Corrected the distribution version to valid PEP 440 syntax (`7.0.1+pro`) while preserving the UI version label `7.0.1-pro`. (Historical entry from 2026-08-12 — the version cited is the one current at that date, not the current 8.10.1.)
 - ✅ Hardened the optional MediaPipe test for Python 3.12 and environments where MediaPipe is installed.
 
 ### Verified commands

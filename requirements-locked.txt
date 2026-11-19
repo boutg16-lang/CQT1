@@ -1,0 +1,33 @@
+# requirements-locked.txt — pinned runtime dependencies for OUSSAMA Cutter
+#
+# Generated 2026-11-18 from uv.lock at commit d3fb45b0e0fe562d956c76b775db494e28e73816 (main, 8.10.1).
+# It pins exactly the direct runtime dependencies that are left unpinned
+# in pyproject.toml [project] dependencies; the already-bounded deps
+# (numpy<2, websockets>=16.1.1,<17, requests>=2.31,<3, onnxruntime<1.24,
+# Pillow==12.3.0, gradio>=6.7,<7) are NOT duplicated here — see
+# pyproject.toml and requirements.txt for those.
+#
+# Regenerate after updating uv.lock (e.g. `uv lock`):
+#   uv export --format requirements-txt --no-dev --no-hashes \
+#     | keep the lines for the direct runtime deps below, or
+#   re-extract them from uv.lock with Python tomllib (name -> version
+#   per [[package]] entry) and pin each as `name==<locked version>`.
+# `uv export` produces the full transitive set; this file intentionally
+# keeps only the direct runtime deps, so it stays reviewable.
+#
+# This file is a pinning reference. The documented install paths still
+# use requirements.txt; nothing in this file changes any installer.
+
+g4f==8.1.1
+yt-dlp[default]==2026.7.4
+ffmpeg-python==0.2.0
+mediapipe==1.0.0
+google-genai==2.17.0
+insightface==1.0.1
+opencv-python==4.11.0.86
+psutil==7.2.2
+fastapi==0.141.1
+uvicorn==0.52.1
+tqdm==4.70.0
+cryptography==50.0.0
+scenedetect==0.7.1
