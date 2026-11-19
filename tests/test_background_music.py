@@ -293,20 +293,75 @@ def test_main_json_reports_skipped_when_no_music(tmp_path, monkeypatch, capsys):
     assert out.read_bytes() == b"video-bytes"
 
 
-def test_apply_same_file_copy_reports_error(tmp_path):
-    # Copying the clip onto itself raises SameFileError inside the
-    # no-music path; apply_background_music reports it instead of raising.
+def test_apply_same_file_no_music_succeeds_without_copy(tmp_path, monkeypatch):
+    # Regression test: copying the clip onto itself used to raise
+    # SameFileError inside the no-music path, turning a safe skip into a
+    # failure. The copy is now skipped and the clip is left untouched.
     clip = _make_clip(tmp_path)
+    calls = []
+    monkeypatch.setattr(background_music.shutil, "copy2",
+                        lambda *a: calls.append(a))
     report = background_music.apply_background_music(str(clip), None, str(clip))
-    assert report["ok"] is False
+    assert report["ok"] is True
     assert report["skipped"] == "no music file found"
-    assert "same file" in report["error"]
+    assert "error" not in report
+    assert calls == []
+    assert clip.read_bytes() == b"video-bytes"
 
 
-def test_main_defaults_out_to_video_and_fails_same_file(tmp_path, monkeypatch, capsys):
-    # Without --out, main() copies the clip onto itself: the report is
-    # not ok, main() returns 1, and the skipped message is still printed.
+def test_apply_same_file_via_different_spelling_skips_copy(tmp_path, monkeypatch):
+    clip = _make_clip(tmp_path)
+    calls = []
+    monkeypatch.setattr(background_music.shutil, "copy2",
+                        lambda *a: calls.append(a))
+    monkeypatch.chdir(tmp_path)
+    report = background_music.apply_background_music("clip.mp4", None, "./clip.mp4")
+    assert report["ok"] is True
+    assert calls == []
+    assert clip.read_bytes() == b"video-bytes"
+
+
+def test_apply_same_file_no_audio_succeeds_without_copy(tmp_path, monkeypatch):
+    clip = _make_clip(tmp_path)
+    music = _make_music(tmp_path)
+    calls = []
+    monkeypatch.setattr(background_music.shutil, "copy2",
+                        lambda *a: calls.append(a))
+    _stub_run(monkeypatch, lambda *a, **k: _FakeResult(stdout=""))
+    report = background_music.apply_background_music(
+        str(clip), str(music), str(clip))
+    assert report["ok"] is True
+    assert report["skipped"] == "clip has no audio stream"
+    assert "error" not in report
+    assert calls == []
+    assert clip.read_bytes() == b"video-bytes"
+
+
+def test_apply_same_file_probe_failure_keeps_error_without_copy(tmp_path, monkeypatch):
+    clip = _make_clip(tmp_path)
+    music = _make_music(tmp_path)
+    calls = []
+    monkeypatch.setattr(background_music.shutil, "copy2",
+                        lambda *a: calls.append(a))
+
+    def boom(*a, **k):
+        raise OSError("ffprobe missing")
+
+    _stub_run(monkeypatch, boom)
+    report = background_music.apply_background_music(
+        str(clip), str(music), str(clip))
+    assert report["ok"] is False
+    assert "ffprobe" in report["error"]
+    assert calls == []
+    assert clip.read_bytes() == b"video-bytes"
+
+
+def test_main_defaults_out_to_video_and_succeeds(tmp_path, monkeypatch, capsys):
+    # Without --out, main() used to copy the clip onto itself: the report
+    # was not ok and main() returned 1. The copy is now skipped, so a
+    # no-music run reports success and leaves the clip untouched.
     clip = _make_clip(tmp_path)
     monkeypatch.setattr(sys, "argv", ["background_music.py", "--video", str(clip)])
-    assert background_music.main() == 1
+    assert background_music.main() == 0
     assert "no music file found" in capsys.readouterr().out
+    assert clip.read_bytes() == b"video-bytes"

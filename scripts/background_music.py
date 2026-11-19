@@ -54,6 +54,22 @@ def _has_audio_stream(video_path):
         return None
 
 
+def _same_file(a, b):
+    """True when both paths name the same file (same absolute path)."""
+    return os.path.abspath(a) == os.path.abspath(b)
+
+
+def _copy_clip(video_path, out_path):
+    """Copy the clip unless out_path is the clip itself (then a no-op).
+
+    shutil.copy2 raises SameFileError when source and destination are the
+    same file, so callers that pass out_path == video_path (e.g. the CLI
+    default --out) must skip the copy instead of failing.
+    """
+    if not _same_file(video_path, out_path):
+        shutil.copy2(video_path, out_path)
+
+
 def apply_background_music(video_path, music_path, out_path,
                            music_volume=0.15, duck_threshold=0.02,
                            duck_ratio=10, duck_attack=80, duck_release=500):
@@ -64,17 +80,17 @@ def apply_background_music(video_path, music_path, out_path,
             return report
         if not music_path or not os.path.exists(music_path):
             report["skipped"] = "no music file found"
-            shutil.copy2(video_path, out_path)
+            _copy_clip(video_path, out_path)
             report["ok"] = True
             return report
         has_audio = _has_audio_stream(video_path)
         if has_audio is None:
             report["error"] = "could not verify the clip audio stream with ffprobe"
-            shutil.copy2(video_path, out_path)
+            _copy_clip(video_path, out_path)
             return report
         if not has_audio:
             report["skipped"] = "clip has no audio stream"
-            shutil.copy2(video_path, out_path)
+            _copy_clip(video_path, out_path)
             report["ok"] = True
             return report
 
@@ -107,8 +123,8 @@ def apply_background_music(video_path, music_path, out_path,
                        "limiter": {"limit": 0.95, "attack_ms": 5, "release_ms": 50}})
     except Exception as e:
         report["error"] = str(e)
-        if os.path.exists(video_path) and out_path != video_path:
-            shutil.copy2(video_path, out_path)
+        if os.path.exists(video_path):
+            _copy_clip(video_path, out_path)
     return report
 
 
