@@ -8,6 +8,7 @@ receive new safety terms — so the sync itself is a tested invariant.
 """
 
 import datetime
+import hashlib
 import json
 import os
 import sys
@@ -17,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import export_blocklist_pack, safety_filter
+from scripts import safety_updater as su
 
 
 def _run(monkeypatch, *argv):
@@ -66,6 +68,19 @@ def test_export_requires_version(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         export_blocklist_pack.main()
     assert exc.value.code == 2
+
+
+def test_export_writes_matching_sha256_sidecar(tmp_path, monkeypatch):
+    out = tmp_path / "pack.json"
+    _run(monkeypatch, "--version", "99", "--out", str(out))
+
+    sidecar = tmp_path / "pack.json.sha256"
+    assert sidecar.exists(), "export must publish a .sha256 sidecar next to the pack"
+    raw = out.read_bytes()
+    expected = hashlib.sha256(raw).hexdigest()
+    assert sidecar.read_text(encoding="utf-8") == "{}  pack.json\n".format(expected)
+    assert su.parse_sidecar(sidecar.read_text(encoding="utf-8")) == expected
+    assert su.verify_pack_bytes(raw, expected)
 
 
 def test_committed_pack_is_in_sync_with_builtin_blocklist():

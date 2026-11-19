@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the v7.18 multi-source blocklist merge + watch helpers."""
 
+import hashlib
 import json
 import os
 import sys
@@ -101,7 +102,13 @@ class TestMergePacks:
 class TestMultiSourceUpdate:
     def _pack_path(self, tmp_path, pack, name="pack.json"):
         p = tmp_path / name
-        p.write_text(json.dumps(pack, ensure_ascii=False), encoding="utf-8")
+        raw = json.dumps(pack, ensure_ascii=False).encode("utf-8")
+        p.write_bytes(raw)
+        # Packs are SHA-256 verified against a sidecar (see
+        # test_safety_pack_hash.py) — the helper publishes a matching one.
+        (tmp_path / (name + ".sha256")).write_text(
+            "{}  {}\n".format(hashlib.sha256(raw).hexdigest(), name), encoding="utf-8"
+        )
         return p.as_uri()
 
     def _cache(self, tmp_path, version=0, terms=None):
