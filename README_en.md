@@ -66,7 +66,7 @@ See the [security and network policy](SECURITY.md#network-and-data-flow) for wha
 
 ### Prerequisites (From Scratch Setup)
 
-To run ViralCutter on a fresh computer, you need to install the following core tools:
+To run OUSSAMA Cutter on a fresh computer, you need to install the following core tools:
 
 1. **Visual Studio C++ Build Tools**
    Required to compile `insightface` and avoid "Cpp/Visual Studio" setup errors.
@@ -92,7 +92,7 @@ To run ViralCutter on a fresh computer, you need to install the following core t
 ### Step-by-Step Installation
 
 1.  **Install Dependencies via Script**
-    Open the ViralCutter folder and double-click **one of the installers** below:
+    Open the OUSSAMA Cutter folder and double-click **one of the installers** below:
     *   `install_dependencies.bat`: **Standard** installation (Recommended). Faster and fail-proof. Uses cloud AIs like Gemini (Free) and GPT-4.
     *   `install_dependencies_advanced_LocalLLM.bat`: **Advanced** installation. Dedicated for users who want to run full offline AIs on their hardware (Llama 3, etc). Requires a good GPU and *C++ Build Tools*.
     
@@ -100,7 +100,7 @@ To run ViralCutter on a fresh computer, you need to install the following core t
 
 2.  **Configure AI (Optional)**
     -   **Gemini (Recommended/Free)**: Set `GEMINI_API_KEY` in your user environment, or set `VIRALCUTTER_CONFIG_PASSPHRASE` before saving a key through the WebUI. UI-entered keys are encrypted into `api_config.secure.json`; the app refuses to write new keys in plaintext. Existing `api_config.json` keys remain readable for migration.
-    -   **Local (GGUF)**: Download your favorite `.gguf` models and place them in the `models/` folder. ViralCutter will detect them automatically.
+    -   **Local (GGUF)**: Download your favorite `.gguf` models and place them in the `models/` folder. OUSSAMA Cutter will detect them automatically.
 
 3.  **Run**
     -   Double-click `run_webui.bat` to open the interface in your browser.
@@ -111,7 +111,7 @@ To run ViralCutter on a fresh computer, you need to install the following core t
 **Viral Clip with Highlight Captions**  
 <video src="https://github.com/user-attachments/assets/7a32edce-fa29-4693-985f-2b12313362f3" controls></video>
 
-**Direct Comparison: Opus Clip vs ViralCutter** (same input video)  
+**Direct Comparison: Opus Clip vs OUSSAMA Cutter** (same input video)  
 <video src="https://github.com/user-attachments/assets/12916792-dc0e-4f63-a76b-5698946f50f4" controls></video>
 
 **2-Face Split Screen Mode**  
@@ -154,7 +154,7 @@ Full details: [ROADMAP_REPORT.md](docs/ROADMAP_REPORT.md#-section-6).
 
 ## Contribute!
 
-ViralCutter is community-maintained. Join us to democratize AI content creation!
+OUSSAMA Cutter is community-maintained. Join us to democratize AI content creation!
 -   **Discord**: [AI Hub Brasil](https://discord.gg/aihubbrasil)
 -   **Github**: Give us a ⭐ star if this project helped you!
 
@@ -168,4 +168,4 @@ ViralCutter is community-maintained. Join us to democratize AI content creation!
 
 
 **Current Version**: 8.10.1-ultimate — model downloads and transcription now stream live progress (`\r`-aware logs, heartbeat lines, Xet disabled by default) instead of appearing frozen at the Hugging Face warning
-*ViralCutter: Because viral clips shouldn't cost a fortune.* 🚀
+*OUSSAMA Cutter: Because viral clips shouldn't cost a fortune.* 🚀
