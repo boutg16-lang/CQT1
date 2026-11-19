@@ -10,9 +10,17 @@ so this is how maintainers push new words to all users:
 
 (remember to bump N on every change — equal or lower versions are ignored
 by clients)
+
+The export also writes a SHA-256 sidecar ``safety_blocklist.json.sha256``
+(sha256sum format) next to the pack, computed from the exact bytes written.
+The updater verifies every download against that sidecar before installing
+it, so commit BOTH files together — a pack without its sidecar is rejected
+by clients. Update procedure: run this script, then commit the pack and
+its sidecar in the same commit.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -63,7 +71,16 @@ def main():
         "safety_blocklist.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(pack, f, ensure_ascii=False, indent=2)
+    # SHA-256 sidecar: computed from the exact bytes just written, so the
+    # digest matches what clients download. Keep the pack and its sidecar
+    # in the same commit — clients reject a pack without a matching sidecar.
+    with open(out, "rb") as f:
+        digest = hashlib.sha256(f.read()).hexdigest()
+    sidecar = out + ".sha256"
+    with open(sidecar, "w", encoding="utf-8") as f:
+        f.write("{}  {}\n".format(digest, os.path.basename(out)))
     print(f"Exported {len(terms)} terms (v{args.version}) -> {out}")
+    print(f"SHA-256 sidecar ({digest[:12]}…) -> {sidecar}")
 
 
 if __name__ == "__main__":
