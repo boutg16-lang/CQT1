@@ -2378,5 +2378,5 @@ $env:VIRALCUTTER_TRANSCRIPTION_BACKEND="faster-whisper"
 
 ### Tests and documentation
 - أضيفت اختبارات للتكرار الحرفي وعبر المشاريع ونافذة المصدر والتداخل الدلالي وحد النشر وقاطع القناة والتوقف قبل OAuth.
-- أضيف `docs/AUTOMATIC_YOUTUBE_SAFETY_AR.md` و`docs/RELEASE_NOTES_7.13.0_PRO_AR.md`.
+- أضيف `docs/AUTOMATIC_YOUTUBE_SAFETY_AR.md` و`docs/archive/RELEASE_NOTES_7.13.0_PRO_AR.md`.
 - اجتاز regression الكامل **691 اختباراً**، مع `ruff` و`compileall`.
