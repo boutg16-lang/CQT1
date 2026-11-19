@@ -391,11 +391,11 @@ def test_process_file_watermark_failure_is_degraded(monkeypatch, tmp_path):
     assert report["ok"] is False
     assert report["degraded"] is True
     assert report["watermark"] is False
-    # NOTE: the "watermark rendering failed" message is overwritten here —
-    # process_file tries to os.replace the staged .wm.mp4 file that the
-    # failed watermark never created, and the rename error replaces it.
-    # The fallback copy still happens.
-    assert "wm.mp4" in report["error"]
+    # NOTE: fixed by PR #102 — process_file now only attempts the rename
+    # when the staged .wm.mp4 exists, so the original
+    # "watermark rendering failed" message is kept. The fallback copy
+    # still happens.
+    assert "watermark rendering failed" in report["error"]
     assert out.read_bytes() == b"video-bytes"
 
 
