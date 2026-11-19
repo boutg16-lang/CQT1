@@ -97,6 +97,14 @@ i18n = I18nAuto(DEFAULT_LANGUAGE)
 # Leaf pipeline utilities (verbose gate, PROGRESS| protocol, temp-file
 # cleanup, subtitle BGR palette, JSON/interval helpers) — extracted from this
 # file into scripts/pipeline_utils.py; behaviour is unchanged.
+# Runtime backend/device resolution lives in scripts/backend_resolution.py
+# (monolith split, step 5). Re-exported here so existing import paths
+# (``main_improved.describe_transcription_device`` /
+# ``main_improved.resolve_safety_backend``) keep working unchanged.
+from scripts.backend_resolution import (
+    describe_transcription_device,
+    resolve_safety_backend,
+)
 from scripts.pipeline_utils import (
     COLORS,
     cleanup_temp_files,
@@ -107,30 +115,6 @@ from scripts.pipeline_utils import (
     set_verbose,
 )
 
-
-def describe_transcription_device(requested):
-    """Resolve the actual transcription device for the live WebUI status."""
-    requested = str(requested or "auto").strip().lower()
-    if requested not in {"auto", "cpu", "cuda"}:
-        requested = "auto"
-    try:
-        import torch
-        cuda_available = bool(torch.cuda.is_available())
-        if requested == "cuda" and not cuda_available:
-            return {"actual": "unavailable", "requested": requested, "name": "", "message": "CUDA مطلوبة لكن بطاقة NVIDIA غير متاحة"}
-        actual = "cuda" if requested == "cuda" or (requested == "auto" and cuda_available) else "cpu"
-        name = ""
-        if actual == "cuda":
-            try:
-                name = torch.cuda.get_device_name(0)
-            except Exception:
-                name = "NVIDIA GPU"
-        label = "NVIDIA GPU / CUDA" if actual == "cuda" else "CPU"
-        detail = " — {}".format(name) if name else ""
-        return {"actual": actual, "requested": requested, "name": name, "message": "يعمل الآن بواسطة {}{}".format(label, detail)}
-    except Exception:
-        return {"actual": "cpu", "requested": requested, "name": "", "message": "يعمل الآن بواسطة CPU (Torch/CUDA غير قابل للفحص)"}
-#
 
 def record_project_state(project_folder, status, *, error=None, args=None, source=None):
     """Best-effort durable project status for both CLI and WebUI runs."""
@@ -388,37 +372,6 @@ def _preflight_or_exit(mode="auto-fix"):
         print("[preflight] could not run the environment check ({}).".format(e))
         print("[preflight] continuing anyway — install dependencies manually if things break.")
         return 0
-
-
-def resolve_safety_backend(requested, ai_backend, api_key=None):
-    """Choose the contextual safety reviewer without changing viral analysis."""
-    requested = str(requested or "auto").strip().lower()
-    openai_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("OPENAI_MODERATION_API_KEY", "").strip()
-    gemini_key = str(api_key or "").strip() if ai_backend == "gemini" else os.getenv("GEMINI_API_KEY", "").strip()
-
-    if requested == "auto":
-        # A custom OpenAI-compatible server (Ollama/LM Studio/OpenRouter) is
-        # not guaranteed to expose /moderations, so those backends never
-        # auto-select it. A plain OPENAI_API_KEY still does for manual/gemini/
-        # g4f runs, preserving the documented behaviour.
-        if ai_backend in {"openai", "auto"}:
-            if ai_backend == "auto" and (gemini_key or api_key):
-                return "gemini", gemini_key or api_key
-            return "local", None
-        if openai_key:
-            return "openai-moderation", openai_key
-        if ai_backend in {"gemini", "g4f"}:
-            return ai_backend, gemini_key or api_key
-        if gemini_key:
-            return "gemini", gemini_key
-        return "local", None
-    if requested == "openai-moderation":
-        return requested, openai_key or (api_key if ai_backend == "openai-moderation" else None)
-    if requested == "gemini":
-        return requested, gemini_key or (api_key if ai_backend == "gemini" else None)
-    if requested == "g4f":
-        return requested, api_key
-    return "local", None
 
 
 def _contextual_review_text(segment, transcript_segments):
