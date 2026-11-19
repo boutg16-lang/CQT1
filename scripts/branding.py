@@ -228,8 +228,16 @@ def process_file(video_path, out_path=None, logo_path=None, position="bottom-rig
         else:
             report["intro_outro"] = False
             if staged != out_path:
-                os.replace(staged, out_path)
-                staged = out_path
+                if os.path.exists(staged):
+                    os.replace(staged, out_path)
+                    staged = out_path
+                elif (os.path.exists(video_path)
+                        and os.path.abspath(video_path) != os.path.abspath(out_path)):
+                    # The watermark step failed before creating the staged
+                    # file: fall back to a plain copy and keep the original
+                    # "watermark rendering failed" error instead of letting
+                    # the missing-file rename overwrite it.
+                    shutil.copy2(video_path, out_path)
         if staged != out_path and os.path.exists(staged):
             try:
                 os.remove(staged)
