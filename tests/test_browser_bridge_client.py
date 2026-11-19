@@ -14,7 +14,6 @@ def test_browser_bridge_health_route_identifies_the_cat_webui():
     assert route.endpoint() == {"service": "oussama-cutter", "ok": True}
 
 
-
 def test_project_preflight_auto_detects_cat_when_default_port_is_busy(monkeypatch):
     calls = []
 
@@ -111,7 +110,9 @@ def test_project_preflight_rejects_non_cat_local_services(monkeypatch):
     assert client._t("The pairing code has not been used.") in str(error.value)
 
 
-def test_project_preflight_explains_unreachable_local_app_without_consuming_code(monkeypatch):
+def test_project_preflight_explains_unreachable_local_app_without_consuming_code(
+    monkeypatch,
+):
     class FakeConnection:
         def __init__(self, host, port, timeout):
             pass
@@ -206,6 +207,7 @@ def test_action_result_redacts_secret_text_before_sharing():
     result = policy.redact_sensitive_text(text)
     assert "privatevalue" not in result
     assert "abcdefghijklmnop" not in result
+
 
 def test_relay_url_is_pinned_to_the_owned_https_service():
     assert agent.DEFAULT_RELAY_URL == "https://cqt1-browser-bridge-369880.zocomputer.io"

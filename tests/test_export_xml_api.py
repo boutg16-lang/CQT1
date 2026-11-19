@@ -6,6 +6,7 @@ contract: 400 for bad input (empty project / unknown format), 404 for an
 unknown project, 422 for out-of-range segment values (FastAPI Query bounds),
 and no internal details leaked in error bodies.
 """
+
 import os
 import socket
 import sys

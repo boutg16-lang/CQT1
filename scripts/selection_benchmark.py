@@ -49,6 +49,7 @@ GOLD_COVERAGE = 0.5
 # Metric
 # ---------------------------------------------------------------------------
 
+
 def coverage(gold: Tuple[float, float], output: Tuple[float, float]) -> float:
     """Fraction of the gold window covered by the output window (0..1)."""
     g_start, g_end = float(gold[0]), float(gold[1])
@@ -59,10 +60,13 @@ def coverage(gold: Tuple[float, float], output: Tuple[float, float]) -> float:
     return intersection / (g_end - g_start)
 
 
-def evaluate(gold: Sequence[Tuple[float, float]],
-             outputs: Sequence[Tuple[float, float]], *,
-             k: Optional[int] = None,
-             min_coverage: float = GOLD_COVERAGE) -> Dict[str, Any]:
+def evaluate(
+    gold: Sequence[Tuple[float, float]],
+    outputs: Sequence[Tuple[float, float]],
+    *,
+    k: Optional[int] = None,
+    min_coverage: float = GOLD_COVERAGE,
+) -> Dict[str, Any]:
     """Recall@k over gold windows, plus per-gold diagnostics."""
     limit = len(outputs) if k is None else int(k)
     if limit < 0:
@@ -80,12 +84,14 @@ def evaluate(gold: Sequence[Tuple[float, float]],
                 best_rank, best_cov = rank, cov
         recalled = best_cov >= float(min_coverage)
         hits += int(recalled)
-        details.append({
-            "gold": [round(float(window[0]), 2), round(float(window[1]), 2)],
-            "recalled": recalled,
-            "best_rank": best_rank,
-            "coverage": round(best_cov, 3),
-        })
+        details.append(
+            {
+                "gold": [round(float(window[0]), 2), round(float(window[1]), 2)],
+                "recalled": recalled,
+                "best_rank": best_rank,
+                "coverage": round(best_cov, 3),
+            }
+        )
     return {
         "k": limit,
         "gold_total": len(gold),
@@ -99,6 +105,7 @@ def evaluate(gold: Sequence[Tuple[float, float]],
 # ---------------------------------------------------------------------------
 # Fixture handling
 # ---------------------------------------------------------------------------
+
 
 def _window(entry: Any, keys: Sequence[str]) -> Optional[Tuple[float, float]]:
     if not isinstance(entry, dict):
@@ -132,7 +139,9 @@ def validate_fixture(fixture: Dict[str, Any]) -> List[str]:
     else:
         for i, cand in enumerate(candidates):
             if _window(cand, ("start_time", "end_time")) is None:
-                problems.append("candidates[{}] has no valid start_time/end_time".format(i))
+                problems.append(
+                    "candidates[{}] has no valid start_time/end_time".format(i)
+                )
                 break
     gold = fixture.get("gold")
     if not isinstance(gold, list) or not gold:
@@ -189,34 +198,46 @@ def demo_fixture() -> Dict[str, Any]:
         # fill the window with sentence-level transcript entries
         cursor = start
         while cursor < end:
-            transcript.append({
-                "start": round(cursor, 2),
-                "end": round(min(cursor + 4.0, end), 2),
-                "text": text,
-            })
+            transcript.append(
+                {
+                    "start": round(cursor, 2),
+                    "end": round(min(cursor + 4.0, end), 2),
+                    "text": text,
+                }
+            )
             cursor += 5.0
-        candidates.append({
-            "start_time": start,
-            "end_time": end,
-            "title": ("لحظة قوية" if is_gold else "مقطع عادي"),
-            "text": text,
-            "score": score,
-        })
+        candidates.append(
+            {
+                "start_time": start,
+                "end_time": end,
+                "title": ("لحظة قوية" if is_gold else "مقطع عادي"),
+                "text": text,
+                "score": score,
+            }
+        )
         if is_gold:
             gold.append({"start": start, "end": end})
         t = end + 2.0
-    return {"name": "demo", "transcript": transcript,
-            "candidates": candidates, "gold": gold}
+    return {
+        "name": "demo",
+        "transcript": transcript,
+        "candidates": candidates,
+        "gold": gold,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Benchmark run
 # ---------------------------------------------------------------------------
 
-def run_benchmark(fixture: Dict[str, Any], *,
-                  k: Optional[int] = None,
-                  min_duration: float = DEFAULT_MIN_DURATION,
-                  max_duration: float = DEFAULT_MAX_DURATION) -> Dict[str, Any]:
+
+def run_benchmark(
+    fixture: Dict[str, Any],
+    *,
+    k: Optional[int] = None,
+    min_duration: float = DEFAULT_MIN_DURATION,
+    max_duration: float = DEFAULT_MAX_DURATION,
+) -> Dict[str, Any]:
     """Run the real selection path and evaluate gold recall."""
     problems = validate_fixture(fixture)
     if problems:
@@ -225,9 +246,12 @@ def run_benchmark(fixture: Dict[str, Any], *,
     from scripts import create_viral_segments
 
     result = create_viral_segments.process_segments(
-        fixture["candidates"], fixture["transcript"],
-        min_duration, max_duration,
-        output_count=max(len(fixture["gold"]) * 2, 6))
+        fixture["candidates"],
+        fixture["transcript"],
+        min_duration,
+        max_duration,
+        output_count=max(len(fixture["gold"]) * 2, 6),
+    )
     outputs = result.get("segments", [])
     output_windows = [
         (float(seg.get("start_time", 0.0)), float(seg.get("end_time", 0.0)))
@@ -235,8 +259,7 @@ def run_benchmark(fixture: Dict[str, Any], *,
         if isinstance(seg, dict)
     ]
     gold_windows = [
-        (float(window["start"]), float(window["end"]))
-        for window in fixture["gold"]
+        (float(window["start"]), float(window["end"])) for window in fixture["gold"]
     ]
     metrics = evaluate(gold_windows, output_windows, k=k)
     return {
@@ -272,25 +295,39 @@ def render_console(report: Dict[str, Any]) -> str:
     lines = [
         "قياس جودة الاختيار — fixture: {}".format(report["fixture"]),
         "  المرشحون: {} — النواتج: {} — recall@{}: {} ({}/{})".format(
-            report["candidates"], report["outputs"], metrics["k"],
-            metrics["recall_at_k"], metrics["gold_recalled"], metrics["gold_total"]),
+            report["candidates"],
+            report["outputs"],
+            metrics["k"],
+            metrics["recall_at_k"],
+            metrics["gold_recalled"],
+            metrics["gold_total"],
+        ),
     ]
     for detail in metrics["details"]:
         icon = "✓" if detail["recalled"] else "✗"
-        lines.append("  {} ذهبي {} ← رتبة {} (تغطية {:.0%})".format(
-            icon, detail["gold"], detail["best_rank"], detail["coverage"]))
+        lines.append(
+            "  {} ذهبي {} ← رتبة {} (تغطية {:.0%})".format(
+                icon, detail["gold"], detail["best_rank"], detail["coverage"]
+            )
+        )
     return "\n".join(lines)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Offline selection-quality benchmark (gold-window recall@k)")
+        description="Offline selection-quality benchmark (gold-window recall@k)"
+    )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--fixture", metavar="JSON", help="labelled fixture file")
-    source.add_argument("--demo", action="store_true",
-                        help="run the built-in synthetic fixture")
-    parser.add_argument("-k", type=int, default=None,
-                        help="top-k outputs to recall within (0 means no outputs; default: all outputs)")
+    source.add_argument(
+        "--demo", action="store_true", help="run the built-in synthetic fixture"
+    )
+    parser.add_argument(
+        "-k",
+        type=int,
+        default=None,
+        help="top-k outputs to recall within (0 means no outputs; default: all outputs)",
+    )
     parser.add_argument("--min-duration", type=float, default=DEFAULT_MIN_DURATION)
     parser.add_argument("--max-duration", type=float, default=DEFAULT_MAX_DURATION)
     parser.add_argument("--output", metavar="JSON", help="write the report to a file")
@@ -299,9 +336,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error("-k must be zero or greater")
 
     fixture = demo_fixture() if args.demo else load_fixture(args.fixture)
-    report = run_benchmark(fixture, k=args.k,
-                           min_duration=args.min_duration,
-                           max_duration=args.max_duration)
+    report = run_benchmark(
+        fixture,
+        k=args.k,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
+    )
     print(render_console(report))
     if args.output:
         _write_json(args.output, report)

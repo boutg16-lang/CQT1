@@ -49,6 +49,7 @@ CENSOR_MAP_FILENAME = "censor_map.json"
 # Word-level transcript
 # ---------------------------------------------------------------------------
 
+
 def load_word_transcript(project_folder):
     """Return the word list from the WhisperX input.json: [{word,start,end}].
 
@@ -71,11 +72,13 @@ def load_word_transcript(project_folder):
     for seg in data.get("segments", []):
         for w in seg.get("words", []) or []:
             try:
-                words.append({
-                    "word": str(w.get("word", w.get("text", ""))),
-                    "start": float(w.get("start", 0)),
-                    "end": float(w.get("end", 0)),
-                })
+                words.append(
+                    {
+                        "word": str(w.get("word", w.get("text", ""))),
+                        "start": float(w.get("start", 0)),
+                        "end": float(w.get("end", 0)),
+                    }
+                )
             except (AttributeError, OverflowError, TypeError, ValueError):
                 skipped += 1
     if skipped:
@@ -89,7 +92,10 @@ def load_word_transcript(project_folder):
 # Span computation
 # ---------------------------------------------------------------------------
 
-def _word_matches_blocklist(norm_words, index, min_rank, allow_norms, include_context_only=False):
+
+def _word_matches_blocklist(
+    norm_words, index, min_rank, allow_norms, include_context_only=False
+):
     """Yield (word_start_idx, word_end_idx, entry) for each blocklist hit.
 
     ``norm_words`` is the list of normalized word strings. Multi-token
@@ -106,12 +112,13 @@ def _word_matches_blocklist(norm_words, index, min_rank, allow_norms, include_co
         tokens = entry["tokens"]
         k = len(tokens)
         for i in range(0, n - k + 1):
-            if norm_words[i:i + k] == tokens:
+            if norm_words[i : i + k] == tokens:
                 yield i, i + k - 1, entry
 
 
-def compute_censor_spans(segment, words, index=None, min_severity="medium",
-                         allow_terms=None, pad=PAD_SECONDS):
+def compute_censor_spans(
+    segment, words, index=None, min_severity="medium", allow_terms=None, pad=PAD_SECONDS
+):
     """Find offending word spans (ABSOLUTE time) inside one viral segment.
 
     Returns a list of dicts: {start, end, term, category, severity}.
@@ -126,9 +133,12 @@ def compute_censor_spans(segment, words, index=None, min_severity="medium",
     min_rank = SEVERITY_ORDER.get(min_severity, 2)
 
     # words whose center falls inside the segment window
-    window = [w for w in words
-              if (w["start"] + w["end"]) / 2.0 >= seg_start - 0.05
-              and (w["start"] + w["end"]) / 2.0 <= seg_end + 0.05]
+    window = [
+        w
+        for w in words
+        if (w["start"] + w["end"]) / 2.0 >= seg_start - 0.05
+        and (w["start"] + w["end"]) / 2.0 <= seg_end + 0.05
+    ]
     if not window:
         return []
 
@@ -141,19 +151,25 @@ def compute_censor_spans(segment, words, index=None, min_severity="medium",
 
     spans = []
     for i, j, entry in _word_matches_blocklist(
-            norm_words, index, min_rank, allow_norms,
-            include_context_only=include_context_only):
+        norm_words,
+        index,
+        min_rank,
+        allow_norms,
+        include_context_only=include_context_only,
+    ):
         start = max(seg_start, window[i]["start"] - pad)
         end = min(seg_end, window[j]["end"] + pad)
         if end <= start:
             continue
-        spans.append({
-            "start": round(start, 3),
-            "end": round(end, 3),
-            "term": entry["term"],
-            "category": entry["category"],
-            "severity": entry["severity"],
-        })
+        spans.append(
+            {
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "term": entry["term"],
+                "category": entry["category"],
+                "severity": entry["severity"],
+            }
+        )
 
     # merge overlapping/touching spans
     spans.sort(key=lambda s: s["start"])
@@ -189,6 +205,7 @@ def spans_to_relative(spans, segment_start, segment_end=None):
 # Audio muting (ffmpeg)
 # ---------------------------------------------------------------------------
 
+
 def build_mute_filter(spans):
     """Build the ffmpeg audio filter string that zeroes the given spans."""
     parts = ["between(t,{:.3f},{:.3f})".format(s["start"], s["end"]) for s in spans]
@@ -203,12 +220,23 @@ def apply_audio_censor(video_path, spans, i18n=lambda k: k):
     af = build_mute_filter(spans)
     tmp_path = video_path + ".censor_tmp.mp4"
     command = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", video_path,
-        "-af", af,
-        "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "192k",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        video_path,
+        "-af",
+        af,
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
         tmp_path,
     ]
     try:
@@ -218,7 +246,11 @@ def apply_audio_censor(video_path, spans, i18n=lambda k: k):
             return True
         print(i18n("[censor] ffmpeg produced no output for {}").format(video_path))
     except subprocess.CalledProcessError as e:
-        print(i18n("[censor] ffmpeg failed for {}: {}").format(video_path, (e.stderr or "")[-300:]))
+        print(
+            i18n("[censor] ffmpeg failed for {}: {}").format(
+                video_path, (e.stderr or "")[-300:]
+            )
+        )
     finally:
         if os.path.exists(tmp_path):
             try:
@@ -231,6 +263,7 @@ def apply_audio_censor(video_path, spans, i18n=lambda k: k):
 # ---------------------------------------------------------------------------
 # Subtitle masking
 # ---------------------------------------------------------------------------
+
 
 def mask_subtitle_json(json_path, spans, mask=MASK_TEXT):
     """Replace offending words with the mask inside a cut subtitle JSON.
@@ -282,6 +315,7 @@ def mask_subtitle_json(json_path, spans, mask=MASK_TEXT):
 # Project-level orchestration
 # ---------------------------------------------------------------------------
 
+
 def _clear_stale_censor_map(project_folder):
     """Remove any censor map from a previous run before re-censoring.
 
@@ -300,8 +334,13 @@ def _clear_stale_censor_map(project_folder):
         print(f"[censor] Could not remove stale censor_map.json: {exc}")
 
 
-def censor_project(project_folder, viral_segments, min_severity="medium",
-                   extra_terms_path=None, i18n=lambda k: k):
+def censor_project(
+    project_folder,
+    viral_segments,
+    min_severity="medium",
+    extra_terms_path=None,
+    i18n=lambda k: k,
+):
     """Apply bleep-censoring to every cut segment of a project.
 
     Returns the censor map (also written to ``censor_map.json``).
@@ -314,7 +353,11 @@ def censor_project(project_folder, viral_segments, min_severity="medium",
 
     words = load_word_transcript(project_folder)
     if not words:
-        print(i18n("[censor] No word-level transcript (input.json) found — bleep mode cannot locate words. Skipping censoring."))
+        print(
+            i18n(
+                "[censor] No word-level transcript (input.json) found — bleep mode cannot locate words. Skipping censoring."
+            )
+        )
         return {"segments": {}, "error": "no_word_transcript"}
 
     custom = load_custom_terms(project_folder, extra_terms_path)
@@ -324,13 +367,22 @@ def censor_project(project_folder, viral_segments, min_severity="medium",
     cuts_folder = os.path.join(project_folder, "cuts")
     subs_folder = os.path.join(project_folder, "subs")
 
-    censor_map = {"mode": "censor", "min_severity": min_severity, "segments": {}, "errors": []}
+    censor_map = {
+        "mode": "censor",
+        "min_severity": min_severity,
+        "segments": {},
+        "errors": [],
+    }
     total_muted = 0
 
     for i, segment in enumerate(segments):
         spans_abs = compute_censor_spans(
-            segment, words, index=index,
-            min_severity=min_severity, allow_terms=allow_terms)
+            segment,
+            words,
+            index=index,
+            min_severity=min_severity,
+            allow_terms=allow_terms,
+        )
         if not spans_abs:
             continue
 
@@ -349,46 +401,67 @@ def censor_project(project_folder, viral_segments, min_severity="medium",
         }
 
         # 1) mute audio in the cut video
-        cut_matches = sorted(glob.glob(os.path.join(
-            cuts_folder, "{:03d}_*_original_scale.mp4".format(i))))
+        cut_matches = sorted(
+            glob.glob(
+                os.path.join(cuts_folder, "{:03d}_*_original_scale.mp4".format(i))
+            )
+        )
         if cut_matches:
-            entry["video_censored"] = apply_audio_censor(cut_matches[0], spans_rel, i18n=i18n)
+            entry["video_censored"] = apply_audio_censor(
+                cut_matches[0], spans_rel, i18n=i18n
+            )
             if not entry["video_censored"]:
-                censor_map["errors"].append({
-                    "index": i,
-                    "error": "audio_censor_failed",
-                    "video": cut_matches[0],
-                })
+                censor_map["errors"].append(
+                    {
+                        "index": i,
+                        "error": "audio_censor_failed",
+                        "video": cut_matches[0],
+                    }
+                )
         else:
             entry["video_censored"] = False
-            censor_map["errors"].append({
-                "index": i,
-                "error": "cut_video_missing",
-            })
-            print(i18n("[censor] Cut video not found for segment {} — audio not muted.").format(i))
+            censor_map["errors"].append(
+                {
+                    "index": i,
+                    "error": "cut_video_missing",
+                }
+            )
+            print(
+                i18n(
+                    "[censor] Cut video not found for segment {} — audio not muted."
+                ).format(i)
+            )
 
         # 2) mask subtitle JSON
-        sub_matches = sorted(glob.glob(os.path.join(
-            subs_folder, "{:03d}_*_processed.json".format(i))))
+        sub_matches = sorted(
+            glob.glob(os.path.join(subs_folder, "{:03d}_*_processed.json".format(i)))
+        )
         entry["subtitle_masked"] = 0
         for sub_path in sub_matches:
             entry["subtitle_masked"] += mask_subtitle_json(sub_path, spans_rel)
         if not sub_matches:
-            censor_map["errors"].append({
-                "index": i,
-                "error": "subtitle_file_missing",
-            })
+            censor_map["errors"].append(
+                {
+                    "index": i,
+                    "error": "subtitle_file_missing",
+                }
+            )
         elif entry["subtitle_masked"] == 0:
-            censor_map["errors"].append({
-                "index": i,
-                "error": "subtitle_words_not_masked",
-            })
+            censor_map["errors"].append(
+                {
+                    "index": i,
+                    "error": "subtitle_words_not_masked",
+                }
+            )
 
         censor_map["segments"][str(i)] = entry
         total_muted += len(spans_rel)
         terms = ", ".join(sorted({s["term"] for s in spans_rel}))
-        print(i18n("[censor] Segment {} ({}): muted {} word(s) — {}").format(
-            i, entry["title"], len(spans_rel), terms))
+        print(
+            i18n("[censor] Segment {} ({}): muted {} word(s) — {}").format(
+                i, entry["title"], len(spans_rel), terms
+            )
+        )
 
     censor_map["total_muted_words"] = total_muted
     try:

@@ -9,12 +9,12 @@ time); ``download()`` itself is intentionally not tested here because it
 needs network + yt-dlp + ffmpeg.
 """
 
-
 import pytest
 
 from scripts import download_video as dv
 
 # --- sanitize_filename -------------------------------------------------------
+
 
 def test_sanitize_filename_keeps_plain_and_arabic_names():
     assert dv.sanitize_filename("Hello World") == "Hello World"
@@ -22,7 +22,7 @@ def test_sanitize_filename_keeps_plain_and_arabic_names():
 
 
 def test_sanitize_filename_strips_reserved_and_control_chars():
-    assert dv.sanitize_filename("a/b\\c:d*e?f\"g<h>i|j") == "abcdefghij"
+    assert dv.sanitize_filename('a/b\\c:d*e?f"g<h>i|j') == "abcdefghij"
     assert dv.sanitize_filename("test 🎉 video") == "test video"
 
 
@@ -45,6 +45,7 @@ def test_sanitize_filename_truncates_to_120_chars():
 
 # --- _friendly_download_error ------------------------------------------------
 
+
 def test_friendly_error_private_video_points_at_cookies():
     msg = dv._friendly_download_error(Exception("ERROR: Private video"))
     assert "PRIVATE" in msg
@@ -63,23 +64,32 @@ def test_friendly_error_age_restricted():
 
 
 def test_friendly_error_unavailable_and_copyright():
-    assert "unavailable" in dv._friendly_download_error(
-        Exception("Video unavailable")).lower()
-    assert "copyright" in dv._friendly_download_error(
-        Exception("removed for copyright reasons")).lower()
+    assert (
+        "unavailable"
+        in dv._friendly_download_error(Exception("Video unavailable")).lower()
+    )
+    assert (
+        "copyright"
+        in dv._friendly_download_error(
+            Exception("removed for copyright reasons")
+        ).lower()
+    )
 
 
 def test_friendly_error_invalid_url_and_js_runtime():
     assert "not a valid YouTube URL" in dv._friendly_download_error(
-        Exception("is not a valid URL"))
+        Exception("is not a valid URL")
+    )
     msg = dv._friendly_download_error(Exception("no supported javascript runtime"))
     assert "JavaScript runtime" in msg
     assert "Deno" in msg
 
 
 def test_friendly_error_subtitle_429_returns_none_for_retry_branch():
-    assert dv._friendly_download_error(
-        Exception("unable to download video subtitles")) is None
+    assert (
+        dv._friendly_download_error(Exception("unable to download video subtitles"))
+        is None
+    )
     assert dv._friendly_download_error(Exception("HTTP Error 429")) is None
 
 
@@ -97,7 +107,10 @@ def test_friendly_error_falls_back_to_generic_message():
 
 # --- _is_http_block / _is_transient_download_error ---------------------------
 
-@pytest.mark.parametrize("text", ["403", "HTTP 403", "Forbidden", "429", "HTTP Error 500"])
+
+@pytest.mark.parametrize(
+    "text", ["403", "HTTP 403", "Forbidden", "429", "HTTP Error 500"]
+)
 def test_is_http_block_true(text):
     assert dv._is_http_block(text) is True
 
@@ -107,15 +120,18 @@ def test_is_http_block_false(text):
     assert dv._is_http_block(text) is False
 
 
-@pytest.mark.parametrize("text", [
-    "IncompleteRead(0 bytes read, 100 more expected)",
-    "connection reset by peer",
-    "Connection aborted",
-    "remote end closed connection",
-    "read timed out",
-    "unexpected EOF",
-    "content too short",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "IncompleteRead(0 bytes read, 100 more expected)",
+        "connection reset by peer",
+        "Connection aborted",
+        "remote end closed connection",
+        "read timed out",
+        "unexpected EOF",
+        "content too short",
+    ],
+)
 def test_is_transient_download_error_true(text):
     assert dv._is_transient_download_error(text) is True
 
@@ -126,6 +142,7 @@ def test_is_transient_download_error_false(text):
 
 
 # --- _run_download_with_retries ----------------------------------------------
+
 
 def test_run_download_with_retries_success_first_try():
     calls = []
@@ -180,6 +197,7 @@ def test_run_download_with_retries_non_transient_raises_immediately():
 
 # --- _format_attempts ---------------------------------------------------------
 
+
 def test_format_attempts_default_format_has_three_player_clients():
     attempts = dv._format_attempts("best[ext=mp4]/best")
     assert attempts == [
@@ -193,14 +211,13 @@ def test_format_attempts_bestvideo_adds_mp4_and_best_fallbacks():
     attempts = dv._format_attempts("bestvideo+bestaudio/best")
     formats = [fmt for fmt, _ in attempts]
     assert formats == (
-        ["bestvideo+bestaudio/best"] * 3
-        + ["best[ext=mp4]/best"] * 3
-        + ["best"] * 3
+        ["bestvideo+bestaudio/best"] * 3 + ["best[ext=mp4]/best"] * 3 + ["best"] * 3
     )
     assert len(attempts) == 9
 
 
 # --- _require_yt_dlp / _runtime_options ---------------------------------------
+
 
 def test_require_yt_dlp_raises_without_yt_dlp(monkeypatch):
     monkeypatch.setattr(dv, "yt_dlp", None)
@@ -226,6 +243,7 @@ def test_runtime_options_uses_explicit_deno_path(monkeypatch):
 
 
 # --- _adopt_downloaded_video --------------------------------------------------
+
 
 def _write(path, size=2048):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,15 +299,19 @@ def test_adopt_mkv_without_ffmpeg_returns_source_unchanged(tmp_path, monkeypatch
 
 
 def test_adopt_returns_none_when_folder_is_empty(tmp_path):
-    assert dv._adopt_downloaded_video(tmp_path, tmp_path / "input",
-                                      tmp_path / "input.mp4") is None
+    assert (
+        dv._adopt_downloaded_video(tmp_path, tmp_path / "input", tmp_path / "input.mp4")
+        is None
+    )
 
 
 # --- progress_hook / _print_friendly_and_exit ---------------------------------
 
+
 def test_progress_hook_prints_percent_and_finished(capsys):
-    dv.progress_hook({"status": "downloading", "_percent_str": "42.5%",
-                      "_eta_str": "00:10"})
+    dv.progress_hook(
+        {"status": "downloading", "_percent_str": "42.5%", "_eta_str": "00:10"}
+    )
     assert "42.5%" in capsys.readouterr().out
     dv.progress_hook({"status": "finished", "filename": "input.mp4"})
     assert "input.mp4" in capsys.readouterr().out

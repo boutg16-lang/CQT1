@@ -47,48 +47,196 @@ _TERMINAL_RE = re.compile(r"[.!?؟…]+\s*[\"'»)】]*\s*$")
 # the antecedent is included. Exact-token match only: the و/ف prefixes are
 # far too common to flag as substrings (most Arabic sentences begin with them).
 START_CONNECTORS_AR = {
-    "لكن", "ولكن", "لكنه", "لكنها", "لكنني", "لكننا",
-    "لذلك", "لذا", "ولذلك", "لهذا", "ولهذا",
-    "لأن", "لان", "ولأن", "ولان",
-    "وهذا", "وهذه", "وذلك", "وهو", "وهي", "وهم",
-    "فهو", "فهي", "فهذا", "فهذه",
-    "ثم", "فإذا", "فاذا", "فإن", "فان",
-    "إذن", "اذن", "أيضا", "ايضا", "كذلك", "أيضاً",
-    "غير", "حيث", "بينما", "عندما", "لما", "لمّا",
-    "بصح", "باسكو", "دونك",
+    "لكن",
+    "ولكن",
+    "لكنه",
+    "لكنها",
+    "لكنني",
+    "لكننا",
+    "لذلك",
+    "لذا",
+    "ولذلك",
+    "لهذا",
+    "ولهذا",
+    "لأن",
+    "لان",
+    "ولأن",
+    "ولان",
+    "وهذا",
+    "وهذه",
+    "وذلك",
+    "وهو",
+    "وهي",
+    "وهم",
+    "فهو",
+    "فهي",
+    "فهذا",
+    "فهذه",
+    "ثم",
+    "فإذا",
+    "فاذا",
+    "فإن",
+    "فان",
+    "إذن",
+    "اذن",
+    "أيضا",
+    "ايضا",
+    "كذلك",
+    "أيضاً",
+    "غير",
+    "حيث",
+    "بينما",
+    "عندما",
+    "لما",
+    "لمّا",
+    "بصح",
+    "باسكو",
+    "دونك",
 }
 
 # English filler/conjunction openers that make weak hooks.
 START_CONNECTORS_EN = {
-    "um", "uh", "so", "and", "but", "or", "then", "because", "also",
-    "well", "like", "actually", "basically",
+    "um",
+    "uh",
+    "so",
+    "and",
+    "but",
+    "or",
+    "then",
+    "because",
+    "also",
+    "well",
+    "like",
+    "actually",
+    "basically",
 }
 
 # Words a clip must not END on: prepositions, conjunctions, articles,
 # auxiliary verbs and relative pronouns (the idea is clearly unfinished).
 END_INCOMPLETE_AR = {
     # prepositions
-    "في", "على", "إلى", "الى", "عن", "من", "مع", "حتى", "منذ", "بين",
-    "تحت", "فوق", "أمام", "امام", "وراء", "قبل", "بعد", "عند", "لدى",
-    "نحو", "مثل", "خلال", "ضد", "دون", "بدون", "عبر", "حول",
+    "في",
+    "على",
+    "إلى",
+    "الى",
+    "عن",
+    "من",
+    "مع",
+    "حتى",
+    "منذ",
+    "بين",
+    "تحت",
+    "فوق",
+    "أمام",
+    "امام",
+    "وراء",
+    "قبل",
+    "بعد",
+    "عند",
+    "لدى",
+    "نحو",
+    "مثل",
+    "خلال",
+    "ضد",
+    "دون",
+    "بدون",
+    "عبر",
+    "حول",
     # conjunctions / relatives
-    "و", "ف", "ثم", "أو", "او", "لكن", "ولكن", "لأن", "لان", "إذا",
-    "اذا", "إن", "ان", "أن", "كي", "لكي", "حين", "عندما", "الذي",
-    "التي", "الذين", "لذلك", "ب", "ل", "ك", "س",
+    "و",
+    "ف",
+    "ثم",
+    "أو",
+    "او",
+    "لكن",
+    "ولكن",
+    "لأن",
+    "لان",
+    "إذا",
+    "اذا",
+    "إن",
+    "ان",
+    "أن",
+    "كي",
+    "لكي",
+    "حين",
+    "عندما",
+    "الذي",
+    "التي",
+    "الذين",
+    "لذلك",
+    "ب",
+    "ل",
+    "ك",
+    "س",
 }
 
 END_INCOMPLETE_EN = {
-    "the", "a", "an", "and", "or", "but", "so", "because", "if", "when",
-    "then", "that", "which", "who", "whose", "to", "of", "in", "on", "at",
-    "for", "with", "about", "into", "from", "by", "as", "is", "are", "was",
-    "were", "be", "been", "have", "has", "had", "will", "would", "can",
-    "could", "should", "shall", "may", "might", "must", "do", "does", "did",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "so",
+    "because",
+    "if",
+    "when",
+    "then",
+    "that",
+    "which",
+    "who",
+    "whose",
+    "to",
+    "of",
+    "in",
+    "on",
+    "at",
+    "for",
+    "with",
+    "about",
+    "into",
+    "from",
+    "by",
+    "as",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "have",
+    "has",
+    "had",
+    "will",
+    "would",
+    "can",
+    "could",
+    "should",
+    "shall",
+    "may",
+    "might",
+    "must",
+    "do",
+    "does",
+    "did",
 }
 
 # Openers that signal a reference to something said BEFORE the window
 # (unresolved context): demonstratives/pronouns as the very first word.
 UNRESOLVED_OPENERS_AR = {"هذا", "هذه", "ذلك", "تلك", "هؤلاء", "أولئك", "هو", "هي", "هم"}
-UNRESOLVED_OPENERS_EN = {"he", "she", "it", "they", "this", "that", "these", "those", "him", "her"}
+UNRESOLVED_OPENERS_EN = {
+    "he",
+    "she",
+    "it",
+    "they",
+    "this",
+    "that",
+    "these",
+    "those",
+    "him",
+    "her",
+}
 
 # A pause longer than this (seconds) between transcript lines marks a
 # sentence boundary when punctuation is missing (Whisper often drops Arabic
@@ -102,9 +250,23 @@ CONNECTOR_PAUSE_SECONDS = 0.18
 
 # Strong clause openers used when one unpunctuated ASR block has no word times.
 _SENTENCE_CONNECTORS_AR = {
-    "لكن", "ولكن", "لذلك", "لذا", "لهذا", "لأن", "لان", "ثم", "بصح",
-    "باسكو", "دونك", "بل", "مع ذلك", "في المقابل", "على العكس",
-    "من جهة أخرى", "ومن جهة أخرى",
+    "لكن",
+    "ولكن",
+    "لذلك",
+    "لذا",
+    "لهذا",
+    "لأن",
+    "لان",
+    "ثم",
+    "بصح",
+    "باسكو",
+    "دونك",
+    "بل",
+    "مع ذلك",
+    "في المقابل",
+    "على العكس",
+    "من جهة أخرى",
+    "ومن جهة أخرى",
 }
 
 # How far (seconds) connector-start repair may walk back to include the
@@ -114,6 +276,7 @@ CONNECTOR_LOOKBACK_SECONDS = 8.0
 # ---------------------------------------------------------------------------
 # Pre-roll / post-roll configuration
 # ---------------------------------------------------------------------------
+
 
 def pre_post_roll_config():
     """Read pre/post-roll from the environment with documented bounds.
@@ -127,6 +290,7 @@ def pre_post_roll_config():
     Enabled values never let the clip exceed its max duration (the caller
     shrinks post-roll first, then pre-roll).
     """
+
     def _read(name, lo, hi):
         raw = os.getenv(name, "").strip()
         if not raw:
@@ -148,6 +312,7 @@ def pre_post_roll_config():
 # ---------------------------------------------------------------------------
 # Word-level timings (WhisperX input.json)
 # ---------------------------------------------------------------------------
+
 
 def load_word_timings(project_folder):
     """Load a flat word list [{start,end,word}] from the project transcript JSON.
@@ -171,15 +336,17 @@ def load_word_timings(project_folder):
         )
         return []
     if not isinstance(data, dict):
-        logger.warning("WhisperX input.json has no object at its root; using segment timings.")
+        logger.warning(
+            "WhisperX input.json has no object at its root; using segment timings."
+        )
         return []
     words = []
     malformed = 0
-    for segment in (data.get("segments") or []):
+    for segment in data.get("segments") or []:
         if not isinstance(segment, dict):
             malformed += 1
             continue
-        for word in (segment.get("words") or []):
+        for word in segment.get("words") or []:
             if not isinstance(word, dict):
                 malformed += 1
                 continue
@@ -190,7 +357,12 @@ def load_word_timings(project_folder):
                 malformed += 1
                 continue
             text = str(word.get("word") or word.get("text") or "").strip()
-            if not text or not math.isfinite(w_start) or not math.isfinite(w_end) or w_end < w_start:
+            if (
+                not text
+                or not math.isfinite(w_start)
+                or not math.isfinite(w_end)
+                or w_end < w_start
+            ):
                 malformed += 1
                 continue
             words.append({"start": w_start, "end": w_end, "word": text})
@@ -206,6 +378,7 @@ def load_word_timings(project_folder):
 # ---------------------------------------------------------------------------
 # Sentence units
 # ---------------------------------------------------------------------------
+
 
 def _timed_word_events(transcript_segments, words=None):
     candidates = words
@@ -224,7 +397,12 @@ def _timed_word_events(transcript_segments, words=None):
         except (TypeError, ValueError):
             continue
         text = str(item.get("word") or item.get("text") or "").strip()
-        if not text or not math.isfinite(start) or not math.isfinite(end) or end < start:
+        if (
+            not text
+            or not math.isfinite(start)
+            or not math.isfinite(end)
+            or end < start
+        ):
             continue
         events.append({"start": start, "end": end, "text": text})
     events.sort(key=lambda item: (item["start"], item["end"]))
@@ -249,31 +427,36 @@ def _estimated_sentence_events(line):
         piece_start = line["start"] + duration * elapsed / total
         elapsed += count
         piece_end = line["start"] + duration * elapsed / total
-        events.append({
-            "start": piece_start,
-            "end": piece_end,
-            "text": piece,
-            "connector_boundary": connector_boundary,
-        })
+        events.append(
+            {
+                "start": piece_start,
+                "end": piece_end,
+                "text": piece,
+                "connector_boundary": connector_boundary,
+            }
+        )
     return events
 
 
 def _normalized_tokens(text):
-    return [arabic_text.normalized_match_text(token)
-            for token in str(text or "").split()
-            if arabic_text.normalized_match_text(token)]
+    return [
+        arabic_text.normalized_match_text(token)
+        for token in str(text or "").split()
+        if arabic_text.normalized_match_text(token)
+    ]
 
 
 def _starts_with_connector(text):
     tokens = _normalized_tokens(text)
     if not tokens:
         return False
-    if tokens[0] in {arabic_text.normalized_match_text(word)
-                     for word in START_CONNECTORS_AR}:
+    if tokens[0] in {
+        arabic_text.normalized_match_text(word) for word in START_CONNECTORS_AR
+    }:
         return True
     for phrase in _SENTENCE_CONNECTORS_AR:
         phrase_tokens = _normalized_tokens(phrase)
-        if phrase_tokens and tokens[:len(phrase_tokens)] == phrase_tokens:
+        if phrase_tokens and tokens[: len(phrase_tokens)] == phrase_tokens:
             return True
     return bool(tokens[0].lower() in START_CONNECTORS_EN)
 
@@ -294,8 +477,11 @@ def _split_connector_phrases(text):
     for index in range(3, len(tokens) - 1):
         for phrase in sorted(_SENTENCE_CONNECTORS_AR, key=len, reverse=True):
             phrase_tokens = _normalized_tokens(phrase)
-            if (phrase_tokens and tokens[index:index + len(phrase_tokens)] == phrase_tokens
-                    and len(tokens) - index - len(phrase_tokens) >= 2):
+            if (
+                phrase_tokens
+                and tokens[index : index + len(phrase_tokens)] == phrase_tokens
+                and len(tokens) - index - len(phrase_tokens) >= 2
+            ):
                 boundaries.append(offsets[index])
                 break
     if not boundaries:
@@ -327,8 +513,13 @@ def _split_sentence_pieces(text):
         if text[index] not in terminal:
             index += 1
             continue
-        if (text[index] == "." and index > 0 and index + 1 < len(text)
-                and text[index - 1].isdigit() and text[index + 1].isdigit()):
+        if (
+            text[index] == "."
+            and index > 0
+            and index + 1 < len(text)
+            and text[index - 1].isdigit()
+            and text[index + 1].isdigit()
+        ):
             index += 1
             continue
         end = index + 1
@@ -362,10 +553,12 @@ def _group_sentence_events(events):
             continue
         gap = event["start"] - current["end"]
         context_words = len(current["text"].split())
-        preview = " ".join(item["text"] for item in events[index:index + 3])
-        connector_pause = (gap >= CONNECTOR_PAUSE_SECONDS
-                           and context_words >= 3
-                           and _starts_with_connector(preview))
+        preview = " ".join(item["text"] for item in events[index : index + 3])
+        connector_pause = (
+            gap >= CONNECTOR_PAUSE_SECONDS
+            and context_words >= 3
+            and _starts_with_connector(preview)
+        )
         split_before = bool(event.get("connector_boundary"))
         # A unit may not grow without bound. Arabic/Darija ASR often emits
         # minutes of speech with no punctuation and sub-pause gaps, which
@@ -373,11 +566,13 @@ def _group_sentence_events(events):
         # looked mid-sentence, first/last_sentence covered the whole video,
         # and title relevance was measured against all of it.
         too_long = (event["end"] - current["start"]) > MAX_SENTENCE_UNIT_SECONDS
-        if (_TERMINAL_RE.search(current["text"])
-                or gap >= SENTENCE_PAUSE_SECONDS
-                or connector_pause
-                or split_before
-                or (too_long and (gap >= 0.02 or context_words >= 4))):
+        if (
+            _TERMINAL_RE.search(current["text"])
+            or gap >= SENTENCE_PAUSE_SECONDS
+            or connector_pause
+            or split_before
+            or (too_long and (gap >= 0.02 or context_words >= 4))
+        ):
             units.append({key: current[key] for key in ("start", "end", "text")})
             current = dict(event)
         else:
@@ -392,9 +587,11 @@ def _line_has_word_timing(line, word_events, word_starts):
     index = bisect_left(word_starts, line["start"])
     if index and word_events[index - 1]["end"] > line["start"]:
         index -= 1
-    return (index < len(word_events)
-            and word_events[index]["start"] < line["end"]
-            and word_events[index]["end"] > line["start"])
+    return (
+        index < len(word_events)
+        and word_events[index]["start"] < line["end"]
+        and word_events[index]["end"] > line["start"]
+    )
 
 
 def _estimated_sentence_events(line):
@@ -408,12 +605,14 @@ def _estimated_sentence_events(line):
         piece_start = line["start"] + duration * elapsed / total
         elapsed += count
         piece_end = line["start"] + duration * elapsed / total
-        events.append({
-            "start": piece_start,
-            "end": piece_end,
-            "text": piece,
-            "connector_boundary": connector_boundary,
-        })
+        events.append(
+            {
+                "start": piece_start,
+                "end": piece_end,
+                "text": piece,
+                "connector_boundary": connector_boundary,
+            }
+        )
     return events
 
 
@@ -473,15 +672,23 @@ def _last_word(text):
 
 
 def _words_normalized(text):
-    return [w for w in (arabic_text.normalized_match_text(tok)
-                        for tok in str(text or "").split()) if w]
+    return [
+        w
+        for w in (
+            arabic_text.normalized_match_text(tok) for tok in str(text or "").split()
+        )
+        if w
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Window analysis
 # ---------------------------------------------------------------------------
 
-def analyze_window(transcript_segments, start_time, end_time, context_span=12.0, *, words=None):
+
+def analyze_window(
+    transcript_segments, start_time, end_time, context_span=12.0, *, words=None
+):
     """Analyze the exact transcript content inside ``[start_time, end_time]``.
 
     Returns a plain dict (JSON-serializable) with the raw window text, the
@@ -518,7 +725,7 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
         return result
 
     lines = []
-    for seg in (transcript_segments or []):
+    for seg in transcript_segments or []:
         if not isinstance(seg, dict):
             continue
         try:
@@ -534,26 +741,41 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
     if not lines:
         return result
 
-    inside = [line for line in lines if line["start"] < end_time and line["end"] > start_time]
+    inside = [
+        line for line in lines if line["start"] < end_time and line["end"] > start_time
+    ]
     word_events = _timed_word_events(transcript_segments, words)
-    inside_words = [word for word in word_events
-                    if word["start"] < end_time and word["end"] > start_time]
+    inside_words = [
+        word
+        for word in word_events
+        if word["start"] < end_time and word["end"] > start_time
+    ]
     if inside_words:
-        before_words = [word for word in word_events
-                        if word["end"] <= start_time
-                        and word["end"] > start_time - context_span]
-        after_words = [word for word in word_events
-                       if word["start"] >= end_time
-                       and word["start"] < end_time + context_span]
+        before_words = [
+            word
+            for word in word_events
+            if word["end"] <= start_time and word["end"] > start_time - context_span
+        ]
+        after_words = [
+            word
+            for word in word_events
+            if word["start"] >= end_time and word["start"] < end_time + context_span
+        ]
         text = " ".join(word["text"] for word in inside_words).strip()
         result["before_text"] = " ".join(word["text"] for word in before_words).strip()
         result["after_text"] = " ".join(word["text"] for word in after_words).strip()
         speech_items = inside_words
     else:
-        before = [line for line in lines
-                  if line["end"] <= start_time and line["end"] > start_time - context_span]
-        after = [line for line in lines
-                 if line["start"] >= end_time and line["start"] < end_time + context_span]
+        before = [
+            line
+            for line in lines
+            if line["end"] <= start_time and line["end"] > start_time - context_span
+        ]
+        after = [
+            line
+            for line in lines
+            if line["start"] >= end_time and line["start"] < end_time + context_span
+        ]
         text = " ".join(line["text"] for line in inside).strip()
         result["before_text"] = " ".join(line["text"] for line in before).strip()
         result["after_text"] = " ".join(line["text"] for line in after).strip()
@@ -563,13 +785,16 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
     normalized_words = _words_normalized(text)
     result["word_count"] = len(normalized_words)
     result["unique_ratio"] = (
-        len(set(normalized_words)) / len(normalized_words) if normalized_words else 0.0)
+        len(set(normalized_words)) / len(normalized_words) if normalized_words else 0.0
+    )
 
     if speech_items:
         result["leading_silence"] = round(
-            max(0.0, speech_items[0]["start"] - start_time), 3)
+            max(0.0, speech_items[0]["start"] - start_time), 3
+        )
         result["trailing_silence"] = round(
-            max(0.0, end_time - speech_items[-1]["end"]), 3)
+            max(0.0, end_time - speech_items[-1]["end"]), 3
+        )
         speech = 0.0
         cursor = start_time
         for item in speech_items:
@@ -593,14 +818,14 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
         # and the language has no punctuation. Only a cut STRICTLY INSIDE a
         # line is a mid-sentence truncation; flagging every line start made
         # every unpunctuated Arabic clip fail final validation.
-        starts_on_line = any(abs(start_time - line["start"]) <= 0.15
-                             for line in inside)
-        ends_on_line = any(abs(end_time - line["end"]) <= 0.15
-                           for line in inside)
+        starts_on_line = any(abs(start_time - line["start"]) <= 0.15 for line in inside)
+        ends_on_line = any(abs(end_time - line["end"]) <= 0.15 for line in inside)
         result["starts_mid_sentence"] = (
-            not starts_on_line and start_time > inside_units[0]["start"] + 0.15)
+            not starts_on_line and start_time > inside_units[0]["start"] + 0.15
+        )
         result["ends_mid_sentence"] = (
-            not ends_on_line and end_time < inside_units[-1]["end"] - 0.15)
+            not ends_on_line and end_time < inside_units[-1]["end"] - 0.15
+        )
 
     if text:
         first = _first_word(text)
@@ -614,16 +839,20 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
             first_index = units.index(inside_units[0])
             previous = units[first_index - 1] if first_index > 0 else None
             token = _normalized_tokens(text)[0] if _normalized_tokens(text) else ""
-            if (previous is not None
-                    and not _TERMINAL_RE.search(previous["text"])
-                    and start_time - previous["end"] <= 0.6
-                    and token.startswith("و")
-                    and len(token) >= 3):
+            if (
+                previous is not None
+                and not _TERMINAL_RE.search(previous["text"])
+                and start_time - previous["end"] <= 0.6
+                and token.startswith("و")
+                and len(token) >= 3
+            ):
                 result["starts_with_connector"] = True
         result["opens_with_unresolved_reference"] = (
-            first in UNRESOLVED_OPENERS_AR or first.lower() in UNRESOLVED_OPENERS_EN)
+            first in UNRESOLVED_OPENERS_AR or first.lower() in UNRESOLVED_OPENERS_EN
+        )
         result["ends_incomplete"] = (
-            last in END_INCOMPLETE_AR or last.lower() in END_INCOMPLETE_EN)
+            last in END_INCOMPLETE_AR or last.lower() in END_INCOMPLETE_EN
+        )
         result["ends_with_terminal_punctuation"] = bool(_TERMINAL_RE.search(text))
 
     result["complete"] = bool(
@@ -638,6 +867,7 @@ def analyze_window(transcript_segments, start_time, end_time, context_span=12.0,
 # ---------------------------------------------------------------------------
 # Boundary repair
 # ---------------------------------------------------------------------------
+
 
 def snap_edges_to_words(start_time, end_time, words):
     """Snap cut edges to word boundaries so a cut never lands inside a word.
@@ -669,8 +899,15 @@ def snap_edges_to_words(start_time, end_time, words):
     return snapped_start, snapped_end
 
 
-def repair_connector_start(start_time, end_time, transcript_segments,
-                           analysis, max_duration, transcript_start=0.0, words=None):
+def repair_connector_start(
+    start_time,
+    end_time,
+    transcript_segments,
+    analysis,
+    max_duration,
+    transcript_start=0.0,
+    words=None,
+):
     """Walk the cut start back when the clip opens with a dangling connector.
 
     Only when: the first word is an Arabic/English connector AND the previous
@@ -698,8 +935,9 @@ def repair_connector_start(start_time, end_time, transcript_segments,
             boundaries.append(float(unit["start"]))
         except (KeyError, TypeError, ValueError):
             continue
-    boundaries = sorted({round(value, 3) for value in boundaries
-                         if value < start_time - 0.01})
+    boundaries = sorted(
+        {round(value, 3) for value in boundaries if value < start_time - 0.01}
+    )
     if not boundaries:
         return start_time, None
     previous_start = boundaries[-1]
@@ -713,8 +951,15 @@ def repair_connector_start(start_time, end_time, transcript_segments,
     return start_time, None
 
 
-def repair_dangling_end(start_time, end_time, transcript_segments, analysis,
-                        max_duration, transcript_end=None, words=None):
+def repair_dangling_end(
+    start_time,
+    end_time,
+    transcript_segments,
+    analysis,
+    max_duration,
+    transcript_end=None,
+    words=None,
+):
     """Extend the cut end when it finishes on a preposition/conjunction.
 
     Extends to the end of the current sentence unit, bounded by
@@ -739,10 +984,19 @@ def repair_dangling_end(start_time, end_time, transcript_segments, analysis,
     return new_end, "dangling_end_extended_to_sentence_end"
 
 
-def refine_boundaries(start_time, end_time, transcript_segments, *,
-                      words=None, min_duration=0.0, max_duration=float("inf"),
-                      transcript_start=0.0, transcript_end=None,
-                      pre_roll=None, post_roll=None):
+def refine_boundaries(
+    start_time,
+    end_time,
+    transcript_segments,
+    *,
+    words=None,
+    min_duration=0.0,
+    max_duration=float("inf"),
+    transcript_start=0.0,
+    transcript_end=None,
+    pre_roll=None,
+    post_roll=None,
+):
     """Production boundary refinement for one candidate window.
 
     Order: word snap → connector-start repair → dangling-end repair →
@@ -762,20 +1016,34 @@ def refine_boundaries(start_time, end_time, transcript_segments, *,
                 start_time, end_time = w_start, w_end
 
         analysis = analyze_window(
-            transcript_segments, start_time, end_time, words=words)
+            transcript_segments, start_time, end_time, words=words
+        )
 
         new_start, note = repair_connector_start(
-            start_time, end_time, transcript_segments, analysis,
-            max_duration, transcript_start=transcript_start, words=words)
+            start_time,
+            end_time,
+            transcript_segments,
+            analysis,
+            max_duration,
+            transcript_start=transcript_start,
+            words=words,
+        )
         if note:
             start_time = new_start
             notes.append(note)
             analysis = analyze_window(
-                transcript_segments, start_time, end_time, words=words)
+                transcript_segments, start_time, end_time, words=words
+            )
 
         new_end, note = repair_dangling_end(
-            start_time, end_time, transcript_segments, analysis,
-            max_duration, transcript_end=transcript_end, words=words)
+            start_time,
+            end_time,
+            transcript_segments,
+            analysis,
+            max_duration,
+            transcript_end=transcript_end,
+            words=words,
+        )
         if note:
             end_time = new_end
             notes.append(note)
@@ -791,7 +1059,9 @@ def refine_boundaries(start_time, end_time, transcript_segments, *,
             pre_roll = min(pre_roll, budget)
             if transcript_end is not None:
                 post_roll = min(post_roll, max(0.0, float(transcript_end) - end_time))
-            pre_roll = min(pre_roll, start_time - max(0.0, float(transcript_start or 0.0)))
+            pre_roll = min(
+                pre_roll, start_time - max(0.0, float(transcript_start or 0.0))
+            )
             if pre_roll > 0.0 or post_roll > 0.0:
                 start_time -= pre_roll
                 end_time += post_roll
@@ -799,19 +1069,27 @@ def refine_boundaries(start_time, end_time, transcript_segments, *,
 
         # Never violate the duration budget or produce an empty window.
         if end_time - start_time > float(max_duration) + 0.05:
-            return original[0], original[1], notes + ["refinement_reverted_max_duration"]
+            return (
+                original[0],
+                original[1],
+                notes + ["refinement_reverted_max_duration"],
+            )
         if end_time <= start_time + 0.1:
             return original[0], original[1], notes + ["refinement_reverted_empty"]
         return round(start_time, 3), round(end_time, 3), notes
     except Exception as exc:
-        logger.warning("Boundary refinement failed; restoring original window: %s", exc,
-                       exc_info=True)
+        logger.warning(
+            "Boundary refinement failed; restoring original window: %s",
+            exc,
+            exc_info=True,
+        )
         return original[0], original[1], notes + ["refinement_error_reverted"]
 
 
 # ---------------------------------------------------------------------------
 # Semantic duplication helpers
 # ---------------------------------------------------------------------------
+
 
 def semantic_similarity(text_a, text_b):
     """Similarity in [0, 1] between two transcript excerpts (Arabic-safe).
@@ -837,7 +1115,9 @@ def semantic_similarity(text_a, text_b):
 
 
 def _number_set(text):
-    return set(re.findall(r"\d+(?:\.\d+)?", arabic_text.normalize_digits(str(text or ""))))
+    return set(
+        re.findall(r"\d+(?:\.\d+)?", arabic_text.normalize_digits(str(text or "")))
+    )
 
 
 def are_semantic_duplicates(text_a, text_b, threshold=None):

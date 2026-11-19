@@ -1,4 +1,5 @@
 """The Android app ships copies of the safety lexicons; they must not drift."""
+
 import json
 from pathlib import Path
 

@@ -23,6 +23,7 @@ from scripts.edit_video import interpolate_boxes
 # scene_boundary_frames
 # ---------------------------------------------------------------------------
 
+
 def test_boundary_frames_skip_opening_scene():
     scenes = [(0.0, 4.0), (4.0, 9.5), (9.5, 20.0)]
     frames = scene_detect.scene_boundary_frames(scenes, fps=30.0)
@@ -38,7 +39,7 @@ def test_boundary_frames_respects_total_frames():
 
 def test_boundary_frames_guards_broken_fps():
     scenes = [(0.0, 2.0), (2.0, 5.0)]
-    assert scene_detect.scene_boundary_frames(scenes, 0.0) == {60}   # 30fps fallback
+    assert scene_detect.scene_boundary_frames(scenes, 0.0) == {60}  # 30fps fallback
     assert scene_detect.scene_boundary_frames(scenes, 999.0) == {60}
     assert scene_detect.scene_boundary_frames([], 25.0) == set()
 
@@ -46,6 +47,7 @@ def test_boundary_frames_guards_broken_fps():
 # ---------------------------------------------------------------------------
 # ActiveSpeakerSelector.reset
 # ---------------------------------------------------------------------------
+
 
 def test_selector_reset_forgets_previous_shot_speaker():
     selector = ActiveSpeakerSelector(switch_margin=1.5, hold_frames=8)
@@ -69,6 +71,7 @@ def test_selector_reset_forgets_previous_shot_speaker():
 # ---------------------------------------------------------------------------
 # interpolate_boxes (smoothstep easing)
 # ---------------------------------------------------------------------------
+
 
 def test_interpolate_boxes_lands_exactly_on_target():
     frames = interpolate_boxes([0, 0, 100, 100], [400, 200, 500, 300], 4)
@@ -102,14 +105,19 @@ def test_interpolate_boxes_handles_multi_face_arrays():
 # Darija hook words
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("title", [
-    "كيفاش تربح من هاد الفكرة في 5 خطوات؟",
-    "علاش الناس كيفشقو فهاد النقطة؟",
-    "شنو خاصك تعرف قبل ما تبدا؟",
-    "واش عرفتي هاد السر ديال النجاح؟",
-])
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "كيفاش تربح من هاد الفكرة في 5 خطوات؟",
+        "علاش الناس كيفشقو فهاد النقطة؟",
+        "شنو خاصك تعرف قبل ما تبدا؟",
+        "واش عرفتي هاد السر ديال النجاح؟",
+    ],
+)
 def test_darija_hook_words_score(title):
     from scripts import seo_titles
+
     result = seo_titles.score_title(title)
     # 7-point hook-word bonus + question mark + digit where present: the
     # dialect phrasing must score at least as well as an MSA equivalent.

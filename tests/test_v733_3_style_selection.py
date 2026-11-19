@@ -21,19 +21,37 @@ def _insights(overall=500.0):
             "overall_avg_views": overall,
             "categories": {
                 "hook_type": [
-                    {"value": "question", "samples": 3, "avg_views": 800.0,
-                     "delta_pct": 60.0},
-                    {"value": "story", "samples": 2, "avg_views": 200.0,
-                     "delta_pct": -60.0},
+                    {
+                        "value": "question",
+                        "samples": 3,
+                        "avg_views": 800.0,
+                        "delta_pct": 60.0,
+                    },
+                    {
+                        "value": "story",
+                        "samples": 2,
+                        "avg_views": 200.0,
+                        "delta_pct": -60.0,
+                    },
                 ],
                 "topic": [
-                    {"value": "money", "samples": 3, "avg_views": 700.0,
-                     "delta_pct": 40.0},
+                    {
+                        "value": "money",
+                        "samples": 3,
+                        "avg_views": 700.0,
+                        "delta_pct": 40.0,
+                    },
                 ],
             },
             "title_styles": [
-                {"style": "title_question", "samples_yes": 3, "samples_no": 2,
-                 "avg_views_yes": 800.0, "avg_views_no": 200.0, "delta_pct": 300.0},
+                {
+                    "style": "title_question",
+                    "samples_yes": 3,
+                    "samples_no": 2,
+                    "avg_views_yes": 800.0,
+                    "avg_views_no": 200.0,
+                    "delta_pct": 300.0,
+                },
             ],
         },
     }
@@ -54,15 +72,18 @@ def test_title_style_flags():
     flags_digits = pw.title_style_flags("5 أخطاء تدمر قناتك")
     assert flags_digits["title_number"] is True
     flags_plain = pw.title_style_flags("تجربتي في العمل الحر")
-    assert flags_plain == {"title_question": False, "title_number": False,
-                           "title_hook_word": False}
+    assert flags_plain == {
+        "title_question": False,
+        "title_number": False,
+        "title_hook_word": False,
+    }
 
 
 def test_style_bonus_is_bounded():
     assert pw._style_bonus(60.0) == 2.4
-    assert pw._style_bonus(300.0) == 3.0   # capped
+    assert pw._style_bonus(300.0) == 3.0  # capped
     assert pw._style_bonus(-300.0) == -3.0
-    assert pw._style_bonus(10.0) == 0.0    # below the 15% floor
+    assert pw._style_bonus(10.0) == 0.0  # below the 15% floor
     assert pw._style_bonus(None) == 0.0
 
 
@@ -80,10 +101,12 @@ def test_style_bonuses_map_from_insights(tmp_path):
 
 
 def test_style_bonus_for_segment():
-    style = {"hook_type": {"question": 2.4, "story": -2.4},
-             "title_question": 3.0}
-    winner = {"hook_type": "question", "angle": "lesson",
-              "recommended_title": "كيف تربح من يوتيوب؟"}
+    style = {"hook_type": {"question": 2.4, "story": -2.4}, "title_question": 3.0}
+    winner = {
+        "hook_type": "question",
+        "angle": "lesson",
+        "recommended_title": "كيف تربح من يوتيوب؟",
+    }
     assert pw.style_bonus_for(winner, style) == pytest.approx(5.4)
     loser = {"hook_type": "story", "recommended_title": "تجربتي في العمل الحر"}
     assert pw.style_bonus_for(loser, style) == pytest.approx(-2.4)
@@ -103,29 +126,58 @@ def test_process_segments_prefers_measured_winning_style(tmp_path, monkeypatch):
     project.mkdir()
     _write_insights(str(project))
     # Style bonuses must survive even with zero numeric correlations.
-    transcript = [{"start": float(i * 6), "end": float(i * 6 + 5),
-                   "text": "sentence number {}".format(i)} for i in range(8)]
-    base = {"score": 70, "hook_strength": 70, "narrative_completeness": 70,
-            "clarity_score": 70, "novelty_score": 50}
-    question = dict(base, title="سؤال قوي؟", hook_type="question",
-                    start_time=0.0, end_time=22.0)
-    story = dict(base, title="قصة عادية", hook_type="story",
-                 start_time=30.0, end_time=52.0)
+    transcript = [
+        {
+            "start": float(i * 6),
+            "end": float(i * 6 + 5),
+            "text": "sentence number {}".format(i),
+        }
+        for i in range(8)
+    ]
+    base = {
+        "score": 70,
+        "hook_strength": 70,
+        "narrative_completeness": 70,
+        "clarity_score": 70,
+        "novelty_score": 50,
+    }
+    question = dict(
+        base, title="سؤال قوي؟", hook_type="question", start_time=0.0, end_time=22.0
+    )
+    story = dict(
+        base, title="قصة عادية", hook_type="story", start_time=30.0, end_time=52.0
+    )
     raw = [question, story]
-    result = cvs.process_segments(raw, transcript, 15, 60,
-                                  project_folder=str(project))
+    result = cvs.process_segments(raw, transcript, 15, 60, project_folder=str(project))
     by_title = {s["title"]: s for s in result["segments"]}
-    assert by_title["سؤال قوي؟"]["selection_score"] > by_title["قصة عادية"]["selection_score"]
+    assert (
+        by_title["سؤال قوي؟"]["selection_score"]
+        > by_title["قصة عادية"]["selection_score"]
+    )
     assert by_title["سؤال قوي؟"]["selection_breakdown"]["style_bonus"] > 0
     assert by_title["قصة عادية"]["selection_breakdown"]["style_bonus"] < 0
 
 
 def test_no_project_insights_keeps_scores_untouched():
-    transcript = [{"start": float(i * 6), "end": float(i * 6 + 5),
-                   "text": "sentence number {}".format(i)} for i in range(8)]
-    candidate = {"score": 70, "hook_strength": 70, "narrative_completeness": 70,
-                 "clarity_score": 70, "novelty_score": 50, "title": "سؤال قوي؟",
-                 "hook_type": "question", "start_time": 0.0, "end_time": 22.0}
+    transcript = [
+        {
+            "start": float(i * 6),
+            "end": float(i * 6 + 5),
+            "text": "sentence number {}".format(i),
+        }
+        for i in range(8)
+    ]
+    candidate = {
+        "score": 70,
+        "hook_strength": 70,
+        "narrative_completeness": 70,
+        "clarity_score": 70,
+        "novelty_score": 50,
+        "title": "سؤال قوي؟",
+        "hook_type": "question",
+        "start_time": 0.0,
+        "end_time": 22.0,
+    }
     result = cvs.process_segments([candidate], transcript, 15, 60)
     seg = result["segments"][0]
     assert "style_bonus" not in seg["selection_breakdown"]

@@ -39,8 +39,10 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 import export_xml_lib.exporter as top_level_exporter  # noqa: E402
 
 FACE_SINGLE = [{"frame": 0, "faces": [[100, 100, 300, 400]]}]
-FACE_DUAL = [{"frame": f, "faces": [[100, 100, 300, 400], [600, 100, 800, 400]]}
-             for f in range(0, 30)]
+FACE_DUAL = [
+    {"frame": f, "faces": [[100, 100, 300, 400], [600, 100, 800, 400]]}
+    for f in range(0, 30)
+]
 
 
 def _make_project(tmp_path, name="MyProj", with_coords=True):
@@ -50,13 +52,15 @@ def _make_project(tmp_path, name="MyProj", with_coords=True):
     if with_coords:
         (proj / "final").mkdir(exist_ok=True)
         (proj / "final" / "000_coords.json").write_text(
-            json.dumps(FACE_SINGLE), encoding="utf-8")
+            json.dumps(FACE_SINGLE), encoding="utf-8"
+        )
     return proj
 
 
 # ---------------------------------------------------------------------------
 # scripts/export_xml.py wrapper
 # ---------------------------------------------------------------------------
+
 
 def test_export_xml_module_exposes_export_pack(tmp_path):
     # The wrapper re-exports export_pack; behaviour (not module identity)
@@ -70,31 +74,53 @@ def test_export_xml_module_exposes_export_pack(tmp_path):
 
 def test_export_xml_cli_help_exits_zero():
     result = subprocess.run(
-        [sys.executable, os.path.join(REPO_ROOT, "scripts", "export_xml.py"),
-         "--help"],
-        capture_output=True, text=True, timeout=60)
+        [sys.executable, os.path.join(REPO_ROOT, "scripts", "export_xml.py"), "--help"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
     assert result.returncode == 0
     assert "usage" in result.stdout.lower()
 
 
 def test_export_xml_cli_passes_args_to_export_pack(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(top_level_exporter, "export_pack",
-                        lambda project, segment, fmt="premiere": calls.append(
-                            (project, segment, fmt)))
-    monkeypatch.setattr(sys, "argv", [
-        "export_xml.py", "--project", str(tmp_path),
-        "--segment", "2", "--format", "premiere"])
-    runpy.run_path(os.path.join(REPO_ROOT, "scripts", "export_xml.py"),
-                   run_name="__main__")
+    monkeypatch.setattr(
+        top_level_exporter,
+        "export_pack",
+        lambda project, segment, fmt="premiere": calls.append((project, segment, fmt)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "export_xml.py",
+            "--project",
+            str(tmp_path),
+            "--segment",
+            "2",
+            "--format",
+            "premiere",
+        ],
+    )
+    runpy.run_path(
+        os.path.join(REPO_ROOT, "scripts", "export_xml.py"), run_name="__main__"
+    )
     assert calls == [(str(tmp_path), 2, "premiere")]
 
 
 def test_export_xml_cli_missing_required_arg_exits(tmp_path):
     result = subprocess.run(
-        [sys.executable, os.path.join(REPO_ROOT, "scripts", "export_xml.py"),
-         "--project", str(tmp_path)],
-        capture_output=True, text=True, timeout=60)
+        [
+            sys.executable,
+            os.path.join(REPO_ROOT, "scripts", "export_xml.py"),
+            "--project",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
     assert result.returncode != 0
     assert "segment" in result.stderr
 
@@ -102,6 +128,7 @@ def test_export_xml_cli_missing_required_arg_exits(tmp_path):
 # ---------------------------------------------------------------------------
 # export_pack
 # ---------------------------------------------------------------------------
+
 
 def test_export_pack_rejects_unsupported_format(tmp_path):
     proj = _make_project(tmp_path)
@@ -135,8 +162,14 @@ def test_export_pack_happy_path_1080p(tmp_path, monkeypatch):
     root = ET.fromstring((stage / "timeline.xml").read_text(encoding="utf-8"))
     assert root.tag == "xmeml"
     assert root.find(".//sequence/name").text == "MyProj_CutRef"
-    assert root.find(".//sequence/media/video/format/samplecharacteristics/width").text == "1080"
-    assert root.find(".//sequence/media/video/format/samplecharacteristics/height").text == "1920"
+    assert (
+        root.find(".//sequence/media/video/format/samplecharacteristics/width").text
+        == "1080"
+    )
+    assert (
+        root.find(".//sequence/media/video/format/samplecharacteristics/height").text
+        == "1920"
+    )
 
 
 def test_export_pack_4k_source_upgrades_sequence(tmp_path, monkeypatch):
@@ -147,23 +180,37 @@ def test_export_pack_4k_source_upgrades_sequence(tmp_path, monkeypatch):
     assert zip_path is not None
     xml = (proj / "export_MyProj_seg0" / "timeline.xml").read_text(encoding="utf-8")
     root = ET.fromstring(xml)
-    assert root.find(".//sequence/media/video/format/samplecharacteristics/width").text == "2160"
-    assert root.find(".//sequence/media/video/format/samplecharacteristics/height").text == "3840"
+    assert (
+        root.find(".//sequence/media/video/format/samplecharacteristics/width").text
+        == "2160"
+    )
+    assert (
+        root.find(".//sequence/media/video/format/samplecharacteristics/height").text
+        == "3840"
+    )
 
 
 def test_export_pack_with_subtitles_writes_srt_and_overlays(tmp_path, monkeypatch):
     proj = _make_project(tmp_path)
     (proj / "subs_ass").mkdir()
-    (proj / "subs_ass" / "000_test_processed.ass").write_text("[Script Info]", encoding="utf-8")
+    (proj / "subs_ass" / "000_test_processed.ass").write_text(
+        "[Script Info]", encoding="utf-8"
+    )
     (proj / "subs").mkdir()
-    (proj / "subs" / "000_test_processed.json").write_text(json.dumps({
-        "segments": [{"start": 0.0, "end": 1.5, "text": "hello"}]}), encoding="utf-8")
+    (proj / "subs" / "000_test_processed.json").write_text(
+        json.dumps({"segments": [{"start": 0.0, "end": 1.5, "text": "hello"}]}),
+        encoding="utf-8",
+    )
     overlay_file = tmp_path / "ov0.mp4"
     overlay_file.write_bytes(b"OV")
     monkeypatch.setattr(exporter, "get_video_dims", lambda p: (1920, 1080, 300, 30.0))
-    monkeypatch.setattr(exporter, "render_segmented_overlays",
-                        lambda *args: [{"start": 0.0, "end": 1.0,
-                                        "path": str(overlay_file), "index": 0}])
+    monkeypatch.setattr(
+        exporter,
+        "render_segmented_overlays",
+        lambda *args: [
+            {"start": 0.0, "end": 1.0, "path": str(overlay_file), "index": 0}
+        ],
+    )
 
     zip_path = exporter.export_pack(str(proj), 0)
 
@@ -179,8 +226,7 @@ def test_export_pack_with_subtitles_writes_srt_and_overlays(tmp_path, monkeypatc
 def test_export_pack_without_face_coords_calls_jit_detection(tmp_path, monkeypatch):
     proj = _make_project(tmp_path, with_coords=False)
     monkeypatch.setattr(exporter, "get_video_dims", lambda p: (1920, 1080, 300, 30.0))
-    monkeypatch.setattr(exporter, "detect_faces_jit",
-                        lambda video: FACE_SINGLE)
+    monkeypatch.setattr(exporter, "detect_faces_jit", lambda video: FACE_SINGLE)
 
     zip_path = exporter.export_pack(str(proj), 0)
     assert zip_path is not None
@@ -191,10 +237,14 @@ def test_export_pack_without_face_coords_calls_jit_detection(tmp_path, monkeypat
 # create_premiere_xml
 # ---------------------------------------------------------------------------
 
+
 def test_xml_escapes_user_strings_and_parses():
     xml = create_premiere_xml(
-        project_name="A & B <Test>", video_path="/v/clip & one.mp4",
-        overlay_segments=[], duration_frames=300)
+        project_name="A & B <Test>",
+        video_path="/v/clip & one.mp4",
+        overlay_segments=[],
+        duration_frames=300,
+    )
     assert "A &amp; B" in xml
     assert "& B" not in xml.replace("&amp;", "")
     root = ET.fromstring(xml)
@@ -203,18 +253,25 @@ def test_xml_escapes_user_strings_and_parses():
 
 def test_xml_single_track_default_center():
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4",
-        overlay_segments=[], duration_frames=300)
+        project_name="P",
+        video_path="/v/clip.mp4",
+        overlay_segments=[],
+        duration_frames=300,
+    )
     assert xml.count("clipitem-video-") == 1
     assert "Crop" not in xml
 
 
 def test_xml_dual_track_when_two_faces_dominate():
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4",
+        project_name="P",
+        video_path="/v/clip.mp4",
         overlay_segments=[{"start": 0.0, "end": 1.0, "path": "/v/ov0.mp4", "index": 0}],
-        duration_frames=60, face_data=FACE_DUAL,
-        source_width=1920, source_height=1080)
+        duration_frames=60,
+        face_data=FACE_DUAL,
+        source_width=1920,
+        source_height=1080,
+    )
     # V1 + V2 + overlay + audio tracks, and split-screen cropping.
     assert xml.count("<track>") == 4
     assert "Crop" in xml
@@ -223,12 +280,14 @@ def test_xml_dual_track_when_two_faces_dominate():
 
 def test_xml_gap_filling_and_zero_duration_segments_skipped():
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4",
+        project_name="P",
+        video_path="/v/clip.mp4",
         overlay_segments=[
             {"start": 1.0, "end": 2.0, "path": "/v/ov1.mp4", "index": 1},
             {"start": 2.0, "end": 2.0, "path": "/v/ov2.mp4", "index": 2},  # zero length
         ],
-        duration_frames=90)
+        duration_frames=90,
+    )
     # Gap [0,30] + segment [30,60] + final gap [60,90] = 3 V1 cuts.
     assert xml.count("clipitem-video-") == 3
     assert "ov2.mp4" not in xml
@@ -237,22 +296,38 @@ def test_xml_gap_filling_and_zero_duration_segments_skipped():
 def test_xml_face_src_size_metadata_and_malformed_fallback():
     good = [{"frame": 0, "src_size": [3840, 2160], "faces": [[100, 100, 300, 400]]}]
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4", overlay_segments=[],
-        duration_frames=300, face_data=good, source_width=1920, source_height=1080)
+        project_name="P",
+        video_path="/v/clip.mp4",
+        overlay_segments=[],
+        duration_frames=300,
+        face_data=good,
+        source_width=1920,
+        source_height=1080,
+    )
     ET.fromstring(xml)
 
     bad = [{"frame": 0, "src_size": "not-a-pair", "faces": [[100, 100, 300, 400]]}]
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4", overlay_segments=[],
-        duration_frames=300, face_data=bad, source_width=1920, source_height=1080)
+        project_name="P",
+        video_path="/v/clip.mp4",
+        overlay_segments=[],
+        duration_frames=300,
+        face_data=bad,
+        source_width=1920,
+        source_height=1080,
+    )
     ET.fromstring(xml)  # malformed metadata falls back to source dims
 
 
 def test_xml_explicit_ids_are_used():
     xml = create_premiere_xml(
-        project_name="P", video_path="/v/clip.mp4", overlay_segments=[],
-        duration_frames=30, video_file_id="file-video-abc",
-        audio_file_id="file-audio-xyz")
+        project_name="P",
+        video_path="/v/clip.mp4",
+        overlay_segments=[],
+        duration_frames=30,
+        video_file_id="file-video-abc",
+        audio_file_id="file-audio-xyz",
+    )
     assert 'id="file-video-abc"' in xml
     assert 'id="file-audio-xyz"' in xml
 
@@ -260,6 +335,7 @@ def test_xml_explicit_ids_are_used():
 # ---------------------------------------------------------------------------
 # utils: SRT + ffprobe dims
 # ---------------------------------------------------------------------------
+
 
 def test_timestamp_to_srt():
     assert timestamp_to_srt(0) == "00:00:00,000"
@@ -270,14 +346,16 @@ def test_timestamp_to_srt():
 def test_json_to_srt_segment_and_word_level():
     srt = json_to_srt([{"start": 0, "end": 1.5, "text": "hello"}])
     assert srt == "1\n00:00:00,000 --> 00:00:01,500\nhello\n\n"
-    srt = json_to_srt([{"start": 2, "end": 3, "words": [
-        {"start": 2, "end": 2.5, "word": "hi"}]}])
+    srt = json_to_srt(
+        [{"start": 2, "end": 3, "words": [{"start": 2, "end": 2.5, "word": "hi"}]}]
+    )
     assert "1\n00:00:02,000 --> 00:00:02,500\nhi\n\n" in srt
 
 
 def test_json_to_srt_tuple_rows_and_empty():
     assert json_to_srt([(0, 1.0, "tuple text")]) == (
-        "1\n00:00:00,000 --> 00:00:01,000\ntuple text\n\n")
+        "1\n00:00:00,000 --> 00:00:01,000\ntuple text\n\n"
+    )
     assert json_to_srt([]) == ""
 
 

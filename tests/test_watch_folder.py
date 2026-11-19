@@ -43,7 +43,10 @@ def test_unstable_or_recent_file_is_skipped(tmp_path):
 
 def test_auto_runtime_uses_detected_gpu_profile(tmp_path):
     profile = tmp_path / "gpu_profile.json"
-    profile.write_text('{"vram_tier":"6gb","transcription":{"device":"cuda","model":"medium"}}', encoding="utf-8")
+    profile.write_text(
+        '{"vram_tier":"6gb","transcription":{"device":"cuda","model":"medium"}}',
+        encoding="utf-8",
+    )
     args = Namespace(gpu_profile=profile, device="auto", model="auto")
     assert resolve_runtime(args) == ("cuda", "medium", "6gb")
 
@@ -55,7 +58,10 @@ def test_auto_runtime_falls_back_safely_without_profile(tmp_path):
 
 def test_explicit_runtime_overrides_profile(tmp_path):
     profile = tmp_path / "gpu_profile.json"
-    profile.write_text('{"vram_tier":"12gb","transcription":{"device":"cuda","model":"large-v3-turbo"}}', encoding="utf-8")
+    profile.write_text(
+        '{"vram_tier":"12gb","transcription":{"device":"cuda","model":"large-v3-turbo"}}',
+        encoding="utf-8",
+    )
     args = Namespace(gpu_profile=profile, device="cpu", model="small")
     assert resolve_runtime(args) == ("cpu", "small", "12gb")
 
@@ -67,8 +73,15 @@ def test_scan_skips_file_removed_before_stat(tmp_path, monkeypatch):
     app.write_text("", encoding="utf-8")
     missing = input_dir / "vanished.mp4"
     monkeypatch.setattr(watch_folder, "discover", lambda *_args: [missing])
-    result = watch_folder.main([
-        "--input", str(input_dir), "--app", str(app),
-        "--state-dir", str(tmp_path / ".state"), "--once",
-    ])
+    result = watch_folder.main(
+        [
+            "--input",
+            str(input_dir),
+            "--app",
+            str(app),
+            "--state-dir",
+            str(tmp_path / ".state"),
+            "--once",
+        ]
+    )
     assert result == 0

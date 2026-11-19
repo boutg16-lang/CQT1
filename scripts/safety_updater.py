@@ -57,16 +57,19 @@ import os
 import time
 import urllib.request
 
-REMOTE_URL = ("https://raw.githubusercontent.com/"
-              "boutg16-lang/CQT1/main/safety_blocklist.json")
+REMOTE_URL = (
+    "https://raw.githubusercontent.com/boutg16-lang/CQT1/main/safety_blocklist.json"
+)
 
 # v7.18: fallback mirrors / community packs merged on top of the canonical
 # pack. Each entry may also carry "required": False to tolerate a dead mirror.
 REMOTE_SOURCES = [
     {"url": REMOTE_URL, "required": True, "label": "canonical"},
     {
-        "url": ("https://raw.githubusercontent.com/"
-                "eldjazaireldjadida4-web/ViralCutter/main/safety_blocklist.json"),
+        "url": (
+            "https://raw.githubusercontent.com/"
+            "eldjazaireldjadida4-web/ViralCutter/main/safety_blocklist.json"
+        ),
         "required": False,
         "label": "legacy-mirror",
     },
@@ -74,12 +77,12 @@ REMOTE_SOURCES = [
 
 CACHE_FILENAME = "safety_blocklist_cache.json"
 STAMP_FILENAME = ".safety_update_stamp"
-FETCH_TIMEOUT = 10          # seconds
-MAX_TERMS = 20000           # sanity limit for a downloaded pack
+FETCH_TIMEOUT = 10  # seconds
+MAX_TERMS = 20000  # sanity limit for a downloaded pack
 ONE_DAY = 24 * 3600
-MAX_SOURCES = 8             # sanity limit for merged packs
+MAX_SOURCES = 8  # sanity limit for merged packs
 SIDECAR_SUFFIX = ".sha256"  # hash sidecar published next to each pack
-SIDECAR_MAX_BYTES = 4096    # a sidecar is one short "<hex>  <name>" line
+SIDECAR_MAX_BYTES = 4096  # a sidecar is one short "<hex>  <name>" line
 
 
 def _repo_root():
@@ -98,6 +101,7 @@ def stamp_path(base_dir=None):
 # Validation
 # ---------------------------------------------------------------------------
 
+
 def validate_pack(data):
     """Return the normalized {"version": int, "terms": [...]} or None."""
     if not isinstance(data, dict):
@@ -109,22 +113,29 @@ def validate_pack(data):
     for t in terms:
         if not isinstance(t, dict) or not t.get("term"):
             continue
-        clean.append({
-            "term": str(t["term"])[:200],
-            "lang": str(t.get("lang", "multi"))[:20],
-            "severity": t.get("severity") if t.get("severity") in ("low", "medium", "high") else "high",
-            "category": str(t.get("category", "custom"))[:50],
-        })
+        clean.append(
+            {
+                "term": str(t["term"])[:200],
+                "lang": str(t.get("lang", "multi"))[:20],
+                "severity": t.get("severity")
+                if t.get("severity") in ("low", "medium", "high")
+                else "high",
+                "category": str(t.get("category", "custom"))[:50],
+            }
+        )
     if not clean:
         return None
     try:
         version = int(data.get("version", 0))
     except Exception:
         version = 0
-    return {"version": version, "terms": clean,
-            "updated": str(data.get("updated", ""))[:40],
-            "reviewed_at": str(data.get("reviewed_at", ""))[:40],
-            "source": str(data.get("source", ""))[:200]}
+    return {
+        "version": version,
+        "terms": clean,
+        "updated": str(data.get("updated", ""))[:40],
+        "reviewed_at": str(data.get("reviewed_at", ""))[:40],
+        "source": str(data.get("source", ""))[:200],
+    }
 
 
 def load_cached_pack(base_dir=None):
@@ -143,11 +154,14 @@ def load_cached_pack(base_dir=None):
 # Update logic
 # ---------------------------------------------------------------------------
 
+
 def _fetch_bytes(url, timeout=FETCH_TIMEOUT, max_bytes=2 * 1024 * 1024):
     """Download raw bytes from ``url`` (2 MB cap by default)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "ViralCutter-safety-updater"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "ViralCutter-safety-updater"}
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read(max_bytes + 1)[:max_bytes + 1]
+        return resp.read(max_bytes + 1)[: max_bytes + 1]
 
 
 def _fetch_json(url, timeout=FETCH_TIMEOUT):
@@ -157,6 +171,7 @@ def _fetch_json(url, timeout=FETCH_TIMEOUT):
 # ---------------------------------------------------------------------------
 # SHA-256 verification
 # ---------------------------------------------------------------------------
+
 
 def parse_sidecar(text):
     """Parse a ``.sha256`` sidecar and return the expected hex digest.
@@ -203,8 +218,9 @@ def _fetch_pack(source):
     except Exception as e:
         return None, "{}: {}".format(label, e)
     try:
-        sidecar = _fetch_bytes(source["url"] + SIDECAR_SUFFIX,
-                               max_bytes=SIDECAR_MAX_BYTES)
+        sidecar = _fetch_bytes(
+            source["url"] + SIDECAR_SUFFIX, max_bytes=SIDECAR_MAX_BYTES
+        )
     except Exception as e:
         return None, "{}: hash sidecar unavailable ({})".format(label, e)
     if len(sidecar) > SIDECAR_MAX_BYTES:
@@ -254,14 +270,15 @@ def merge_packs(packs):
             key = (term["term"].casefold(), term["lang"])
             previous = merged.get(key)
             order = {"low": 0, "medium": 1, "high": 2}
-            if previous is None or order.get(term["severity"], 2) > order.get(previous["severity"], 2):
+            if previous is None or order.get(term["severity"], 2) > order.get(
+                previous["severity"], 2
+            ):
                 merged[key] = term
     reviewed_at = ""
     if reviewed_dates and all(reviewed_dates):
         try:
             reviewed_at = min(
-                datetime.date.fromisoformat(value[:10])
-                for value in reviewed_dates
+                datetime.date.fromisoformat(value[:10]) for value in reviewed_dates
             ).isoformat()
         except (TypeError, ValueError):
             pass
@@ -302,15 +319,20 @@ def check_and_update(base_dir=None, url=None, force=False, extra_urls=None):
         try:
             last = float(open(stamp, encoding="utf-8").read().strip() or "0")
             if time.time() - last < ONE_DAY:
-                return {"status": "up-to-date", "version": cached_version,
-                        "previous_version": cached_version,
-                        "message": "checked recently (daily throttle)"}
+                return {
+                    "status": "up-to-date",
+                    "version": cached_version,
+                    "previous_version": cached_version,
+                    "message": "checked recently (daily throttle)",
+                }
         except Exception:
             pass
 
     if url is not None:
         sources = [{"url": url, "required": True, "label": "primary"}]
-        sources.extend({"url": u, "required": False, "label": "extra"} for u in (extra_urls or []))
+        sources.extend(
+            {"url": u, "required": False, "label": "extra"} for u in (extra_urls or [])
+        )
     else:
         sources = [{"url": REMOTE_URL, "required": True, "label": "canonical"}]
         for source in REMOTE_SOURCES:
@@ -342,44 +364,65 @@ def check_and_update(base_dir=None, url=None, force=False, extra_urls=None):
         if verification_failed:
             # Fail closed, and say so: a pack was reachable but its hash
             # did not check out — that is not a network problem.
-            return {"status": "error", "version": cached_version,
-                    "previous_version": cached_version,
-                    "message": "hash verification failed ({}) — keeping previous list".format(
-                        "; ".join(errors[:2]))}
-        return {"status": "offline", "version": cached_version,
+            return {
+                "status": "error",
+                "version": cached_version,
                 "previous_version": cached_version,
-                "message": "could not reach any update source ({}) — using local list".format(
-                    "; ".join(errors[:2]))}
+                "message": "hash verification failed ({}) — keeping previous list".format(
+                    "; ".join(errors[:2])
+                ),
+            }
+        return {
+            "status": "offline",
+            "version": cached_version,
+            "previous_version": cached_version,
+            "message": "could not reach any update source ({}) — using local list".format(
+                "; ".join(errors[:2])
+            ),
+        }
 
     merged = merge_packs(fetched)
     # Provenance: every merged pack was SHA-256 verified, record that in
     # the cached pack itself (merge_packs only keeps the packs' own
     # "source" strings, which say nothing about verification).
     merged["source"] = "; ".join(
-        "{} [sha256 verified]".format(label) for label in verified_labels)
+        "{} [sha256 verified]".format(label) for label in verified_labels
+    )
     if merged["version"] <= cached_version and cached is not None:
-        return {"status": "up-to-date", "version": cached_version,
-                "previous_version": cached_version,
-                "message": "list is current (v{})".format(cached_version)}
+        return {
+            "status": "up-to-date",
+            "version": cached_version,
+            "previous_version": cached_version,
+            "message": "list is current (v{})".format(cached_version),
+        }
 
     try:
         with open(cache_path(base_dir), "w", encoding="utf-8") as f:
             json.dump(merged, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        return {"status": "error", "version": cached_version,
-                "previous_version": cached_version,
-                "message": "could not write cache ({})".format(e)}
+        return {
+            "status": "error",
+            "version": cached_version,
+            "previous_version": cached_version,
+            "message": "could not write cache ({})".format(e),
+        }
 
     message = "updated v{} → v{} ({} terms, sources: {})".format(
-        cached_version, merged["version"], len(merged["terms"]),
-        merged.get("source", "?"))
+        cached_version,
+        merged["version"],
+        len(merged["terms"]),
+        merged.get("source", "?"),
+    )
     if errors:
         # A source was skipped (e.g. a mirror without a sidecar) — say so
         # instead of silently merging a subset.
         message += "; skipped: {}".format("; ".join(errors))
-    return {"status": "updated", "version": merged["version"],
-            "previous_version": cached_version,
-            "message": message}
+    return {
+        "status": "updated",
+        "version": merged["version"],
+        "previous_version": cached_version,
+        "message": message,
+    }
 
 
 def watch(base_dir=None, interval_hours=6, max_cycles=None):
@@ -389,13 +432,17 @@ def watch(base_dir=None, interval_hours=6, max_cycles=None):
     for long-running WebUI sessions and always-on boxes.
     """
     import time as _time
+
     interval = max(1.0, float(interval_hours)) * 3600
     cycle = 0
     while max_cycles is None or cycle < max_cycles:
         cycle += 1
         result = check_and_update(base_dir=base_dir, force=True)
-        print("[safety-updater] cycle {}: {} — {}".format(
-            cycle, result["status"], result["message"]))
+        print(
+            "[safety-updater] cycle {}: {} — {}".format(
+                cycle, result["status"], result["message"]
+            )
+        )
         if max_cycles is not None and cycle >= max_cycles:
             break
         _time.sleep(interval)
@@ -404,16 +451,35 @@ def watch(base_dir=None, interval_hours=6, max_cycles=None):
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="Update the hate-speech blocklist from GitHub (multi-source).")
-    parser.add_argument("--force", action="store_true", help="ignore the daily throttle")
-    parser.add_argument("--url", default=REMOTE_URL, help="override the primary pack URL")
-    parser.add_argument("--extra-url", action="append", default=[],
-                        help="additional pack URL to merge (repeatable)")
-    parser.add_argument("--watch", type=float, default=None, metavar="HOURS",
-                        help="continuous mode: re-check every N hours")
-    parser.add_argument("--cycles", type=int, default=None,
-                        help="with --watch: stop after N cycles (default: forever)")
+        description="Update the hate-speech blocklist from GitHub (multi-source)."
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="ignore the daily throttle"
+    )
+    parser.add_argument(
+        "--url", default=REMOTE_URL, help="override the primary pack URL"
+    )
+    parser.add_argument(
+        "--extra-url",
+        action="append",
+        default=[],
+        help="additional pack URL to merge (repeatable)",
+    )
+    parser.add_argument(
+        "--watch",
+        type=float,
+        default=None,
+        metavar="HOURS",
+        help="continuous mode: re-check every N hours",
+    )
+    parser.add_argument(
+        "--cycles",
+        type=int,
+        default=None,
+        help="with --watch: stop after N cycles (default: forever)",
+    )
     args = parser.parse_args()
 
     if args.watch is not None:
@@ -421,8 +487,7 @@ def main():
         print("[safety-updater] watch finished after {} cycle(s)".format(count))
         return
 
-    result = check_and_update(force=args.force, url=args.url,
-                              extra_urls=args.extra_url)
+    result = check_and_update(force=args.force, url=args.url, extra_urls=args.extra_url)
     print("[safety-updater] {}: {}".format(result["status"], result["message"]))
 
 

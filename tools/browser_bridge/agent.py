@@ -50,7 +50,9 @@ def request(relay_url, path, method="GET", token=None, body=None, timeout=35):
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = "Bearer " + token
-    req = urllib.request.Request(relay_url + path, data=data, headers=headers, method=method)
+    req = urllib.request.Request(
+        relay_url + path, data=data, headers=headers, method=method
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -59,7 +61,9 @@ def request(relay_url, path, method="GET", token=None, body=None, timeout=35):
             payload = json.loads(exc.read().decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             payload = {"error": "Relay returned HTTP {}".format(exc.code)}
-        raise BridgeError(payload.get("error", "Relay request failed"), status=exc.code) from exc
+        raise BridgeError(
+            payload.get("error", "Relay request failed"), status=exc.code
+        ) from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise BridgeError("Relay request failed: {}".format(exc)) from exc
     if not isinstance(payload, dict):
@@ -105,8 +109,13 @@ def stop_session(session_id, token, relay_url=DEFAULT_RELAY_URL):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create and control an isolated local CAT browser test session.")
-    parser.add_argument("--relay-url", default=os.environ.get("CAT_BROWSER_BRIDGE_URL", DEFAULT_RELAY_URL))
+    parser = argparse.ArgumentParser(
+        description="Create and control an isolated local CAT browser test session."
+    )
+    parser.add_argument(
+        "--relay-url",
+        default=os.environ.get("CAT_BROWSER_BRIDGE_URL", DEFAULT_RELAY_URL),
+    )
     parser.add_argument("command", choices=("create", "status", "action", "stop"))
     parser.add_argument("--session-id")
     parser.add_argument("--action-json")
@@ -119,7 +128,9 @@ def main():
             session_id = args.session_id
             token = os.environ.get("CAT_BROWSER_AGENT_TOKEN", "")
             if not session_id or not token:
-                raise BridgeError("Set CAT_BROWSER_AGENT_TOKEN and provide --session-id")
+                raise BridgeError(
+                    "Set CAT_BROWSER_AGENT_TOKEN and provide --session-id"
+                )
             if args.command == "status":
                 result = session_status(session_id, token, args.relay_url)
             elif args.command == "stop":
@@ -127,7 +138,9 @@ def main():
             else:
                 if not args.action_json:
                     raise BridgeError("--action-json is required for action")
-                result = perform_action(session_id, token, json.loads(args.action_json), args.relay_url)
+                result = perform_action(
+                    session_id, token, json.loads(args.action_json), args.relay_url
+                )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (BridgeError, json.JSONDecodeError) as exc:

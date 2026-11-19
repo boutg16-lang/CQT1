@@ -7,6 +7,7 @@ files remain readable and can be migrated without discarding user data.
 
 No gradio imports — pure and unit-testable.
 """
+
 import json
 import logging
 import os
@@ -130,23 +131,36 @@ def load_ui_settings(base_dir=None):
     from scripts.secure_config import get_keys as _secure_get_keys
     from scripts.secure_config import resolve_api_keys as _resolve_keys
     from scripts.secure_config import secure_config_path
+
     keys = []
     source = KEY_SOURCE_NONE
-    env_keys = _resolve_keys(base_dir=base_dir, warn=False) if os.getenv("VIRALCUTTER_GEMINI_KEYS") or os.getenv("VIRALCUTTER_GEMINI_KEY") or os.getenv("GEMINI_API_KEY") else []
+    env_keys = (
+        _resolve_keys(base_dir=base_dir, warn=False)
+        if os.getenv("VIRALCUTTER_GEMINI_KEYS")
+        or os.getenv("VIRALCUTTER_GEMINI_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        else []
+    )
     if env_keys:
         keys, source = env_keys, KEY_SOURCE_ENV
     else:
         try:
             keys = _secure_get_keys(base_dir=base_dir)
         except Exception as exc:
-            logger.warning("Could not load encrypted Gemini settings (%s).", type(exc).__name__)
+            logger.warning(
+                "Could not load encrypted Gemini settings (%s).", type(exc).__name__
+            )
             keys = []
         if keys:
             source = KEY_SOURCE_SECURE
     secure_store_exists = os.path.isfile(secure_config_path(base_dir))
     if not keys and not secure_store_exists:
         file_keys = gemini.get("api_keys") or [gemini.get("api_key", "")]
-        keys = [str(item).strip() for item in file_keys if str(item or "").strip() not in FAKE_KEYS][:3]
+        keys = [
+            str(item).strip()
+            for item in file_keys
+            if str(item or "").strip() not in FAKE_KEYS
+        ][:3]
         if keys:
             source = KEY_SOURCE_FILE
     key = keys[0] if keys else ""
@@ -173,18 +187,27 @@ def load_ui_settings(base_dir=None):
         # Local servers need no key; hosted ones read OPENAI_API_KEY. In auto
         # mode the OpenAI key is shown when present, otherwise the saved
         # Gemini key remains visible (auto may legitimately use Gemini).
-        openai_key = (os.getenv("OPENAI_API_KEY", "").strip()
-                      or os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
-                      or str(openai_cfg.get("api_key") or "").strip())
+        openai_key = (
+            os.getenv("OPENAI_API_KEY", "").strip()
+            or os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
+            or str(openai_cfg.get("api_key") or "").strip()
+        )
         if openai_key:
             key = openai_key
-            source = (KEY_SOURCE_ENV
-                      if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY")
-                      else KEY_SOURCE_FILE)
+            source = (
+                KEY_SOURCE_ENV
+                if os.getenv("OPENAI_API_KEY") or os.getenv("VIRALCUTTER_OPENAI_KEY")
+                else KEY_SOURCE_FILE
+            )
         elif backend == "openai":
             key = ""
-    default_chunk = (20000 if backend == "gemini"
-                     else 12000 if backend in {"openai", "auto"} else 2000)
+    default_chunk = (
+        20000
+        if backend == "gemini"
+        else 12000
+        if backend in {"openai", "auto"}
+        else 2000
+    )
     chunk = _coerce_chunk(backend_cfg.get("chunk_size"), default_chunk)
     if backend == "openai" and not model:
         model = str(openai_cfg.get("model") or "llama3.1")
@@ -193,23 +216,34 @@ def load_ui_settings(base_dir=None):
         "ai_backend": backend,
         "api_key": key,
         "api_keys": keys,
-        "key_mode": str(gemini.get("key_mode") or "auto") if str(gemini.get("key_mode") or "auto") in {"auto", "1", "2", "3"} else "auto",
+        "key_mode": str(gemini.get("key_mode") or "auto")
+        if str(gemini.get("key_mode") or "auto") in {"auto", "1", "2", "3"}
+        else "auto",
         "key_source": source,
         "ai_model": model,
         "chunk_size": chunk,
         "openai_base_url": str(
             os.getenv("VIRALCUTTER_OPENAI_BASE_URL", "").strip()
             or os.getenv("OPENAI_BASE_URL", "").strip()
-            or openai_cfg.get("base_url") or "http://localhost:11434/v1"),
+            or openai_cfg.get("base_url")
+            or "http://localhost:11434/v1"
+        ),
         "embedding_model": str(openai_cfg.get("embedding_model") or "bge-m3"),
-        "embeddings": bool(openai_cfg.get("embeddings")) or str(
-            os.getenv("VIRALCUTTER_EMBEDDINGS", "")).strip().lower() in {
-                "1", "true", "yes", "on"},
+        "embeddings": bool(openai_cfg.get("embeddings"))
+        or str(os.getenv("VIRALCUTTER_EMBEDDINGS", "")).strip().lower()
+        in {"1", "true", "yes", "on"},
     }
 
 
-def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=None,
-                     base_dir=None, api_keys=None, key_mode=None):
+def save_ui_settings(
+    ai_backend=None,
+    api_key=None,
+    ai_model=None,
+    chunk_size=None,
+    base_dir=None,
+    api_keys=None,
+    key_mode=None,
+):
     """Persist settings without writing Gemini keys to the legacy plaintext file."""
     path = legacy_config_path(base_dir)
     config = _defaults()
@@ -224,8 +258,10 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
                     return False, "بنية ملف الإعدادات غير صالحة؛ لم يتم تغييره."
             config.update(loaded)
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
-            logger.warning("Could not read saved AI settings (%s); refusing to replace the file.",
-                           type(exc).__name__)
+            logger.warning(
+                "Could not read saved AI settings (%s); refusing to replace the file.",
+                type(exc).__name__,
+            )
             return False, "تعذّرت قراءة ملف الإعدادات؛ لم يتم تغييره."
 
     for section in ("gemini", "g4f", "openai"):
@@ -234,8 +270,15 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
 
     env_keys = []
     from scripts.secure_config import resolve_api_keys as _resolve_keys
-    if any(os.getenv(name) for name in (
-            "VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY")):
+
+    if any(
+        os.getenv(name)
+        for name in (
+            "VIRALCUTTER_GEMINI_KEYS",
+            "VIRALCUTTER_GEMINI_KEY",
+            "GEMINI_API_KEY",
+        )
+    ):
         env_keys = _resolve_keys(base_dir=base_dir, warn=False)
     if ai_backend in VALID_BACKENDS:
         config["selected_api"] = ai_backend
@@ -257,39 +300,53 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
     # for the current run and nothing is written to disk.
     openai_backend = backend in {"openai", "auto"}
     if openai_backend:
-        clean_keys = [key for key in clean_keys
-                      if key.startswith(GEMINI_KEY_PREFIX)]
+        clean_keys = [key for key in clean_keys if key.startswith(GEMINI_KEY_PREFIX)]
     if clean_keys and not env_keys:
         config["gemini"]["api_keys"] = clean_keys
         config["gemini"]["api_key"] = clean_keys[0]
     elif not isinstance(config["gemini"].get("api_keys"), list):
         legacy_key = str(config["gemini"].get("api_key") or "").strip()
-        config["gemini"]["api_keys"] = [legacy_key] if legacy_key and legacy_key not in FAKE_KEYS else []
+        config["gemini"]["api_keys"] = (
+            [legacy_key] if legacy_key and legacy_key not in FAKE_KEYS else []
+        )
 
     if key_mode in {"auto", "1", "2", "3"}:
         config["gemini"]["key_mode"] = key_mode
 
-    section = (config["gemini"] if backend == "gemini"
-               else config["openai"] if backend == "openai"
-               else config["g4f"] if backend == "g4f" else None)
+    section = (
+        config["gemini"]
+        if backend == "gemini"
+        else config["openai"]
+        if backend == "openai"
+        else config["g4f"]
+        if backend == "g4f"
+        else None
+    )
     if ai_model and section is not None:
         if backend == "gemini":
             supported_model = resolve_gemini_model(ai_model)
             if supported_model != str(ai_model).strip():
-                return False, "Gemini model is unavailable; choose one of the listed models."
+                return (
+                    False,
+                    "Gemini model is unavailable; choose one of the listed models.",
+                )
             section["model"] = supported_model
         else:
             section["model"] = str(ai_model).strip()
     if chunk_size is not None and section is not None:
-        default_chunk = (20000 if backend == "gemini"
-                         else 12000 if backend == "openai" else 2000)
+        default_chunk = (
+            20000 if backend == "gemini" else 12000 if backend == "openai" else 2000
+        )
         section["chunk_size"] = _coerce_chunk(chunk_size, default_chunk)
 
     stored = config["gemini"].get("api_keys") or [config["gemini"].get("api_key", "")]
     if isinstance(stored, str):
         stored = [stored]
-    stored_keys = [str(value or "").strip() for value in stored
-                   if str(value or "").strip() not in FAKE_KEYS]
+    stored_keys = [
+        str(value or "").strip()
+        for value in stored
+        if str(value or "").strip() not in FAKE_KEYS
+    ]
     passphrase = os.environ.get("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
     if stored_keys and not passphrase:
         return False, (
@@ -299,10 +356,13 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
     if stored_keys:
         try:
             from scripts.secure_config import set_keys
+
             set_keys(stored_keys, passphrase=passphrase, base_dir=base_dir)
         except Exception as exc:
-            logger.warning("Encrypted Gemini key storage failed (%s); settings were not written.",
-                           type(exc).__name__)
+            logger.warning(
+                "Encrypted Gemini key storage failed (%s); settings were not written.",
+                type(exc).__name__,
+            )
             return False, "تعذّر حفظ المفتاح مشفّراً؛ لم يتم حفظ الإعدادات."
         config["gemini"]["api_key"] = ""
         config["gemini"]["api_keys"] = []
@@ -313,6 +373,7 @@ def save_ui_settings(ai_backend=None, api_key=None, ai_model=None, chunk_size=No
     except (OSError, TypeError, ValueError) as exc:
         logger.warning("Could not persist AI settings (%s).", type(exc).__name__)
         return False, "تعذّر حفظ الإعدادات؛ راجع سجل التطبيق للتفاصيل."
+
 
 def mask_key(key, visible_head=4, visible_tail=4):
     """Mask a key for display: AIza****wxyz (short keys fully masked)."""
@@ -349,7 +410,9 @@ def _rest_test_gemini(api_key, timeout=10):
 
     url = "https://generativelanguage.googleapis.com/v1beta/models"
     req = urllib.request.Request(
-        url, headers={"User-Agent": "ViralCutter/1.0", "X-Goog-Api-Key": api_key.strip()})
+        url,
+        headers={"User-Agent": "ViralCutter/1.0", "X-Goog-Api-Key": api_key.strip()},
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = _json.loads(resp.read().decode("utf-8", "replace"))
@@ -360,8 +423,16 @@ def _rest_test_gemini(api_key, timeout=10):
             payload = _json.loads(exc.read(4096).decode("utf-8", "replace"))
             error = payload.get("error") or {}
             detail = _safe_api_error(error.get("message", "request rejected"), api_key)
-        except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as read_exc:
-            logger.warning("Could not read Gemini error response (%s).", type(read_exc).__name__)
+        except (
+            OSError,
+            UnicodeError,
+            ValueError,
+            TypeError,
+            AttributeError,
+        ) as read_exc:
+            logger.warning(
+                "Could not read Gemini error response (%s).", type(read_exc).__name__
+            )
             detail = "request rejected"
         return False, "HTTP {}: {}".format(exc.code, detail)
     except Exception as exc:
@@ -376,18 +447,23 @@ def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10)
         return False, "Gemini API key is empty"
     try:
         import importlib
+
         try:
             client = importlib.import_module("google.genai").Client(api_key=key)
             resp = client.models.generate_content(
-                model=model_name, contents="Reply with exactly: ok",
-                config={"http_options": {"timeout": timeout * 1000}})
+                model=model_name,
+                contents="Reply with exactly: ok",
+                config={"http_options": {"timeout": timeout * 1000}},
+            )
             return True, (getattr(resp, "text", "") or "").strip()
         except ImportError:
             try:
                 genai = importlib.import_module("google.generativeai")
                 genai.configure(api_key=key)
                 model = genai.GenerativeModel(model_name)
-                resp = model.generate_content("Reply with exactly: ok", request_options={"timeout": timeout})
+                resp = model.generate_content(
+                    "Reply with exactly: ok", request_options={"timeout": timeout}
+                )
                 text = getattr(resp, "text", "") or ""
                 return True, text.strip()
             except ImportError:
@@ -408,6 +484,7 @@ def test_gemini_connection(api_key, model_name=DEFAULT_GEMINI_MODEL, timeout=10)
 # Full WebUI preferences (v6.9.2) — remember EVERY form field, not just the
 # API key. Same spirit as the headline v6.9 feature: set it once, it stays.
 # ---------------------------------------------------------------------------
+
 
 def webui_prefs_path(base_dir=None):
     """Path of the local prefs file (default: repo root)."""

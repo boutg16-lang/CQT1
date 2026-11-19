@@ -6,17 +6,24 @@ def _detect_best_encoder():
     try:
         from scripts.ffmpeg_toolchain import encoder_works
     except Exception:
+
         def encoder_works(_codec):
             return False
+
     try:
-        result = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True
+        )
         output = result.stdout or ""
     except Exception:
         output = ""
     # Prove the encoder runs; a compiled-in h264_nvenc without a GPU fails.
-    for codec, preset in (("h264_nvenc", "p1"), ("h264_amf", "quality"),
-                          ("h264_qsv", "veryfast"),
-                          ("h264_videotoolbox", "default")):
+    for codec, preset in (
+        ("h264_nvenc", "p1"),
+        ("h264_amf", "quality"),
+        ("h264_qsv", "veryfast"),
+        ("h264_videotoolbox", "default"),
+    ):
         if codec in output and encoder_works(codec):
             return codec, preset
     return "libx264", "ultrafast"
@@ -57,19 +64,33 @@ def _subtitles_filter(subtitle_path):
     return vf
 
 
-def burn_video_file(video_path, subtitle_path, output_path, prefer_hardware_acceleration=None):
+def burn_video_file(
+    video_path, subtitle_path, output_path, prefer_hardware_acceleration=None
+):
     """Burn subtitles into a single video file with safe fallback handling."""
+
     def run_ffmpeg(encoder, preset, additional_args=None):
         additional_args = additional_args or []
         cmd = [
-            "ffmpeg", "-y", "-loglevel", "error", "-hide_banner",
-            "-i", video_path,
-            "-vf", _subtitles_filter(subtitle_path),
-            "-c:v", encoder,
-            "-preset", preset,
-            "-b:v", "5M",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-hide_banner",
+            "-i",
+            video_path,
+            "-vf",
+            _subtitles_filter(subtitle_path),
+            "-c:v",
+            encoder,
+            "-preset",
+            preset,
+            "-b:v",
+            "5M",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
             output_path,
         ] + additional_args
         subprocess.run(cmd, check=True, capture_output=True)
@@ -90,8 +111,10 @@ def burn_video_file(video_path, subtitle_path, output_path, prefer_hardware_acce
             return True, "CPU Success"
         except subprocess.CalledProcessError as e2:
             err_msg = f"Fatal error burning subtitles for {os.path.basename(video_path)}: {e2}"
-            if getattr(e2, 'stderr', None):
-                err_msg += f" | FFmpeg Log: {e2.stderr.decode('utf-8', errors='replace')}"
+            if getattr(e2, "stderr", None):
+                err_msg += (
+                    f" | FFmpeg Log: {e2.stderr.decode('utf-8', errors='replace')}"
+                )
             print(err_msg)
             return False, err_msg
     except Exception as e:
@@ -104,12 +127,14 @@ def burn(project_folder="tmp", prefer_hardware_acceleration=None):
     else:
         project_folder_abs = project_folder
 
-    subs_folder = os.path.join(project_folder_abs, 'subs_ass')
-    polished_folder = os.path.join(project_folder_abs, 'final_polished')
-    videos_folder = os.path.join(project_folder_abs, 'final')
-    if os.path.isdir(polished_folder) and any(f.endswith(('.mp4', '.mkv', '.avi')) for f in os.listdir(polished_folder)):
+    subs_folder = os.path.join(project_folder_abs, "subs_ass")
+    polished_folder = os.path.join(project_folder_abs, "final_polished")
+    videos_folder = os.path.join(project_folder_abs, "final")
+    if os.path.isdir(polished_folder) and any(
+        f.endswith((".mp4", ".mkv", ".avi")) for f in os.listdir(polished_folder)
+    ):
         videos_folder = polished_folder  # prefer the polished pass (jump cuts / zoom / music / branding)
-    output_folder = os.path.join(project_folder_abs, 'burned_sub')
+    output_folder = os.path.join(project_folder_abs, "burned_sub")
 
     os.makedirs(output_folder, exist_ok=True)
 
@@ -123,21 +148,28 @@ def burn(project_folder="tmp", prefer_hardware_acceleration=None):
         return
 
     for video_file in files:
-        if video_file.endswith(('.mp4', '.mkv', '.avi')):
+        if video_file.endswith((".mp4", ".mkv", ".avi")):
             if "temp_video_no_audio" in video_file:
                 continue
 
             video_name = os.path.splitext(video_file)[0]
             subtitle_file = os.path.join(subs_folder, f"{video_name}.ass")
             if not os.path.exists(subtitle_file):
-                subtitle_file_processed = os.path.join(subs_folder, f"{video_name}_processed.ass")
+                subtitle_file_processed = os.path.join(
+                    subs_folder, f"{video_name}_processed.ass"
+                )
                 if os.path.exists(subtitle_file_processed):
                     subtitle_file = subtitle_file_processed
 
             if os.path.exists(subtitle_file):
                 output_file = os.path.join(output_folder, f"{video_name}_subtitled.mp4")
                 print(f"Burning: {video_name}...")
-                success, msg = burn_video_file(os.path.join(videos_folder, video_file), subtitle_file, output_file, prefer_hardware_acceleration=prefer_hardware_acceleration)
+                success, msg = burn_video_file(
+                    os.path.join(videos_folder, video_file),
+                    subtitle_file,
+                    output_file,
+                    prefer_hardware_acceleration=prefer_hardware_acceleration,
+                )
                 if success:
                     print(f"Done: {output_file}")
                 else:

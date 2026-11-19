@@ -28,8 +28,15 @@ def test_fetch_tracks_does_not_return_stale_files(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "yt_dlp", SimpleNamespace(YoutubeDL=NoTracks))
     monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
 
-    assert cli.fetch_tracks("https://www.youtube.com/watch?v=abcdefghijk",
-                            str(outdir), retries=2, wait=0) == []
+    assert (
+        cli.fetch_tracks(
+            "https://www.youtube.com/watch?v=abcdefghijk",
+            str(outdir),
+            retries=2,
+            wait=0,
+        )
+        == []
+    )
     assert downloads == ["https://www.youtube.com/watch?v=abcdefghijk"] * 2
     assert stale.read_text(encoding="utf-8") == "stale"
     assert list(outdir.iterdir()) == [stale]
@@ -56,8 +63,11 @@ def test_fetch_tracks_returns_only_current_run_files(tmp_path, monkeypatch):
             attempts.append(True)
             if len(attempts) == 2:
                 path = self.options["outtmpl"]
-                for placeholder, value in (("%(id)s", "abcdefghijk"),
-                                           ("%(language)s", "ar"), ("%(ext)s", "srt")):
+                for placeholder, value in (
+                    ("%(id)s", "abcdefghijk"),
+                    ("%(language)s", "ar"),
+                    ("%(ext)s", "srt"),
+                ):
                     path = path.replace(placeholder, value)
                 with open(path, "w", encoding="utf-8") as stream:
                     stream.write("fresh")
@@ -65,8 +75,9 @@ def test_fetch_tracks_returns_only_current_run_files(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "yt_dlp", SimpleNamespace(YoutubeDL=DelayedTracks))
     monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
 
-    files = cli.fetch_tracks("https://www.youtube.com/watch?v=abcdefghijk",
-                             str(outdir), retries=3, wait=0)
+    files = cli.fetch_tracks(
+        "https://www.youtube.com/watch?v=abcdefghijk", str(outdir), retries=3, wait=0
+    )
 
     assert len(attempts) == 2
     assert len(files) == 1

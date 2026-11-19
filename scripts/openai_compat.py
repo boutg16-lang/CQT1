@@ -63,12 +63,12 @@ def _clean_base_url(value: str) -> str:
         return DEFAULT_BASE_URL
     if not re.match(r"^https?://", value, flags=re.IGNORECASE):
         raise OpenAICompatError(
-            "OpenAI-compatible base URL must start with http:// or https://")
+            "OpenAI-compatible base URL must start with http:// or https://"
+        )
     return value
 
 
-def resolve_settings(config: dict | None = None,
-                     override: dict | None = None) -> dict:
+def resolve_settings(config: dict | None = None, override: dict | None = None) -> dict:
     """Resolve base URL, key, model and embedding model from env + config.
 
     ``override`` is used by the auto-router when it probes several explicit
@@ -81,7 +81,8 @@ def resolve_settings(config: dict | None = None,
             override.get("base_url")
             or _first_env("VIRALCUTTER_OPENAI_BASE_URL", "OPENAI_BASE_URL")
             or section.get("base_url")
-            or DEFAULT_BASE_URL),
+            or DEFAULT_BASE_URL
+        ),
         "api_key": str(override.get("api_key") or "").strip()
         or _first_env("VIRALCUTTER_OPENAI_KEY", "OPENAI_API_KEY")
         or str(section.get("api_key") or "").strip(),
@@ -119,16 +120,20 @@ def _headers(api_key: str) -> dict:
 def _post(url: str, payload: dict, api_key: str, timeout: float):
     if requests is None:
         raise OpenAICompatError(
-            "requests is not installed; install the core requirements")
+            "requests is not installed; install the core requirements"
+        )
     try:
-        return requests.post(url, json=payload, headers=_headers(api_key),
-                             timeout=timeout)
+        return requests.post(
+            url, json=payload, headers=_headers(api_key), timeout=timeout
+        )
     except requests.exceptions.Timeout as exc:
         raise OpenAICompatError(
-            "request timed out after {:.0f}s: {}".format(timeout, url)) from exc
+            "request timed out after {:.0f}s: {}".format(timeout, url)
+        ) from exc
     except requests.exceptions.RequestException as exc:
         raise OpenAICompatError(
-            "could not reach {}: {}".format(url, _sanitize(exc))) from exc
+            "could not reach {}: {}".format(url, _sanitize(exc))
+        ) from exc
 
 
 def _raise_for_response(response, label: str) -> None:
@@ -142,18 +147,28 @@ def _raise_for_response(response, label: str) -> None:
     detail = _sanitize(body)
     if status in (401, 403):
         raise OpenAICompatError(
-            "{} rejected the credentials (HTTP {}). Set the provider key."
-            .format(label, status))
+            "{} rejected the credentials (HTTP {}). Set the provider key.".format(
+                label, status
+            )
+        )
     if status == 404:
         raise OpenAICompatError(
             "{} endpoint not found (HTTP 404). Check the base URL — for Ollama "
-            "it is http://localhost:11434/v1.".format(label))
+            "it is http://localhost:11434/v1.".format(label)
+        )
     raise OpenAICompatError("{} failed (HTTP {}): {}".format(label, status, detail))
 
 
-def chat(prompt: str, *, model: str | None = None, config: dict | None = None,
-         temperature: float = 0.4, max_tokens: int | None = None,
-         timeout: float | None = None, retries: int = MAX_RETRIES) -> str:
+def chat(
+    prompt: str,
+    *,
+    model: str | None = None,
+    config: dict | None = None,
+    temperature: float = 0.4,
+    max_tokens: int | None = None,
+    timeout: float | None = None,
+    retries: int = MAX_RETRIES,
+) -> str:
     """Return the assistant text for one prompt, with bounded retries.
 
     Retries only transient failures (429 and 5xx). Authentication, malformed
@@ -182,43 +197,55 @@ def chat(prompt: str, *, model: str | None = None, config: dict | None = None,
             last_error = exc
             if attempt + 1 >= retries:
                 break
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
             continue
         status = int(getattr(response, "status_code", 0) or 0)
         if status == 200:
             try:
                 data = response.json()
             except Exception as exc:
-                raise OpenAICompatError(
-                    "provider returned non-JSON response") from exc
+                raise OpenAICompatError("provider returned non-JSON response") from exc
             choices = data.get("choices") if isinstance(data, dict) else None
             if not isinstance(choices, list) or not choices:
                 raise OpenAICompatError("provider returned no choices")
-            message = choices[0].get("message") if isinstance(choices[0], dict) else None
+            message = (
+                choices[0].get("message") if isinstance(choices[0], dict) else None
+            )
             content = message.get("content") if isinstance(message, dict) else None
             if isinstance(content, list):
                 # Some servers return content parts instead of a string.
                 content = "".join(
-                    str(part.get("text") or "") for part in content
-                    if isinstance(part, dict))
+                    str(part.get("text") or "")
+                    for part in content
+                    if isinstance(part, dict)
+                )
             content = str(content or "").strip()
             if not content:
                 raise OpenAICompatError("provider returned an empty message")
             return content
         if status == 429 or 500 <= status < 600:
             last_error = OpenAICompatError(
-                "provider busy (HTTP {}) after {} attempt(s)".format(status, attempt + 1))
+                "provider busy (HTTP {}) after {} attempt(s)".format(
+                    status, attempt + 1
+                )
+            )
             if attempt + 1 < retries:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             break
         _raise_for_response(response, "chat completion")
     raise last_error or OpenAICompatError("chat completion failed")
 
 
-def embed(texts, *, model: str | None = None, config: dict | None = None,
-          timeout: float | None = None, retries: int = MAX_RETRIES,
-          batch_size: int = 32) -> list[list[float]]:
+def embed(
+    texts,
+    *,
+    model: str | None = None,
+    config: dict | None = None,
+    timeout: float | None = None,
+    retries: int = MAX_RETRIES,
+    batch_size: int = 32,
+) -> list[list[float]]:
     """Embed texts in one or more batches; returns one vector per input.
 
     Raises ``OpenAICompatError`` on any failure. Callers that treat embeddings
@@ -235,7 +262,7 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
     timeout = _timeout(timeout or settings["timeout"])
     vectors: list[list[float]] = []
     for start in range(0, len(items), max(1, int(batch_size))):
-        batch = items[start:start + batch_size]
+        batch = items[start : start + batch_size]
         payload = {"model": model, "input": batch}
         response = None
         last_error = None
@@ -246,16 +273,17 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
                 last_error = exc
                 if attempt + 1 >= retries:
                     break
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             status = int(getattr(response, "status_code", 0) or 0)
             if status == 200:
                 break
             if status == 429 or 500 <= status < 600:
                 last_error = OpenAICompatError(
-                    "embedding endpoint busy (HTTP {})".format(status))
+                    "embedding endpoint busy (HTTP {})".format(status)
+                )
                 if attempt + 1 < retries:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
             _raise_for_response(response, "embedding")
         if response is None or int(getattr(response, "status_code", 0) or 0) != 200:
@@ -268,12 +296,15 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
         if not isinstance(entries, list) or len(entries) != len(batch):
             raise OpenAICompatError(
                 "embedding endpoint returned {} vectors for {} inputs".format(
-                    len(entries) if isinstance(entries, list) else 0, len(batch)))
+                    len(entries) if isinstance(entries, list) else 0, len(batch)
+                )
+            )
         ordered = []
         for position, entry in enumerate(entries):
             if not isinstance(entry, dict):
                 raise OpenAICompatError(
-                    "embedding endpoint returned a non-object entry")
+                    "embedding endpoint returned a non-object entry"
+                )
             try:
                 index = int(entry.get("index", position))
             except (TypeError, ValueError):
@@ -291,22 +322,29 @@ def embed(texts, *, model: str | None = None, config: dict | None = None,
     return vectors
 
 
-def list_models(*, config: dict | None = None, timeout: float | None = None,
-                base_url: str | None = None,
-                api_key: str | None = None) -> list[str]:
+def list_models(
+    *,
+    config: dict | None = None,
+    timeout: float | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> list[str]:
     """Return the server's model ids (``/v1/models``)."""
     settings = resolve_settings(
-        config, override={"base_url": base_url, "api_key": api_key})
+        config, override={"base_url": base_url, "api_key": api_key}
+    )
     timeout = _timeout(timeout or settings["timeout"])
     if requests is None:
         raise OpenAICompatError("requests is not installed")
     url = settings["base_url"] + "/models"
     try:
-        response = requests.get(url, headers=_headers(settings["api_key"]),
-                                timeout=timeout)
+        response = requests.get(
+            url, headers=_headers(settings["api_key"]), timeout=timeout
+        )
     except requests.exceptions.RequestException as exc:
         raise OpenAICompatError(
-            "could not reach {}: {}".format(url, _sanitize(exc))) from exc
+            "could not reach {}: {}".format(url, _sanitize(exc))
+        ) from exc
     _raise_for_response(response, "model listing")
     try:
         data = response.json()
@@ -315,8 +353,11 @@ def list_models(*, config: dict | None = None, timeout: float | None = None,
     entries = data.get("data") if isinstance(data, dict) else None
     if not isinstance(entries, list):
         return []
-    return sorted(str(entry.get("id")) for entry in entries
-                  if isinstance(entry, dict) and entry.get("id"))
+    return sorted(
+        str(entry.get("id"))
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("id")
+    )
 
 
 def probe(config: dict | None = None) -> tuple[bool, str]:

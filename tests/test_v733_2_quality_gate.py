@@ -10,9 +10,14 @@ from scripts import create_viral_segments as cvs
 
 
 def _config(**overrides):
-    base = {"enabled": True,
-            "min": {"hook_strength": 20.0, "narrative_completeness": 20.0,
-                    "clarity_score": 20.0}}
+    base = {
+        "enabled": True,
+        "min": {
+            "hook_strength": 20.0,
+            "narrative_completeness": 20.0,
+            "clarity_score": 20.0,
+        },
+    }
     for key, value in overrides.items():
         if key == "min":
             base["min"].update(value)
@@ -22,9 +27,15 @@ def _config(**overrides):
 
 
 def _candidate(title, hook, narrative, clarity, **extra):
-    seg = {"title": title, "start_time": 10.0, "end_time": 40.0, "score": 80,
-           "hook_strength": hook, "narrative_completeness": narrative,
-           "clarity_score": clarity}
+    seg = {
+        "title": title,
+        "start_time": 10.0,
+        "end_time": 40.0,
+        "score": 80,
+        "hook_strength": hook,
+        "narrative_completeness": narrative,
+        "clarity_score": clarity,
+    }
     seg.update(extra)
     return seg
 
@@ -67,15 +78,20 @@ def test_gate_floor_override_via_env(monkeypatch):
 
 
 def test_process_segments_integrates_gate():
-    transcript = [{"start": float(i * 5), "end": float(i * 5 + 4),
-                   "text": "sentence number {}".format(i)} for i in range(8)]
+    transcript = [
+        {
+            "start": float(i * 5),
+            "end": float(i * 5 + 4),
+            "text": "sentence number {}".format(i),
+        }
+        for i in range(8)
+    ]
     raw = [
         _candidate("Strong", 85, 80, 75, start_time=0.0, end_time=20.0),
         _candidate("Weak", 10, 8, 5, start_time=25.0, end_time=39.0),
         {"title": "NoEval", "start_time": 25.0, "end_time": 39.0, "score": 70},
     ]
-    result = cvs.process_segments(raw, transcript, 10, 60,
-                                  snap_to_boundaries=False)
+    result = cvs.process_segments(raw, transcript, 10, 60, snap_to_boundaries=False)
     titles = [s["title"] for s in result["segments"]]
     assert "Weak" not in titles
     assert "Strong" in titles
@@ -84,9 +100,14 @@ def test_process_segments_integrates_gate():
 
 def test_process_segments_gate_can_be_disabled(monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_QUALITY_GATE", "0")
-    transcript = [{"start": float(i * 5), "end": float(i * 5 + 4),
-                   "text": "sentence number {}".format(i)} for i in range(8)]
+    transcript = [
+        {
+            "start": float(i * 5),
+            "end": float(i * 5 + 4),
+            "text": "sentence number {}".format(i),
+        }
+        for i in range(8)
+    ]
     raw = [_candidate("Weak", 10, 8, 5, start_time=0.0, end_time=20.0)]
-    result = cvs.process_segments(raw, transcript, 10, 60,
-                                  snap_to_boundaries=False)
+    result = cvs.process_segments(raw, transcript, 10, 60, snap_to_boundaries=False)
     assert [s["title"] for s in result["segments"]] == ["Weak"]

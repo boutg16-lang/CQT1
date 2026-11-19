@@ -20,14 +20,23 @@ def _read_ascii(name):
 
 
 def _labels(text):
-    return {match.group(1).strip().upper() for match in re.finditer(r"^:([A-Za-z0-9_]+)\s*$", text, re.MULTILINE)}
+    return {
+        match.group(1).strip().upper()
+        for match in re.finditer(r"^:([A-Za-z0-9_]+)\s*$", text, re.MULTILINE)
+    }
 
 
 def test_windows_launchers_are_ascii_and_have_valid_gotos():
-    for name in ("install_dependencies.bat", "run_webui.bat", "packaging/install_ffmpeg_windows.bat"):
+    for name in (
+        "install_dependencies.bat",
+        "run_webui.bat",
+        "packaging/install_ffmpeg_windows.bat",
+    ):
         text = _read_ascii(name)
         labels = _labels(text)
-        for target in re.findall(r"\bgoto\s+([A-Za-z0-9_]+)", text, flags=re.IGNORECASE):
+        for target in re.findall(
+            r"\bgoto\s+([A-Za-z0-9_]+)", text, flags=re.IGNORECASE
+        ):
             assert target.upper() in labels, f"{name}: missing goto label {target}"
 
 
@@ -42,7 +51,7 @@ def test_install_launcher_uses_project_drive_for_temp_and_runs_diagnostics():
 
 def test_installer_checks_for_locked_venv_before_mutating_it():
     text = _read_ascii("install_dependencies.bat")
-    guard = 'scripts\\windows_installer_preflight.ps1'
+    guard = "scripts\\windows_installer_preflight.ps1"
     assert guard in text
     assert text.index(guard) < text.index('rmdir /s /q ".venv"')
     assert text.index(guard) < text.index("uv pip install")
@@ -51,7 +60,9 @@ def test_installer_checks_for_locked_venv_before_mutating_it():
 
 
 def test_installer_preflight_matches_running_python_environment():
-    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(
+        encoding="ascii"
+    )
     assert "Get-CimInstance -ClassName Win32_Process" in text
     assert "[System.IO.Path]::GetFullPath" in text
     assert "OrdinalIgnoreCase" in text
@@ -59,7 +70,9 @@ def test_installer_preflight_matches_running_python_environment():
 
 
 def test_installer_preflight_detects_python_hosts_loading_venv_modules():
-    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(
+        encoding="ascii"
+    )
     assert "Get-Process -Name python,pythonw" in text
     assert "$process.Modules" in text
     assert "$venvPrefix" in text
@@ -89,17 +102,24 @@ def test_installer_preflight_blocks_current_python_interpreter():
     )
     assert result.returncode == 2, result.stdout + result.stderr
     assert "A process is using this project's Python environment" in result.stdout
-    assert re.search(r"\[INFO\] PID \d+: .* is running this project's Python interpreter\.", result.stdout)
+    assert re.search(
+        r"\[INFO\] PID \d+: .* is running this project's Python interpreter\.",
+        result.stdout,
+    )
 
 
 def test_webui_launcher_is_non_destructive_and_has_warning_path():
     text = _read_ascii("run_webui.bat")
     assert "setlocal EnableExtensions" in text
-    assert "cd /d \"%~dp0\"" in text
+    assert 'cd /d "%~dp0"' in text
     assert "scripts/ensure_websockets.py --check" in text
     assert "scripts/ensure_websockets.py --repair" in text
-    assert text.index("scripts/ensure_websockets.py --check") < text.index("scripts.preflight --auto-fix --ensure-upload")
-    assert text.index("scripts/ensure_websockets.py --repair") < text.index("scripts.preflight --auto-fix --ensure-upload")
+    assert text.index("scripts/ensure_websockets.py --check") < text.index(
+        "scripts.preflight --auto-fix --ensure-upload"
+    )
+    assert text.index("scripts/ensure_websockets.py --repair") < text.index(
+        "scripts.preflight --auto-fix --ensure-upload"
+    )
     assert 'if "%PREFLIGHT_EXIT%"=="2" goto START_WEBUI_WARNINGS' in text
     assert 'if exist "bin\\ffmpeg.exe" set "PATH=%CD%\\bin;%PATH%"' in text
 
@@ -110,13 +130,19 @@ def test_cli_launchers_repair_websockets_before_preflight():
 
     assert "ensure_websockets.py --check" in windows
     assert "ensure_websockets.py --repair" in windows
-    assert windows.index("ensure_websockets.py --repair") < windows.index("scripts.preflight --auto-fix")
+    assert windows.index("ensure_websockets.py --repair") < windows.index(
+        "scripts.preflight --auto-fix"
+    )
     assert "ensure_websockets.py --repair" in shell
-    assert shell.index("ensure_websockets.py --repair") < shell.index("scripts.preflight --auto-fix")
+    assert shell.index("ensure_websockets.py --repair") < shell.index(
+        "scripts.preflight --auto-fix"
+    )
 
 
 def test_installer_preflight_reports_process_identity_without_command_line():
-    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(encoding="ascii")
+    text = (ROOT / "scripts" / "windows_installer_preflight.ps1").read_text(
+        encoding="ascii"
+    )
     assert "ProcessId = $process.Id" in text
     assert "ProcessName = $process.ProcessName" in text
     assert "[INFO] PID {0}: {1}" in text
@@ -128,9 +154,9 @@ def test_windows_launchers_distinguish_busy_environment_from_inspection_failure(
         text = (ROOT / name).read_text(encoding="utf-8").replace("\r\n", "\n")
         assert "if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN" in text
         assert "if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE" in text
-        assert text.index("if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN") < text.index(
-            "if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE"
-        )
+        assert text.index(
+            "if errorlevel 3 goto WEBSOCKETS_PROCESS_UNKNOWN"
+        ) < text.index("if errorlevel 2 goto WEBSOCKETS_PROCESS_IN_USE")
         assert ":WEBSOCKETS_PROCESS_IN_USE" in text
         assert ":WEBSOCKETS_PROCESS_UNKNOWN" in text
 
@@ -140,7 +166,7 @@ def test_powershell_wrappers_keep_temp_on_project_drive_and_forward_args():
         text = (ROOT / name).read_text(encoding="ascii")
         assert "$env:TEMP = $TempRoot" in text
         assert "$env:TMP = $TempRoot" in text
-        assert "$env:UV_NO_CACHE = \"1\"" in text or name == "setup_on_d.ps1"
+        assert '$env:UV_NO_CACHE = "1"' in text or name == "setup_on_d.ps1"
     text = (ROOT / "run_webui_on_d.ps1").read_text(encoding="ascii")
     assert "ValueFromRemainingArguments" in text
     assert "& $Launcher @Arguments" in text

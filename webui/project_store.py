@@ -5,6 +5,7 @@ A project is still a normal directory containing the existing ViralCutter
 artifacts. This module adds a small, human-readable manifest and JSONL event
 log without changing the legacy file layout, so old projects remain usable.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -27,7 +28,7 @@ def _now():
 def safe_project_name(name, fallback="project"):
     """Return a filesystem-safe project folder name while preserving Unicode."""
     raw = str(name or "").strip().replace("\\", "_").replace("/", "_")
-    raw = "".join(ch for ch in raw if ch.isprintable() and ch not in '<>:\"|?*')
+    raw = "".join(ch for ch in raw if ch.isprintable() and ch not in '<>:"|?*')
     raw = re.sub(r"\s+", " ", raw).strip(" .")
     if raw.upper() in {"CON", "PRN", "AUX", "NUL"}:
         raw = "_" + raw
@@ -125,8 +126,9 @@ def resolve_project_input(project_dir, allowed_root=None):
         source.get("managed") is False
         or settings.get("storage") == "external_reference"
     )
-    root = (os.path.realpath(str(allowed_root))
-            if allowed_root is not None else project_dir)
+    root = (
+        os.path.realpath(str(allowed_root)) if allowed_root is not None else project_dir
+    )
 
     for candidate in candidates:
         raw = os.path.expanduser(candidate)
@@ -135,7 +137,9 @@ def resolve_project_input(project_dir, allowed_root=None):
         else:
             path = os.path.realpath(os.path.join(project_dir, raw))
         # Honour explicit external references unless the caller pinned a root.
-        if (allowed_root is not None or not external_reference) and not _is_within(root, path):
+        if (allowed_root is not None or not external_reference) and not _is_within(
+            root, path
+        ):
             continue
         if os.path.isfile(path):
             return path
@@ -182,7 +186,12 @@ def load_manifest(project_dir, create=False, **kwargs):
 def save_manifest(project_dir, manifest):
     data = dict(manifest or {})
     data.setdefault("schema", SCHEMA_VERSION)
-    data.setdefault("id", uuid.uuid5(uuid.NAMESPACE_URL, "viralcutter:" + os.path.abspath(str(project_dir))).hex)
+    data.setdefault(
+        "id",
+        uuid.uuid5(
+            uuid.NAMESPACE_URL, "viralcutter:" + os.path.abspath(str(project_dir))
+        ).hex,
+    )
     data["path"] = os.path.abspath(str(project_dir))
     data["updated_at"] = _now()
     _atomic_write_json(manifest_path(project_dir), data)
@@ -208,7 +217,9 @@ def create_project(base_dir, name, *, source=None, settings=None, exist_ok=False
         project_name = safe_project_name(project_name + "_" + suffix)
         project_dir = os.path.join(base_dir, project_name)
     os.makedirs(project_dir, exist_ok=True)
-    manifest = load_manifest(project_dir, create=True, name=project_name, source=source, settings=settings)
+    manifest = load_manifest(
+        project_dir, create=True, name=project_name, source=source, settings=settings
+    )
     append_event(project_dir, "created", {"source": source or {}})
     return project_dir, manifest
 
@@ -244,7 +255,7 @@ def read_events(project_dir, limit=200):
                     continue
     except OSError:
         return []
-    return records[-max(0, int(limit or 0)):]
+    return records[-max(0, int(limit or 0)) :]
 
 
 def _has_rendered_files(folder):
@@ -277,9 +288,11 @@ def list_projects(root=None):
             manifest = default_manifest(entry.path)
             manifest["status"] = "legacy"
             manifest["created_at"] = _dt.datetime.fromtimestamp(
-                entry.stat().st_ctime, tz=_dt.timezone.utc).isoformat(timespec="seconds")
+                entry.stat().st_ctime, tz=_dt.timezone.utc
+            ).isoformat(timespec="seconds")
             manifest["updated_at"] = _dt.datetime.fromtimestamp(
-                entry.stat().st_mtime, tz=_dt.timezone.utc).isoformat(timespec="seconds")
+                entry.stat().st_mtime, tz=_dt.timezone.utc
+            ).isoformat(timespec="seconds")
         manifest["has_input"] = bool(resolve_project_input(entry.path))
         manifest["has_outputs"] = any(
             _has_rendered_files(os.path.join(entry.path, folder))

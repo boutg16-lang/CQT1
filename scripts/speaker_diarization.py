@@ -15,6 +15,7 @@ Two layers, both graceful-degrading:
 The association between those segments and the tracked faces happens in
 ``scripts/voice_face_link.py`` (pure, unit-tested).
 """
+
 from __future__ import annotations
 
 import os
@@ -22,8 +23,9 @@ import os
 SINGLE_SPEAKER = "SPEAKER_0"
 
 
-def detect_speech_turns(energies, fps, threshold=0.15, min_turn_seconds=0.8,
-                        max_gap_seconds=0.4):
+def detect_speech_turns(
+    energies, fps, threshold=0.15, min_turn_seconds=0.8, max_gap_seconds=0.4
+):
     """Pure speech-turn detection over a per-frame energy array.
 
     ``energies`` follows the scale the pipeline uses (audio_activity_change
@@ -50,14 +52,22 @@ def detect_speech_turns(energies, fps, threshold=0.15, min_turn_seconds=0.8,
             last_speech = idx
         elif start is not None and (idx - last_speech) > gap_frames:
             if last_speech - start + 1 >= min_turn_frames:
-                turns.append({"start": round(start / fps, 3),
-                              "end": round((last_speech + 1) / fps, 3),
-                              "speaker": SINGLE_SPEAKER})
+                turns.append(
+                    {
+                        "start": round(start / fps, 3),
+                        "end": round((last_speech + 1) / fps, 3),
+                        "speaker": SINGLE_SPEAKER,
+                    }
+                )
             start = None
     if start is not None and last_speech - start + 1 >= min_turn_frames:
-        turns.append({"start": round(start / fps, 3),
-                      "end": round((last_speech + 1) / fps, 3),
-                      "speaker": SINGLE_SPEAKER})
+        turns.append(
+            {
+                "start": round(start / fps, 3),
+                "end": round((last_speech + 1) / fps, 3),
+                "speaker": SINGLE_SPEAKER,
+            }
+        )
     return turns
 
 
@@ -67,25 +77,33 @@ def diarize_audio(audio_path, token=None):
     Returns None when pyannote is not installed, no HF token is available,
     or the pipeline fails — the caller then uses the energy fallback.
     """
-    token = (token or os.getenv("PYANNOTE_AUTH_TOKEN")
-             or os.getenv("HF_TOKEN") or "").strip()
+    token = (
+        token or os.getenv("PYANNOTE_AUTH_TOKEN") or os.getenv("HF_TOKEN") or ""
+    ).strip()
     if not token or not audio_path or not os.path.isfile(audio_path):
         return None
     try:
         from scripts.transcribe_video import apply_safe_globals_hack
+
         apply_safe_globals_hack()
         from pyannote.audio import Pipeline
 
         from scripts.speechbrain_compat import patch_speechbrain_inspect_compat
+
         patch_speechbrain_inspect_compat()
         pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1", use_auth_token=token)
+            "pyannote/speaker-diarization-3.1", use_auth_token=token
+        )
         result = pipeline(audio_path)
         segments = []
         for turn, _track, speaker in result.itertracks(yield_label=True):
-            segments.append({"start": round(float(turn.start), 3),
-                             "end": round(float(turn.end), 3),
-                             "speaker": str(speaker)})
+            segments.append(
+                {
+                    "start": round(float(turn.start), 3),
+                    "end": round(float(turn.end), 3),
+                    "speaker": str(speaker),
+                }
+            )
         segments.sort(key=lambda item: item["start"])
         return segments or None
     except Exception:
@@ -108,6 +126,7 @@ def turns_for_clip(audio_path, audio_energies, fps, prefer_diarization=True):
 def load_segments_file(project_folder):
     """Read a persisted ``speaker_segments.json`` from a project, or None."""
     import json
+
     path = os.path.join(project_folder, "speaker_segments.json")
     if not os.path.isfile(path):
         return None

@@ -33,26 +33,31 @@ try:
         SceneManager,
         open_video,
     )
+
     HAS_SCENEDETECT = True
 except Exception:  # pragma: no cover - optional dependency
     HAS_SCENEDETECT = False
 
 try:
     import cv2
+
     HAS_CV2 = True
 except Exception:  # pragma: no cover
     cv2 = None
     HAS_CV2 = False
 
-DEFAULT_THRESHOLD = 27.0      # ContentDetector sensitivity (lower = more cuts)
-MIN_SCENE_SECONDS = 1.5       # ignore ultra-short scenes (noise)
+DEFAULT_THRESHOLD = 27.0  # ContentDetector sensitivity (lower = more cuts)
+MIN_SCENE_SECONDS = 1.5  # ignore ultra-short scenes (noise)
 
 
 # ---------------------------------------------------------------------------
 # PySceneDetect path
 # ---------------------------------------------------------------------------
 
-def _scenes_with_pyscenedetect(path: str, threshold: float) -> list[tuple[float, float]]:
+
+def _scenes_with_pyscenedetect(
+    path: str, threshold: float
+) -> list[tuple[float, float]]:
     video = open_video(path)
     manager = SceneManager()
     manager.add_detector(ContentDetector(threshold=threshold))
@@ -72,6 +77,7 @@ def _scenes_with_pyscenedetect(path: str, threshold: float) -> list[tuple[float,
 # ---------------------------------------------------------------------------
 # OpenCV fallback
 # ---------------------------------------------------------------------------
+
 
 def _scenes_with_opencv(path: str, threshold: float) -> list[tuple[float, float]]:
     """Content-diff scene detection (frame histogram comparison)."""
@@ -118,7 +124,10 @@ def _scenes_with_opencv(path: str, threshold: float) -> list[tuple[float, float]
 # Public API
 # ---------------------------------------------------------------------------
 
-def find_scene_cuts(path: str, threshold: float = DEFAULT_THRESHOLD) -> list[tuple[float, float]]:
+
+def find_scene_cuts(
+    path: str, threshold: float = DEFAULT_THRESHOLD
+) -> list[tuple[float, float]]:
     """Return scene boundaries as [(start, end), ...] seconds.
 
     Uses PySceneDetect when installed, otherwise the OpenCV fallback.
@@ -139,8 +148,9 @@ def find_scene_cuts(path: str, threshold: float = DEFAULT_THRESHOLD) -> list[tup
     return []
 
 
-def snap_to_scene(start: float, end: float, scenes: list[tuple[float, float]],
-                  tolerance: float = 2.0) -> tuple[float, float]:
+def snap_to_scene(
+    start: float, end: float, scenes: list[tuple[float, float]], tolerance: float = 2.0
+) -> tuple[float, float]:
     """Snap a [start, end] window to the nearest scene boundaries.
 
     Returns the adjusted window, clamped so it never shrinks below
@@ -172,8 +182,9 @@ def snap_to_scene(start: float, end: float, scenes: list[tuple[float, float]],
     return round(best_start, 2), round(best_end, 2)
 
 
-def scene_boundary_frames(scenes: list[tuple[float, float]], fps: float,
-                          total_frames: int | None = None) -> set[int]:
+def scene_boundary_frames(
+    scenes: list[tuple[float, float]], fps: float, total_frames: int | None = None
+) -> set[int]:
     """Frame indices where a NEW scene starts (the cut frame itself).
 
     The face-crop pipeline uses these to reset identity tracking, box
@@ -207,22 +218,31 @@ def scene_boundary_frames(scenes: list[tuple[float, float]], fps: float,
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("video", help="input video file")
-    parser.add_argument("--json", dest="json_out", default=None,
-                        help="write scenes to a JSON file")
-    parser.add_argument("--list", action="store_true",
-                        help="print scenes one per line (srt-like)")
-    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
-                        help="detector sensitivity (default 27, lower = more cuts)")
+    parser.add_argument(
+        "--json", dest="json_out", default=None, help="write scenes to a JSON file"
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="print scenes one per line (srt-like)"
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_THRESHOLD,
+        help="detector sensitivity (default 27, lower = more cuts)",
+    )
     args = parser.parse_args(argv)
 
     scenes = find_scene_cuts(args.video, args.threshold)
     if args.json_out:
-        payload = {"source": args.video, "engine": (
-            "pyscenedetect" if HAS_SCENEDETECT else "opencv-fallback"),
-            "scenes": [{"start": s, "end": e} for s, e in scenes]}
+        payload = {
+            "source": args.video,
+            "engine": ("pyscenedetect" if HAS_SCENEDETECT else "opencv-fallback"),
+            "scenes": [{"start": s, "end": e} for s, e in scenes],
+        }
         with open(args.json_out, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         print("[scene-detect] wrote {} scenes -> {}".format(len(scenes), args.json_out))
@@ -230,8 +250,13 @@ def main(argv=None) -> int:
         for s, e in scenes:
             print("{:.2f} --> {:.2f}".format(s, e))
     if not args.json_out and not args.list:
-        print(json.dumps([{"start": s, "end": e} for s, e in scenes],
-                         ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                [{"start": s, "end": e} for s, e in scenes],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     return 0
 
 

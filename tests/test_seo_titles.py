@@ -20,6 +20,7 @@ from scripts import seo_titles as st  # noqa: E402
 # Suggest-response parsing helpers
 # ---------------------------------------------------------------------------
 
+
 def test_parse_suggest_response_plain_json():
     data = st._parse_suggest_response('["topic", ["a", "b"], []]')
     assert data[1] == ["a", "b"]
@@ -53,6 +54,7 @@ def test_suggestion_text_plain_string():
 # fetch_suggestions (network mocked)
 # ---------------------------------------------------------------------------
 
+
 class _FakeResponse:
     def __init__(self, payload):
         self._payload = payload
@@ -70,8 +72,8 @@ class _FakeResponse:
 def test_fetch_suggestions_dedupes_and_limits(monkeypatch):
     payload = json.dumps(["topic", ["Alpha", "alpha", "Beta", "Gamma"], []])
     monkeypatch.setattr(
-        st.urllib.request, "urlopen",
-        lambda req, timeout=None: _FakeResponse(payload))
+        st.urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse(payload)
+    )
     result = st.fetch_suggestions("topic", max_results=2)
     assert result == ["Alpha", "Beta"]
 
@@ -87,15 +89,15 @@ def test_fetch_suggestions_network_failure_returns_empty(monkeypatch):
 def test_fetch_suggestions_wrapped_response(monkeypatch):
     payload = 'window.google.ac.h(["t", ["one", "two"], []])'
     monkeypatch.setattr(
-        st.urllib.request, "urlopen",
-        lambda req, timeout=None: _FakeResponse(payload))
+        st.urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse(payload)
+    )
     assert st.fetch_suggestions("t") == ["one", "two"]
 
 
 def test_fetch_suggestions_garbage_response_returns_empty(monkeypatch):
     monkeypatch.setattr(
-        st.urllib.request, "urlopen",
-        lambda req, timeout=None: _FakeResponse("garbage"))
+        st.urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse("garbage")
+    )
     assert st.fetch_suggestions("t") == []
 
 
@@ -103,11 +105,24 @@ def test_fetch_suggestions_garbage_response_returns_empty(monkeypatch):
 # Scoring internals
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("length,expected", [
-    (35, 25.0), (70, 25.0), (20, 15.0), (34, 15.0), (71, 15.0),
-    (90, 15.0), (10, 8.0), (19, 8.0), (91, 8.0), (110, 8.0),
-    (9, 0.0), (111, 0.0),
-])
+
+@pytest.mark.parametrize(
+    "length,expected",
+    [
+        (35, 25.0),
+        (70, 25.0),
+        (20, 15.0),
+        (34, 15.0),
+        (71, 15.0),
+        (90, 15.0),
+        (10, 8.0),
+        (19, 8.0),
+        (91, 8.0),
+        (110, 8.0),
+        (9, 0.0),
+        (111, 0.0),
+    ],
+)
 def test_len_score_boundaries(length, expected):
     assert st._len_score("x" * length) == expected
 
@@ -153,23 +168,27 @@ def test_penalty_score_repeated_words_and_length():
 def test_score_title_empty():
     result = st.score_title("")
     assert result["score"] == 0.0
-    assert result["breakdown"] == {"length": 0, "hook": 0,
-                                   "keywords": 0, "penalty": 0}
+    assert result["breakdown"] == {"length": 0, "hook": 0, "keywords": 0, "penalty": 0}
 
 
 def test_score_title_known_value():
     # Verified empirically: length 25 + hook 21 + keywords 8 - penalty 0.
     result = st.score_title("كيف تكسب المال من الإنترنت في 2024؟", ["المال"])
     assert result["score"] == 54.0
-    assert result["breakdown"] == {"length": 25.0, "hook": 21.0,
-                                   "keywords": 8.0, "penalty": 0.0}
+    assert result["breakdown"] == {
+        "length": 25.0,
+        "hook": 21.0,
+        "keywords": 8.0,
+        "penalty": 0.0,
+    }
 
 
 def test_score_title_breakdown_sums_to_score():
     result = st.score_title("HOW TO MAKE MONEY FAST!!! money money", ["money"])
     b = result["breakdown"]
-    expected = max(0.0, min(100.0, b["length"] + b["hook"]
-                            + b["keywords"] - b["penalty"]))
+    expected = max(
+        0.0, min(100.0, b["length"] + b["hook"] + b["keywords"] - b["penalty"])
+    )
     assert result["score"] == round(expected, 1)
     assert 0.0 <= result["score"] <= 100.0
 
@@ -182,6 +201,7 @@ def test_score_title_none_keywords():
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
+
 
 def test_generate_titles_sorted_by_score_desc():
     titles = st.generate_titles("تعلم البرمجة", count=6)
@@ -217,8 +237,9 @@ def test_generate_titles_no_duplicate_titles():
 
 
 def test_generate_titles_grounded_mode():
-    transcript = ("اليوم نتحدث عن كيف تكسب المال من الإنترنت. "
-                  "المال مهم جدا في حياتنا اليومية.")
+    transcript = (
+        "اليوم نتحدث عن كيف تكسب المال من الإنترنت. المال مهم جدا في حياتنا اليومية."
+    )
     titles = st.generate_titles("المال", transcript_text=transcript, count=6)
     assert titles
     for item in titles:
@@ -232,8 +253,8 @@ def test_generate_titles_grounded_mode():
 def test_generate_titles_grounded_mode_rejects_invented_numbers():
     transcript = "اليوم نتحدث عن كيف تكسب المال من الإنترنت بسهولة."
     titles = st.generate_titles(
-        "المال", transcript_text="ربحت 99999 دولار في يوم واحد. " + transcript,
-        count=6)
+        "المال", transcript_text="ربحت 99999 دولار في يوم واحد. " + transcript, count=6
+    )
     # The 99999 sentence is a candidate only if it survives validation; any
     # title that invents a number not in the *window* text is dropped. Here
     # the number IS in the window, so candidates are grounded either way.
@@ -254,6 +275,7 @@ def test_generate_titles_grounded_short_sentences_skipped():
 # Publish-time hints
 # ---------------------------------------------------------------------------
 
+
 def test_best_time_windows_known_platform():
     result = st.best_time_windows("tiktok")
     assert result["platform"] == "tiktok"
@@ -269,8 +291,7 @@ def test_suggest_next_slots_weekday():
     # 2026-01-05 is a Monday; YouTube weekday window starts 17:00.
     start = dt.datetime(2026, 1, 5, 10, 0, tzinfo=dt.timezone.utc)
     slots = st.suggest_next_slots("youtube", 2, start)
-    assert slots == ["2026-01-05T17:00:00+00:00",
-                     "2026-01-06T17:00:00+00:00"]
+    assert slots == ["2026-01-05T17:00:00+00:00", "2026-01-06T17:00:00+00:00"]
 
 
 def test_suggest_next_slots_skips_past_slots():
@@ -284,19 +305,18 @@ def test_suggest_next_slots_weekend_has_two_windows():
     # 2026-01-10 is a Saturday; YouTube weekend windows (10,13) and (17,21).
     start = dt.datetime(2026, 1, 10, 9, 0, tzinfo=dt.timezone.utc)
     slots = st.suggest_next_slots("youtube", 2, start)
-    assert slots == ["2026-01-10T10:00:00+00:00",
-                     "2026-01-10T17:00:00+00:00"]
+    assert slots == ["2026-01-10T10:00:00+00:00", "2026-01-10T17:00:00+00:00"]
 
 
 def test_suggest_next_slots_unknown_platform_uses_youtube():
     start = dt.datetime(2026, 1, 5, 10, 0, tzinfo=dt.timezone.utc)
-    assert st.suggest_next_slots("nope", 1, start) == [
-        "2026-01-05T17:00:00+00:00"]
+    assert st.suggest_next_slots("nope", 1, start) == ["2026-01-05T17:00:00+00:00"]
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def test_main_score_command(capsys):
     assert st.main(["score", "كيف تكسب المال؟", "--keyword", "المال"]) == 0

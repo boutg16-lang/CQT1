@@ -16,6 +16,7 @@ from scripts import auto_updater, checkpoint, oom_guard, secure_config
 # checkpoint
 # ---------------------------------------------------------------------------
 
+
 class TestCheckpoint:
     def test_run_marks_done(self, tmp_path):
         calls = []
@@ -59,13 +60,16 @@ class TestCheckpoint:
         assert calls == [1, 2]
 
     def test_corrupt_checkpoint_is_safe(self, tmp_path):
-        (tmp_path / checkpoint.CHECKPOINT_FILENAME).write_text("{not json", encoding="utf-8")
+        (tmp_path / checkpoint.CHECKPOINT_FILENAME).write_text(
+            "{not json", encoding="utf-8"
+        )
         assert checkpoint.is_done(str(tmp_path), "cut") is False
 
 
 # ---------------------------------------------------------------------------
 # secure_config
 # ---------------------------------------------------------------------------
+
 
 class TestSecureConfig:
     def test_set_get_roundtrip(self, tmp_path, monkeypatch):
@@ -108,6 +112,7 @@ class TestSecureConfig:
 # oom_guard
 # ---------------------------------------------------------------------------
 
+
 class _FakeOOM(Exception):
     pass
 
@@ -123,8 +128,12 @@ class TestOomGuard:
             return ("x.srt", "x.tsv")
 
         result = oom_guard.transcribe_with_fallback(
-            "in.mp4", "large-v3-turbo", str(tmp_path),
-            transcribe_fn=fake_transcribe, verbose=False)
+            "in.mp4",
+            "large-v3-turbo",
+            str(tmp_path),
+            transcribe_fn=fake_transcribe,
+            verbose=False,
+        )
         assert result == ("x.srt", "x.tsv")
         assert used == ["large-v3-turbo", "medium"]
 
@@ -134,8 +143,12 @@ class TestOomGuard:
 
         with pytest.raises(ValueError):
             oom_guard.transcribe_with_fallback(
-                "in.mp4", "large", str(tmp_path),
-                transcribe_fn=fake_transcribe, verbose=False)
+                "in.mp4",
+                "large",
+                str(tmp_path),
+                transcribe_fn=fake_transcribe,
+                verbose=False,
+            )
 
     def test_success_first_try(self, tmp_path):
         used = []
@@ -145,8 +158,12 @@ class TestOomGuard:
             return ("a", "b")
 
         oom_guard.transcribe_with_fallback(
-            "in.mp4", "small", str(tmp_path),
-            transcribe_fn=fake_transcribe, verbose=False)
+            "in.mp4",
+            "small",
+            str(tmp_path),
+            transcribe_fn=fake_transcribe,
+            verbose=False,
+        )
         assert used == ["small"]
 
     def test_chain_exhausted_raises(self, tmp_path):
@@ -155,24 +172,37 @@ class TestOomGuard:
 
         with pytest.raises(_FakeOOM):
             oom_guard.transcribe_with_fallback(
-                "in.mp4", "tiny", str(tmp_path),
-                transcribe_fn=fake_transcribe, verbose=False)
+                "in.mp4",
+                "tiny",
+                str(tmp_path),
+                transcribe_fn=fake_transcribe,
+                verbose=False,
+            )
 
 
 # ---------------------------------------------------------------------------
 # auto_updater
 # ---------------------------------------------------------------------------
 
+
 class TestAutoUpdater:
     def test_no_update_when_versions_equal(self):
         info = auto_updater.check_for_update(
-            current_version="0.9.0", timeout=1,
-            urlopen=lambda t: json.dumps({
-                "tag_name": "v0.9.0",
-                "assets": [{"name": "ViralCutter.exe",
-                            "browser_download_url": "https://x/ViralCutter.exe"}],
-                "body": "release notes",
-            }).encode())
+            current_version="0.9.0",
+            timeout=1,
+            urlopen=lambda t: json.dumps(
+                {
+                    "tag_name": "v0.9.0",
+                    "assets": [
+                        {
+                            "name": "ViralCutter.exe",
+                            "browser_download_url": "https://x/ViralCutter.exe",
+                        }
+                    ],
+                    "body": "release notes",
+                }
+            ).encode(),
+        )
         assert info["update_available"] is False
         assert info["latest_version"] == "v0.9.0"
 
@@ -181,12 +211,20 @@ class TestAutoUpdater:
         # updater's platform matching (exe on Windows, bin/appimage on POSIX).
         asset_name = "ViralCutter.exe" if os.name == "nt" else "ViralCutter-linux"
         info = auto_updater.check_for_update(
-            current_version="0.8.0", timeout=1,
-            urlopen=lambda t: json.dumps({
-                "tag_name": "v1.0.0",
-                "assets": [{"name": asset_name,
-                            "browser_download_url": "https://x/" + asset_name}],
-            }).encode())
+            current_version="0.8.0",
+            timeout=1,
+            urlopen=lambda t: json.dumps(
+                {
+                    "tag_name": "v1.0.0",
+                    "assets": [
+                        {
+                            "name": asset_name,
+                            "browser_download_url": "https://x/" + asset_name,
+                        }
+                    ],
+                }
+            ).encode(),
+        )
         assert info["update_available"] is True
         assert info["download_url"] == "https://x/" + asset_name
 
@@ -195,19 +233,28 @@ class TestAutoUpdater:
         # ".dmg" matches no platform pattern, so download_url must stay None
         # on every OS.
         info = auto_updater.check_for_update(
-            current_version="0.8.0", timeout=1,
-            urlopen=lambda t: json.dumps({
-                "tag_name": "v1.0.0",
-                "assets": [{"name": "ViralCutter.dmg",
-                            "browser_download_url": "https://x/ViralCutter.dmg"}],
-            }).encode())
+            current_version="0.8.0",
+            timeout=1,
+            urlopen=lambda t: json.dumps(
+                {
+                    "tag_name": "v1.0.0",
+                    "assets": [
+                        {
+                            "name": "ViralCutter.dmg",
+                            "browser_download_url": "https://x/ViralCutter.dmg",
+                        }
+                    ],
+                }
+            ).encode(),
+        )
         assert info["update_available"] is True
         assert info["download_url"] is None
 
     def test_offline_is_safe(self):
-        info = auto_updater.check_for_update(timeout=1,
-                                             urlopen=lambda t: (_ for _ in ()).throw(
-                                                 RuntimeError("network down")))
+        info = auto_updater.check_for_update(
+            timeout=1,
+            urlopen=lambda t: (_ for _ in ()).throw(RuntimeError("network down")),
+        )
         assert info["update_available"] is False
         assert info["error"] is not None
 
@@ -236,13 +283,14 @@ class TestAutoUpdater:
             def __exit__(self, *a):
                 return False
 
-        monkeypatch.setattr(auto_updater.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+        monkeypatch.setattr(
+            auto_updater.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         dest = tmp_path / "upd"
         expected = hashlib.sha256(payload).hexdigest()
-        path = auto_updater.download_update("https://x/ViralCutter.exe",
-                                            dest_dir=str(dest),
-                                            expected_sha256=expected)
+        path = auto_updater.download_update(
+            "https://x/ViralCutter.exe", dest_dir=str(dest), expected_sha256=expected
+        )
         assert os.path.exists(path)
         with open(path, "rb") as f:
             assert f.read() == payload
@@ -267,12 +315,14 @@ class TestAutoUpdater:
             def __exit__(self, *a):
                 return False
 
-        monkeypatch.setattr(auto_updater.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+        monkeypatch.setattr(
+            auto_updater.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         dest = tmp_path / "upd"
         with pytest.raises(RuntimeError, match="no checksum manifest"):
-            auto_updater.download_update("https://x/ViralCutter.exe",
-                                         dest_dir=str(dest))
+            auto_updater.download_update(
+                "https://x/ViralCutter.exe", dest_dir=str(dest)
+            )
         # the partial download must not linger as a valid update
         assert not os.path.exists(os.path.join(str(dest), "ViralCutter.exe"))
 
@@ -293,13 +343,16 @@ class TestAutoUpdater:
             def __exit__(self, *a):
                 return False
 
-        monkeypatch.setattr(auto_updater.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+        monkeypatch.setattr(
+            auto_updater.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         dest = tmp_path / "upd"
         with pytest.raises(RuntimeError, match="checksum mismatch"):
-            auto_updater.download_update("https://x/ViralCutter.exe",
-                                         dest_dir=str(dest),
-                                         expected_sha256="0" * 64)
+            auto_updater.download_update(
+                "https://x/ViralCutter.exe",
+                dest_dir=str(dest),
+                expected_sha256="0" * 64,
+            )
         assert not os.path.exists(os.path.join(str(dest), "ViralCutter.exe"))
 
 
@@ -346,34 +399,38 @@ class TestAutoUpdaterVersionGates:
 
     def test_newer_ranks_prerelease_below_final(self, monkeypatch):
         monkeypatch.setattr(auto_updater, "LOCAL_VERSION", "7.51.0-pro")
-        assert auto_updater._newer("7.51.0-rc1") is False   # replayed rc
-        assert auto_updater._newer("7.51.0-pro") is False   # same build
-        assert auto_updater._newer("v7.51.0") is False      # same, plain tag
-        assert auto_updater._newer("7.51.1-rc1") is True    # newer prerelease
-        assert auto_updater._newer("7.52.0-pro") is True    # newer final
-        assert auto_updater._newer("garbage") is False      # fail closed
+        assert auto_updater._newer("7.51.0-rc1") is False  # replayed rc
+        assert auto_updater._newer("7.51.0-pro") is False  # same build
+        assert auto_updater._newer("v7.51.0") is False  # same, plain tag
+        assert auto_updater._newer("7.51.1-rc1") is True  # newer prerelease
+        assert auto_updater._newer("7.52.0-pro") is True  # newer final
+        assert auto_updater._newer("garbage") is False  # fail closed
 
     def _stage(self, tmp_path, payload=b"NEW-BINARY", **extra):
         dest = tmp_path / "updates"
         dest.mkdir(parents=True)
         staged = dest / "OUSSAMA-Cutter.exe"
         staged.write_bytes(payload)
-        info = {"downloaded": str(staged), "asset": staged.name,
-                "local_version": "7.50.0-pro", "tag": "7.52.0-pro"}
+        info = {
+            "downloaded": str(staged),
+            "asset": staged.name,
+            "local_version": "7.50.0-pro",
+            "tag": "7.52.0-pro",
+        }
         info.update(extra)
         (dest / auto_updater.UPDATE_INFO).write_text(json.dumps(info))
         return dest, staged
 
     def test_apply_refuses_a_staged_downgrade(self, tmp_path, monkeypatch):
         monkeypatch.setattr(auto_updater, "LOCAL_VERSION", "7.51.0-pro")
-        dest, _ = self._stage(tmp_path, tag="7.51.0-pro")   # not newer
+        dest, _ = self._stage(tmp_path, tag="7.51.0-pro")  # not newer
         assert auto_updater.apply_pending_update(dest_dir=str(dest)) is None
         dest, _ = self._stage(tmp_path / "older", tag="7.50.0-pro")
         assert auto_updater.apply_pending_update(dest_dir=str(dest)) is None
 
     def test_apply_accepts_a_newer_staged_build(self, tmp_path, monkeypatch):
         monkeypatch.setattr(auto_updater, "LOCAL_VERSION", "7.51.0-pro")
-        dest, staged = self._stage(tmp_path)                # tag 7.52.0-pro
+        dest, staged = self._stage(tmp_path)  # tag 7.52.0-pro
         assert auto_updater.apply_pending_update(dest_dir=str(dest)) == str(staged)
 
     def test_apply_rehashes_the_staged_file(self, tmp_path, monkeypatch):
@@ -386,20 +443,33 @@ class TestAutoUpdaterVersionGates:
         assert auto_updater.apply_pending_update(dest_dir=str(dest)) is None
 
     def test_download_cli_refuses_when_not_newer(self, monkeypatch, capsys):
-        monkeypatch.setattr(auto_updater, "check_for_update", lambda: {
-            "update_available": False, "latest_version": "7.51.0-pro",
-            "download_url": "https://x/OUSSAMA-Cutter.exe", "error": None})
+        monkeypatch.setattr(
+            auto_updater,
+            "check_for_update",
+            lambda: {
+                "update_available": False,
+                "latest_version": "7.51.0-pro",
+                "download_url": "https://x/OUSSAMA-Cutter.exe",
+                "error": None,
+            },
+        )
         monkeypatch.setattr(sys, "argv", ["auto_updater", "--download"])
         assert auto_updater.main() == 1
         assert "no newer version" in capsys.readouterr().out
 
     def test_download_cli_force_bypasses_the_gate(self, monkeypatch):
-        monkeypatch.setattr(auto_updater, "check_for_update", lambda: {
-            "update_available": False, "latest_version": "7.51.0-pro",
-            "download_url": "https://x/OUSSAMA-Cutter.exe", "error": None,
-            "sha256": None})
-        monkeypatch.setattr(auto_updater, "download_update",
-                            lambda *a, **k: "/tmp/x")
+        monkeypatch.setattr(
+            auto_updater,
+            "check_for_update",
+            lambda: {
+                "update_available": False,
+                "latest_version": "7.51.0-pro",
+                "download_url": "https://x/OUSSAMA-Cutter.exe",
+                "error": None,
+                "sha256": None,
+            },
+        )
+        monkeypatch.setattr(auto_updater, "download_update", lambda *a, **k: "/tmp/x")
         monkeypatch.setattr(sys, "argv", ["auto_updater", "--download", "--force"])
         assert auto_updater.main() == 0
 
@@ -409,15 +479,22 @@ class TestWhisperModelFallback:
 
     def test_turbo_candidates(self):
         from scripts.transcribe_video import resolve_model_candidates
-        assert resolve_model_candidates("large-v3-turbo")[:3] == ["large-v3-turbo", "large-v3", "medium"]
+
+        assert resolve_model_candidates("large-v3-turbo")[:3] == [
+            "large-v3-turbo",
+            "large-v3",
+            "medium",
+        ]
 
     def test_plain_model_gets_large_v3_fallback(self):
         from scripts.transcribe_video import resolve_model_candidates
+
         assert resolve_model_candidates("small")[-1] == "large-v3"
         assert resolve_model_candidates("large-v3") == ["large-v3"]
 
     def test_none_defaults(self):
         from scripts.transcribe_video import resolve_model_candidates
+
         assert resolve_model_candidates(None)[0] == "large-v3"
 
 
@@ -432,9 +509,12 @@ def test_checkpoint_rejects_unknown_stage(tmp_path):
 # v7.5 multi-key Gemini and transcription device
 # ---------------------------------------------------------------------------
 
+
 def test_secure_config_multiple_keys_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(secure_config, "_base_dir", lambda: str(tmp_path))
-    path = secure_config.set_keys(["k-one", "k-two", "k-three", "ignored"], passphrase="hunter2")
+    path = secure_config.set_keys(
+        ["k-one", "k-two", "k-three", "ignored"], passphrase="hunter2"
+    )
     assert os.path.exists(path)
     assert secure_config.get_keys(passphrase="hunter2") == ["k-one", "k-two", "k-three"]
     assert secure_config.get_key(passphrase="hunter2") == "k-one"
@@ -443,10 +523,15 @@ def test_secure_config_multiple_keys_roundtrip(tmp_path, monkeypatch):
 def test_settings_store_multiple_keys_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     from webui import settings_store
+
     ok, err = settings_store.save_ui_settings(
-        ai_backend="gemini", api_keys=["k-one", "k-two", "k-three"],
-        key_mode="2", ai_model="gemini-2.5-flash", chunk_size=20000,
-        base_dir=str(tmp_path))
+        ai_backend="gemini",
+        api_keys=["k-one", "k-two", "k-three"],
+        key_mode="2",
+        ai_model="gemini-2.5-flash",
+        chunk_size=20000,
+        base_dir=str(tmp_path),
+    )
     assert ok, err
     loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
     assert loaded["api_keys"] == ["k-one", "k-two", "k-three"]
@@ -456,6 +541,7 @@ def test_settings_store_multiple_keys_roundtrip(tmp_path, monkeypatch):
 
 def test_gemini_rotation_switches_after_invalid_key(monkeypatch):
     from scripts import create_viral_segments
+
     calls = []
     monkeypatch.setattr(create_viral_segments, "HAS_GEMINI", True)
     monkeypatch.setattr(create_viral_segments, "_GEMINI_KEY_CURSOR", 0)
@@ -469,6 +555,7 @@ def test_gemini_rotation_switches_after_invalid_key(monkeypatch):
     monkeypatch.setattr(create_viral_segments, "_gemini_generate", fake_generate)
     assert create_viral_segments.call_gemini("p", ["k-one", "k-two"], "model") == "ok"
     assert calls == ["k-one", "k-two"]
+
 
 def test_rich_lifecycle_metadata_records_failure_and_resume(tmp_path):
     with pytest.raises(RuntimeError, match="broken"):

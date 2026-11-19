@@ -7,6 +7,7 @@ the Contents API and the Git Data API), so the owner runs one command. These
 tests prove the command does exactly the right thing, in the right order, and
 is safe to run twice.
 """
+
 import shutil
 from pathlib import Path
 
@@ -31,24 +32,28 @@ def fake_repo(tmp_path):
         "name: Build Windows EXE\n"
         "      - name: Smoke-test the exe (WebUI must boot)\n"
         "          ./dist/ViralCutter.exe --webui\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (repo / applier.WORKFLOW_DIR / "ci.yml").write_text(
         "name: CI\njobs:\n  test:\n    steps:\n      - run: pytest -v\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     (repo / applier.SPEC_PATH).write_text(
-        '# -*- mode: python ; coding: utf-8 -*-\n'
+        "# -*- mode: python ; coding: utf-8 -*-\n"
         'exe = EXE(\n    name="OUSSAMA-Cutter",\n)\n\n'
-        '# --- CI compatibility shim (temporary see issue #25) ---\n'
-        'import shutil as _shutil\n'
+        "# --- CI compatibility shim (temporary see issue #25) ---\n"
+        "import shutil as _shutil\n"
         'if _os.environ.get("GITHUB_ACTIONS") == "true":\n'
         '    _shutil.copyfile("dist/OUSSAMA-Cutter.exe", "dist/ViralCutter.exe")\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     return repo
 
 
 # ---------------------------------------------------------------------------
 # State inspection
 # ---------------------------------------------------------------------------
+
 
 def test_inspect_reports_the_legacy_state(fake_repo):
     state = applier.inspect(str(fake_repo))
@@ -69,13 +74,16 @@ def test_inspect_flags_a_missing_packaged_source(fake_repo):
 # Applying
 # ---------------------------------------------------------------------------
 
+
 def test_apply_writes_both_workflows_and_drops_the_shim(fake_repo):
     result = applier.apply_changes(str(fake_repo))
 
     assert len(result["written"]) == 2
     assert result["shim_removed"] is True
 
-    build_exe = (fake_repo / applier.WORKFLOW_DIR / "build-exe.yml").read_text(encoding="utf-8")
+    build_exe = (fake_repo / applier.WORKFLOW_DIR / "build-exe.yml").read_text(
+        encoding="utf-8"
+    )
     assert "EXE_NAME: OUSSAMA-Cutter.exe" in build_exe
     assert "checksums.txt" in build_exe
     # the legacy name only survives in the historical comment, not as a path
@@ -106,6 +114,7 @@ def test_written_files_use_lf_endings(fake_repo):
 # Validation
 # ---------------------------------------------------------------------------
 
+
 def test_validate_passes_after_apply(fake_repo):
     applier.apply_changes(str(fake_repo))
     assert applier.validate(str(fake_repo)) == []
@@ -121,8 +130,12 @@ def test_validate_rejects_files_without_the_fix(fake_repo):
 def test_validate_catches_a_spec_name_mismatch(fake_repo):
     applier.apply_changes(str(fake_repo))
     spec = fake_repo / applier.SPEC_PATH
-    spec.write_text(spec.read_text(encoding="utf-8").replace(
-        'name="OUSSAMA-Cutter"', 'name="Totally-Different"'), encoding="utf-8")
+    spec.write_text(
+        spec.read_text(encoding="utf-8").replace(
+            'name="OUSSAMA-Cutter"', 'name="Totally-Different"'
+        ),
+        encoding="utf-8",
+    )
     problems = applier.validate(str(fake_repo))
     assert any("does not match" in problem for problem in problems)
 
@@ -139,6 +152,7 @@ def test_validate_flags_a_backslash_line_ending_regression(fake_repo):
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def test_cli_dry_run_changes_nothing(fake_repo, capsys):
     assert applier.main(["--root", str(fake_repo)]) == 0
@@ -193,13 +207,17 @@ def test_cli_push_surfaces_a_git_failure(fake_repo, monkeypatch):
 # The packaged sources must match the documented patch
 # ---------------------------------------------------------------------------
 
+
 def test_packaged_workflows_are_the_fixed_ones():
     """The shipped data files must carry the fix (not the legacy workflow)."""
-    build_exe = (ROOT / applier.SOURCE_DIR / "build-exe.yml").read_text(encoding="utf-8")
+    build_exe = (ROOT / applier.SOURCE_DIR / "build-exe.yml").read_text(
+        encoding="utf-8"
+    )
     ci = (ROOT / applier.SOURCE_DIR / "ci.yml").read_text(encoding="utf-8")
     assert "EXE_NAME: OUSSAMA-Cutter.exe" in build_exe
-    assert build_exe.index("Create / update GitHub Release") < \
-        build_exe.index("Upload exe as workflow artifact")
+    assert build_exe.index("Create / update GitHub Release") < build_exe.index(
+        "Upload exe as workflow artifact"
+    )
     assert build_exe.count("retention-days: 7") == 1
     assert ci.index("Run unit tests") < ci.index("Upload build and compliance reports")
     assert "retention-days: 7" in ci

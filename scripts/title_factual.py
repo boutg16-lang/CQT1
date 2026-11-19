@@ -28,20 +28,138 @@ from scripts.title_text import detect_text_script, fit_publish_title
 # ---------------------------------------------------------------------------
 
 AR_STOPWORDS = {
-    "في", "على", "إلى", "الى", "عن", "من", "مع", "هذا", "هذه", "ذلك",
-    "التي", "الذي", "أن", "ان", "إن", "كان", "كانت", "ما", "لا", "لم",
-    "لن", "قد", "هو", "هي", "هم", "أنا", "انا", "نحن", "انت", "أنت",
-    "ثم", "أو", "او", "و", "ف", "ب", "ل", "ك", "يا", "أي", "اي", "كل",
-    "بعد", "قبل", "عند", "حتى", "إذا", "اذا", "لكن", "ليس", "بين",
-    "منه", "منها", "فيه", "فيها", "عليه", "عندما", "الآن", "الان",
-    "شيء", "كيف", "ماذا", "لماذا", "هل", "تم", "بشكل", "جدا", "أيضا",
-    "the", "a", "an", "and", "or", "but", "so", "to", "of", "in", "on",
-    "at", "for", "with", "is", "are", "was", "were", "be", "been", "it",
-    "its", "this", "that", "these", "those", "i", "you", "he", "she",
-    "we", "they", "my", "your", "his", "her", "our", "their", "not",
-    "do", "does", "did", "have", "has", "had", "will", "would", "can",
-    "could", "how", "what", "why", "when", "who", "which", "there",
-    "here", "just", "really", "very", "much", "many", "some", "any",
+    "في",
+    "على",
+    "إلى",
+    "الى",
+    "عن",
+    "من",
+    "مع",
+    "هذا",
+    "هذه",
+    "ذلك",
+    "التي",
+    "الذي",
+    "أن",
+    "ان",
+    "إن",
+    "كان",
+    "كانت",
+    "ما",
+    "لا",
+    "لم",
+    "لن",
+    "قد",
+    "هو",
+    "هي",
+    "هم",
+    "أنا",
+    "انا",
+    "نحن",
+    "انت",
+    "أنت",
+    "ثم",
+    "أو",
+    "او",
+    "و",
+    "ف",
+    "ب",
+    "ل",
+    "ك",
+    "يا",
+    "أي",
+    "اي",
+    "كل",
+    "بعد",
+    "قبل",
+    "عند",
+    "حتى",
+    "إذا",
+    "اذا",
+    "لكن",
+    "ليس",
+    "بين",
+    "منه",
+    "منها",
+    "فيه",
+    "فيها",
+    "عليه",
+    "عندما",
+    "الآن",
+    "الان",
+    "شيء",
+    "كيف",
+    "ماذا",
+    "لماذا",
+    "هل",
+    "تم",
+    "بشكل",
+    "جدا",
+    "أيضا",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "so",
+    "to",
+    "of",
+    "in",
+    "on",
+    "at",
+    "for",
+    "with",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "it",
+    "its",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "you",
+    "he",
+    "she",
+    "we",
+    "they",
+    "my",
+    "your",
+    "his",
+    "her",
+    "our",
+    "their",
+    "not",
+    "do",
+    "does",
+    "did",
+    "have",
+    "has",
+    "had",
+    "will",
+    "would",
+    "can",
+    "could",
+    "how",
+    "what",
+    "why",
+    "when",
+    "who",
+    "which",
+    "there",
+    "here",
+    "just",
+    "really",
+    "very",
+    "much",
+    "many",
+    "some",
+    "any",
 }
 
 # Strong clickbait patterns: penalized ALWAYS; treated as excessive when the
@@ -49,11 +167,28 @@ AR_STOPWORDS = {
 # supports the claim" — deterministic validation cannot prove support, so a
 # low-factuality clickbait title is rejected, a factual one is only nudged).
 _CLICKBAIT_PATTERNS = [
-    r"لن تصدق", r"لن تتوقع", r"ستغير حياتك", r"تغير حياتك", r"سر خطير",
-    r"الجميع مخطئ", r"اكتشاف صادم", r"اكتشاف مذهل", r"صدمة", r"صادم",
-    r"انصدمت", r"صُدمت", r"لا أحد يخبرك", r"لا يخبرك أحد", r"قبل فوات الأوان",
-    r"you won'?t believe", r"won'?t expect", r"will change your life",
-    r"shocking", r"insane", r"gone wrong", r"they don'?t want you to know",
+    r"لن تصدق",
+    r"لن تتوقع",
+    r"ستغير حياتك",
+    r"تغير حياتك",
+    r"سر خطير",
+    r"الجميع مخطئ",
+    r"اكتشاف صادم",
+    r"اكتشاف مذهل",
+    r"صدمة",
+    r"صادم",
+    r"انصدمت",
+    r"صُدمت",
+    r"لا أحد يخبرك",
+    r"لا يخبرك أحد",
+    r"قبل فوات الأوان",
+    r"you won'?t believe",
+    r"won'?t expect",
+    r"will change your life",
+    r"shocking",
+    r"insane",
+    r"gone wrong",
+    r"they don'?t want you to know",
 ]
 _CLICKBAIT_RE = re.compile("|".join(_CLICKBAIT_PATTERNS), re.IGNORECASE)
 
@@ -62,10 +197,12 @@ _LATIN_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{1,}")
 # thousands separator (U+066C) is not blindly rewritten to a decimal point.
 _NUMBER_RE = re.compile(r"(?<!\w)[0-9٠-٩۰-۹]+(?:[٬,٫.\u066B][0-9٠-٩۰-۹]+)*")
 _NUMBER_SEP_RE = re.compile(r"[٬,٫.\u066B]")
-_DIGIT_ONLY_TRANSLATION = str.maketrans({
-    **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
-    **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
-})
+_DIGIT_ONLY_TRANSLATION = str.maketrans(
+    {
+        **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
+        **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
+    }
+)
 
 PUBLISH_TITLE_LIMIT = 100
 
@@ -111,14 +248,17 @@ for _scale, _forms in {
     for _form in _forms:
         _ARABIC_SCALE_WORDS[arabic_text.normalized_match_text(_form)] = _scale
 
-_ARABIC_SMALL_NUMBERS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
-                         if 1 <= value <= 9}
-_ARABIC_TENS = {value for value in _ARABIC_NUMBER_WORD_VALUES.values()
-                if 20 <= value <= 90 and value % 10 == 0}
+_ARABIC_SMALL_NUMBERS = {
+    value for value in _ARABIC_NUMBER_WORD_VALUES.values() if 1 <= value <= 9
+}
+_ARABIC_TENS = {
+    value
+    for value in _ARABIC_NUMBER_WORD_VALUES.values()
+    if 20 <= value <= 90 and value % 10 == 0
+}
 
 
-_NUMBER_VOCABULARY = (set(_ARABIC_NUMBER_WORD_VALUES)
-                      | set(_ARABIC_SCALE_WORDS))
+_NUMBER_VOCABULARY = set(_ARABIC_NUMBER_WORD_VALUES) | set(_ARABIC_SCALE_WORDS)
 
 
 def _content_tokens(text):
@@ -199,7 +339,7 @@ def _arabic_number_words(text):
         first = None
         phrase_length = 0
         for length in (2, 1):
-            phrase = " ".join(normalized[index:index + length])
+            phrase = " ".join(normalized[index : index + length])
             if phrase in _ARABIC_NUMBER_WORD_VALUES:
                 first = _ARABIC_NUMBER_WORD_VALUES[phrase]
                 phrase_length = length
@@ -213,8 +353,11 @@ def _arabic_number_words(text):
         next_index = index + phrase_length
         if next_index < len(normalized) and normalized[next_index] == "و":
             next_index += 1
-        second = (_ARABIC_NUMBER_WORD_VALUES.get(normalized[next_index])
-                  if next_index < len(normalized) else None)
+        second = (
+            _ARABIC_NUMBER_WORD_VALUES.get(normalized[next_index])
+            if next_index < len(normalized)
+            else None
+        )
         if second == 10 and first in _ARABIC_SMALL_NUMBERS:
             value = first + 10
             consumed = next_index + 1 - index
@@ -228,8 +371,11 @@ def _arabic_number_words(text):
         scale_index = index + consumed
         if scale_index < len(normalized) and normalized[scale_index] == "و":
             scale_index += 1
-        scale = _ARABIC_SCALE_WORDS.get(
-            normalized[scale_index]) if scale_index < len(normalized) else None
+        scale = (
+            _ARABIC_SCALE_WORDS.get(normalized[scale_index])
+            if scale_index < len(normalized)
+            else None
+        )
         if scale:
             value *= scale
             consumed = scale_index + 1 - index
@@ -241,7 +387,8 @@ def _arabic_number_words(text):
 
 _DIGIT_SCALE_RE = re.compile(
     r"(?<!\w)([0-9٠-٩۰-۹]+(?:[٬,٫.\u066B][0-9٠-٩۰-۹]+)*)\s*"
-    r"(ألف|آلاف|الف|الاف|مليون|ملايين|مليار|مليارات)")
+    r"(ألف|آلاف|الف|الاف|مليون|ملايين|مليار|مليارات)"
+)
 
 
 def _number_mentions(text):
@@ -252,15 +399,17 @@ def _number_mentions(text):
     for match in _NUMBER_RE.finditer(raw):
         # A digit that is the base of "20 ألف" must not also be counted as a
         # standalone 20 — the composite already represents the same fact.
-        if any(start <= match.start() and match.end() <= end
-               for start, end in scale_spans):
+        if any(
+            start <= match.start() and match.end() <= end for start, end in scale_spans
+        ):
             continue
         digits.add(_canonical_number(match.group(0)))
     # Digit + scale word: "20 ألف" is 20000, not {20, 1000}.
     for match in scale_matches:
         base = _canonical_number(match.group(1))
         scale = _ARABIC_SCALE_WORDS.get(
-            arabic_text.normalized_match_text(match.group(2)), 1)
+            arabic_text.normalized_match_text(match.group(2)), 1
+        )
         try:
             digits.add(format(Decimal(base) * scale, "f"))
         except InvalidOperation:
@@ -348,8 +497,10 @@ def transcript_relevance_score(title, window_text):
         return 0.0
     window_stems = {arabic_text.light_stem(token) for token in window_tokens}
     matched = sum(
-        1 for token in title_tokens
-        if token in window_tokens or arabic_text.light_stem(token) in window_stems)
+        1
+        for token in title_tokens
+        if token in window_tokens or arabic_text.light_stem(token) in window_stems
+    )
     return round(100.0 * matched / len(title_tokens), 1)
 
 
@@ -389,8 +540,12 @@ def curiosity_score(title):
         score += 30.0
     if re.search(r"\d", arabic_text.normalize_digits(text)):
         score += 15.0
-    if re.search(r"(?<!\w)(كيف|كيفاش|لماذا|علاش|سر|خطأ|أخطاء|حقيقة|طريقة"
-                 r"|how|why|secret|mistake|truth)(?!\w)", text, re.IGNORECASE):
+    if re.search(
+        r"(?<!\w)(كيف|كيفاش|لماذا|علاش|سر|خطأ|أخطاء|حقيقة|طريقة"
+        r"|how|why|secret|mistake|truth)(?!\w)",
+        text,
+        re.IGNORECASE,
+    ):
         score += 25.0
     return round(max(0.0, min(100.0, score)), 1)
 
@@ -399,6 +554,7 @@ def seo_score(title):
     """SEO proxy: delegates to the project's existing seo_titles scorer."""
     try:
         from scripts import seo_titles
+
         return float(seo_titles.score_title(str(title or "")).get("score", 0.0))
     except Exception:
         return 50.0
@@ -486,9 +642,15 @@ def score_title_candidate(title, window_text, content_language="auto"):
     text = str(title or "")
     if text.count("!") > 2 or text.count("؟") > 2 or text.count("?") > 2:
         clickbait_penalty += 10.0
-    final = (0.30 * factual + 0.20 * relevance + 0.15 * clarity
-             + 0.10 * curiosity + 0.10 * seo + 0.15 * language
-             - clickbait_penalty)
+    final = (
+        0.30 * factual
+        + 0.20 * relevance
+        + 0.15 * clarity
+        + 0.10 * curiosity
+        + 0.10 * seo
+        + 0.15 * language
+        - clickbait_penalty
+    )
     return {
         "factual_accuracy_score": factual,
         "transcript_relevance_score": relevance,
@@ -501,8 +663,9 @@ def score_title_candidate(title, window_text, content_language="auto"):
     }
 
 
-def validate_title(title, window_text, content_language="auto",
-                   max_length=PUBLISH_TITLE_LIMIT):
+def validate_title(
+    title, window_text, content_language="auto", max_length=PUBLISH_TITLE_LIMIT
+):
     """The validation block shipped in title_data.validation."""
     title = str(title or "").strip()
     unsupported = hallucinated_facts(title, window_text)
@@ -542,6 +705,7 @@ def title_needs_replacement(title, window_text, content_language="auto"):
 # ---------------------------------------------------------------------------
 # Deterministic fallback titles (conservative, low confidence)
 # ---------------------------------------------------------------------------
+
 
 def _trim_words(text, limit=70):
     return fit_publish_title(str(text or "").strip(), limit)
@@ -608,8 +772,20 @@ def fallback_titles(window_analysis, content_language="auto", max_count=3):
         # "ب السبب الحقيقي…" as a "safe" title.
         words = text.split()
         while words and words[0].strip("،,") in {
-                "ب", "و", "ف", "ل", "ك", "لكن", "ثم", "فإذا", "وهذا", "فهو",
-                "and", "but", "so"}:
+            "ب",
+            "و",
+            "ف",
+            "ل",
+            "ك",
+            "لكن",
+            "ثم",
+            "فإذا",
+            "وهذا",
+            "فهو",
+            "and",
+            "but",
+            "so",
+        }:
             words.pop(0)
         cleaned = " ".join(words).strip()
         if cleaned:
@@ -640,8 +816,8 @@ def detect_content_language(window_text):
 TITLE_VALIDATION_SCHEMA_VERSION = "1.1"
 
 # Factual thresholds on the 0-100 ``factual_accuracy_score`` scale.
-MIN_VERIFY_FACTUAL = 60.0   # >= this + no unsupported facts → "verified"
-MIN_REVIEW_FACTUAL = 45.0   # below this the title/window link is too weak
+MIN_VERIFY_FACTUAL = 60.0  # >= this + no unsupported facts → "verified"
+MIN_REVIEW_FACTUAL = 45.0  # below this the title/window link is too weak
 
 # Curated claim / superlative / result markers that ASSERT a fact. A marker
 # that the title uses but the clip window never says is an unsupported claim.
@@ -649,24 +825,75 @@ MIN_REVIEW_FACTUAL = 45.0   # below this the title/window link is too weak
 # يعني ادّعاءً غير مدعوم.
 _CLAIM_MARKERS = (
     # Arabic — superlatives / comparisons
-    "الأفضل", "أفضل", "الأسرع", "أسرع", "الأكبر", "أكبر", "الأول", "أول",
-    "الأعلى", "أعلى", "الأكثر", "أكثر",
+    "الأفضل",
+    "أفضل",
+    "الأسرع",
+    "أسرع",
+    "الأكبر",
+    "أكبر",
+    "الأول",
+    "أول",
+    "الأعلى",
+    "أعلى",
+    "الأكثر",
+    "أكثر",
     # Arabic — causation / result
-    "بسبب", "نتيجة", "أدى", "أدت", "يؤدي", "يؤدي إلى",
+    "بسبب",
+    "نتيجة",
+    "أدى",
+    "أدت",
+    "يؤدي",
+    "يؤدي إلى",
     # Arabic — achievement / change / proof
-    "حقق", "حققت", "زاد", "زادت", "ارتفع", "ارتفعت", "انخفض", "انخفضت",
-    "وفّر", "وفر", "ربح", "ربحت", "خسر", "خسرت", "أثبت", "أثبتت",
+    "حقق",
+    "حققت",
+    "زاد",
+    "زادت",
+    "ارتفع",
+    "ارتفعت",
+    "انخفض",
+    "انخفضت",
+    "وفّر",
+    "وفر",
+    "ربح",
+    "ربحت",
+    "خسر",
+    "خسرت",
+    "أثبت",
+    "أثبتت",
     # Arabic — promotion / period promises
-    "مجانًا", "مجانا", "خلال", "في أسبوع", "في يوم", "أضعاف",
+    "مجانًا",
+    "مجانا",
+    "خلال",
+    "في أسبوع",
+    "في يوم",
+    "أضعاف",
     # English — superlatives / comparisons
-    "best", "fastest", "biggest", "largest", "first", "most",
+    "best",
+    "fastest",
+    "biggest",
+    "largest",
+    "first",
+    "most",
     # English — causation / result
-    "because", "result", "caused", "cause",
+    "because",
+    "result",
+    "caused",
+    "cause",
     # English — achievement / change / proof
-    "achieved", "increased", "decreased", "saved", "earned", "lost",
-    "proved", "proven",
+    "achieved",
+    "increased",
+    "decreased",
+    "saved",
+    "earned",
+    "lost",
+    "proved",
+    "proven",
     # English — promotion / period promises
-    "free", "in a week", "in a day", "times more",
+    "free",
+    "in a week",
+    "in a day",
+    "times more",
 )
 
 _ALL_CLAIM_MARKERS = tuple(dict.fromkeys(_CLAIM_MARKERS))
@@ -678,12 +905,49 @@ _UNIT_GROUPS = {
     "currency_dzd": ("دينار", "دنانير", "ديناراً", "دينارًا", "dzd"),
     "currency_gbp": ("جنيه", "جنيهات", "gbp", "pound", "pounds", "£"),
     "currency_eur": ("يورو", "euros", "euro", "€"),
-    "mass_kg": ("كيلوغرام", "كيلوغرامات", "كيلو", "كغ", "kg", "kgs", "kilogram", "kilograms"),
+    "mass_kg": (
+        "كيلوغرام",
+        "كيلوغرامات",
+        "كيلو",
+        "كغ",
+        "kg",
+        "kgs",
+        "kilogram",
+        "kilograms",
+    ),
     "mass_g": ("غرام", "غرامات", "جرام", "جرامات", "g", "gram", "grams"),
     "mass_ton": ("طن", "أطنان", "ton", "tons", "tonne", "tonnes"),
-    "volume_l": ("لتر", "لترات", "ليتر", "ليترات", "l", "liter", "liters", "litre", "litres"),
-    "volume_ml": ("مل", "ملليلتر", "مليلتر", "ml", "milliliter", "milliliters", "millilitre", "millilitres"),
-    "length_km": ("كيلومتر", "كيلومترات", "كم", "km", "kilometer", "kilometers", "kilometre", "kilometres"),
+    "volume_l": (
+        "لتر",
+        "لترات",
+        "ليتر",
+        "ليترات",
+        "l",
+        "liter",
+        "liters",
+        "litre",
+        "litres",
+    ),
+    "volume_ml": (
+        "مل",
+        "ملليلتر",
+        "مليلتر",
+        "ml",
+        "milliliter",
+        "milliliters",
+        "millilitre",
+        "millilitres",
+    ),
+    "length_km": (
+        "كيلومتر",
+        "كيلومترات",
+        "كم",
+        "km",
+        "kilometer",
+        "kilometers",
+        "kilometre",
+        "kilometres",
+    ),
     "length_m": ("متر", "أمتار", "meter", "meters", "metre", "metres", "m"),
     "duration_year": ("سنة", "سنوات", "عام", "أعوام", "year", "years"),
     "duration_month": ("شهر", "أشهر", "شهور", "month", "months"),
@@ -699,14 +963,27 @@ _SCOPE_MARKERS = (
     # Explicit whole-source framing only. A bare "الفيديو" / "الحلقة" in the
     # window used to disable scope detection for an obviously whole-video
     # title like "كل الفيديو في دقيقة".
-    "في هذا الفيديو", "هذا الفيديو", "الفيديو كامل", "الفيديو كله",
-    "المقطع كامل", "كل الفيديو", "الحلقة كاملة",
-    "in this video", "this video", "the whole video", "whole video",
+    "في هذا الفيديو",
+    "هذا الفيديو",
+    "الفيديو كامل",
+    "الفيديو كله",
+    "المقطع كامل",
+    "كل الفيديو",
+    "الحلقة كاملة",
+    "in this video",
+    "this video",
+    "the whole video",
+    "whole video",
     "full video",
 )
 
 _ALT_TITLE_STYLES = (
-    "direct", "curiosity", "benefit", "question", "emotional", "educational",
+    "direct",
+    "curiosity",
+    "benefit",
+    "question",
+    "emotional",
+    "educational",
 )
 
 
@@ -749,21 +1026,29 @@ def unsupported_claims(title, window_text):
         if norm_marker in seen_norm:
             continue
         seen_norm.add(norm_marker)
-        if (_contains_phrase(norm_title, norm_marker)
-                and not _contains_phrase(norm_window, norm_marker)):
+        if _contains_phrase(norm_title, norm_marker) and not _contains_phrase(
+            norm_window, norm_marker
+        ):
             unsupported.append(marker)
 
     for variants in _UNIT_GROUPS.values():
         title_units = [
-            variant for variant in variants
-            if (_contains_phrase(norm_title, _normalized_for_match(variant))
-                if _normalized_for_match(variant) else variant in title_raw)
+            variant
+            for variant in variants
+            if (
+                _contains_phrase(norm_title, _normalized_for_match(variant))
+                if _normalized_for_match(variant)
+                else variant in title_raw
+            )
         ]
         if not title_units:
             continue
         window_has_group = any(
-            (_contains_phrase(norm_window, _normalized_for_match(variant))
-             if _normalized_for_match(variant) else variant in window_raw)
+            (
+                _contains_phrase(norm_window, _normalized_for_match(variant))
+                if _normalized_for_match(variant)
+                else variant in window_raw
+            )
             for variant in variants
         )
         if not window_has_group:
@@ -819,9 +1104,16 @@ def _resolve_language(content_language, window_text):
     return language
 
 
-def validate_title_vs_clip(title, window_text, content_language="auto", *,
-                           full_transcript_text=None, clip_ratio=None,
-                           llm_entailment=None, max_length=PUBLISH_TITLE_LIMIT):
+def validate_title_vs_clip(
+    title,
+    window_text,
+    content_language="auto",
+    *,
+    full_transcript_text=None,
+    clip_ratio=None,
+    llm_entailment=None,
+    max_length=PUBLISH_TITLE_LIMIT,
+):
     """Factually validate ONE title against the EXACT clip-window transcript.
 
     Returns the v7.41 schema (see ``TITLE_VALIDATION_SCHEMA_VERSION``)::
@@ -857,8 +1149,8 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
 
     window_latin_tokens = _latin_tokens(window_text)
     unsupported_entities = sorted(
-        token for token in _latin_tokens(title_text)
-        if token not in window_latin_tokens)
+        token for token in _latin_tokens(title_text) if token not in window_latin_tokens
+    )
     # An Arabic ASR transcript writes brands transliterated ("الآيفون"), so a
     # Latin brand in the title cannot be proven false when the window has no
     # Latin text at all. Keep it for human review instead of rejecting an
@@ -867,8 +1159,10 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
     hard_entities = unsupported_entities if window_latin_tokens else []
     soft_entities = [] if window_latin_tokens else unsupported_entities
     unsupported_numbers = sorted(
-        number for number in title_numbers(title_text)
-        if number not in _text_numbers(window_text))
+        number
+        for number in title_numbers(title_text)
+        if number not in _text_numbers(window_text)
+    )
     claims = unsupported_claims(title_text, window_text)
 
     factual = factual_accuracy_score(title_text, window_text)
@@ -878,16 +1172,23 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
 
     clickbait = contains_clickbait_pattern(title_text)
     clickbait_penalty = 30.0 if clickbait else 0.0
-    if (title_text.count("!") > 2 or title_text.count("؟") > 2
-            or title_text.count("?") > 2):
+    if (
+        title_text.count("!") > 2
+        or title_text.count("؟") > 2
+        or title_text.count("?") > 2
+    ):
         clickbait_penalty += 10.0
 
     full_video_scope = detect_full_video_scope(
-        title_text, window_text, clip_ratio=clip_ratio)
+        title_text, window_text, clip_ratio=clip_ratio
+    )
 
     title_only_tokens = title_tokens - window_tokens
-    low_relevance = (bool(window_tokens) and relevance < MIN_REVIEW_FACTUAL
-                     and bool(title_only_tokens))
+    low_relevance = (
+        bool(window_tokens)
+        and relevance < MIN_REVIEW_FACTUAL
+        and bool(title_only_tokens)
+    )
 
     # --- deterministic gate -------------------------------------------------
     reasons = []
@@ -902,8 +1203,11 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
         reasons.append("unsupported_claim: " + ", ".join(claims))
         rejected = True
     if not language_matches:
-        reasons.append("language_mismatch: title={} clip={}".format(
-            detect_text_script(title_text), language))
+        reasons.append(
+            "language_mismatch: title={} clip={}".format(
+                detect_text_script(title_text), language
+            )
+        )
         rejected = True
     if clickbait and factual < MIN_VERIFY_FACTUAL:
         reasons.append("excessive_clickbait")
@@ -927,8 +1231,8 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
         rejected = True
 
     has_verifiable_content = bool(
-        title_tokens or title_numbers(title_text) or _latin_tokens(title_text)
-        or claims)
+        title_tokens or title_numbers(title_text) or _latin_tokens(title_text) or claims
+    )
     if rejected:
         status = "rejected"
     elif factual < MIN_VERIFY_FACTUAL:
@@ -945,8 +1249,9 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
         reasons.append("title_has_no_verifiable_content")
     elif len(title_text) > int(max_length):
         status = "review"
-        reasons.append("title_exceeds_length_limit: {}>{}".format(
-            len(title_text), int(max_length)))
+        reasons.append(
+            "title_exceeds_length_limit: {}>{}".format(len(title_text), int(max_length))
+        )
     else:
         status = "verified"
 
@@ -955,7 +1260,8 @@ def validate_title_vs_clip(title, window_text, content_language="auto", *,
         "relevance": relevance,
         "full_video_scope": bool(full_video_scope),
         "hallucinated_facts": sorted(
-            set(unsupported_entities) | set(unsupported_numbers)),
+            set(unsupported_entities) | set(unsupported_numbers)
+        ),
         "unsupported_entities": unsupported_entities,
         "unverified_entities": soft_entities,
         "unsupported_numbers": unsupported_numbers,
@@ -997,8 +1303,9 @@ def _candidate_text_and_style(candidate, index):
 def _window_analysis_from_text(window_text):
     """Minimal ``window_analysis`` for fallback titles from raw window text."""
     text = str(window_text or "").strip()
-    parts = [part.strip() for part in re.split(r"(?<=[.!?؟…])\s+", text)
-             if part.strip()]
+    parts = [
+        part.strip() for part in re.split(r"(?<=[.!?؟…])\s+", text) if part.strip()
+    ]
     first = parts[0] if parts else text
     last = parts[-1] if parts else text
     return {"text": text, "first_sentence": first, "last_sentence": last}
@@ -1009,13 +1316,16 @@ def _pick_best_title(items):
     best = items[0]
     for item in items[1:]:
         if (item["scores"]["factual_accuracy_score"], item["score"]) > (
-                best["scores"]["factual_accuracy_score"], best["score"]):
+            best["scores"]["factual_accuracy_score"],
+            best["score"],
+        ):
             best = item
     return best
 
 
-def validate_all_title_candidates(recommended_title, alt_titles, window_text,
-                                  content_language="auto", **kwargs):
+def validate_all_title_candidates(
+    recommended_title, alt_titles, window_text, content_language="auto", **kwargs
+):
     """Validate ``recommended_title`` AND every de-duplicated alt title.
 
     Returns::
@@ -1042,7 +1352,8 @@ def validate_all_title_candidates(recommended_title, alt_titles, window_text,
     # Validate BEFORE truncation: a fabricated claim beyond the 100-char
     # publish limit used to disappear before the fact check ran.
     primary_validation = validate_title_vs_clip(
-        primary_raw, window_text, language, **options)
+        primary_raw, window_text, language, **options
+    )
     primary_text = fit_publish_title(primary_raw, limit)
 
     alternatives = []
@@ -1066,53 +1377,68 @@ def validate_all_title_candidates(recommended_title, alt_titles, window_text,
         if validation["status"] == "rejected":
             rejected.append({"text": text, "validation": validation})
             continue
-        alternatives.append({
-            "text": text,
-            "style": style,
-            "validation": validation,
-            "score": score_title_candidate(text, window_text, language)["final_title_score"],
-            "_order": order,
-        })
+        alternatives.append(
+            {
+                "text": text,
+                "style": style,
+                "validation": validation,
+                "score": score_title_candidate(text, window_text, language)[
+                    "final_title_score"
+                ],
+                "_order": order,
+            }
+        )
         order += 1
 
     verified_available = primary_validation["status"] == "verified" or any(
-        item["validation"]["status"] == "verified" for item in alternatives)
+        item["validation"]["status"] == "verified" for item in alternatives
+    )
 
     if not verified_available:
         fallbacks = fallback_titles(
-            _window_analysis_from_text(window_text), language, max_count=5)
+            _window_analysis_from_text(window_text), language, max_count=5
+        )
         for index, item in enumerate(fallbacks):
             raw_text = str(item.get("text") or "").strip()
             validation = validate_title_vs_clip(
-                raw_text, window_text, language, **options)
+                raw_text, window_text, language, **options
+            )
             text = fit_publish_title(raw_text, limit)
             if not text or text.casefold() in seen:
                 continue
             seen.add(text.casefold())
             if validation["status"] == "rejected":
                 continue
-            alternatives.append({
-                "text": text,
-                "style": str(item.get("style") or _ALT_TITLE_STYLES[
-                    index % len(_ALT_TITLE_STYLES)]),
-                "validation": validation,
-                "score": score_title_candidate(
-                    text, window_text, language)["final_title_score"],
-                "_order": order,
-            })
+            alternatives.append(
+                {
+                    "text": text,
+                    "style": str(
+                        item.get("style")
+                        or _ALT_TITLE_STYLES[index % len(_ALT_TITLE_STYLES)]
+                    ),
+                    "validation": validation,
+                    "score": score_title_candidate(text, window_text, language)[
+                        "final_title_score"
+                    ],
+                    "_order": order,
+                }
+            )
             order += 1
             if validation["status"] == "verified":
                 verified_available = True
                 break
 
-    alternatives.sort(key=lambda item: (
-        -item["validation"]["checks"]["factual_accuracy_score"],
-        -item["score"], item["_order"]))
+    alternatives.sort(
+        key=lambda item: (
+            -item["validation"]["checks"]["factual_accuracy_score"],
+            -item["score"],
+            item["_order"],
+        )
+    )
     for item in alternatives:
         item.pop("_order", None)
 
-    review_required = (not verified_available
-                       or primary_validation["status"] == "review")
+    review_required = not verified_available or primary_validation["status"] == "review"
     return {
         "primary": {"text": primary_text, "validation": primary_validation},
         "alternatives": alternatives,
@@ -1122,9 +1448,16 @@ def validate_all_title_candidates(recommended_title, alt_titles, window_text,
     }
 
 
-def build_title_data(recommended_title, alt_titles, window_text,
-                     window_analysis, content_language="auto", *,
-                     clip_ratio=None, llm_entailment=None):
+def build_title_data(
+    recommended_title,
+    alt_titles,
+    window_text,
+    window_analysis,
+    content_language="auto",
+    *,
+    clip_ratio=None,
+    llm_entailment=None,
+):
     """Assemble the full ``title_data`` block for one segment.
 
     Every candidate (including ``recommended_title``) is validated against the
@@ -1152,25 +1485,24 @@ def build_title_data(recommended_title, alt_titles, window_text,
     seen = set()
     for index, candidate in enumerate([recommended_title] + list(alt_titles or [])):
         raw_text, style = _candidate_text_and_style(candidate, index)
-        validation = validate_title_vs_clip(
-            raw_text, window_text, language, **options)
+        validation = validate_title_vs_clip(raw_text, window_text, language, **options)
         text = fit_publish_title(raw_text, PUBLISH_TITLE_LIMIT)
         if not text or text.casefold() in seen:
             continue
         seen.add(text.casefold())
         scores = score_title_candidate(raw_text, window_text, language)
-        pool.append({
-            "text": text,
-            "style": style,
-            "score": scores["final_title_score"],
-            "scores": scores,
-            "validation": validation,
-        })
+        pool.append(
+            {
+                "text": text,
+                "style": style,
+                "score": scores["final_title_score"],
+                "scores": scores,
+                "validation": validation,
+            }
+        )
 
-    verified = [item for item in pool
-                if item["validation"]["status"] == "verified"]
-    review = [item for item in pool
-              if item["validation"]["status"] == "review"]
+    verified = [item for item in pool if item["validation"]["status"] == "verified"]
+    review = [item for item in pool if item["validation"]["status"] == "review"]
 
     fallback_used = False
     fallback_pool = []
@@ -1190,33 +1522,43 @@ def build_title_data(recommended_title, alt_titles, window_text,
             if not raw_text:
                 continue
             validation = validate_title_vs_clip(
-                raw_text, window_text, language, **options)
+                raw_text, window_text, language, **options
+            )
             text = fit_publish_title(raw_text, PUBLISH_TITLE_LIMIT)
             if not text or validation["status"] == "rejected":
                 continue
             scores = score_title_candidate(raw_text, window_text, language)
-            fallback_pool.append({
-                "text": text,
-                "style": str(item.get("style") or _ALT_TITLE_STYLES[
-                    index % len(_ALT_TITLE_STYLES)]),
-                "score": scores["final_title_score"],
-                "scores": scores,
-                "validation": validation,
-            })
+            fallback_pool.append(
+                {
+                    "text": text,
+                    "style": str(
+                        item.get("style")
+                        or _ALT_TITLE_STYLES[index % len(_ALT_TITLE_STYLES)]
+                    ),
+                    "score": scores["final_title_score"],
+                    "scores": scores,
+                    "validation": validation,
+                }
+            )
         if not fallback_pool:
             scores = score_title_candidate("Viral Segment", window_text, language)
-            fallback_pool.append({
-                "text": "Viral Segment",
-                "style": "direct",
-                "score": scores["final_title_score"],
-                "scores": scores,
-                "validation": validate_title_vs_clip(
-                    "Viral Segment", window_text, language, **options),
-            })
-        verified_fallbacks = [item for item in fallback_pool
-                              if item["validation"]["status"] == "verified"]
-        acceptable_fallbacks = [item for item in fallback_pool
-                               if item["validation"]["status"] != "rejected"]
+            fallback_pool.append(
+                {
+                    "text": "Viral Segment",
+                    "style": "direct",
+                    "score": scores["final_title_score"],
+                    "scores": scores,
+                    "validation": validate_title_vs_clip(
+                        "Viral Segment", window_text, language, **options
+                    ),
+                }
+            )
+        verified_fallbacks = [
+            item for item in fallback_pool if item["validation"]["status"] == "verified"
+        ]
+        acceptable_fallbacks = [
+            item for item in fallback_pool if item["validation"]["status"] != "rejected"
+        ]
         if verified_fallbacks:
             best = verified_fallbacks[0]
         elif acceptable_fallbacks:
@@ -1231,7 +1573,8 @@ def build_title_data(recommended_title, alt_titles, window_text,
             if window_title:
                 scores = score_title_candidate(window_title, window_text, language)
                 validation = validate_title_vs_clip(
-                    window_title, window_text, language, **options)
+                    window_title, window_text, language, **options
+                )
                 if validation["status"] != "rejected":
                     conservative = {
                         "text": window_title,
@@ -1250,7 +1593,8 @@ def build_title_data(recommended_title, alt_titles, window_text,
                 review_validation = dict(best["validation"])
                 review_validation["status"] = "review"
                 review_validation["reasons"] = list(
-                    review_validation.get("reasons") or []) + ["no_verifiable_title"]
+                    review_validation.get("reasons") or []
+                ) + ["no_verifiable_title"]
                 best = dict(best, validation=review_validation)
                 fallback_pool[-1] = best
         confidence = 35.0  # ambiguous/unsupported transcript → low confidence
@@ -1264,22 +1608,30 @@ def build_title_data(recommended_title, alt_titles, window_text,
         if item["text"].casefold() in rejected_seen:
             continue
         rejected_seen.add(item["text"].casefold())
-        rejected_titles.append({"text": item["text"],
-                                "validation": item["validation"]})
+        rejected_titles.append({"text": item["text"], "validation": item["validation"]})
 
-    candidates = [item for item in all_items
-                  if item["text"] != best["text"]
-                  and item["validation"]["status"] != "rejected"]
-    candidates.sort(key=lambda item: (
-        -item["validation"]["checks"]["factual_accuracy_score"],
-        -item["score"]))
+    candidates = [
+        item
+        for item in all_items
+        if item["text"] != best["text"] and item["validation"]["status"] != "rejected"
+    ]
+    candidates.sort(
+        key=lambda item: (
+            -item["validation"]["checks"]["factual_accuracy_score"],
+            -item["score"],
+        )
+    )
     alternative_titles = [
         {"text": item["text"], "style": item["style"], "score": item["score"]}
         for item in candidates[:5]
     ]
     validated_alternatives = [
-        {"text": item["text"], "style": item["style"], "score": item["score"],
-         "validation": item["validation"]}
+        {
+            "text": item["text"],
+            "style": item["style"],
+            "score": item["score"],
+            "validation": item["validation"],
+        }
         for item in candidates
     ]
 

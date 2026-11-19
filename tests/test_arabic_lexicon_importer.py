@@ -47,18 +47,22 @@ SAMPLE = """
 # _extract_terms
 # ---------------------------------------------------------------------------
 
+
 class TestExtractTerms:
     def test_sections_grouped_by_heading(self):
         sections = ali._extract_terms(SAMPLE)
         titles = [title for title, _ in sections]
-        assert titles == ["1. General Profanity", "4. Identity-Based Slurs",
-                          "4.4 Misogynist Phrases", "5. Dehumanizing Insults",
-                          "7. Other Stuff"]
+        assert titles == [
+            "1. General Profanity",
+            "4. Identity-Based Slurs",
+            "4.4 Misogynist Phrases",
+            "5. Dehumanizing Insults",
+            "7. Other Stuff",
+        ]
 
     def test_slash_variants_split(self):
         sections = dict(ali._extract_terms(SAMPLE))
-        assert sections["4. Identity-Based Slurs"] == [
-            "زنجي", "زنوج", "كلمة طويلة جدا"]
+        assert sections["4. Identity-Based Slurs"] == ["زنجي", "زنوج", "كلمة طويلة جدا"]
 
     def test_transliteration_dropped(self):
         sections = dict(ali._extract_terms(SAMPLE))
@@ -88,26 +92,32 @@ class TestExtractTerms:
 # _should_import / build_terms
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("title,expected", [
-    ("4. Identity-Based Slurs", True),
-    ("4.1 Something", True),
-    ("4.4 Misogynist Phrases", True),
-    ("5. Dehumanizing Insults", True),
-    ("6. Dehumanizing Insults", True),
-    ("Random Slurs Here", True),
-    ("Misogynist language", True),
-    ("Sexist terms", True),
-    ("1. General Profanity", False),
-    ("7. Other Stuff", False),
-    ("", False),
-])
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        ("4. Identity-Based Slurs", True),
+        ("4.1 Something", True),
+        ("4.4 Misogynist Phrases", True),
+        ("5. Dehumanizing Insults", True),
+        ("6. Dehumanizing Insults", True),
+        ("Random Slurs Here", True),
+        ("Misogynist language", True),
+        ("Sexist terms", True),
+        ("1. General Profanity", False),
+        ("7. Other Stuff", False),
+        ("", False),
+    ],
+)
 def test_should_import(title, expected):
     assert ali._should_import(title) is expected
 
 
 class TestBuildTerms:
     def test_categories_and_severities(self):
-        terms = {(t["term"], t["category"], t["severity"]) for t in ali.build_terms(SAMPLE)}
+        terms = {
+            (t["term"], t["category"], t["severity"]) for t in ali.build_terms(SAMPLE)
+        }
         assert ("زنجي", "hate_slur", "high") in terms
         assert ("زنوج", "hate_slur", "high") in terms
         assert ("عبارة", "harassment", "medium") in terms
@@ -122,8 +132,7 @@ class TestBuildTerms:
         assert all(t["lang"] == "ar" for t in ali.build_terms(SAMPLE))
 
     def test_duplicate_terms_deduplicated_casefold(self):
-        text = ("## 4. Identity-Based Slurs\n"
-                "* **زنجي (a):** one\n* **زنجي (b):** two\n")
+        text = "## 4. Identity-Based Slurs\n* **زنجي (a):** one\n* **زنجي (b):** two\n"
         terms = ali.build_terms(text)
         assert [t["term"] for t in terms] == ["زنجي"]
 
@@ -134,6 +143,7 @@ class TestBuildTerms:
 # ---------------------------------------------------------------------------
 # _fetch
 # ---------------------------------------------------------------------------
+
 
 class _FakeResponse:
     def __init__(self, data):
@@ -178,6 +188,7 @@ class TestFetch:
 # main()
 # ---------------------------------------------------------------------------
 
+
 class TestMain:
     def test_dry_run_returns_zero_and_prints_stats(self, monkeypatch, capsys):
         monkeypatch.setattr(ali, "_fetch", lambda url=ali.LEXICON_URL: SAMPLE)
@@ -199,7 +210,9 @@ class TestMain:
     def test_write_creates_pack_in_tmp_root(self, tmp_path, monkeypatch):
         monkeypatch.setattr(ali, "_fetch", lambda url=ali.LEXICON_URL: SAMPLE)
         # point the module's __file__ at a tmp "repo root" so --write lands there
-        monkeypatch.setattr(ali, "__file__", str(tmp_path / "scripts" / "arabic_lexicon_importer.py"))
+        monkeypatch.setattr(
+            ali, "__file__", str(tmp_path / "scripts" / "arabic_lexicon_importer.py")
+        )
         monkeypatch.setattr(sys, "argv", ["prog", "--write"])
         assert ali.main() == 0
         pack = json.loads((tmp_path / ali.OUT_FILENAME).read_text(encoding="utf-8"))
@@ -211,7 +224,9 @@ class TestMain:
 
     def test_write_dry_run_writes_nothing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(ali, "_fetch", lambda url=ali.LEXICON_URL: SAMPLE)
-        monkeypatch.setattr(ali, "__file__", str(tmp_path / "scripts" / "arabic_lexicon_importer.py"))
+        monkeypatch.setattr(
+            ali, "__file__", str(tmp_path / "scripts" / "arabic_lexicon_importer.py")
+        )
         monkeypatch.setattr(sys, "argv", ["prog", "--dry-run"])
         assert ali.main() == 0
         assert not (tmp_path / ali.OUT_FILENAME).exists()
@@ -221,20 +236,29 @@ class TestMain:
 # _merge_into_blocklist (fake safety_filter)
 # ---------------------------------------------------------------------------
 
+
 def _fake_safety_filter(monkeypatch, blocklist):
     fake = types.SimpleNamespace(BLOCKLIST=list(blocklist))
     monkeypatch.setitem(sys.modules, "scripts.safety_filter", fake)
     import scripts
+
     monkeypatch.setattr(scripts, "safety_filter", fake, raising=False)
     return fake
 
 
 class TestMergeIntoBlocklist:
     def test_appends_missing_terms(self, monkeypatch):
-        fake = _fake_safety_filter(monkeypatch, [("existing", "ar", "high", "hate_slur")])
+        fake = _fake_safety_filter(
+            monkeypatch, [("existing", "ar", "high", "hate_slur")]
+        )
         terms = [
             {"term": "زنجي", "lang": "ar", "severity": "high", "category": "hate_slur"},
-            {"term": "newterm", "lang": "ar", "severity": "medium", "category": "harassment"},
+            {
+                "term": "newterm",
+                "lang": "ar",
+                "severity": "medium",
+                "category": "harassment",
+            },
         ]
         ali._merge_into_blocklist(terms)
         assert ("زنجي", "ar", "high", "hate_slur") in fake.BLOCKLIST
@@ -243,7 +267,9 @@ class TestMergeIntoBlocklist:
 
     def test_idempotent_second_merge_adds_nothing(self, monkeypatch):
         fake = _fake_safety_filter(monkeypatch, [])
-        terms = [{"term": "زنجي", "lang": "ar", "severity": "high", "category": "hate_slur"}]
+        terms = [
+            {"term": "زنجي", "lang": "ar", "severity": "high", "category": "hate_slur"}
+        ]
         ali._merge_into_blocklist(terms)
         ali._merge_into_blocklist(terms)
         assert len(fake.BLOCKLIST) == 1
@@ -251,5 +277,13 @@ class TestMergeIntoBlocklist:
     def test_casefold_dedup(self, monkeypatch):
         fake = _fake_safety_filter(monkeypatch, [("Term", "ar", "high", "hate_slur")])
         ali._merge_into_blocklist(
-            [{"term": "TERM", "lang": "ar", "severity": "high", "category": "hate_slur"}])
+            [
+                {
+                    "term": "TERM",
+                    "lang": "ar",
+                    "severity": "high",
+                    "category": "hate_slur",
+                }
+            ]
+        )
         assert len(fake.BLOCKLIST) == 1

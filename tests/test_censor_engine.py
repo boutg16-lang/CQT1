@@ -54,8 +54,10 @@ class TestComputeSpans:
         assert "اذبحهم" in spans[0]["term"]
 
     def test_min_severity_high_skips_medium(self):
-        words = [{"word": "يا", "start": 0.0, "end": 0.3},
-                 {"word": "كلب", "start": 0.3, "end": 0.8}]  # medium harassment
+        words = [
+            {"word": "يا", "start": 0.0, "end": 0.3},
+            {"word": "كلب", "start": 0.3, "end": 0.8},
+        ]  # medium harassment
         seg = {"start_time": 0.0, "end_time": 1.0}
         assert ce.compute_censor_spans(seg, words, min_severity="medium")
         assert not ce.compute_censor_spans(seg, words, min_severity="high")
@@ -68,8 +70,10 @@ class TestComputeSpans:
         assert ce.compute_censor_spans(SEGMENT, []) == []
 
     def test_clean_words(self):
-        clean = [{"word": "طبخ", "start": 0.0, "end": 0.5},
-                 {"word": "وسفر", "start": 0.5, "end": 1.0}]
+        clean = [
+            {"word": "طبخ", "start": 0.0, "end": 0.5},
+            {"word": "وسفر", "start": 0.5, "end": 1.0},
+        ]
         assert ce.compute_censor_spans(SEGMENT, clean) == []
 
     def test_identity_label_is_not_bleeped_by_itself(self):
@@ -98,16 +102,23 @@ class TestRelativeSpans:
 # Subtitle masking
 # ---------------------------------------------------------------------------
 
+
 class TestMaskSubtitles:
     def test_masks_overlapping_words(self, tmp_path):
-        subs = {"segments": [{
-            "start": 0, "end": 4, "text": "مرحبا هؤلاء القردة",
-            "words": [
-                {"word": "مرحبا", "start": 0.0, "end": 0.5},
-                {"word": "القردة", "start": 1.5, "end": 2.0},
-                {"word": "بكم", "start": 2.5, "end": 3.0},
-            ],
-        }]}
+        subs = {
+            "segments": [
+                {
+                    "start": 0,
+                    "end": 4,
+                    "text": "مرحبا هؤلاء القردة",
+                    "words": [
+                        {"word": "مرحبا", "start": 0.0, "end": 0.5},
+                        {"word": "القردة", "start": 1.5, "end": 2.0},
+                        {"word": "بكم", "start": 2.5, "end": 3.0},
+                    ],
+                }
+            ]
+        }
         path = tmp_path / "sub.json"
         path.write_text(json.dumps(subs, ensure_ascii=False), encoding="utf-8")
         spans = [{"start": 1.42, "end": 2.08, "term": "قردة"}]
@@ -126,12 +137,25 @@ class TestMaskSubtitles:
 # ffmpeg audio muting (real end-to-end, skipped without ffmpeg)
 # ---------------------------------------------------------------------------
 
+
 def _mean_volume(path, start, end):
     """Return mean_volume in dB for a window of the file's audio."""
     cmd = [
-        FFMPEG, "-hide_banner", "-loglevel", "info",
-        "-ss", str(start), "-to", str(end), "-i", path,
-        "-af", "volumedetect", "-f", "null", "-",
+        FFMPEG,
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-ss",
+        str(start),
+        "-to",
+        str(end),
+        "-i",
+        path,
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
     ]
     out = subprocess.run(cmd, capture_output=True, text=True)
     for line in (out.stderr or "").splitlines():
@@ -145,10 +169,26 @@ class TestAudioCensor:
     def _make_video(self, path, seconds=6):
         # 6s of loud sine wave with a tiny black video track
         cmd = [
-            FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency=440:duration={}".format(seconds),
-            "-f", "lavfi", "-i", "color=black:size=64x64:duration={}".format(seconds),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            FFMPEG,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration={}".format(seconds),
+            "-f",
+            "lavfi",
+            "-i",
+            "color=black:size=64x64:duration={}".format(seconds),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
             str(path),
         ]
         subprocess.run(cmd, check=True, capture_output=True)
@@ -180,6 +220,7 @@ class TestAudioCensor:
 # Project orchestration
 # ---------------------------------------------------------------------------
 
+
 class TestCensorProject:
     def _make_project(self, tmp_path):
         project = tmp_path / "proj"
@@ -188,13 +229,26 @@ class TestCensorProject:
         # word-level transcript
         input_json = {"segments": [{"start": 0, "end": 4, "text": "x", "words": WORDS}]}
         (project / "input.json").write_text(
-            json.dumps(input_json, ensure_ascii=False), encoding="utf-8")
+            json.dumps(input_json, ensure_ascii=False), encoding="utf-8"
+        )
         # fake cut video + subtitle json for segment 0
         (project / "cuts" / "000_test_original_scale.mp4").write_bytes(b"fake")
-        subs = {"segments": [{"start": 0, "end": 4, "text": "x", "words": [
-            {"word": w["word"], "start": w["start"], "end": w["end"]} for w in WORDS]}]}
+        subs = {
+            "segments": [
+                {
+                    "start": 0,
+                    "end": 4,
+                    "text": "x",
+                    "words": [
+                        {"word": w["word"], "start": w["start"], "end": w["end"]}
+                        for w in WORDS
+                    ],
+                }
+            ]
+        }
         (project / "subs" / "000_test_processed.json").write_text(
-            json.dumps(subs, ensure_ascii=False), encoding="utf-8")
+            json.dumps(subs, ensure_ascii=False), encoding="utf-8"
+        )
         return str(project)
 
     def test_end_to_end_map_and_masking(self, tmp_path):
@@ -209,9 +263,14 @@ class TestCensorProject:
         # map file written
         assert os.path.exists(os.path.join(project, "censor_map.json"))
         # subtitle words actually masked
-        data = json.loads((tmp_path / "proj" / "subs" / "000_test_processed.json")
-                          .read_text(encoding="utf-8"))
-        masked = [w["word"] for w in data["segments"][0]["words"] if w["word"] == ce.MASK_TEXT]
+        data = json.loads(
+            (tmp_path / "proj" / "subs" / "000_test_processed.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        masked = [
+            w["word"] for w in data["segments"][0]["words"] if w["word"] == ce.MASK_TEXT
+        ]
         assert len(masked) >= 2
 
     def test_no_word_transcript(self, tmp_path):
@@ -225,4 +284,6 @@ class TestCensorProject:
         for subtitle in (tmp_path / "proj" / "subs").glob("*.json"):
             subtitle.unlink()
         cmap = ce.censor_project(project, {"segments": [dict(SEGMENT)]})
-        assert any(error["error"] == "subtitle_file_missing" for error in cmap["errors"])
+        assert any(
+            error["error"] == "subtitle_file_missing" for error in cmap["errors"]
+        )

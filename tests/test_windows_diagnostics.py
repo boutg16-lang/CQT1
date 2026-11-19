@@ -20,7 +20,17 @@ def test_windows_diagnostics_is_json_serializable(tmp_path):
 def test_windows_diagnostics_contains_runtime_checks(tmp_path):
     report = collect(tmp_path)
     names = {item["name"] for item in report["checks"]}
-    assert {"Python", "Project root", "Project drive space", "Torch", "WhisperX", "CTranslate2", "Faster-whisper fallback", "setuptools", "google-auth-oauthlib"} <= names
+    assert {
+        "Python",
+        "Project root",
+        "Project drive space",
+        "Torch",
+        "WhisperX",
+        "CTranslate2",
+        "Faster-whisper fallback",
+        "setuptools",
+        "google-auth-oauthlib",
+    } <= names
     text = render(report)
     assert "OUSSAMA Cutter Windows diagnostics" in text
     assert "Summary:" in text
@@ -35,11 +45,13 @@ def test_windows_diagnostics_does_not_modify_root(tmp_path):
 
 def test_windows_telegram_check_is_optional_and_secret_free():
     token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm"
-    result = _telegram_check({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "on",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "100, 200",
-    })
+    result = _telegram_check(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "on",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "100, 200",
+        }
+    )
     assert result["status"] == "ok"
     assert result["critical"] is False
     assert "2 allowlisted" in result["detail"]
@@ -71,7 +83,10 @@ def test_windows_diagnostics_flags_whisperx_3_2_outside_locked_stack(monkeypatch
     monkeypatch.setattr(
         diagnostics,
         "_import_probe",
-        lambda module_name, distribution=None: (True, versions.get(module_name, "installed")),
+        lambda module_name, distribution=None: (
+            True,
+            versions.get(module_name, "installed"),
+        ),
     )
 
     checks = diagnostics._huggingface_stack_checks()
@@ -93,6 +108,7 @@ def test_windows_diagnostics_rejects_huggingface_hub_0_x():
     result = _version_range_check("huggingface-hub", "0.36.2", "1.16.0", "2.0")
     assert result["status"] == "warn"
     assert "1.16.0" in result["detail"]
+
 
 def test_windows_diagnostics_rejects_invalid_huggingface_version():
     result = _version_range_check("huggingface-hub", "not-a-version", "1.16.0", "2.0")

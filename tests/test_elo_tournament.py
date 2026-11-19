@@ -2,8 +2,11 @@ from scripts import elo_tournament
 
 
 def _item(index, score=50.0):
-    return {"title": "clip-%d" % index, "score": score,
-            "transcript_text": "نص المقطع رقم %d" % index}
+    return {
+        "title": "clip-%d" % index,
+        "score": score,
+        "transcript_text": "نص المقطع رقم %d" % index,
+    }
 
 
 def test_expected_and_updated_are_symmetric():
@@ -30,7 +33,8 @@ def test_tournament_is_deterministic_with_same_seed():
     first = elo_tournament.run_tournament(items, elo_tournament.score_judge, seed=123)
     second = elo_tournament.run_tournament(items, elo_tournament.score_judge, seed=123)
     assert [(r["index"], r["elo"]) for r in first["ranking"]] == [
-        (r["index"], r["elo"]) for r in second["ranking"]]
+        (r["index"], r["elo"]) for r in second["ranking"]
+    ]
 
 
 def test_no_rematches_within_tournament():
@@ -54,7 +58,9 @@ def test_odd_field_gives_someone_a_rest():
 
 
 def test_single_candidate_and_empty_input():
-    assert elo_tournament.run_tournament([], elo_tournament.score_judge)["ranking"] == []
+    assert (
+        elo_tournament.run_tournament([], elo_tournament.score_judge)["ranking"] == []
+    )
     one = elo_tournament.run_tournament([_item(0)], elo_tournament.score_judge)
     assert one["pairings"] == 0
     assert one["ranking"][0]["rank"] == 1
@@ -63,7 +69,11 @@ def test_single_candidate_and_empty_input():
 def test_items_are_not_mutated():
     items = [_item(0, 60.0), _item(1, 70.0)]
     elo_tournament.run_tournament(items, elo_tournament.score_judge, seed=9)
-    assert items[0] == {"title": "clip-0", "score": 60.0, "transcript_text": "نص المقطع رقم 0"}
+    assert items[0] == {
+        "title": "clip-0",
+        "score": 60.0,
+        "transcript_text": "نص المقطع رقم 0",
+    }
 
 
 def test_score_judge_verdicts():
@@ -80,12 +90,16 @@ def test_llm_judge_parses_answers():
         def llm(prompt):
             verdicts.append(prompt)
             return answer
+
         return llm
 
     assert elo_tournament.llm_judge(make_llm("A"))(_item(0), _item(1)) == "a"
     assert elo_tournament.llm_judge(make_llm("b."))(_item(0), _item(1)) == "b"
     assert elo_tournament.llm_judge(make_llm("DRAW"))(_item(0), _item(1)) == "draw"
-    assert elo_tournament.llm_judge(make_llm("إجابة غير مفهومة"))(_item(0), _item(1)) == "draw"
+    assert (
+        elo_tournament.llm_judge(make_llm("إجابة غير مفهومة"))(_item(0), _item(1))
+        == "draw"
+    )
     assert "المقطع A" in verdicts[0] and "المقطع B" in verdicts[0]
 
 

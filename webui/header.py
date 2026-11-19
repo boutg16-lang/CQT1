@@ -32,7 +32,15 @@ description = """
   </p>
   <div style="font-size:0.86em; color:#94a3b8;">{brand_description}</div>
 </div>
-""".format(logo=LOGO_DATA_URI, version=VERSION, app_name=APP_NAME, tagline=i18n("Open-source Opus Clip alternative — turn long YouTube videos into viral Shorts, fully local, with a YouTube-strike protection layer."), brand_description=APP_DESCRIPTION)
+""".format(
+    logo=LOGO_DATA_URI,
+    version=VERSION,
+    app_name=APP_NAME,
+    tagline=i18n(
+        "Open-source Opus Clip alternative — turn long YouTube videos into viral Shorts, fully local, with a YouTube-strike protection layer."
+    ),
+    brand_description=APP_DESCRIPTION,
+)
 
 
 def env_status_html(force=False):
@@ -46,17 +54,32 @@ def env_status_html(force=False):
     try:
         # build a compact summary from the live checks
         from scripts import preflight
+
         checks_list, critical, warn = preflight.collect_checks()
         n_ok = sum(1 for c in checks_list if c["status"] == "ok")
         n_warn = len(warn)
         n_fail = len(critical)
         if n_fail:
-            color, icon, label = "#f87171", "❌", i18n("Critical issues — check the terminal or restart after fixing")
+            color, icon, label = (
+                "#f87171",
+                "❌",
+                i18n("Critical issues — check the terminal or restart after fixing"),
+            )
         elif n_warn:
-            color, icon, label = "#fbbf24", "⚠️", i18n("System ready with optional warnings (works normally)")
+            color, icon, label = (
+                "#fbbf24",
+                "⚠️",
+                i18n("System ready with optional warnings (works normally)"),
+            )
         else:
-            color, icon, label = "#4ade80", "✅", i18n("Everything in place — system ready")
-        detail = i18n("{} checks passed · {} warnings · {} critical").format(n_ok, n_warn, n_fail)
+            color, icon, label = (
+                "#4ade80",
+                "✅",
+                i18n("Everything in place — system ready"),
+            )
+        detail = i18n("{} checks passed · {} warnings · {} critical").format(
+            n_ok, n_warn, n_fail
+        )
         html = (
             '<div style="display:inline-flex; align-items:center; gap:10px; background:rgba(255,255,255,0.05);'
             ' border:1px solid rgba(255,255,255,0.10); border-radius:12px; padding:10px 16px; margin-top:10px;">'
@@ -64,7 +87,7 @@ def env_status_html(force=False):
             '<div style="text-align:right;">'
             '<div style="color:{color}; font-weight:700; font-size:0.95em;">{label}</div>'
             '<div style="color:#94a3b8; font-size:0.8em;">{detail}</div>'
-            '</div></div>'
+            "</div></div>"
         ).format(color=color, icon=icon, label=label, detail=detail)
     except Exception:
         html = ""
@@ -76,12 +99,22 @@ def home_quickstart():
     """🏠 Home tab: the quick-start card (status is a separate component)."""
     steps = [
         ("1️⃣", i18n("Paste a YouTube video link (or upload a video)")),
-        ("2️⃣", i18n("Choose the number of clips and the AI style (free Gemini or local)")),
-        ("3️⃣", i18n("Press «Start Processing» — cutting, subtitles and safety check run automatically")),
+        (
+            "2️⃣",
+            i18n("Choose the number of clips and the AI style (free Gemini or local)"),
+        ),
+        (
+            "3️⃣",
+            i18n(
+                "Press «Start Processing» — cutting, subtitles and safety check run automatically"
+            ),
+        ),
     ]
     steps_html = "".join(
         '<li style="display:flex; gap:10px; align-items:flex-start; padding:8px 0;">'
-        '<span style="font-size:1.2em;">{e}</span><span>{t}</span></li>'.format(e=e, t=t)
+        '<span style="font-size:1.2em;">{e}</span><span>{t}</span></li>'.format(
+            e=e, t=t
+        )
         for e, t in steps
     )
     return """
@@ -104,7 +137,9 @@ def recent_updates_html(version="?"):
         "🛡️ اعتمادية أعلى: استئناف سليم بعد الانقطاع، كشف ffmpeg المكسور قبل التنزيل، ونجاة من نفاد RAM/VRAM عبر faster-whisper.",
     ]
     list_html = "".join(
-        '<li style="display:flex; gap:10px; align-items:flex-start; padding:6px 0; color:#cbd5e1; line-height:1.8;">{}</li>'.format(item)
+        '<li style="display:flex; gap:10px; align-items:flex-start; padding:6px 0; color:#cbd5e1; line-height:1.8;">{}</li>'.format(
+            item
+        )
         for item in items
     )
     return """

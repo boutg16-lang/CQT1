@@ -25,7 +25,9 @@ CONTROL_TOKEN_FILE = STATE_DIR / "control.token"
 
 def _ensure_state_dir():
     if STATE_DIR.is_symlink():
-        raise BridgeError("The browser bridge state directory cannot be a symbolic link")
+        raise BridgeError(
+            "The browser bridge state directory cannot be a symbolic link"
+        )
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
 
@@ -53,7 +55,9 @@ def _atomic_write(path, data):
 
 
 def _save_state(state):
-    payload = json.dumps(state, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    payload = json.dumps(
+        state, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
     _atomic_write(STATE_FILE, payload)
 
 
@@ -74,7 +78,9 @@ def _read_state():
 
 def _remove_state():
     if STATE_DIR.is_symlink():
-        raise BridgeError("The browser bridge state directory cannot be a symbolic link")
+        raise BridgeError(
+            "The browser bridge state directory cannot be a symbolic link"
+        )
     for path in (STATE_FILE, SCREENSHOT_FILE):
         try:
             path.unlink()
@@ -99,7 +105,9 @@ def _start():
                 raise
         else:
             if status.get("active"):
-                raise BridgeError("A browser session is already active; use status or stop first.")
+                raise BridgeError(
+                    "A browser session is already active; use status or stop first."
+                )
         _remove_state()
     session = create_session(control_token=_read_control_token())
     state = {
@@ -112,12 +120,25 @@ def _start():
         try:
             stop_session(state["session_id"], state["agent_token"])
         except Exception as cleanup_error:
-            print("Could not stop the unpaired session: {}".format(type(cleanup_error).__name__), file=sys.stderr)
+            print(
+                "Could not stop the unpaired session: {}".format(
+                    type(cleanup_error).__name__
+                ),
+                file=sys.stderr,
+            )
         raise BridgeError("Could not safely store the temporary session token") from exc
     print("Pairing code: {}".format(session["pairing_code"]))
-    print("Enter this one-time code in Start_Browser_Test.bat on the computer running CAT.")
-    print("The pairing code is valid for {} minutes.".format(max(1, int(session.get("expires_in_seconds", 900) / 60))))
-    print("The paired session has no fixed time limit while the local bridge stays connected. If the relay restarts or the heartbeat is lost, reconnect with a new code.")
+    print(
+        "Enter this one-time code in Start_Browser_Test.bat on the computer running CAT."
+    )
+    print(
+        "The pairing code is valid for {} minutes.".format(
+            max(1, int(session.get("expires_in_seconds", 900) / 60))
+        )
+    )
+    print(
+        "The paired session has no fixed time limit while the local bridge stays connected. If the relay restarts or the heartbeat is lost, reconnect with a new code."
+    )
     return 0
 
 
@@ -126,7 +147,15 @@ def _status():
     status = session_status(state["session_id"], state["agent_token"])
     visible = {
         key: status[key]
-        for key in ("active", "paired", "project_url", "lease_expires_at", "actions_used", "actions_remaining", "actions_limit_per_minute")
+        for key in (
+            "active",
+            "paired",
+            "project_url",
+            "lease_expires_at",
+            "actions_used",
+            "actions_remaining",
+            "actions_limit_per_minute",
+        )
         if key in status
     }
     print(json.dumps(visible, ensure_ascii=False, indent=2))
@@ -140,9 +169,13 @@ def _action(action):
         try:
             image = base64.b64decode(result.pop("image_base64"), validate=True)
         except (ValueError, TypeError) as exc:
-            raise BridgeError("The local browser returned an invalid screenshot") from exc
+            raise BridgeError(
+                "The local browser returned an invalid screenshot"
+            ) from exc
         if not image or len(image) > 5_000_000:
-            raise BridgeError("The local browser screenshot exceeded the safe size limit")
+            raise BridgeError(
+                "The local browser screenshot exceeded the safe size limit"
+            )
         _atomic_write(SCREENSHOT_FILE, image)
         result["screenshot_path"] = str(SCREENSHOT_FILE)
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -162,7 +195,9 @@ def _stop():
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Safely control the paired local CAT browser.")
+    parser = argparse.ArgumentParser(
+        description="Safely control the paired local CAT browser."
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("start")
     subparsers.add_parser("status")
@@ -208,13 +243,17 @@ def main(argv=None):
         if args.command == "stop":
             return _stop()
         action = {"type": args.command}
-        if args.command in {"navigate", "click", "fill", "select", "press", "scroll", "wait"}:
+        if args.command in {
+            "navigate",
+            "click",
+            "fill",
+            "select",
+            "press",
+            "scroll",
+            "wait",
+        }:
             action.update(
-                {
-                    key: value
-                    for key, value in vars(args).items()
-                    if key != "command"
-                }
+                {key: value for key, value in vars(args).items() if key != "command"}
             )
         return _action(action)
     except BridgeError as exc:

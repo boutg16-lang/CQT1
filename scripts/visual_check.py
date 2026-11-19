@@ -72,9 +72,20 @@ def extract_frames(video_path, num_frames=4, work_dir=None, width=320, height=32
     try:
         # get duration
         probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         duration = float(probe.stdout.strip() or 0)
     except Exception:
         duration = 0.0
@@ -92,10 +103,21 @@ def extract_frames(video_path, num_frames=4, work_dir=None, width=320, height=32
     while at < duration and i < num_frames:
         out = os.path.join(work, "{}.vis{}.png".format(base, i))
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-ss", "{:.3f}".format(at), "-i", video_path,
-            "-frames:v", "1", "-vf", "scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2".format(
-                width, height, width, height),
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            "{:.3f}".format(at),
+            "-i",
+            video_path,
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2".format(
+                width, height, width, height
+            ),
             out,
         ]
         try:
@@ -112,14 +134,18 @@ def extract_frames(video_path, num_frames=4, work_dir=None, width=320, height=32
 class NudeNetClassifier:
     """Thin ONNX classifier wrapper. Never raises on environment problems."""
 
-    def __init__(self, model_path=None, classes=None, graphic_classes=None,
-                 input_size=None):
+    def __init__(
+        self, model_path=None, classes=None, graphic_classes=None, input_size=None
+    ):
         self.model_path = model_path or default_model_path()
         meta = _load_model_meta(self.model_path)
         self.classes = classes or meta.get("classes") or DEFAULT_CLASSES
-        self.graphic_classes = (graphic_classes or meta.get("graphic")
-                                or DEFAULT_GRAPHIC_CLASSES)
-        self.input_size = int(input_size or meta.get("input_size") or DEFAULT_INPUT_SIZE)
+        self.graphic_classes = (
+            graphic_classes or meta.get("graphic") or DEFAULT_GRAPHIC_CLASSES
+        )
+        self.input_size = int(
+            input_size or meta.get("input_size") or DEFAULT_INPUT_SIZE
+        )
         self._session = None
         self._error = None
         self._load()
@@ -135,7 +161,8 @@ class NudeNetClassifier:
             return
         try:
             self._session = ort.InferenceSession(
-                self.model_path, providers=["CPUExecutionProvider"])
+                self.model_path, providers=["CPUExecutionProvider"]
+            )
         except Exception as e:
             self._error = "failed to load ONNX model: {}".format(e)
 
@@ -160,15 +187,27 @@ class NudeNetClassifier:
 
             size = self.input_size
             cmd = [
-                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                "-i", image_path,
-                "-vf", "scale={}:{}".format(size, size),
-                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                image_path,
+                "-vf",
+                "scale={}:{}".format(size, size),
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
+                "pipe:1",
             ]
             res = subprocess.run(cmd, capture_output=True, timeout=60)
             expected = size * size * 3
             if len(res.stdout) < expected:
-                self._error = "could not decode frame ({} bytes)".format(len(res.stdout))
+                self._error = "could not decode frame ({} bytes)".format(
+                    len(res.stdout)
+                )
                 return None
             arr = np.frombuffer(res.stdout[:expected], dtype=np.uint8)
             arr = arr.reshape(1, 3, size, size).astype(np.float32) / 255.0  # NCHW
@@ -193,7 +232,9 @@ class NudeNetClassifier:
     def analyze_video(self, video_path, num_frames=4, work_dir=None):
         """Score a video clip. Returns a report dict (never raises)."""
         report = {
-            "model": os.path.basename(self.model_path) if os.path.exists(self.model_path) else None,
+            "model": os.path.basename(self.model_path)
+            if os.path.exists(self.model_path)
+            else None,
             "available": self.available,
             "error": self._error,
             "frames": [],
@@ -204,8 +245,13 @@ class NudeNetClassifier:
         if not self.available:
             return report
 
-        frames = extract_frames(video_path, num_frames, work_dir,
-                                width=self.input_size, height=self.input_size)
+        frames = extract_frames(
+            video_path,
+            num_frames,
+            work_dir,
+            width=self.input_size,
+            height=self.input_size,
+        )
         frame_scores = []
         for i, fp in enumerate(frames):
             pred = self.predict_frame(fp)
@@ -213,20 +259,25 @@ class NudeNetClassifier:
                 continue
             graphic = sum(pred.get(c, 0.0) for c in self.graphic_classes)
             top = max(pred, key=pred.get)
-            frame_scores.append({
-                "frame": i,
-                "graphic_prob": round(graphic * 100.0, 1),
-                "top_class": top,
-                "top_prob": round(pred[top] * 100.0, 1),
-                "scores": {k: round(v * 100.0, 1) for k, v in pred.items()},
-            })
+            frame_scores.append(
+                {
+                    "frame": i,
+                    "graphic_prob": round(graphic * 100.0, 1),
+                    "top_class": top,
+                    "top_prob": round(pred[top] * 100.0, 1),
+                    "scores": {k: round(v * 100.0, 1) for k, v in pred.items()},
+                }
+            )
             report["frames"].append(frame_scores[-1])
 
         if frame_scores:
             report["graphic_score"] = round(
-                max(f["graphic_prob"] for f in frame_scores), 1)
+                max(f["graphic_prob"] for f in frame_scores), 1
+            )
             report["graphic"] = report["graphic_score"] >= 50.0
-            report["top_class"] = max(frame_scores, key=lambda f: f["graphic_prob"])["top_class"]
+            report["top_class"] = max(frame_scores, key=lambda f: f["graphic_prob"])[
+                "top_class"
+            ]
         # cleanup extracted frames
         for fp in frames:
             try:
@@ -277,11 +328,15 @@ def make_classifier(model_path=None):
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="ViralCutter visual check (ONNX).")
     parser.add_argument("--video", help="Video clip to analyze")
     parser.add_argument("--model", default=None, help="ONNX model path")
-    parser.add_argument("--download", action="store_true",
-                        help="Download the default visual model and exit")
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download the default visual model and exit",
+    )
     parser.add_argument("--frames", type=int, default=4, help="Frames to sample")
     parser.add_argument("--json", action="store_true", help="Print JSON report")
     args = parser.parse_args()
@@ -293,7 +348,11 @@ def main():
     if not args.video:
         parser.error("--video is required unless --download is used")
 
-    clf = NudeNetClassifier(args.model) if (args.model or os.path.exists(default_model_path())) else None
+    clf = (
+        NudeNetClassifier(args.model)
+        if (args.model or os.path.exists(default_model_path()))
+        else None
+    )
     if clf is None:
         print("No visual model. Run: python -m scripts.visual_check --download")
         return 2
@@ -302,11 +361,17 @@ def main():
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("model: {}".format(report["model"]))
-        print("graphic_score: {}  graphic: {}".format(
-            report["graphic_score"], report["graphic"]))
+        print(
+            "graphic_score: {}  graphic: {}".format(
+                report["graphic_score"], report["graphic"]
+            )
+        )
         for f in report["frames"]:
-            print("  frame {}: graphic={} top={}({}%)".format(
-                f["frame"], f["graphic_prob"], f["top_class"], f["top_prob"]))
+            print(
+                "  frame {}: graphic={} top={}({}%)".format(
+                    f["frame"], f["graphic_prob"], f["top_class"], f["top_prob"]
+                )
+            )
     return 0
 
 

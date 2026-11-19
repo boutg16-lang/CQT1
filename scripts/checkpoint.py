@@ -21,8 +21,18 @@ CHECKPOINT_FILENAME = "checkpoint.json"
 # state and the second save clobbers the first one's stages.
 _SAVE_LOCK = threading.RLock()
 STAGES = [
-    "download", "transcribe", "segments", "safety", "cut",
-    "edit", "polish", "subtitles", "audio_qc", "scorecard", "music_check", "done",
+    "download",
+    "transcribe",
+    "segments",
+    "safety",
+    "cut",
+    "edit",
+    "polish",
+    "subtitles",
+    "audio_qc",
+    "scorecard",
+    "music_check",
+    "done",
 ]
 
 
@@ -52,7 +62,9 @@ def load_checkpoint(project_folder):
             return _blank_checkpoint()
         base = _blank_checkpoint()
         base.update(data)
-        base["history"] = data.get("history") if isinstance(data.get("history"), list) else []
+        base["history"] = (
+            data.get("history") if isinstance(data.get("history"), list) else []
+        )
         # A corrupt/foreign version must never make later saves raise; fall
         # back to the current schema version instead of trusting the value.
         try:
@@ -133,17 +145,27 @@ def mark_started(project_folder, stage):
     _validate_stage(stage)
     with _SAVE_LOCK:
         data = load_checkpoint(project_folder)
-        attempts = sum(
-            1 for item in data.get("history", [])
-            if isinstance(item, dict) and item.get("stage") == stage
-            and item.get("status") == "running"
-        ) + 1
+        attempts = (
+            sum(
+                1
+                for item in data.get("history", [])
+                if isinstance(item, dict)
+                and item.get("stage") == stage
+                and item.get("status") == "running"
+            )
+            + 1
+        )
         data["stages"].pop(stage, None)
         data["active_stage"] = stage
         data["last_error"] = None
         _event(data, stage, "running", attempt=attempts)
-        save_checkpoint(project_folder, data["stages"],
-                        history=data["history"], active_stage=stage, last_error=None)
+        save_checkpoint(
+            project_folder,
+            data["stages"],
+            history=data["history"],
+            active_stage=stage,
+            last_error=None,
+        )
 
 
 def mark_done(project_folder, stage):
@@ -154,8 +176,13 @@ def mark_done(project_folder, stage):
         data["active_stage"] = None
         data["last_error"] = None
         _event(data, stage, "success")
-        save_checkpoint(project_folder, data["stages"],
-                        history=data["history"], active_stage=None, last_error=None)
+        save_checkpoint(
+            project_folder,
+            data["stages"],
+            history=data["history"],
+            active_stage=None,
+            last_error=None,
+        )
 
 
 def mark_failed(project_folder, stage, error):
@@ -170,9 +197,13 @@ def mark_failed(project_folder, stage, error):
             "message": str(error)[:4000],
         }
         _event(data, stage, "failed", error=str(error)[:1000])
-        save_checkpoint(project_folder, data["stages"],
-                        history=data["history"], active_stage=None,
-                        last_error=data["last_error"])
+        save_checkpoint(
+            project_folder,
+            data["stages"],
+            history=data["history"],
+            active_stage=None,
+            last_error=data["last_error"],
+        )
 
 
 def clear(project_folder, stage=None):
@@ -189,8 +220,13 @@ def clear(project_folder, stage=None):
             _event(data, stage, "cleared")
         data["active_stage"] = None
         data["last_error"] = None
-        save_checkpoint(project_folder, data["stages"],
-                        history=data["history"], active_stage=None, last_error=None)
+        save_checkpoint(
+            project_folder,
+            data["stages"],
+            history=data["history"],
+            active_stage=None,
+            last_error=None,
+        )
 
 
 def list_pending(project_folder):
@@ -252,13 +288,22 @@ def main():
     parser.add_argument("--project", required=True, help="project folder")
     parser.add_argument("--status", action="store_true", help="show stage status")
     parser.add_argument("--mark", default=None, help="mark a stage done (e.g. cut)")
-    parser.add_argument("--clear", nargs="?", const="__all__", default=None,
-                        help="clear one stage or all (no value)")
+    parser.add_argument(
+        "--clear",
+        nargs="?",
+        const="__all__",
+        default=None,
+        help="clear one stage or all (no value)",
+    )
     args = parser.parse_args()
     if args.status:
         data = load_checkpoint(args.project)
         for stage in STAGES:
-            print("{}: {}".format(stage, "done" if is_done(args.project, stage) else "pending"))
+            print(
+                "{}: {}".format(
+                    stage, "done" if is_done(args.project, stage) else "pending"
+                )
+            )
         if data.get("active_stage"):
             print("active_stage: {}".format(data["active_stage"]))
         if data.get("last_error"):
@@ -268,7 +313,11 @@ def main():
         print("marked '{}' done".format(args.mark))
     elif args.clear is not None:
         clear(args.project, None if args.clear == "__all__" else args.clear)
-        print("cleared checkpoint{}".format("" if args.clear == "__all__" else " for " + args.clear))
+        print(
+            "cleared checkpoint{}".format(
+                "" if args.clear == "__all__" else " for " + args.clear
+            )
+        )
     else:
         print("pending: {}".format(", ".join(list_pending(args.project))))
     return 0

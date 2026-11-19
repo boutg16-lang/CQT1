@@ -26,31 +26,104 @@ from scripts import arabic_text, clip_scoring
 
 # Tokens that add zero information when they OPEN a clip. Conservative on
 # purpose: words like «والله» carry emphasis and are content, not filler.
-FILLER_OPENERS = frozenset({
-    "يعني", "طيب", "آه", "اه", "أه", "إيه", "ايه", "امم", "أمم", "همم",
-    "ههم", "اوكي", "أوكي", "حسنا", "حسناً", "هم",
-})
+FILLER_OPENERS = frozenset(
+    {
+        "يعني",
+        "طيب",
+        "آه",
+        "اه",
+        "أه",
+        "إيه",
+        "ايه",
+        "امم",
+        "أمم",
+        "همم",
+        "ههم",
+        "اوكي",
+        "أوكي",
+        "حسنا",
+        "حسناً",
+        "هم",
+    }
+)
 
 # Standalone tokens that signal the window starts mid-conversation: the
 # opener presupposes context the viewer does not have.
-CONTINUATION_MARKERS = frozenset({
-    "و", "ف", "ثم", "بس", "لكن", "لكنه", "لأن", "لان", "عشان", "علشان",
-    "كمان", "برضو", "كذلك", "أيضا", "ايضا", "بعدين", "وبعدين", "برضه",
-})
+CONTINUATION_MARKERS = frozenset(
+    {
+        "و",
+        "ف",
+        "ثم",
+        "بس",
+        "لكن",
+        "لكنه",
+        "لأن",
+        "لان",
+        "عشان",
+        "علشان",
+        "كمان",
+        "برضو",
+        "كذلك",
+        "أيضا",
+        "ايضا",
+        "بعدين",
+        "وبعدين",
+        "برضه",
+    }
+)
 
 # Question words that make strong openers (curiosity gap in the viewer's
 # own dialect — MSA and dialectal forms both count).
-QUESTION_OPENERS = frozenset({
-    "ليش", "ليه", "لييه", "لماذا", "كيف", "كيفاش", "وش", "ويش", "ايش",
-    "إيش", "شو", "شنو", "هل", "قديش", "كم", "مين", "من", "وين", "أين",
-    "اين", "متى", "امتى", "علاش",
-})
+QUESTION_OPENERS = frozenset(
+    {
+        "ليش",
+        "ليه",
+        "لييه",
+        "لماذا",
+        "كيف",
+        "كيفاش",
+        "وش",
+        "ويش",
+        "ايش",
+        "إيش",
+        "شو",
+        "شنو",
+        "هل",
+        "قديش",
+        "كم",
+        "مين",
+        "من",
+        "وين",
+        "أين",
+        "اين",
+        "متى",
+        "امتى",
+        "علاش",
+    }
+)
 
 # Second/first-person address pulls the viewer into the conversation.
-PERSONAL_HOOK_TOKENS = frozenset({
-    "أنا", "انا", "انت", "إنت", "أنت", "انتي", "إنتي", "أنتي", "انتم",
-    "إياك", "يا", "نفسك", "حالك", "عندك", "عندي", "قولي", "اسمع",
-})
+PERSONAL_HOOK_TOKENS = frozenset(
+    {
+        "أنا",
+        "انا",
+        "انت",
+        "إنت",
+        "أنت",
+        "انتي",
+        "إنتي",
+        "أنتي",
+        "انتم",
+        "إياك",
+        "يا",
+        "نفسك",
+        "حالك",
+        "عندك",
+        "عندي",
+        "قولي",
+        "اسمع",
+    }
+)
 
 _NUMBER_RE = re.compile(r"[0-9٠-٩۱۲۳۴۵۶۷۸۹]+")
 _WS_RE = re.compile(r"\s+")
@@ -165,15 +238,21 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
     raw = str(text or "").strip()
     if not raw:
         return {
-            "hook_score": 0.0, "opens_with_filler": False, "filler_word": None,
-            "opens_mid_thought": False, "continuation_marker": None,
-            "has_question_hook": False, "has_number_hook": False,
-            "has_personal_hook": False, "emotional_charge": 0.0,
-            "trim_words": 0, "notes": ["لا يوجد نص افتتاحي لتحليله"],
+            "hook_score": 0.0,
+            "opens_with_filler": False,
+            "filler_word": None,
+            "opens_mid_thought": False,
+            "continuation_marker": None,
+            "has_question_hook": False,
+            "has_number_hook": False,
+            "has_personal_hook": False,
+            "emotional_charge": 0.0,
+            "trim_words": 0,
+            "notes": ["لا يوجد نص افتتاحي لتحليله"],
         }
 
     tokens = _tokens(raw)
-    opening = tokens[:max(1, int(max_opening_words))]
+    opening = tokens[: max(1, int(max_opening_words))]
     # Normalize each token with the SAME helper the trimmer uses, so trailing
     # punctuation («يعني،») cannot defeat the membership checks below while
     # the raw tokens stay available for display fields.
@@ -194,13 +273,14 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
     opens_with_filler = bool(trim_words)
 
     opens_mid_thought = first_word in CONTINUATION_MARKERS
-    has_question_hook = (
-        first_word in QUESTION_OPENERS
-        or ("؟" in first_sentence and len(first_sentence.split()) <= 12)
+    has_question_hook = first_word in QUESTION_OPENERS or (
+        "؟" in first_sentence and len(first_sentence.split()) <= 12
     )
     has_number_hook = bool(_NUMBER_RE.search(first_sentence))
-    opening_joined = " ".join(words[:len(opening)])
-    has_personal_hook = any(token in PERSONAL_HOOK_TOKENS for token in words[:len(opening)])
+    opening_joined = " ".join(words[: len(opening)])
+    has_personal_hook = any(
+        token in PERSONAL_HOOK_TOKENS for token in words[: len(opening)]
+    )
     emotional_charge = clip_scoring.emotional_value_heuristic(opening_joined)
 
     score = 50.0
@@ -218,11 +298,14 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
         score -= min(24.0, 12.0 + 6.0 * trim_words)
         notes.append(
             "تبدأ بحشو («{}» ×{}) — اقصِ أول {} كلمة للوصول إلى اللحظة الحقيقية".format(
-                filler_word, trim_words, trim_words))
+                filler_word, trim_words, trim_words
+            )
+        )
     if opens_mid_thought:
         score -= 12.0
         notes.append(
-            "تبدأ منتصف فكرة («{}») — المشاهد الجديد يفتقد السياق".format(first_word))
+            "تبدأ منتصف فكرة («{}») — المشاهد الجديد يفتقد السياق".format(first_word)
+        )
     if not notes:
         notes.append("افتتاحية نظيفة بلا إشارات قوة واضحة")
     if trim_words and not opens_mid_thought:
@@ -267,12 +350,20 @@ def rank_openings(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         entry = dict(segment)
         entry["opening_analysis"] = analyze_segment_opening(segment)
         annotated.append(entry)
-    annotated.sort(key=lambda item: item["opening_analysis"]["hook_score"], reverse=True)
+    annotated.sort(
+        key=lambda item: item["opening_analysis"]["hook_score"], reverse=True
+    )
     return annotated
 
 
 __all__ = [
-    "CONTINUATION_MARKERS", "FILLER_OPENERS", "PERSONAL_HOOK_TOKENS",
-    "QUESTION_OPENERS", "analyze_opening", "analyze_segment_opening",
-    "drop_leading_filler_tokens", "leading_filler_trim", "rank_openings",
+    "CONTINUATION_MARKERS",
+    "FILLER_OPENERS",
+    "PERSONAL_HOOK_TOKENS",
+    "QUESTION_OPENERS",
+    "analyze_opening",
+    "analyze_segment_opening",
+    "drop_leading_filler_tokens",
+    "leading_filler_trim",
+    "rank_openings",
 ]

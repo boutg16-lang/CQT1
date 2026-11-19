@@ -297,7 +297,9 @@ def test_weights_fingerprint_is_stable_hex():
 
 def test_weights_fingerprint_changes_with_weights():
     base = weights_fingerprint()
-    changed = weights_fingerprint({**clip_scoring.DEFAULT_SELECTION_WEIGHTS, "hook_strength": 0.5})
+    changed = weights_fingerprint(
+        {**clip_scoring.DEFAULT_SELECTION_WEIGHTS, "hook_strength": 0.5}
+    )
     assert changed != base
 
 

@@ -121,8 +121,9 @@ def _segment_review_reasons(project_folder, index):
                 payload = json.load(handle)
             segments = payload.get("segments") if isinstance(payload, dict) else None
             if isinstance(segments, list):
-                entries = [(i, seg) for i, seg in enumerate(segments)
-                           if isinstance(seg, dict)]
+                entries = [
+                    (i, seg) for i, seg in enumerate(segments) if isinstance(seg, dict)
+                ]
         except Exception:
             entries = []
     else:
@@ -132,28 +133,38 @@ def _segment_review_reasons(project_folder, index):
             # open here let ``export_blocked`` clips through; fail closed.
             path = os.path.join(project_folder, VIRAL_SEGMENTS_FILE)
             if os.path.exists(path):
-                return [{
-                    "source": "segment_validation",
-                    "detail": "clip #{} selection evidence could not be read; refusing upload".format(index),
-                    "severity": "high",
-                }]
+                return [
+                    {
+                        "source": "segment_validation",
+                        "detail": "clip #{} selection evidence could not be read; refusing upload".format(
+                            index
+                        ),
+                        "severity": "high",
+                    }
+                ]
             return []
         entries = [(index, entry)]
 
     reasons = []
     for entry_index, entry in entries:
         if entry.get("export_blocked"):
-            detail = "clip #{} failed final validation; export blocked".format(entry_index)
+            detail = "clip #{} failed final validation; export blocked".format(
+                entry_index
+            )
         elif entry.get("requires_review") or entry.get("title_review_required"):
             detail = "clip #{} requires manual review before publishing ({})".format(
-                entry_index, entry.get("publish_blocked_reason") or "manual_review_required")
+                entry_index,
+                entry.get("publish_blocked_reason") or "manual_review_required",
+            )
         else:
             continue
-        reasons.append({
-            "source": "segment_validation",
-            "detail": detail,
-            "severity": "high",
-        })
+        reasons.append(
+            {
+                "source": "segment_validation",
+                "detail": detail,
+                "severity": "high",
+            }
+        )
     return reasons
 
 
@@ -180,17 +191,27 @@ def is_transient_youtube_error(exc) -> bool:
     if status in (429, 500, 502, 503, 504):
         return True
     text = str(exc).lower()
-    return any(marker in text for marker in (
-        "internal error encountered", "backend error", "rate limit exceeded",
-        "http error 500", "http error 502", "http error 503", "http error 504",
-    ))
+    return any(
+        marker in text
+        for marker in (
+            "internal error encountered",
+            "backend error",
+            "rate limit exceeded",
+            "http error 500",
+            "http error 502",
+            "http error 503",
+            "http error 504",
+        )
+    )
 
 
 class UploadGateError(Exception):
     """Raised when a clip must not be published. Carries structured reasons."""
 
     def __init__(self, reasons):
-        self.reasons = reasons  # list of {"source": str, "detail": str, "severity": str}
+        self.reasons = (
+            reasons  # list of {"source": str, "detail": str, "severity": str}
+        )
         joined = "; ".join("{}: {}".format(r["source"], r["detail"]) for r in reasons)
         super().__init__("Upload refused by ViralCutter safety gate: " + joined)
 
@@ -198,6 +219,7 @@ class UploadGateError(Exception):
 # ---------------------------------------------------------------------------
 # Evidence loaders
 # ---------------------------------------------------------------------------
+
 
 def _load_json(project_folder, name):
     path = os.path.join(project_folder, name)
@@ -241,14 +263,18 @@ def _report_entry_matches_clip(project_folder, index, entry, require_boundaries=
         if any(value is None for value in current_times + report_times):
             return False
         try:
-            return all(abs(float(left) - float(right)) <= 0.25
-                       for left, right in zip(current_times, report_times, strict=False))
+            return all(
+                abs(float(left) - float(right)) <= 0.25
+                for left, right in zip(current_times, report_times, strict=False)
+            )
         except (TypeError, ValueError):
             return False
     if all(value is not None for value in current_times + report_times):
         try:
-            return all(abs(float(left) - float(right)) <= 0.25
-                       for left, right in zip(current_times, report_times, strict=False))
+            return all(
+                abs(float(left) - float(right)) <= 0.25
+                for left, right in zip(current_times, report_times, strict=False)
+            )
         except (TypeError, ValueError):
             return False
     current_title = str(current.get("title") or "").strip().casefold()
@@ -268,17 +294,21 @@ def _blocklist_reasons(project_folder, index):
     if not isinstance(summary, dict):
         summary = {}
     if summary.get("visual_gate_failed"):
-        reasons.append({
-            "source": "visual_safety",
-            "detail": "visual safety scan was required but no usable local model was available",
-            "severity": "high",
-        })
+        reasons.append(
+            {
+                "source": "visual_safety",
+                "detail": "visual safety scan was required but no usable local model was available",
+                "severity": "high",
+            }
+        )
     if summary.get("ocr_gate_failed"):
-        reasons.append({
-            "source": "ocr_safety",
-            "detail": "OCR safety scan was required but no usable Tesseract installation was available",
-            "severity": "high",
-        })
+        reasons.append(
+            {
+                "source": "ocr_safety",
+                "detail": "OCR safety scan was required but no usable Tesseract installation was available",
+                "severity": "high",
+            }
+        )
     data = _load_json_dict(project_folder, PUBLISH_BLOCKLIST)
     if not data:
         return reasons
@@ -297,19 +327,27 @@ def _blocklist_reasons(project_folder, index):
         reuse = axes.get("reuse")
         reuse = reuse if isinstance(reuse, dict) else {}
         score = reuse.get("score")
-        why = "high overall risk" if score is None else "reused-content score ~{:.0f}%".format(score)
-        reasons.append({
-            "source": "publish_blocklist",
-            "detail": "clip #{} is BLOCKED for publish ({})".format(
-                entry.get("index", "?"), why),
-            "severity": "high",
-        })
+        why = (
+            "high overall risk"
+            if score is None
+            else "reused-content score ~{:.0f}%".format(score)
+        )
+        reasons.append(
+            {
+                "source": "publish_blocklist",
+                "detail": "clip #{} is BLOCKED for publish ({})".format(
+                    entry.get("index", "?"), why
+                ),
+                "severity": "high",
+            }
+        )
     return reasons
 
 
 def _verified_censor_evidence(project_folder, index, report_entry):
     if index is None or not _report_entry_matches_clip(
-            project_folder, index, report_entry, require_boundaries=True):
+        project_folder, index, report_entry, require_boundaries=True
+    ):
         return False
     censor_map = _load_json(project_folder, CENSOR_MAP)
     if not isinstance(censor_map, dict) or censor_map.get("mode") != "censor":
@@ -319,14 +357,19 @@ def _verified_censor_evidence(project_folder, index, report_entry):
         return False
     entry = segments.get(str(index))
     if not isinstance(entry, dict) or not _report_entry_matches_clip(
-            project_folder, index, entry, require_boundaries=True):
+        project_folder, index, entry, require_boundaries=True
+    ):
         return False
     try:
         subtitle_masked = int(entry.get("subtitle_masked", 0))
         muted_words = int(entry.get("muted_words", 0))
     except (TypeError, ValueError):
         return False
-    if entry.get("video_censored") is not True or subtitle_masked < 1 or muted_words < 1:
+    if (
+        entry.get("video_censored") is not True
+        or subtitle_masked < 1
+        or muted_words < 1
+    ):
         return False
     if not isinstance(entry.get("spans"), list) or not entry["spans"]:
         return False
@@ -373,52 +416,75 @@ def _safety_report_reasons(project_folder, index):
     # New reports store every segment under `segments` and use statuses such as
     # `blocked`, `ai_blocked`, and `manual_review`. Older reports may store only
     # a `blocked` list; both shapes remain supported.
-    entries.extend(data.get("segments", []) if isinstance(data.get("segments"), list) else [])
-    entries.extend(data.get("ai_review", []) if isinstance(data.get("ai_review"), list) else [])
+    entries.extend(
+        data.get("segments", []) if isinstance(data.get("segments"), list) else []
+    )
+    entries.extend(
+        data.get("ai_review", []) if isinstance(data.get("ai_review"), list) else []
+    )
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        if index is not None and not _report_entry_matches_clip(project_folder, index, entry):
+        if index is not None and not _report_entry_matches_clip(
+            project_folder, index, entry
+        ):
             continue
         status = str(entry.get("status", "")).lower()
         semantic = entry.get("semantic") or {}
         is_manual_review = _entry_requires_manual_review(status, semantic)
         if status == "censor":
             if not _verified_censor_evidence(project_folder, index, entry):
-                reasons.append({
-                    "source": "censor_verification",
-                    "detail": "censoring was not verified for both clip audio and subtitles",
-                    "severity": "high",
-                })
+                reasons.append(
+                    {
+                        "source": "censor_verification",
+                        "detail": "censoring was not verified for both clip audio and subtitles",
+                        "severity": "high",
+                    }
+                )
             # Censoring the words cannot neutralise a context-level `review`
             # verdict: still refuse until a human signs off.
             if is_manual_review:
-                reasons.append({
-                    "source": "semantic_safety",
-                    "detail": "segment requires manual safety review before publishing: {}".format(
-                        semantic.get("explanation") or entry.get("reason") or entry.get("title", "?")),
-                    "severity": "high",
-                })
+                reasons.append(
+                    {
+                        "source": "semantic_safety",
+                        "detail": "segment requires manual safety review before publishing: {}".format(
+                            semantic.get("explanation")
+                            or entry.get("reason")
+                            or entry.get("title", "?")
+                        ),
+                        "severity": "high",
+                    }
+                )
             continue
         is_legacy_blocked = legacy_list_mode and (
             status == "" and ("reason" in entry or entry.get("blocked") is True)
         )
-        is_blocked = status in {"blocked", "semantic_blocked", "ai_blocked", "ai_flagged"} or is_legacy_blocked or bool(
-            entry.get("blocked") is True
+        is_blocked = (
+            status in {"blocked", "semantic_blocked", "ai_blocked", "ai_flagged"}
+            or is_legacy_blocked
+            or bool(entry.get("blocked") is True)
         )
         if not (is_blocked or is_manual_review):
             continue
         if is_manual_review:
-            detail = "segment requires manual safety review before publishing: {}".format(
-                semantic.get("explanation") or entry.get("reason") or entry.get("title", "?"))
+            detail = (
+                "segment requires manual safety review before publishing: {}".format(
+                    semantic.get("explanation")
+                    or entry.get("reason")
+                    or entry.get("title", "?")
+                )
+            )
         else:
             detail = "segment blocked by safety filter: {}".format(
-                entry.get("reason", entry.get("title", "?")))
-        reasons.append({
-            "source": "semantic_safety" if is_manual_review else "safety_report",
-            "detail": detail,
-            "severity": "high",
-        })
+                entry.get("reason", entry.get("title", "?"))
+            )
+        reasons.append(
+            {
+                "source": "semantic_safety" if is_manual_review else "safety_report",
+                "detail": detail,
+                "severity": "high",
+            }
+        )
     return reasons
 
 
@@ -428,57 +494,85 @@ def _prepublish_report_reasons(project_folder, index):
     for report_name in (SAFETY_REPORT, SCORECARD):
         report = _load_json(project_folder, report_name)
         if not isinstance(report, dict):
-            reasons.append({
-                "source": "prepublish_evidence",
-                "detail": "required pre-publish report is missing or invalid: {}".format(report_name),
-                "severity": "high",
-            })
+            reasons.append(
+                {
+                    "source": "prepublish_evidence",
+                    "detail": "required pre-publish report is missing or invalid: {}".format(
+                        report_name
+                    ),
+                    "severity": "high",
+                }
+            )
             continue
         if report_name == SAFETY_REPORT:
             if str(report.get("mode", "")).lower() == "off":
-                reasons.append({
-                    "source": "prepublish_evidence",
-                    "detail": "policy safety filter was disabled for this project run",
-                    "severity": "high",
-                })
+                reasons.append(
+                    {
+                        "source": "prepublish_evidence",
+                        "detail": "policy safety filter was disabled for this project run",
+                        "severity": "high",
+                    }
+                )
             entries = report.get("segments")
             if not isinstance(entries, list) or not any(
-                    _report_entry_matches_clip(project_folder, index, entry, require_boundaries=True) for entry in entries):
-                reasons.append({
-                    "source": "prepublish_evidence",
-                    "detail": "safety report does not contain evidence for the selected clip",
-                    "severity": "high",
-                })
+                _report_entry_matches_clip(
+                    project_folder, index, entry, require_boundaries=True
+                )
+                for entry in entries
+            ):
+                reasons.append(
+                    {
+                        "source": "prepublish_evidence",
+                        "detail": "safety report does not contain evidence for the selected clip",
+                        "severity": "high",
+                    }
+                )
             if not isinstance(report.get("ai_review_requested"), bool):
-                reasons.append({
-                    "source": "prepublish_evidence",
-                    "detail": "contextual safety review status is missing",
-                    "severity": "high",
-                })
+                reasons.append(
+                    {
+                        "source": "prepublish_evidence",
+                        "detail": "contextual safety review status is missing",
+                        "severity": "high",
+                    }
+                )
             elif report.get("ai_review_requested"):
                 if report.get("ai_review_status") != "complete":
-                    reasons.append({
-                        "source": "prepublish_evidence",
-                        "detail": "contextual safety review is not complete",
-                        "severity": "high",
-                    })
+                    reasons.append(
+                        {
+                            "source": "prepublish_evidence",
+                            "detail": "contextual safety review is not complete",
+                            "severity": "high",
+                        }
+                    )
                 reviewed = report.get("ai_reviewed_clips")
                 if not isinstance(reviewed, list) or not any(
-                        _report_entry_matches_clip(project_folder, index, entry, require_boundaries=True) for entry in reviewed):
-                    reasons.append({
-                        "source": "prepublish_evidence",
-                        "detail": "contextual safety review does not cover the selected clip",
-                        "severity": "high",
-                    })
+                    _report_entry_matches_clip(
+                        project_folder, index, entry, require_boundaries=True
+                    )
+                    for entry in reviewed
+                ):
+                    reasons.append(
+                        {
+                            "source": "prepublish_evidence",
+                            "detail": "contextual safety review does not cover the selected clip",
+                            "severity": "high",
+                        }
+                    )
         else:
             entries = report.get("segments")
             if not isinstance(entries, list) or not any(
-                    _report_entry_matches_clip(project_folder, index, entry, require_boundaries=True) for entry in entries):
-                reasons.append({
-                    "source": "prepublish_evidence",
-                    "detail": "risk scorecard does not contain evidence for the selected clip",
-                    "severity": "high",
-                })
+                _report_entry_matches_clip(
+                    project_folder, index, entry, require_boundaries=True
+                )
+                for entry in entries
+            ):
+                reasons.append(
+                    {
+                        "source": "prepublish_evidence",
+                        "detail": "risk scorecard does not contain evidence for the selected clip",
+                        "severity": "high",
+                    }
+                )
     return reasons
 
 
@@ -488,16 +582,22 @@ def _provenance_reasons(project_folder, index):
         return []
     reasons = []
     for item in data.get("clips", []) or []:
-        if not isinstance(item, dict) or (index is not None and item.get("index") != index):
+        if not isinstance(item, dict) or (
+            index is not None and item.get("index") != index
+        ):
             continue
         if item.get("action") != "block":
             continue
-        reasons.append({
-            "source": "provenance",
-            "detail": "rights or meaningful transformation evidence is incomplete for clip #{}: {}".format(
-                item.get("index", "?"), "; ".join(item.get("reasons", []) or ["review required"])),
-            "severity": "high",
-        })
+        reasons.append(
+            {
+                "source": "provenance",
+                "detail": "rights or meaningful transformation evidence is incomplete for clip #{}: {}".format(
+                    item.get("index", "?"),
+                    "; ".join(item.get("reasons", []) or ["review required"]),
+                ),
+                "severity": "high",
+            }
+        )
     return reasons
 
 
@@ -507,7 +607,10 @@ def _quality_reasons(project_folder, index, title=""):
 
     reasons = []
     if index is None:
-        add("selection_quality", "clip index is missing; selection evidence cannot be matched")
+        add(
+            "selection_quality",
+            "clip index is missing; selection evidence cannot be matched",
+        )
         return reasons
 
     data = _load_json_dict(project_folder, "viral_segments.txt") or {}
@@ -516,9 +619,15 @@ def _quality_reasons(project_folder, index, title=""):
         add("selection_quality", "clip selection evidence is missing or invalid")
         return reasons
 
-    entry = next((item for item in segments
-                  if isinstance(item, dict)
-                  and item.get("index", item.get("segment_index")) == index), None)
+    entry = next(
+        (
+            item
+            for item in segments
+            if isinstance(item, dict)
+            and item.get("index", item.get("segment_index")) == index
+        ),
+        None,
+    )
     if entry is None and 0 <= index < len(segments):
         candidate = segments[index]
         if isinstance(candidate, dict):
@@ -537,14 +646,23 @@ def _quality_reasons(project_folder, index, title=""):
         if not 0 <= numeric_score <= 100:
             raise ValueError("score out of range")
         if numeric_score < minimum:
-            add("selection_quality", "clip #{} selection score {:.1f} is below the publish floor {:.0f}".format(
-                index, numeric_score, minimum))
+            add(
+                "selection_quality",
+                "clip #{} selection score {:.1f} is below the publish floor {:.0f}".format(
+                    index, numeric_score, minimum
+                ),
+            )
     except (TypeError, ValueError):
         add("selection_quality", "clip #{} has no valid selection score".format(index))
 
-    quality_status = str(entry.get("quality_status", entry.get("editorial_status", ""))).lower()
+    quality_status = str(
+        entry.get("quality_status", entry.get("editorial_status", ""))
+    ).lower()
     if quality_status in {"needs_review", "review", "failed", "rejected"}:
-        add("selection_quality", "clip #{} editorial quality is {}".format(index, quality_status))
+        add(
+            "selection_quality",
+            "clip #{} editorial quality is {}".format(index, quality_status),
+        )
     if entry.get("requires_review") or entry.get("publish_blocked_reason"):
         add("selection_quality", "clip #{} is marked for manual review".format(index))
     readiness = str(entry.get("selection_readiness", "")).lower()
@@ -553,61 +671,114 @@ def _quality_reasons(project_folder, index, title=""):
 
     completion = str(entry.get("completion_status", "")).lower()
     if completion not in {"complete", "completed", "verified", "ok"}:
-        add("selection_quality", "clip #{} boundaries are not verified complete".format(index))
+        add(
+            "selection_quality",
+            "clip #{} boundaries are not verified complete".format(index),
+        )
     final_validation = entry.get("final_validation")
     if not isinstance(final_validation, dict) or final_validation.get("ok") is not True:
-        add("selection_quality", "clip #{} has no passing final segment validation".format(index))
+        add(
+            "selection_quality",
+            "clip #{} has no passing final segment validation".format(index),
+        )
 
     title_data = entry.get("title_data") or {}
     if not isinstance(title_data, dict):
         title_data = {}
-    validation = entry.get("title_validation") or title_data.get("title_validation") or {}
-    validation_status = (str(validation.get("status", "")).lower()
-                         if isinstance(validation, dict) else "")
+    validation = (
+        entry.get("title_validation") or title_data.get("title_validation") or {}
+    )
+    validation_status = (
+        str(validation.get("status", "")).lower()
+        if isinstance(validation, dict)
+        else ""
+    )
     # Accept the documented synonyms the validator/legacy producers emit.
-    verified_status = validation_status in {"verified", "ok", "valid", "pass", "approved"}
+    verified_status = validation_status in {
+        "verified",
+        "ok",
+        "valid",
+        "pass",
+        "approved",
+    }
     if not verified_status:
         add("title_quality", "clip #{} has no verified factual title".format(index))
     if entry.get("title_review_required") or title_data.get("title_review_required"):
-        add("title_quality", "clip #{} title is flagged for manual review".format(index))
+        add(
+            "title_quality", "clip #{} title is flagged for manual review".format(index)
+        )
 
     confidence = entry.get("title_confidence", title_data.get("title_confidence"))
     try:
         numeric_confidence = float(confidence)
         if not 0 <= numeric_confidence <= 100 or numeric_confidence < 60.0:
-            add("title_quality", "clip #{} title confidence must be at least 60".format(index))
+            add(
+                "title_quality",
+                "clip #{} title confidence must be at least 60".format(index),
+            )
     except (TypeError, ValueError):
-        add("title_quality", "clip #{} has no valid title-confidence evidence".format(index))
+        add(
+            "title_quality",
+            "clip #{} has no valid title-confidence evidence".format(index),
+        )
 
-    approved_title = str(entry.get("recommended_title") or entry.get("title") or "").strip()
+    approved_title = str(
+        entry.get("recommended_title") or entry.get("title") or ""
+    ).strip()
     actual_title = str(title or "").strip()
     try:
         from scripts.title_text import fit_publish_title
+
         approved_title = fit_publish_title(approved_title, 100)
         actual_title = fit_publish_title(actual_title, 100)
     except Exception:
         pass
     transcript_text = str(entry.get("transcript_text") or "").strip()
     if not approved_title:
-        add("title_quality", "clip #{} has no approved title to compare with the upload".format(index))
+        add(
+            "title_quality",
+            "clip #{} has no approved title to compare with the upload".format(index),
+        )
     elif actual_title != approved_title:
         if not transcript_text:
-            add("title_quality", "clip #{} edited title cannot be checked without its transcript".format(index))
+            add(
+                "title_quality",
+                "clip #{} edited title cannot be checked without its transcript".format(
+                    index
+                ),
+            )
         else:
             try:
                 from scripts import title_factual
-                checks = validation.get("checks", {}) if isinstance(validation, dict) else {}
-                clip_ratio = checks.get("clip_ratio") if isinstance(checks, dict) else None
+
+                checks = (
+                    validation.get("checks", {}) if isinstance(validation, dict) else {}
+                )
+                clip_ratio = (
+                    checks.get("clip_ratio") if isinstance(checks, dict) else None
+                )
                 language = title_data.get("title_language", "auto")
                 actual_validation = title_factual.validate_title_vs_clip(
-                    actual_title, transcript_text, language, clip_ratio=clip_ratio)
+                    actual_title, transcript_text, language, clip_ratio=clip_ratio
+                )
                 if actual_validation.get("status") != "verified":
-                    detail = "; ".join(actual_validation.get("reasons", []) or [
-                        actual_validation.get("status", "review")])
-                    add("title_quality", "edited title for clip #{} is not verified against its transcript: {}".format(
-                        index, detail))
+                    detail = "; ".join(
+                        actual_validation.get("reasons", [])
+                        or [actual_validation.get("status", "review")]
+                    )
+                    add(
+                        "title_quality",
+                        "edited title for clip #{} is not verified against its transcript: {}".format(
+                            index, detail
+                        ),
+                    )
             except Exception as exc:
-                add("title_quality", "edited title for clip #{} could not be verified: {}".format(index, exc))
+                add(
+                    "title_quality",
+                    "edited title for clip #{} could not be verified: {}".format(
+                        index, exc
+                    ),
+                )
     return reasons
 
 
@@ -615,10 +786,21 @@ def _quality_reasons(project_folder, index, title=""):
 # The gate
 # ---------------------------------------------------------------------------
 
-def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
-               extra_rules_path=None, require_video=False, music_gate=None,
-               video_path=None, platform="youtube", require_reports=False,
-               quality_gate=False):
+
+def check_clip(
+    project_folder,
+    index=None,
+    title="",
+    caption="",
+    hashtags=None,
+    extra_rules_path=None,
+    require_video=False,
+    music_gate=None,
+    video_path=None,
+    platform="youtube",
+    require_reports=False,
+    quality_gate=False,
+):
     """Evaluate one clip against every safety barrier.
 
     Returns {"allowed": bool, "reasons": [...], "metadata": {...}}.
@@ -641,6 +823,7 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
     # validation and shipped with its factual qualifier cut off.
     try:
         from scripts.title_text import fit_publish_title
+
         platform_limit = 150 if str(platform or "").lower() == "tiktok" else 100
         title = fit_publish_title(str(title or ""), platform_limit)
     except Exception:
@@ -648,8 +831,12 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
     guard_verdict = {"allowed": True, "reasons": [], "evidence": {}}
     try:
         guard_verdict = content_guard.assess_clip(
-            project_folder, index, title=title, video_path=video_path,
-            platform=platform,)
+            project_folder,
+            index,
+            title=title,
+            video_path=video_path,
+            platform=platform,
+        )
         if not guard_verdict.get("allowed", True):
             reasons.extend(guard_verdict.get("reasons", []))
     except Exception as exc:
@@ -658,11 +845,15 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
         # skipped, so refuse the upload and surface the diagnostic instead.
         guard_verdict = {
             "allowed": False,
-            "reasons": [{
-                "source": "content_guard_unavailable",
-                "detail": "content guard could not be evaluated; refusing upload: {}".format(exc),
-                "severity": "high",
-            }],
+            "reasons": [
+                {
+                    "source": "content_guard_unavailable",
+                    "detail": "content guard could not be evaluated; refusing upload: {}".format(
+                        exc
+                    ),
+                    "severity": "high",
+                }
+            ],
             "evidence": {"error": str(exc)},
         }
         reasons.extend(guard_verdict["reasons"])
@@ -681,18 +872,21 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
     # Audio copyright fingerprint report (Roadmap 2.3) — optional module.
     try:
         from scripts.music_fingerprint import music_gate_reasons
+
         reasons += music_gate_reasons(project_folder, index, gate=music_gate)
     except Exception as exc:
         # Optional in warn/off mode, but in "block" mode a failure must not
         # silently drop the copyright gate.
         print("[upload_gate] music fingerprint check failed: {}".format(exc))
         if str(music_gate or "").strip().lower() == "block":
-            reasons.append({
-                "source": "music_fingerprint",
-                "detail": "music copyright check could not run ({}); refusing "
-                          "upload".format(exc),
-                "severity": "high",
-            })
+            reasons.append(
+                {
+                    "source": "music_fingerprint",
+                    "detail": "music copyright check could not run ({}); refusing "
+                    "upload".format(exc),
+                    "severity": "high",
+                }
+            )
 
     meta = check_metadata(title, caption, hashtags or [], extra_rules_path)
 
@@ -701,65 +895,101 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
     # text to the network and treats ambiguous policy language as review-needed.
     try:
         from scripts.semantic_safety import analyze_text
-        semantic = analyze_text(" ".join([
-            str(title or ""), str(caption or ""),
-            " ".join(str(tag) for tag in (hashtags or [])),
-        ]))
+
+        semantic = analyze_text(
+            " ".join(
+                [
+                    str(title or ""),
+                    str(caption or ""),
+                    " ".join(str(tag) for tag in (hashtags or [])),
+                ]
+            )
+        )
         if semantic.get("action") in {"block", "review"}:
-            reasons.append({
-                "source": "semantic_safety",
-                "detail": "publish metadata requires safety review: {}".format(
-                    semantic.get("explanation", "policy pattern detected")),
-                "severity": "high",
-            })
+            reasons.append(
+                {
+                    "source": "semantic_safety",
+                    "detail": "publish metadata requires safety review: {}".format(
+                        semantic.get("explanation", "policy pattern detected")
+                    ),
+                    "severity": "high",
+                }
+            )
     except Exception as exc:
         error = "{}: {}".format(type(exc).__name__, exc)[:500]
         logger.error("Publish metadata safety check failed; refusing upload: %s", error)
-        reasons.append({
-            "source": "semantic_safety",
-            "code": "semantic_safety_unavailable",
-            "detail": "local semantic safety check failed; upload refused: {}".format(error),
-            "severity": "high",
-        })
+        reasons.append(
+            {
+                "source": "semantic_safety",
+                "code": "semantic_safety_unavailable",
+                "detail": "local semantic safety check failed; upload refused: {}".format(
+                    error
+                ),
+                "severity": "high",
+            }
+        )
 
     if not meta["ok"]:
-        reasons.append({
-            "source": "metadata_compliance",
-            "detail": summarize_metadata(meta),
-            "severity": meta["severity"],
-        })
+        reasons.append(
+            {
+                "source": "metadata_compliance",
+                "detail": summarize_metadata(meta),
+                "severity": meta["severity"],
+            }
+        )
 
     if require_video and index is not None:
-        found = video_path if video_path and os.path.isfile(video_path) else _find_clip_video(project_folder, index)
+        found = (
+            video_path
+            if video_path and os.path.isfile(video_path)
+            else _find_clip_video(project_folder, index)
+        )
         if not found:
-            reasons.append({
-                "source": "missing_video",
-                "detail": "no rendered video found for clip #{}".format(index),
-                "severity": "high",
-            })
+            reasons.append(
+                {
+                    "source": "missing_video",
+                    "detail": "no rendered video found for clip #{}".format(index),
+                    "severity": "high",
+                }
+            )
         else:
             try:
                 from scripts.media_validation import validate_media_file
-                media = validate_media_file(found, min_duration=0.5, require_audio=False)
+
+                media = validate_media_file(
+                    found, min_duration=0.5, require_audio=False
+                )
                 if not media.get("ok"):
-                    reasons.append({
-                        "source": "media_validation",
-                        "detail": "rendered video failed validation: {}".format(
-                            "; ".join(media.get("errors", [media.get("error", "invalid media")]))),
-                        "severity": "high",
-                    })
+                    reasons.append(
+                        {
+                            "source": "media_validation",
+                            "detail": "rendered video failed validation: {}".format(
+                                "; ".join(
+                                    media.get(
+                                        "errors", [media.get("error", "invalid media")]
+                                    )
+                                )
+                            ),
+                            "severity": "high",
+                        }
+                    )
             except Exception as exc:
-                reasons.append({
-                    "source": "media_validation",
-                    "detail": "could not validate rendered video: {}".format(exc),
-                    "severity": "high",
-                })
+                reasons.append(
+                    {
+                        "source": "media_validation",
+                        "detail": "could not validate rendered video: {}".format(exc),
+                        "severity": "high",
+                    }
+                )
 
     # Only high-severity reasons block; music "warn" flags are advisory and
     # never stop an upload on their own (metadata/safety/blocklist unchanged).
-    blocking = [r for r in reasons
-                if r["severity"] == "high"
-                or (r["severity"] == "medium" and r["source"] != "music_fingerprint")]
+    blocking = [
+        r
+        for r in reasons
+        if r["severity"] == "high"
+        or (r["severity"] == "medium" and r["source"] != "music_fingerprint")
+    ]
 
     return {
         "allowed": not blocking,
@@ -771,6 +1001,7 @@ def check_clip(project_folder, index=None, title="", caption="", hashtags=None,
 
 def _find_clip_video(project_folder, index):
     import glob
+
     if index is None:
         # No clip index (e.g. `--upload` without `--index`): there is no
         # single clip to locate, so let the caller fall back to its default.
@@ -778,8 +1009,12 @@ def _find_clip_video(project_folder, index):
     patterns = [
         os.path.join(project_folder, "final_polished", "*{0:03d}*.mp4".format(index)),
         os.path.join(project_folder, "final", "*{0:03d}*.mp4".format(index)),
-        os.path.join(project_folder, "final", "final-output{0:03d}_processed.mp4".format(index)),
-        os.path.join(project_folder, "cuts", "{0:03d}_*_original_scale.mp4".format(index)),
+        os.path.join(
+            project_folder, "final", "final-output{0:03d}_processed.mp4".format(index)
+        ),
+        os.path.join(
+            project_folder, "cuts", "{0:03d}_*_original_scale.mp4".format(index)
+        ),
     ]
     for pattern in patterns:
         hits = sorted(glob.glob(pattern))
@@ -788,15 +1023,35 @@ def _find_clip_video(project_folder, index):
     return None
 
 
-def gate_upload(project_folder, index=None, title="", caption="", hashtags=None,
-                extra_rules_path=None, require_video=False, music_gate=None,
-                video_path=None, platform="youtube", require_reports=False,
-                quality_gate=False):
+def gate_upload(
+    project_folder,
+    index=None,
+    title="",
+    caption="",
+    hashtags=None,
+    extra_rules_path=None,
+    require_video=False,
+    music_gate=None,
+    video_path=None,
+    platform="youtube",
+    require_reports=False,
+    quality_gate=False,
+):
     """Enforcement wrapper: raises UploadGateError when the clip must not go out."""
-    verdict = check_clip(project_folder, index, title, caption, hashtags,
-                         extra_rules_path, require_video, music_gate,
-                         video_path=video_path, platform=platform,
-                         require_reports=require_reports, quality_gate=quality_gate)
+    verdict = check_clip(
+        project_folder,
+        index,
+        title,
+        caption,
+        hashtags,
+        extra_rules_path,
+        require_video,
+        music_gate,
+        video_path=video_path,
+        platform=platform,
+        require_reports=require_reports,
+        quality_gate=quality_gate,
+    )
     if not verdict["allowed"]:
         raise UploadGateError(verdict["reasons"])
     return verdict
@@ -850,15 +1105,19 @@ def audit_project(project_folder, extra_rules_path=None):
         if recommended:
             merged["recommended_title"] = recommended
         publish_title = effective_title(merged)
-        verdict = check_clip(project_folder, idx,
-                             title=publish_title,
-                             require_video=False,
-                             extra_rules_path=extra_rules_path)
+        verdict = check_clip(
+            project_folder,
+            idx,
+            title=publish_title,
+            require_video=False,
+            extra_rules_path=extra_rules_path,
+        )
         if verdict["allowed"]:
             allowed.append(idx)
         else:
-            blocked.append({"index": idx, "title": publish_title,
-                            "reasons": verdict["reasons"]})
+            blocked.append(
+                {"index": idx, "title": publish_title, "reasons": verdict["reasons"]}
+            )
     return allowed, blocked
 
 
@@ -866,15 +1125,25 @@ def audit_project(project_folder, extra_rules_path=None):
 # Platform upload adapters (all MUST pass through the gate)
 # ---------------------------------------------------------------------------
 
+
 class _BaseUploader:
     """Thin adapter contract. Subclasses implement _do_upload()."""
 
     platform = "base"
 
-    def __init__(self, project_folder, dry_run=False, extra_rules_path=None,
-                 video_url=None, music_gate=None, client_secrets_path=None,
-                 token_path=None, privacy_status=None, publish_at=None,
-                 oauth_full_access=False):
+    def __init__(
+        self,
+        project_folder,
+        dry_run=False,
+        extra_rules_path=None,
+        video_url=None,
+        music_gate=None,
+        client_secrets_path=None,
+        token_path=None,
+        privacy_status=None,
+        publish_at=None,
+        oauth_full_access=False,
+    ):
         self.project_folder = project_folder
         self.dry_run = dry_run
         self.extra_rules_path = extra_rules_path
@@ -888,8 +1157,16 @@ class _BaseUploader:
         self.require_preflight_reports = not bool(dry_run)
         self.require_quality_gate = not bool(dry_run)
 
-    def upload(self, video_path, title, caption="", hashtags=None, index=None,
-               privacy_status=None, publish_at=None):
+    def upload(
+        self,
+        video_path,
+        title,
+        caption="",
+        hashtags=None,
+        index=None,
+        privacy_status=None,
+        publish_at=None,
+    ):
         """Gate first, then upload. Raises UploadGateError when blocked."""
         effective_publish_at = publish_at or self.publish_at
         resolved_privacy = (
@@ -897,19 +1174,32 @@ class _BaseUploader:
             if self.platform == "youtube"
             else (privacy_status or self.privacy_status)
         )
-        if (self.platform == "youtube" and effective_publish_at
-                and resolved_privacy != "private"):
+        if (
+            self.platform == "youtube"
+            and effective_publish_at
+            and resolved_privacy != "private"
+        ):
             raise ValueError("YouTube scheduled videos must use private privacy_status")
-        gate_upload(self.project_folder, index, title, caption, hashtags,
-                    self.extra_rules_path,
-                    require_video=bool(getattr(self, "validate_video", False)),
-                    music_gate=self.music_gate, video_path=video_path,
-                    platform=self.platform,
-                    require_reports=bool(getattr(self, "require_preflight_reports", False)),
-                    quality_gate=bool(getattr(self, "require_quality_gate", False)))
+        gate_upload(
+            self.project_folder,
+            index,
+            title,
+            caption,
+            hashtags,
+            self.extra_rules_path,
+            require_video=bool(getattr(self, "validate_video", False)),
+            music_gate=self.music_gate,
+            video_path=video_path,
+            platform=self.platform,
+            require_reports=bool(getattr(self, "require_preflight_reports", False)),
+            quality_gate=bool(getattr(self, "require_quality_gate", False)),
+        )
         if self.dry_run:
-            print("[{}] DRY-RUN would upload '{}' → {}".format(
-                self.platform, title, video_path))
+            print(
+                "[{}] DRY-RUN would upload '{}' → {}".format(
+                    self.platform, title, video_path
+                )
+            )
             return {"status": "dry-run", "platform": self.platform}
         upload_kwargs = {}
         if self.platform == "youtube":
@@ -918,20 +1208,35 @@ class _BaseUploader:
                 "publish_at": publish_at or self.publish_at,
             }
         try:
-            result = self._do_upload(video_path, title, caption, hashtags, **upload_kwargs)
+            result = self._do_upload(
+                video_path, title, caption, hashtags, **upload_kwargs
+            )
         except Exception as exc:
             try:
                 content_guard.record_platform_error(
-                    self.project_folder, self.platform, exc)
+                    self.project_folder, self.platform, exc
+                )
             except Exception as record_exc:
-                logger.warning("Could not record %s platform error: %s",
-                               self.platform, type(record_exc).__name__)
+                logger.warning(
+                    "Could not record %s platform error: %s",
+                    self.platform,
+                    type(record_exc).__name__,
+                )
             raise
-        if isinstance(result, dict) and result.get("status") in content_guard.SUCCESS_STATUSES:
+        if (
+            isinstance(result, dict)
+            and result.get("status") in content_guard.SUCCESS_STATUSES
+        ):
             try:
                 content_guard.record_publish(
-                    self.project_folder, self.platform, video_path, title=title,
-                    status=result.get("status"), index=index, result=result)
+                    self.project_folder,
+                    self.platform,
+                    video_path,
+                    title=title,
+                    status=result.get("status"),
+                    index=index,
+                    result=result,
+                )
             except Exception as exc:
                 # The upload already succeeded; retain the result and make the
                 # missing local audit record visible for the next run.
@@ -946,7 +1251,10 @@ class _BaseUploader:
     def _missing_credentials(platform, env_vars):
         raise RuntimeError(
             "{} upload requires OAuth credentials via env vars: {}. "
-            "See docs/ROADMAP_REPORT.md (2.2) for setup.".format(platform, ", ".join(env_vars)))
+            "See docs/ROADMAP_REPORT.md (2.2) for setup.".format(
+                platform, ", ".join(env_vars)
+            )
+        )
 
 
 class YouTubeUploader(_BaseUploader):
@@ -963,6 +1271,7 @@ class YouTubeUploader(_BaseUploader):
     Privacy: default privacyStatus is "private" (safe) — set YT_PRIVACY=public
     only when you intend to publish.
     """
+
     platform = "youtube"
     SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
@@ -977,21 +1286,28 @@ class YouTubeUploader(_BaseUploader):
         token_path = self._token_path()
         secrets = self._client_secrets_path()
         if not os.path.isfile(secrets):
-            raise RuntimeError("YouTube channel is not connected: client_secrets.json is missing")
+            raise RuntimeError(
+                "YouTube channel is not connected: client_secrets.json is missing"
+            )
         if not os.path.isfile(token_path):
-            raise RuntimeError("YouTube channel is not connected: press 'تسجيل الدخول إلى YouTube' first")
+            raise RuntimeError(
+                "YouTube channel is not connected: press 'تسجيل الدخول إلى YouTube' first"
+            )
         try:
             return self._load_existing_token()
         except Exception as exc:
             detail = str(exc)
             if "OAuth token lacks required YouTube permissions" in detail:
                 from webui.youtube_credentials import invalidate_token
+
                 invalidate_token(token_path)
                 raise RuntimeError(
                     "نطاقات OAuth غير كافية للتحقق من القناة. تم حذف التوكن القديم؛ "
                     "اضغط تسجيل الدخول إلى YouTube ووافق على صلاحية رفع الفيديو وقراءة القناة."
                 ) from exc
-            raise RuntimeError("YouTube connection is invalid or expired: {}".format(detail[:400])) from exc
+            raise RuntimeError(
+                "YouTube connection is invalid or expired: {}".format(detail[:400])
+            ) from exc
 
     def verify_channel(self):
         """Verify that the token can access a YouTube channel and return identity."""
@@ -999,7 +1315,9 @@ class YouTubeUploader(_BaseUploader):
         try:
             from googleapiclient.discovery import build
         except ImportError:
-            raise RuntimeError("YouTube channel verification needs google-api-python-client") from None
+            raise RuntimeError(
+                "YouTube channel verification needs google-api-python-client"
+            ) from None
         service = None
         try:
             service = build("youtube", "v3", credentials=creds, cache_discovery=False)
@@ -1009,23 +1327,29 @@ class YouTubeUploader(_BaseUploader):
             response = None
             for attempt in range(3):
                 try:
-                    response = service.channels().list(
-                        part="id,snippet", mine=True).execute()
+                    response = (
+                        service.channels().list(part="id,snippet", mine=True).execute()
+                    )
                     break
                 except Exception as call_error:
                     last_error = call_error
                     if not is_transient_youtube_error(call_error):
                         raise
                     if attempt < 2:
-                        delay = 1.5 * (2 ** attempt)
+                        delay = 1.5 * (2**attempt)
                         logger.warning(
                             "YouTube channel check failed transiently (%s); "
-                            "retrying in %.1fs.", call_error, delay)
+                            "retrying in %.1fs.",
+                            call_error,
+                            delay,
+                        )
                         time.sleep(delay)
             else:
                 raise YouTubeTransientError(
                     "YouTube API is temporarily unavailable: {}".format(
-                        str(last_error)[:300])) from last_error
+                        str(last_error)[:300]
+                    )
+                ) from last_error
         except YouTubeTransientError:
             raise
         except Exception as exc:
@@ -1036,19 +1360,25 @@ class YouTubeUploader(_BaseUploader):
                 or "insufficient permission" in lower
                 or "insufficient authentication scopes" in lower
                 or "insufficient authentication" in lower
-                or "403" in lower and "permission" in lower
+                or "403" in lower
+                and "permission" in lower
             )
             if insufficient:
                 from webui.youtube_credentials import invalidate_token
+
                 invalidate_token(self._token_path())
                 raise RuntimeError(
                     "نطاقات OAuth غير كافية للتحقق من القناة. تم حذف التوكن القديم؛ "
                     "اضغط تسجيل الدخول إلى YouTube ووافق على صلاحية رفع الفيديو وقراءة القناة."
                 ) from exc
-            raise RuntimeError("تعذر التحقق من قناة YouTube عبر API: {}".format(detail[:400])) from exc
+            raise RuntimeError(
+                "تعذر التحقق من قناة YouTube عبر API: {}".format(detail[:400])
+            ) from exc
         items = response.get("items") or []
         if not items:
-            raise RuntimeError("حساب OAuth صالح، لكن لا توجد قناة YouTube متاحة لهذا الحساب")
+            raise RuntimeError(
+                "حساب OAuth صالح، لكن لا توجد قناة YouTube متاحة لهذا الحساب"
+            )
         item = items[0] or {}
         snippet = item.get("snippet") or {}
         return {
@@ -1057,12 +1387,25 @@ class YouTubeUploader(_BaseUploader):
         }
 
     def _token_path(self):
-        return self.token_path or os.getenv("YT_TOKEN_FILE") or os.path.join(
-            os.path.expanduser("~"), ".viralcutter", "youtube", "token.json")
+        return (
+            self.token_path
+            or os.getenv("YT_TOKEN_FILE")
+            or os.path.join(
+                os.path.expanduser("~"), ".viralcutter", "youtube", "token.json"
+            )
+        )
 
     def _client_secrets_path(self):
-        return self.client_secrets_path or os.getenv("YT_CLIENT_SECRETS_FILE") or os.path.join(
-            os.path.expanduser("~"), ".viralcutter", "youtube", "client_secrets.json")
+        return (
+            self.client_secrets_path
+            or os.getenv("YT_CLIENT_SECRETS_FILE")
+            or os.path.join(
+                os.path.expanduser("~"),
+                ".viralcutter",
+                "youtube",
+                "client_secrets.json",
+            )
+        )
 
     @staticmethod
     def _normalize_publish_at(value):
@@ -1074,12 +1417,16 @@ class YouTubeUploader(_BaseUploader):
         try:
             parsed = _datetime.datetime.fromisoformat(raw)
         except ValueError as exc:
-            raise ValueError("publish_at must be ISO 8601, e.g. 2026-08-15T18:30:00+00:00") from exc
+            raise ValueError(
+                "publish_at must be ISO 8601, e.g. 2026-08-15T18:30:00+00:00"
+            ) from exc
         if parsed.tzinfo is None:
             raise ValueError("publish_at must include a timezone, e.g. +00:00 or Z")
         if parsed <= _datetime.datetime.now(_datetime.timezone.utc):
             raise ValueError("publish_at must be in the future")
-        return parsed.astimezone(_datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        return (
+            parsed.astimezone(_datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        )
 
     def _load_existing_token(self):
         """Load and refresh a stored token only; never start interactive OAuth."""
@@ -1091,6 +1438,7 @@ class YouTubeUploader(_BaseUploader):
             scopes_for_access,
             store_token_json,
         )
+
         token_path = self._token_path()
         scopes = scopes_for_access(self.oauth_full_access)
         creds = Credentials.from_authorized_user_file(token_path, scopes)
@@ -1100,8 +1448,10 @@ class YouTubeUploader(_BaseUploader):
                 store_token_json(creds.to_json(), token_path)
             except Exception as store_exc:
                 # Never log the token itself, only the failure type.
-                logger.warning("Could not persist refreshed OAuth token: %s",
-                               type(store_exc).__name__)
+                logger.warning(
+                    "Could not persist refreshed OAuth token: %s",
+                    type(store_exc).__name__,
+                )
         if not creds or not creds.valid:
             raise RuntimeError("stored OAuth token is not valid")
         return require_scopes(creds, self.oauth_full_access)
@@ -1135,15 +1485,18 @@ class YouTubeUploader(_BaseUploader):
                     return require_scopes(creds, self.oauth_full_access)
                 except Exception:
                     from webui.youtube_credentials import invalidate_token
+
                     invalidate_token(token_path)
         # The consent flow needs client_secrets.json.
         if not os.path.exists(secrets):
             self._missing_credentials(self.platform, ["YT_CLIENT_SECRETS_FILE"])
         from google_auth_oauthlib.flow import InstalledAppFlow
+
         flow = InstalledAppFlow.from_client_secrets_file(secrets, scopes)
         creds = flow.run_local_server(port=0, prompt="consent")
         try:
             from webui.youtube_credentials import store_token_json
+
             store_token_json(creds.to_json(), token_path)
         except Exception:
             os.makedirs(os.path.dirname(token_path), exist_ok=True)
@@ -1155,8 +1508,9 @@ class YouTubeUploader(_BaseUploader):
                 pass
         return creds
 
-    def _do_upload(self, video_path, title, caption, hashtags, privacy_status=None,
-                   publish_at=None):
+    def _do_upload(
+        self, video_path, title, caption, hashtags, privacy_status=None, publish_at=None
+    ):
         if not os.path.exists(video_path):
             raise FileNotFoundError("video not found: {}".format(video_path))
         creds = self._load_or_create_token()
@@ -1165,7 +1519,8 @@ class YouTubeUploader(_BaseUploader):
             from googleapiclient.http import MediaFileUpload
         except ImportError:
             raise RuntimeError(
-                "youtube upload needs: pip install -r requirements-upload.txt") from None
+                "youtube upload needs: pip install -r requirements-upload.txt"
+            ) from None
 
         tags = [str(h).lstrip("#") for h in (hashtags or []) if str(h).strip()]
         description = caption or ""
@@ -1194,8 +1549,9 @@ class YouTubeUploader(_BaseUploader):
         }
         service = build("youtube", "v3", credentials=creds)
         media = MediaFileUpload(video_path, chunksize=8 * 1024 * 1024, resumable=True)
-        request = service.videos().insert(part="snippet,status", body=body,
-                                          media_body=media)
+        request = service.videos().insert(
+            part="snippet,status", body=body, media_body=media
+        )
         response = None
         transient_attempts = 0
         while response is None:
@@ -1205,26 +1561,41 @@ class YouTubeUploader(_BaseUploader):
             except Exception as exc:
                 status_code = getattr(getattr(exc, "resp", None), "status", None)
                 if status_code in {429, 500, 502, 503, 504} and transient_attempts < 3:
-                    delay = min(30, 2 ** transient_attempts)
+                    delay = min(30, 2**transient_attempts)
                     transient_attempts += 1
-                    print("[youtube] temporary API error {} — retry {} in {}s".format(
-                        status_code, transient_attempts, delay), flush=True)
+                    print(
+                        "[youtube] temporary API error {} — retry {} in {}s".format(
+                            status_code, transient_attempts, delay
+                        ),
+                        flush=True,
+                    )
                     time.sleep(delay)
                     continue
                 if status_code in {401, 403}:
                     raise RuntimeError(
                         "YouTube upload permission denied (HTTP {}). Reconnect the channel and "
-                        "confirm YouTube Data API v3 and upload scope.".format(status_code)
+                        "confirm YouTube Data API v3 and upload scope.".format(
+                            status_code
+                        )
                     ) from exc
                 raise
             if status:
-                print("[youtube] uploaded {:.0f}%".format(
-                    status.progress() * 100 if status.progress() else 0), flush=True)
+                print(
+                    "[youtube] uploaded {:.0f}%".format(
+                        status.progress() * 100 if status.progress() else 0
+                    ),
+                    flush=True,
+                )
         video_id = response.get("id")
         print("[youtube] uploaded '{}' → https://youtu.be/{}".format(title, video_id))
-        return {"status": "scheduled" if normalized_publish_at else "uploaded", "platform": "youtube",
-                "video_id": video_id, "url": "https://youtu.be/{}".format(video_id),
-                "privacy_status": privacy, "publish_at": normalized_publish_at}
+        return {
+            "status": "scheduled" if normalized_publish_at else "uploaded",
+            "platform": "youtube",
+            "video_id": video_id,
+            "url": "https://youtu.be/{}".format(video_id),
+            "privacy_status": privacy,
+            "publish_at": normalized_publish_at,
+        }
 
     def attach_thumbnail(self, video_id, thumbnail_path):
         """Attach a local image as the video's YouTube thumbnail.
@@ -1241,7 +1612,8 @@ class YouTubeUploader(_BaseUploader):
             from googleapiclient.http import MediaFileUpload
         except ImportError:
             raise RuntimeError(
-                "youtube thumbnail needs: pip install -r requirements-upload.txt") from None
+                "youtube thumbnail needs: pip install -r requirements-upload.txt"
+            ) from None
         service = build("youtube", "v3", credentials=creds)
         media = MediaFileUpload(thumbnail_path, mimetype="image/png")
         request = service.thumbnails().set(videoId=video_id, media_body=media)
@@ -1252,8 +1624,10 @@ class YouTubeUploader(_BaseUploader):
 # Shared HTTP helpers (stdlib only — no extra pip deps for the upload stack)
 # ---------------------------------------------------------------------------
 
-def _http_json(url, data=None, headers=None, method=None, timeout=60, retries=3,
-               form=False):
+
+def _http_json(
+    url, data=None, headers=None, method=None, timeout=60, retries=3, form=False
+):
     """JSON/form/raw-bytes HTTP request via urllib with a 429/5xx retry loop.
 
     - data dict + form=False  → JSON body (Content-Type: application/json)
@@ -1276,12 +1650,15 @@ def _http_json(url, data=None, headers=None, method=None, timeout=60, retries=3,
         req_headers.update(headers)
     if body is not None and "Content-Type" not in req_headers:
         req_headers["Content-Type"] = (
-            "application/x-www-form-urlencoded" if form else "application/json")
+            "application/x-www-form-urlencoded" if form else "application/json"
+        )
 
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            req = urllib.request.Request(url, data=body, headers=req_headers, method=method)
+            req = urllib.request.Request(
+                url, data=body, headers=req_headers, method=method
+            )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
                 try:
@@ -1304,7 +1681,9 @@ def _http_json(url, data=None, headers=None, method=None, timeout=60, retries=3,
             if attempt < retries:
                 time.sleep(2 * attempt)
                 continue
-            raise RuntimeError("network error talking to {}: {}".format(url, e)) from None
+            raise RuntimeError(
+                "network error talking to {}: {}".format(url, e)
+            ) from None
     raise RuntimeError("request failed: {}".format(last_err))
 
 
@@ -1320,7 +1699,11 @@ def _api_error_message(status, raw):
         msg = err.get("message") or err.get("description") or err.get("detail")
         if msg:
             return "API error {}: {}".format(code or status, msg)
-    msg = payload.get("message") or payload.get("error_description") or payload.get("reason")
+    msg = (
+        payload.get("message")
+        or payload.get("error_description")
+        or payload.get("reason")
+    )
     if msg:
         return "API error {}: {}".format(status, msg)
     return "API error {}: {}".format(status, raw[:200])
@@ -1336,10 +1719,22 @@ TIKTOK_APPROVAL_HINT = (
 def _with_tiktok_hint(msg):
     """Append the app-approval hint when a TikTok error smells like permissions."""
     lower = msg.lower()
-    if any(k in lower for k in (
-            "permission", "approve", "approval", "scope", "unauthorized",
-            "forbidden", "not allowed", "no permission", "40100", "43201",
-            "access_token")):
+    if any(
+        k in lower
+        for k in (
+            "permission",
+            "approve",
+            "approval",
+            "scope",
+            "unauthorized",
+            "forbidden",
+            "not allowed",
+            "no permission",
+            "40100",
+            "43201",
+            "access_token",
+        )
+    ):
         return msg + "\n" + TIKTOK_APPROVAL_HINT
     return msg
 
@@ -1351,7 +1746,8 @@ def _token_file(platform):
         "youtube": "YT_TOKEN_FILE",
     }
     return os.getenv(env_map[platform]) or os.path.join(
-        os.path.expanduser("~"), ".viralcutter", "{}_token.json".format(platform))
+        os.path.expanduser("~"), ".viralcutter", "{}_token.json".format(platform)
+    )
 
 
 def _save_token(platform, payload):
@@ -1392,6 +1788,7 @@ def _load_token(platform):
 # Anonymous video hosting (bridges the Instagram Graph API "public URL" gap)
 # ---------------------------------------------------------------------------
 
+
 def _multipart_body(fields, file_path, file_field, boundary):
     """Build a multipart/form-data body (stdlib only)."""
     lines = []
@@ -1401,8 +1798,11 @@ def _multipart_body(fields, file_path, file_field, boundary):
         lines.append("")
         lines.append(str(v))
     lines.append("--" + boundary)
-    lines.append('Content-Disposition: form-data; name="{}"; filename="{}"'.format(
-        file_field, os.path.basename(file_path)))
+    lines.append(
+        'Content-Disposition: form-data; name="{}"; filename="{}"'.format(
+            file_field, os.path.basename(file_path)
+        )
+    )
     lines.append("Content-Type: video/mp4")
     lines.append("")
     head = "\r\n".join(lines).encode("utf-8") + b"\r\n"
@@ -1431,6 +1831,7 @@ def host_media_file(video_path, timeout=300):
     Returns the https URL. Raises RuntimeError with a readable message.
     """
     import uuid
+
     if not os.path.exists(video_path):
         raise FileNotFoundError("video not found: {}".format(video_path))
     size = os.path.getsize(video_path)
@@ -1440,38 +1841,56 @@ def host_media_file(video_path, timeout=300):
         raise RuntimeError(
             "auto-host supports files up to 200 MB (got {:.1f} MB). Host this "
             "clip yourself and pass --video-url or IG_VIDEO_URL.".format(
-                size / (1024 * 1024)))
+                size / (1024 * 1024)
+            )
+        )
 
     hosts = [
-        {"name": "catbox.moe", "url": "https://catbox.moe/user/api.php",
-         "fields": {"reqtype": "fileupload", "userhash": ""}},
-        {"name": "0x0.st", "url": "https://0x0.st",
-         "fields": {"secret": ""}},
+        {
+            "name": "catbox.moe",
+            "url": "https://catbox.moe/user/api.php",
+            "fields": {"reqtype": "fileupload", "userhash": ""},
+        },
+        {"name": "0x0.st", "url": "https://0x0.st", "fields": {"secret": ""}},
     ]
     last_err = None
     for host in hosts:
         boundary = "----ViralCutter{}".format(uuid.uuid4().hex)
-        body = _multipart_body(host["fields"], video_path, "fileToUpload"
-                               if host["name"] == "catbox.moe" else "file",
-                               boundary)
+        body = _multipart_body(
+            host["fields"],
+            video_path,
+            "fileToUpload" if host["name"] == "catbox.moe" else "file",
+            boundary,
+        )
         req = urllib.request.Request(
-            host["url"], data=body, method="POST",
-            headers={"Content-Type": "multipart/form-data; boundary={}".format(boundary),
-                     "User-Agent": "ViralCutter/6.11 (desktop upload helper)"})
+            host["url"],
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "multipart/form-data; boundary={}".format(boundary),
+                "User-Agent": "ViralCutter/6.11 (desktop upload helper)",
+            },
+        )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 url = resp.read().decode("utf-8", errors="replace").strip()
-            if url and url.startswith("https://") and not any(
-                    token in url.lower() for token in ("error", "<html")):
+            if (
+                url
+                and url.startswith("https://")
+                and not any(token in url.lower() for token in ("error", "<html"))
+            ):
                 return url
-            last_err = "host {} replied: {}".format(host["name"], url[:120] or "(empty)")
+            last_err = "host {} replied: {}".format(
+                host["name"], url[:120] or "(empty)"
+            )
         except Exception as e:
             last_err = "host {} failed: {}".format(host["name"], e)
             continue
     raise RuntimeError(
         "auto-hosting failed on all providers (catbox.moe, 0x0.st). "
         "Last error: {}. Host the clip yourself and pass --video-url or "
-        "IG_VIDEO_URL.".format(last_err))
+        "IG_VIDEO_URL.".format(last_err)
+    )
 
 
 class _OAuthCallbackServer:
@@ -1505,21 +1924,26 @@ class _OAuthCallbackServer:
                     holder.error = query.get("error_description", query.get("error"))[0]
                     self.send_response(400)
                     self.end_headers()
-                    self.wfile.write(b"ViralCutter: OAuth error received. You may close this tab.")
+                    self.wfile.write(
+                        b"ViralCutter: OAuth error received. You may close this tab."
+                    )
                     return
                 code = (query.get("code") or [None])[0]
                 state = (query.get("state") or [None])[0]
                 if not code:
                     self.send_response(400)
                     self.end_headers()
-                    self.wfile.write(b"ViralCutter: no code in redirect. You may close this tab.")
+                    self.wfile.write(
+                        b"ViralCutter: no code in redirect. You may close this tab."
+                    )
                     return
                 holder.code = code
                 holder.state_ok = state == expected_state
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(
-                    b"ViralCutter: authorization received. You may close this tab and return to the app.")
+                    b"ViralCutter: authorization received. You may close this tab and return to the app."
+                )
 
             def do_HEAD(self):
                 self.send_response(200)
@@ -1538,7 +1962,9 @@ class _OAuthCallbackServer:
         if self.code is None:
             raise RuntimeError(
                 "OAuth timed out after {}s — no redirect received on http://localhost:{}/".format(
-                    self.timeout, self.port))
+                    self.timeout, self.port
+                )
+            )
         if not self.state_ok:
             raise RuntimeError("OAuth state mismatch (CSRF guard) — please retry.")
         return self.code
@@ -1559,6 +1985,7 @@ class TikTokUploader(_BaseUploader):
     Privacy: default privacyLevel is SELF_ONLY (draft, safe) — set
     TIKTOK_PRIVACY=PUBLIC_TO_EVERYONE only when you intend to publish.
     """
+
     platform = "tiktok"
     AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
     TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
@@ -1568,21 +1995,38 @@ class TikTokUploader(_BaseUploader):
     SCOPES = "user.info.basic,video.publish"
     CALLBACK_PORT = 8431
 
-    def __init__(self, project_folder, dry_run=False, extra_rules_path=None,
-                 video_url=None, music_gate=None, client_secrets_path=None,
-                 token_path=None, privacy_status=None, publish_at=None,
-                 oauth_full_access=False):
+    def __init__(
+        self,
+        project_folder,
+        dry_run=False,
+        extra_rules_path=None,
+        video_url=None,
+        music_gate=None,
+        client_secrets_path=None,
+        token_path=None,
+        privacy_status=None,
+        publish_at=None,
+        oauth_full_access=False,
+    ):
         super().__init__(
-            project_folder, dry_run=dry_run, extra_rules_path=extra_rules_path,
-            video_url=video_url, music_gate=music_gate,
-            client_secrets_path=client_secrets_path, token_path=token_path,
-            privacy_status=privacy_status, publish_at=publish_at,
-            oauth_full_access=oauth_full_access)
+            project_folder,
+            dry_run=dry_run,
+            extra_rules_path=extra_rules_path,
+            video_url=video_url,
+            music_gate=music_gate,
+            client_secrets_path=client_secrets_path,
+            token_path=token_path,
+            privacy_status=privacy_status,
+            publish_at=publish_at,
+            oauth_full_access=oauth_full_access,
+        )
 
     # -- OAuth -----------------------------------------------------------------
 
     def _redirect_uri(self):
-        return os.getenv("TIKTOK_REDIRECT_URI", "http://localhost:{}/".format(self.CALLBACK_PORT))
+        return os.getenv(
+            "TIKTOK_REDIRECT_URI", "http://localhost:{}/".format(self.CALLBACK_PORT)
+        )
 
     def auth(self):
         """Run the full OAuth consent flow (browser + local callback). No upload."""
@@ -1590,9 +2034,11 @@ class TikTokUploader(_BaseUploader):
         client_secret = os.getenv("TIKTOK_CLIENT_SECRET", "")
         if not client_key or not client_secret:
             self._missing_credentials(
-                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"])
+                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"]
+            )
         redirect_uri = self._redirect_uri()
         import secrets
+
         state = secrets.token_urlsafe(16)
         params = {
             "client_key": client_key,
@@ -1606,6 +2052,7 @@ class TikTokUploader(_BaseUploader):
         print("[tiktok] if the browser does not open, visit:\n  {}".format(auth_url))
         try:
             import webbrowser
+
             webbrowser.open(auth_url)
         except Exception:
             pass
@@ -1616,13 +2063,15 @@ class TikTokUploader(_BaseUploader):
         return path
 
     def _exchange_code(self, code, redirect_uri, client_key, client_secret):
-        form = urllib.parse.urlencode({
-            "client_key": client_key,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
-        }).encode("utf-8")
+        form = urllib.parse.urlencode(
+            {
+                "client_key": client_key,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+            }
+        ).encode("utf-8")
         req = urllib.request.Request(self.TOKEN_URL, data=form, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         try:
@@ -1632,8 +2081,11 @@ class TikTokUploader(_BaseUploader):
             raw = e.read().decode("utf-8", errors="replace")
             raise RuntimeError(_api_error_message(e.code, raw)) from None
         if payload.get("error"):
-            raise RuntimeError("TikTok OAuth failed: {}".format(
-                payload.get("error_description") or payload.get("error")))
+            raise RuntimeError(
+                "TikTok OAuth failed: {}".format(
+                    payload.get("error_description") or payload.get("error")
+                )
+            )
         payload["expires_at"] = time.time() + int(payload.get("expires_in", 0) or 0)
         return payload
 
@@ -1642,19 +2094,24 @@ class TikTokUploader(_BaseUploader):
         client_secret = os.getenv("TIKTOK_CLIENT_SECRET", "")
         if not client_key or not client_secret or not token.get("refresh_token"):
             self._missing_credentials(
-                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"])
-        form = urllib.parse.urlencode({
-            "client_key": client_key,
-            "client_secret": client_secret,
-            "grant_type": "refresh_token",
-            "refresh_token": token["refresh_token"],
-        }).encode("utf-8")
+                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"]
+            )
+        form = urllib.parse.urlencode(
+            {
+                "client_key": client_key,
+                "client_secret": client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": token["refresh_token"],
+            }
+        ).encode("utf-8")
         req = urllib.request.Request(self.TOKEN_URL, data=form, method="POST")
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with urllib.request.urlopen(req, timeout=60) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
         if payload.get("error"):
-            raise RuntimeError("TikTok token refresh failed: {}".format(payload.get("error")))
+            raise RuntimeError(
+                "TikTok token refresh failed: {}".format(payload.get("error"))
+            )
         new_token = dict(token)
         for key in ("access_token", "refresh_token", "expires_in", "scope", "open_id"):
             if payload.get(key) is not None:
@@ -1669,12 +2126,14 @@ class TikTokUploader(_BaseUploader):
         token, path = _load_token("tiktok")
         if not token:
             self._missing_credentials(
-                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"])
+                self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"]
+            )
         expires_at = token.get("expires_at") or 0
         if expires_at and time.time() > expires_at - 60:
             if not token.get("refresh_token"):
                 self._missing_credentials(
-                    self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"])
+                    self.platform, ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"]
+                )
             token = self._refresh_token(token)
         return token["access_token"]
 
@@ -1712,41 +2171,62 @@ class TikTokUploader(_BaseUploader):
             init = _http_json(self.VIDEO_INIT_URL, init_payload, headers=headers)
         except RuntimeError as e:
             raise RuntimeError(_with_tiktok_hint(str(e))) from None
-        publish_id = ((init.get("data") or {}).get("publish_id"))
+        publish_id = (init.get("data") or {}).get("publish_id")
         if not publish_id:
-            raise RuntimeError(_with_tiktok_hint(
-                "TikTok init returned no publish_id: {}".format(init)))
+            raise RuntimeError(
+                _with_tiktok_hint("TikTok init returned no publish_id: {}".format(init))
+            )
 
         # Upload the file bytes (single chunk) — the actual PUT body. The
         # endpoint returns an empty 2xx body, so we ignore the JSON result.
         with open(video_path, "rb") as f:
             blob = f.read()
         upload_url = "{}?video_size={}".format(
-            self.VIDEO_UPLOAD_URL + str(publish_id) + "/", size)
-        _http_json(upload_url, data=blob, headers={
-            "Authorization": "Bearer {}".format(access_token),
-            "Content-Type": "video/mp4",
-        }, method="PUT", timeout=600)
+            self.VIDEO_UPLOAD_URL + str(publish_id) + "/", size
+        )
+        _http_json(
+            upload_url,
+            data=blob,
+            headers={
+                "Authorization": "Bearer {}".format(access_token),
+                "Content-Type": "video/mp4",
+            },
+            method="PUT",
+            timeout=600,
+        )
 
         # Poll publish status (PUBLISH_COMPLETE / FAILED / PROCESSING...).
         for _ in range(30):
-            status = _http_json(self.STATUS_URL, {"publish_id": publish_id},
-                                headers=headers)
+            status = _http_json(
+                self.STATUS_URL, {"publish_id": publish_id}, headers=headers
+            )
             state = ((status.get("data") or {}).get("status") or "").upper()
             if state == "PUBLISH_COMPLETE":
-                print("[tiktok] uploaded '{}' (publish_id {})".format(
-                    display_title, publish_id))
-                return {"status": "uploaded", "platform": "tiktok",
-                        "publish_id": publish_id, "url": "https://www.tiktok.com/"}
+                print(
+                    "[tiktok] uploaded '{}' (publish_id {})".format(
+                        display_title, publish_id
+                    )
+                )
+                return {
+                    "status": "uploaded",
+                    "platform": "tiktok",
+                    "publish_id": publish_id,
+                    "url": "https://www.tiktok.com/",
+                }
             if state == "FAILED":
-                fail = ((status.get("data") or {}).get("fail_reason")
-                        or status.get("error") or "unknown")
-                raise RuntimeError(_with_tiktok_hint(
-                    "TikTok publish failed: {}".format(fail)))
+                fail = (
+                    (status.get("data") or {}).get("fail_reason")
+                    or status.get("error")
+                    or "unknown"
+                )
+                raise RuntimeError(
+                    _with_tiktok_hint("TikTok publish failed: {}".format(fail))
+                )
             time.sleep(5)
         raise RuntimeError(
             "TikTok publish is still processing (publish_id {}) — check later "
-            "on tiktok.com".format(publish_id))
+            "on tiktok.com".format(publish_id)
+        )
 
 
 class InstagramUploader(_BaseUploader):
@@ -1773,20 +2253,36 @@ class InstagramUploader(_BaseUploader):
 
     The safety gate runs BEFORE any API call (see _BaseUploader.upload).
     """
+
     platform = "instagram"
     GRAPH = "https://graph.facebook.com/v21.0"
     TOKEN_EXCHANGE = "https://graph.facebook.com/v21.0/oauth/access_token"
 
-    def __init__(self, project_folder, dry_run=False, extra_rules_path=None,
-                 video_url=None, music_gate=None, client_secrets_path=None,
-                 token_path=None, privacy_status=None, publish_at=None,
-                 oauth_full_access=False):
+    def __init__(
+        self,
+        project_folder,
+        dry_run=False,
+        extra_rules_path=None,
+        video_url=None,
+        music_gate=None,
+        client_secrets_path=None,
+        token_path=None,
+        privacy_status=None,
+        publish_at=None,
+        oauth_full_access=False,
+    ):
         super().__init__(
-            project_folder, dry_run=dry_run, extra_rules_path=extra_rules_path,
-            video_url=video_url, music_gate=music_gate,
-            client_secrets_path=client_secrets_path, token_path=token_path,
-            privacy_status=privacy_status, publish_at=publish_at,
-            oauth_full_access=oauth_full_access)
+            project_folder,
+            dry_run=dry_run,
+            extra_rules_path=extra_rules_path,
+            video_url=video_url,
+            music_gate=music_gate,
+            client_secrets_path=client_secrets_path,
+            token_path=token_path,
+            privacy_status=privacy_status,
+            publish_at=publish_at,
+            oauth_full_access=oauth_full_access,
+        )
 
     def auth(self):
         """Print how to get a long-lived IG token (no browser flow needed)."""
@@ -1797,24 +2293,28 @@ class InstagramUploader(_BaseUploader):
             client_secret = os.getenv("IG_CLIENT_SECRET")
             if client_id and client_secret:
                 url = "{}?grant_type=fb_exchange_token&client_id={}&client_secret={}&fb_exchange_token={}".format(
-                    self.TOKEN_EXCHANGE, urllib.parse.quote(client_id),
-                    urllib.parse.quote(client_secret), urllib.parse.quote(token))
+                    self.TOKEN_EXCHANGE,
+                    urllib.parse.quote(client_id),
+                    urllib.parse.quote(client_secret),
+                    urllib.parse.quote(token),
+                )
                 try:
                     payload = _http_json(url)
                 except RuntimeError as e:
                     raise RuntimeError(
                         "IG long-lived exchange failed ({}). Set IG_ACCESS_TOKEN "
-                        "directly to the long-lived token instead.".format(e)) from None
+                        "directly to the long-lived token instead.".format(e)
+                    ) from None
                 token = payload.get("access_token", token)
-            path = _save_token("instagram", {
-                "access_token": token, "expires_at": 0})
+            path = _save_token("instagram", {"access_token": token, "expires_at": 0})
             print("[instagram] ✅ token saved → {}".format(path))
             return path
         raise RuntimeError(
             "Instagram token setup: 1) generate a long-lived IG user access "
             "token (Graph API explorer) and set IG_ACCESS_TOKEN + IG_USER_ID, "
             "or 2) set IG_CLIENT_ID + IG_CLIENT_SECRET and run "
-            "`--auth instagram` with a short-lived token to exchange it.")
+            "`--auth instagram` with a short-lived token to exchange it."
+        )
 
     def _ensure_token(self):
         token, _path = _load_token("instagram")
@@ -1822,7 +2322,8 @@ class InstagramUploader(_BaseUploader):
             env_token = os.getenv("IG_ACCESS_TOKEN")
             if not env_token:
                 self._missing_credentials(
-                    self.platform, ["IG_ACCESS_TOKEN", "IG_USER_ID"])
+                    self.platform, ["IG_ACCESS_TOKEN", "IG_USER_ID"]
+                )
             token = {"access_token": env_token, "expires_at": 0}
         return token["access_token"]
 
@@ -1835,32 +2336,45 @@ class InstagramUploader(_BaseUploader):
         video_url = self.video_url or os.getenv("IG_VIDEO_URL", "")
         if not video_url:
             auto_host_allowed = os.getenv("IG_ALLOW_AUTO_HOST", "").lower() in (
-                "1", "true", "yes", "on"
+                "1",
+                "true",
+                "yes",
+                "on",
             )
-            if (not auto_host_allowed or
-                    os.getenv("IG_HOST_DISABLE", "").lower() in ("1", "true", "yes")):
+            if not auto_host_allowed or os.getenv("IG_HOST_DISABLE", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
                 raise RuntimeError(
                     "Instagram Graph API requires a PUBLIC https video_url for "
                     "the clip (no raw-file upload exists for IG Reels). Host "
                     "the clip and pass --video-url or set IG_VIDEO_URL. "
                     "Anonymous auto-hosting is disabled by default; set "
-                    "IG_ALLOW_AUTO_HOST=1 only with explicit consent.")
+                    "IG_ALLOW_AUTO_HOST=1 only with explicit consent."
+                )
             if not os.path.exists(video_path):
                 raise FileNotFoundError("video not found: {}".format(video_path))
-            print("[instagram] no IG_VIDEO_URL — explicitly enabled auto-hosting "
-                  "the clip on a "
-                  "free anonymous host (catbox.moe, 0x0.st fallback)…")
+            print(
+                "[instagram] no IG_VIDEO_URL — explicitly enabled auto-hosting "
+                "the clip on a "
+                "free anonymous host (catbox.moe, 0x0.st fallback)…"
+            )
             video_url = host_media_file(video_path)
             print("[instagram] hosted → {}".format(video_url))
-            print("[instagram] note: the hosted copy is temporary; the post "
-                  "keeps the video. Set IG_VIDEO_URL and remove "
-                  "IG_ALLOW_AUTO_HOST=1 to control hosting yourself.")
+            print(
+                "[instagram] note: the hosted copy is temporary; the post "
+                "keeps the video. Set IG_VIDEO_URL and remove "
+                "IG_ALLOW_AUTO_HOST=1 to control hosting yourself."
+            )
 
         caption_text = (title or "").strip()
         if caption:
             caption_text = (caption_text + "\n\n" + caption).strip()
         if hashtags:
-            tags = " ".join("#" + str(h).lstrip("#") for h in hashtags if str(h).strip())
+            tags = " ".join(
+                "#" + str(h).lstrip("#") for h in hashtags if str(h).strip()
+            )
             caption_text = (caption_text + "\n\n" + tags).strip()
         caption_text = caption_text[:2200]  # IG caption limit
 
@@ -1870,22 +2384,28 @@ class InstagramUploader(_BaseUploader):
             "media_type": "REELS",
             "video_url": video_url,
             "caption": caption_text,
-            "share_to_feed": os.getenv("IG_SHARE_TO_FEED", "true").lower() in ("1", "true", "yes"),
+            "share_to_feed": os.getenv("IG_SHARE_TO_FEED", "true").lower()
+            in ("1", "true", "yes"),
         }
         # Graph API media/media_publish endpoints take FORM-encoded params.
-        created = _http_json("{}/{}/media".format(base, ig_user_id), params,
-                             form=True)
+        created = _http_json("{}/{}/media".format(base, ig_user_id), params, form=True)
         creation_id = created.get("id")
         if not creation_id:
             raise RuntimeError("Instagram media creation failed: {}".format(created))
 
-        published = _http_json("{}/{}/media_publish".format(base, ig_user_id),
-                               {"creation_id": creation_id,
-                                "access_token": access_token}, form=True)
+        published = _http_json(
+            "{}/{}/media_publish".format(base, ig_user_id),
+            {"creation_id": creation_id, "access_token": access_token},
+            form=True,
+        )
         media_id = published.get("id")
         print("[instagram] uploaded '{}' (media_id {})".format(title, media_id))
-        return {"status": "uploaded", "platform": "instagram",
-                "media_id": media_id, "url": "https://www.instagram.com/"}
+        return {
+            "status": "uploaded",
+            "platform": "instagram",
+            "media_id": media_id,
+            "url": "https://www.instagram.com/",
+        }
 
 
 UPLOADERS = {
@@ -1907,69 +2427,114 @@ def check_platform_setup(platform):
 
     if platform == "youtube":
         secrets = env.get("YT_CLIENT_SECRETS_FILE") or os.path.join(
-            os.getcwd(), "client_secrets.json")
-        checks.append({
-            "ok": os.path.exists(secrets),
-            "item": "OAuth client secrets (client_secrets.json)",
-            "detail": secrets + (" — found" if os.path.exists(secrets)
-                                 else " — MISSING. Get one from Google Cloud "
-                                 "Console → APIs & Services → Credentials → "
-                                 "OAuth 2.0 Client ID (Desktop app).")})
+            os.getcwd(), "client_secrets.json"
+        )
+        checks.append(
+            {
+                "ok": os.path.exists(secrets),
+                "item": "OAuth client secrets (client_secrets.json)",
+                "detail": secrets
+                + (
+                    " — found"
+                    if os.path.exists(secrets)
+                    else " — MISSING. Get one from Google Cloud "
+                    "Console → APIs & Services → Credentials → "
+                    "OAuth 2.0 Client ID (Desktop app)."
+                ),
+            }
+        )
         token = _token_file("youtube")
-        checks.append({
-            "ok": os.path.exists(token),
-            "item": "Saved YouTube token",
-            "detail": token + (" — found" if os.path.exists(token)
-                               else " — missing. Run --auth youtube once.")})
+        checks.append(
+            {
+                "ok": os.path.exists(token),
+                "item": "Saved YouTube token",
+                "detail": token
+                + (
+                    " — found"
+                    if os.path.exists(token)
+                    else " — missing. Run --auth youtube once."
+                ),
+            }
+        )
     elif platform == "tiktok":
         ck, cs = env.get("TIKTOK_CLIENT_KEY"), env.get("TIKTOK_CLIENT_SECRET")
-        checks.append({
-            "ok": bool(ck and cs),
-            "item": "TikTok app credentials (TIKTOK_CLIENT_KEY/SECRET)",
-            "detail": "set" if ck and cs else
-                      "MISSING — create an app at developers.tiktok.com and "
-                      "set both env vars."})
+        checks.append(
+            {
+                "ok": bool(ck and cs),
+                "item": "TikTok app credentials (TIKTOK_CLIENT_KEY/SECRET)",
+                "detail": "set"
+                if ck and cs
+                else "MISSING — create an app at developers.tiktok.com and "
+                "set both env vars.",
+            }
+        )
         token = _token_file("tiktok")
-        checks.append({
-            "ok": os.path.exists(token),
-            "item": "Saved TikTok token",
-            "detail": token + (" — found" if os.path.exists(token)
-                               else " — missing. Run --auth tiktok once "
-                               "(opens the browser consent).")})
-        checks.append({
-            "ok": None,
-            "item": "Content Posting API approval",
-            "detail": "CANNOT be verified from here — TikTok approves apps "
-                      "manually (days/weeks). Even with perfect code, uploads "
-                      "only work after approval. Check developers.tiktok.com "
-                      "→ your app → Permissions → video.publish."})
+        checks.append(
+            {
+                "ok": os.path.exists(token),
+                "item": "Saved TikTok token",
+                "detail": token
+                + (
+                    " — found"
+                    if os.path.exists(token)
+                    else " — missing. Run --auth tiktok once "
+                    "(opens the browser consent)."
+                ),
+            }
+        )
+        checks.append(
+            {
+                "ok": None,
+                "item": "Content Posting API approval",
+                "detail": "CANNOT be verified from here — TikTok approves apps "
+                "manually (days/weeks). Even with perfect code, uploads "
+                "only work after approval. Check developers.tiktok.com "
+                "→ your app → Permissions → video.publish.",
+            }
+        )
     elif platform == "instagram":
         token, path = _load_token("instagram")
         env_tok = env.get("IG_ACCESS_TOKEN")
-        checks.append({
-            "ok": bool(token or env_tok),
-            "item": "Instagram access token",
-            "detail": path + (" — found" if token else
-                              " — missing. Set IG_ACCESS_TOKEN (long-lived "
-                              "user token) or run --auth instagram.")})
+        checks.append(
+            {
+                "ok": bool(token or env_tok),
+                "item": "Instagram access token",
+                "detail": path
+                + (
+                    " — found"
+                    if token
+                    else " — missing. Set IG_ACCESS_TOKEN (long-lived "
+                    "user token) or run --auth instagram."
+                ),
+            }
+        )
         uid = env.get("IG_USER_ID")
-        checks.append({
-            "ok": bool(uid),
-            "item": "IG_USER_ID",
-            "detail": "set" if uid else "MISSING — set IG_USER_ID (your IG "
-                      "Business/Creator account id)."})
+        checks.append(
+            {
+                "ok": bool(uid),
+                "item": "IG_USER_ID",
+                "detail": "set"
+                if uid
+                else "MISSING — set IG_USER_ID (your IG Business/Creator account id).",
+            }
+        )
         url = env.get("IG_VIDEO_URL")
-        checks.append({
-            "ok": None,
-            "item": "Video URL source",
-            "detail": ("IG_VIDEO_URL is set — Graph API will use it." if url
-                       else "not set — upload will be BLOCKED by default. Set "
-                       "IG_VIDEO_URL for a URL you control, or explicitly set "
-                       "IG_ALLOW_AUTO_HOST=1 to accept public third-party "
-                       "hosting." )})
+        checks.append(
+            {
+                "ok": None,
+                "item": "Video URL source",
+                "detail": (
+                    "IG_VIDEO_URL is set — Graph API will use it."
+                    if url
+                    else "not set — upload will be BLOCKED by default. Set "
+                    "IG_VIDEO_URL for a URL you control, or explicitly set "
+                    "IG_ALLOW_AUTO_HOST=1 to accept public third-party "
+                    "hosting."
+                ),
+            }
+        )
     else:
-        checks.append({"ok": False, "item": "unknown platform",
-                       "detail": platform})
+        checks.append({"ok": False, "item": "unknown platform", "detail": platform})
     return checks
 
 
@@ -1977,42 +2542,94 @@ def check_platform_setup(platform):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="ViralCutter upload gate — refuses publishing blocked clips.")
-    parser.add_argument("--project", default=None, help="Project folder (not needed for --check)")
-    parser.add_argument("--index", type=int, default=None,
-                        help="Clip index to check (default: audit all scored clips)")
+        description="ViralCutter upload gate — refuses publishing blocked clips."
+    )
+    parser.add_argument(
+        "--project", default=None, help="Project folder (not needed for --check)"
+    )
+    parser.add_argument(
+        "--index",
+        type=int,
+        default=None,
+        help="Clip index to check (default: audit all scored clips)",
+    )
     parser.add_argument("--title", default="", help="Title (checked live)")
     parser.add_argument("--caption", default="", help="Caption (checked live)")
     parser.add_argument("--hashtags", default="", help="Comma-separated hashtags")
     parser.add_argument("--extra-rules", default=None, help="Extra metadata rules JSON")
-    parser.add_argument("--require-video", action="store_true",
-                        help="Also require a rendered video file for the clip")
-    parser.add_argument("--strict-quality", action="store_true",
-                        help="Require the selection score, boundaries, and title evidence before publishing")
-    parser.add_argument("--upload", choices=list(UPLOADERS), default=None,
-                        help="Platform to upload to (dry-run by default)")
-    parser.add_argument("--video", default=None, help="Video file to upload (with --upload)")
-    parser.add_argument("--video-url", default=None,
-                        help="Public HTTPS video URL (required by Instagram Graph API for Reels)")
-    parser.add_argument("--client-secrets", default=None,
-                        help="YouTube OAuth client secrets JSON (copied to secure local storage)")
-    parser.add_argument("--privacy", choices=["private", "unlisted", "public"], default=None,
-                        help="YouTube privacy status (scheduled uploads must be private)")
-    parser.add_argument("--publish-at", default=None,
-                        help="Schedule YouTube publication as ISO 8601 with timezone")
-    parser.add_argument("--full-youtube-access", action="store_true",
-                        help="request the broader YouTube OAuth scope")
-    parser.add_argument("--no-dry-run", action="store_true",
-                        help="Actually call the platform SDK (needs credentials)")
-    parser.add_argument("--auth", choices=list(UPLOADERS), default=None,
-                        help="Run the OAuth consent flow for a platform and save the token (no upload)")
-    parser.add_argument("--check", choices=list(UPLOADERS), default=None,
-                        help="Diagnose a platform's setup (env vars, tokens, known external barriers) — no upload, no network")
-    parser.add_argument("--music-gate", choices=["warn", "block", "off"], default=None,
-                        help="How to treat music_fingerprint.json matches (default: warn)")
+    parser.add_argument(
+        "--require-video",
+        action="store_true",
+        help="Also require a rendered video file for the clip",
+    )
+    parser.add_argument(
+        "--strict-quality",
+        action="store_true",
+        help="Require the selection score, boundaries, and title evidence before publishing",
+    )
+    parser.add_argument(
+        "--upload",
+        choices=list(UPLOADERS),
+        default=None,
+        help="Platform to upload to (dry-run by default)",
+    )
+    parser.add_argument(
+        "--video", default=None, help="Video file to upload (with --upload)"
+    )
+    parser.add_argument(
+        "--video-url",
+        default=None,
+        help="Public HTTPS video URL (required by Instagram Graph API for Reels)",
+    )
+    parser.add_argument(
+        "--client-secrets",
+        default=None,
+        help="YouTube OAuth client secrets JSON (copied to secure local storage)",
+    )
+    parser.add_argument(
+        "--privacy",
+        choices=["private", "unlisted", "public"],
+        default=None,
+        help="YouTube privacy status (scheduled uploads must be private)",
+    )
+    parser.add_argument(
+        "--publish-at",
+        default=None,
+        help="Schedule YouTube publication as ISO 8601 with timezone",
+    )
+    parser.add_argument(
+        "--full-youtube-access",
+        action="store_true",
+        help="request the broader YouTube OAuth scope",
+    )
+    parser.add_argument(
+        "--no-dry-run",
+        action="store_true",
+        help="Actually call the platform SDK (needs credentials)",
+    )
+    parser.add_argument(
+        "--auth",
+        choices=list(UPLOADERS),
+        default=None,
+        help="Run the OAuth consent flow for a platform and save the token (no upload)",
+    )
+    parser.add_argument(
+        "--check",
+        choices=list(UPLOADERS),
+        default=None,
+        help="Diagnose a platform's setup (env vars, tokens, known external barriers) — no upload, no network",
+    )
+    parser.add_argument(
+        "--music-gate",
+        choices=["warn", "block", "off"],
+        default=None,
+        help="How to treat music_fingerprint.json matches (default: warn)",
+    )
     args = parser.parse_args()
 
     if args.check:
@@ -2032,15 +2649,19 @@ def main():
         client_secrets_path = args.client_secrets
         if client_secrets_path and args.auth == "youtube":
             from webui.youtube_credentials import store_client_secrets
+
             client_secrets_path = store_client_secrets(client_secrets_path)["path"]
-        uploader = UPLOADERS[args.auth](args.project, dry_run=True,
-                                        extra_rules_path=args.extra_rules,
-                                        video_url=args.video_url,
-                                        music_gate=args.music_gate,
-                                        client_secrets_path=client_secrets_path,
-                                        privacy_status=args.privacy,
-                                        publish_at=args.publish_at,
-                                        oauth_full_access=args.full_youtube_access)
+        uploader = UPLOADERS[args.auth](
+            args.project,
+            dry_run=True,
+            extra_rules_path=args.extra_rules,
+            video_url=args.video_url,
+            music_gate=args.music_gate,
+            client_secrets_path=client_secrets_path,
+            privacy_status=args.privacy,
+            publish_at=args.publish_at,
+            oauth_full_access=args.full_youtube_access,
+        )
         try:
             uploader.auth()
         except UploadGateError as e:
@@ -2054,23 +2675,31 @@ def main():
         client_secrets_path = args.client_secrets
         if client_secrets_path and args.upload == "youtube":
             from webui.youtube_credentials import store_client_secrets
+
             client_secrets_path = store_client_secrets(client_secrets_path)["path"]
-        uploader = UPLOADERS[args.upload](args.project, dry_run=not args.no_dry_run,
-                                          extra_rules_path=args.extra_rules,
-                                          video_url=args.video_url,
-                                          music_gate=args.music_gate,
-                                          client_secrets_path=client_secrets_path,
-                                          privacy_status=args.privacy,
-                                          publish_at=args.publish_at,
-                                          oauth_full_access=args.full_youtube_access)
+        uploader = UPLOADERS[args.upload](
+            args.project,
+            dry_run=not args.no_dry_run,
+            extra_rules_path=args.extra_rules,
+            video_url=args.video_url,
+            music_gate=args.music_gate,
+            client_secrets_path=client_secrets_path,
+            privacy_status=args.privacy,
+            publish_at=args.publish_at,
+            oauth_full_access=args.full_youtube_access,
+        )
         uploader.require_quality_gate = bool(args.strict_quality or args.no_dry_run)
         uploader.require_preflight_reports = bool(args.no_dry_run)
         try:
-            uploader.upload(args.video or _find_clip_video(args.project, args.index) or "",
-                            args.title, args.caption,
-                            [h for h in args.hashtags.split(",") if h.strip()],
-                            index=args.index, privacy_status=args.privacy,
-                            publish_at=args.publish_at)
+            uploader.upload(
+                args.video or _find_clip_video(args.project, args.index) or "",
+                args.title,
+                args.caption,
+                [h for h in args.hashtags.split(",") if h.strip()],
+                index=args.index,
+                privacy_status=args.privacy,
+                publish_at=args.publish_at,
+            )
         except UploadGateError as e:
             print(str(e))
             return 3
@@ -2080,10 +2709,16 @@ def main():
         parser.error("--project is required for gate checks/audits (or use --check)")
 
     if args.index is not None:
-        verdict = check_clip(args.project, args.index, args.title, args.caption,
-                             [h for h in args.hashtags.split(",") if h.strip()],
-                             args.extra_rules, args.require_video,
-                             quality_gate=args.strict_quality)
+        verdict = check_clip(
+            args.project,
+            args.index,
+            args.title,
+            args.caption,
+            [h for h in args.hashtags.split(",") if h.strip()],
+            args.extra_rules,
+            args.require_video,
+            quality_gate=args.strict_quality,
+        )
         if verdict["allowed"]:
             print("clip #{}: ALLOWED".format(args.index))
             return 0
@@ -2095,8 +2730,13 @@ def main():
     allowed, blocked = audit_project(args.project, args.extra_rules)
     print("audit: {} allowed, {} blocked".format(len(allowed), len(blocked)))
     for b in blocked:
-        print("  BLOCKED #{} '{}' — {}".format(
-            b["index"], b["title"], b["reasons"][0]["detail"] if b["reasons"] else ""))
+        print(
+            "  BLOCKED #{} '{}' — {}".format(
+                b["index"],
+                b["title"],
+                b["reasons"][0]["detail"] if b["reasons"] else "",
+            )
+        )
     return 3 if blocked else 0
 
 

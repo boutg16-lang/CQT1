@@ -71,7 +71,9 @@ def _fmt_time(seconds: Any) -> str:
     return "{:02d}:{:02d}".format(minutes, secs)
 
 
-def _candidate_brief(cid: str, segment: Dict[str, Any], *, text_bound: int = 700) -> str:
+def _candidate_brief(
+    cid: str, segment: Dict[str, Any], *, text_bound: int = 700
+) -> str:
     title = segment.get("recommended_title") or segment.get("title") or ""
     text = str(segment.get("transcript_text") or segment.get("caption") or "").strip()
     if len(text) > text_bound:
@@ -114,7 +116,7 @@ def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
                 depth -= 1
                 if depth == 0:
                     try:
-                        payload = json.loads(cleaned[start:position + 1])
+                        payload = json.loads(cleaned[start : position + 1])
                     except (TypeError, ValueError):
                         break
                     return payload if isinstance(payload, dict) else None
@@ -219,9 +221,18 @@ def apply_editor_reviews(
         index = int(review["id"][1:])
         entry = annotated[index]
         verdict = review["verdict"]
-        record: Dict[str, Any] = {key: review[key] for key in (
-            "hook_score", "payoff_score", "standalone_score", "title_verdict",
-            "suggested_title", "reason") if key in review}
+        record: Dict[str, Any] = {
+            key: review[key]
+            for key in (
+                "hook_score",
+                "payoff_score",
+                "standalone_score",
+                "title_verdict",
+                "suggested_title",
+                "reason",
+            )
+            if key in review
+        }
         record["verdict"] = verdict
 
         if review.get("title_verdict") in ("oversells", "mismatch"):
@@ -239,7 +250,9 @@ def apply_editor_reviews(
             # clamp inside the original window; never widen, never invert
             new_start = max(start, min(new_start, end))
             new_end = min(end, max(new_end, new_start))
-            if end - start > 0 and new_end - new_start >= _safe_float(min_duration, 0.0):
+            if end - start > 0 and new_end - new_start >= _safe_float(
+                min_duration, 0.0
+            ):
                 entry["start_time"] = round(new_start, 2)
                 entry["end_time"] = round(new_end, 2)
                 entry["duration"] = round(new_end - new_start, 2)
@@ -247,7 +260,8 @@ def apply_editor_reviews(
             else:
                 record["verdict"] = "keep"
                 record["trim_fallback"] = (
-                    "اقتراح القص خارج النافذة أو أقصر من الحد الأدنى — أُبقي المقطع كما هو")
+                    "اقتراح القص خارج النافذة أو أقصر من الحد الأدنى — أُبقي المقطع كما هو"
+                )
                 verdict = "keep"
 
         entry["editor_review"] = record
@@ -271,15 +285,16 @@ def editor_review_segments(
     pass to a no-op, not to a pipeline crash.
     """
     ordered = sorted(
-        segments, key=lambda item: _safe_float(item.get("score"), 0.0), reverse=True)
+        segments, key=lambda item: _safe_float(item.get("score"), 0.0), reverse=True
+    )
     head = ordered[: max(0, int(max_candidates))]
-    tail = ordered[max(0, int(max_candidates)):]
+    tail = ordered[max(0, int(max_candidates)) :]
 
     errors: List[str] = []
     all_reviews: List[Dict[str, Any]] = []
     batch_size = max(1, int(batch_size))
     for offset in range(0, len(head), batch_size):
-        batch = list(enumerate(head))[offset: offset + batch_size]
+        batch = list(enumerate(head))[offset : offset + batch_size]
         candidates = [("c{}".format(index), segment) for index, segment in batch]
         prompt = build_editor_prompt(candidates)
         try:
@@ -288,7 +303,11 @@ def editor_review_segments(
                 cid = review.get("id", "")
                 # ids are global head-relative indexes by construction;
                 # accept only ids that actually reference a candidate
-                if cid.startswith("c") and cid[1:].isdigit() and int(cid[1:]) < len(head):
+                if (
+                    cid.startswith("c")
+                    and cid[1:].isdigit()
+                    and int(cid[1:]) < len(head)
+                ):
                     all_reviews.append(review)
         except Exception as exc:  # noqa: BLE001 - fail-open by design
             errors.append("batch {}: {}".format(offset // batch_size, exc))
@@ -304,11 +323,16 @@ def editor_review_segments(
 def _load_llm(backend: str) -> Callable[[str], str]:
     """Resolve a backend name into an llm_call for the CLI."""
     from scripts import create_viral_segments as cvs
+
     backend = backend.strip().lower()
     if backend == "gemini":
-        api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+        api_key = (
+            os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
+        ).strip()
         if not api_key:
-            raise SystemExit("GEMINI_API_KEY is not set — export it or pick --backend g4f")
+            raise SystemExit(
+                "GEMINI_API_KEY is not set — export it or pick --backend g4f"
+            )
         return lambda prompt: cvs.call_gemini(prompt, api_key)
     if backend == "g4f":
         return lambda prompt: cvs.call_g4f(prompt)
@@ -317,18 +341,33 @@ def _load_llm(backend: str) -> Callable[[str], str]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Editor-in-chief review of a project's candidate clips (LLM-backed).")
-    parser.add_argument("--project", required=True, help="Project folder with viral_segments.txt")
+        description="Editor-in-chief review of a project's candidate clips (LLM-backed)."
+    )
+    parser.add_argument(
+        "--project", required=True, help="Project folder with viral_segments.txt"
+    )
     parser.add_argument("--backend", default="gemini", choices=["gemini", "g4f"])
-    parser.add_argument("--top", type=int, default=DEFAULT_MAX_CANDIDATES,
-                        help="How many top-scored candidates to review (default: %(default)s)")
-    parser.add_argument("--min-duration", type=float, default=15.0,
-                        help="Minimum clip length a trim may keep (default: %(default)s)")
-    parser.add_argument("--apply", action="store_true",
-                        help="Write the annotated segments back (a .bak backup is kept)")
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=DEFAULT_MAX_CANDIDATES,
+        help="How many top-scored candidates to review (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--min-duration",
+        type=float,
+        default=15.0,
+        help="Minimum clip length a trim may keep (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the annotated segments back (a .bak backup is kept)",
+    )
     args = parser.parse_args(argv)
 
     from webui import segments_review
+
     payload = segments_review._read_payload(args.project)
     if not payload or not payload.get("segments"):
         print("[editor-review] no segments found in {}".format(args.project))
@@ -336,19 +375,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     segments = payload["segments"]
 
     result = editor_review_segments(
-        segments, _load_llm(args.backend), max_candidates=args.top,
-        min_duration=args.min_duration)
+        segments,
+        _load_llm(args.backend),
+        max_candidates=args.top,
+        min_duration=args.min_duration,
+    )
     summary = result["summary"]
-    print("[editor-review] reviewed={reviewed} keep={keep} trim={trim} reject={reject} "
-          "title_warnings={title_warnings} errors={errors}".format(
-              **summary, errors=len(summary["errors"])))
+    print(
+        "[editor-review] reviewed={reviewed} keep={keep} trim={trim} reject={reject} "
+        "title_warnings={title_warnings} errors={errors}".format(
+            **summary, errors=len(summary["errors"])
+        )
+    )
 
     report_path = os.path.join(args.project, REVIEW_FILENAME)
     with open(report_path, "w", encoding="utf-8") as handle:
-        json.dump({"summary": summary,
-                   "reviews": [s.get("editor_review") for s in result["segments"]
-                               if s.get("editor_review")]},
-                  handle, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "summary": summary,
+                "reviews": [
+                    s.get("editor_review")
+                    for s in result["segments"]
+                    if s.get("editor_review")
+                ],
+            },
+            handle,
+            ensure_ascii=False,
+            indent=2,
+        )
     print("[editor-review] report: {}".format(report_path))
 
     if args.apply:
@@ -356,13 +410,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         shutil.copyfile(target, target + ".editor_review.bak")
         payload["segments"] = result["segments"]
         segments_review._write_payload(args.project, payload)
-        print("[editor-review] applied (backup: {})".format(target + ".editor_review.bak"))
+        print(
+            "[editor-review] applied (backup: {})".format(target + ".editor_review.bak")
+        )
     return 0 if not summary["errors"] else 1
 
 
 __all__ = [
-    "REVIEW_FILENAME", "VERDICTS", "apply_editor_reviews", "build_editor_prompt",
-    "editor_review_segments", "main", "parse_editor_response",
+    "REVIEW_FILENAME",
+    "VERDICTS",
+    "apply_editor_reviews",
+    "build_editor_prompt",
+    "editor_review_segments",
+    "main",
+    "parse_editor_response",
 ]
 
 

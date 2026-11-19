@@ -35,7 +35,6 @@ PAIR_LIMIT_PER_ADDRESS = 20
 CONTROL_TOKEN_FILE_ENV = "CAT_BROWSER_BRIDGE_CONTROL_TOKEN_FILE"
 
 
-
 class Session:
     def __init__(self, session_id, agent_token, pairing_code, now):
         self.session_id = session_id
@@ -67,35 +66,53 @@ def _digest(value):
 
 
 def _matches(stored, value):
-    return stored is not None and isinstance(value, str) and hmac.compare_digest(stored, _digest(value))
+    return (
+        stored is not None
+        and isinstance(value, str)
+        and hmac.compare_digest(stored, _digest(value))
+    )
 
 
 def _new_pairing_code():
     raw = secrets.token_bytes(10)
     code = base64.b32encode(raw).decode("ascii").rstrip("=")
-    return "-".join(code[index:index + 4] for index in range(0, len(code), 4))
+    return "-".join(code[index : index + 4] for index in range(0, len(code), 4))
 
 
 def _normalize_pairing_code(value):
-    return "".join(value.upper().split()).replace("-", "") if isinstance(value, str) else ""
+    return (
+        "".join(value.upper().split()).replace("-", "")
+        if isinstance(value, str)
+        else ""
+    )
 
 
 def _prune_locked(now=None):
     now = time.time() if now is None else now
     for session_id, session in tuple(SESSIONS.items()):
-        if session.expires_at <= now or (session.ended_at and session.ended_at + 120 <= now):
+        if session.expires_at <= now or (
+            session.ended_at and session.ended_at + 120 <= now
+        ):
             with session.condition:
                 session.active = False
                 session.condition.notify_all()
             SESSIONS.pop(session_id, None)
     for address, requests in tuple(CREATE_REQUESTS.items()):
-        recent = [timestamp for timestamp in requests if timestamp > now - CREATE_WINDOW_SECONDS]
+        recent = [
+            timestamp
+            for timestamp in requests
+            if timestamp > now - CREATE_WINDOW_SECONDS
+        ]
         if recent:
             CREATE_REQUESTS[address] = recent
         else:
             CREATE_REQUESTS.pop(address, None)
     for address, requests in tuple(PAIR_REQUESTS.items()):
-        recent = [timestamp for timestamp in requests if timestamp > now - CREATE_WINDOW_SECONDS]
+        recent = [
+            timestamp
+            for timestamp in requests
+            if timestamp > now - CREATE_WINDOW_SECONDS
+        ]
         if recent:
             PAIR_REQUESTS[address] = recent
         else:
@@ -104,7 +121,9 @@ def _prune_locked(now=None):
 
 def _public_status(session):
     now = time.time()
-    actions_in_window = sum(timestamp > now - ACTION_WINDOW_SECONDS for timestamp in session.action_times)
+    actions_in_window = sum(
+        timestamp > now - ACTION_WINDOW_SECONDS for timestamp in session.action_times
+    )
     return {
         "session_id": session.session_id,
         "paired": session.client_token_hash is not None,
@@ -120,7 +139,9 @@ def _public_status(session):
 
 def _renew_client_lease(session, now=None):
     if session.active and session.client_token_hash is not None:
-        session.expires_at = (time.time() if now is None else now) + CLIENT_LEASE_SECONDS
+        session.expires_at = (
+            time.time() if now is None else now
+        ) + CLIENT_LEASE_SECONDS
 
 
 def _take_action_slot(session, now=None):
@@ -133,13 +154,6 @@ def _take_action_slot(session, now=None):
     session.action_times.append(now)
     session.action_count += 1
     return True
-
-
-
-
-
-
-
 
 
 def _configured_control_token():
@@ -156,7 +170,9 @@ class RelayHandler(BaseHTTPRequestHandler):
         LOGGER.info("http_request status=%s", args[1] if len(args) > 1 else "unknown")
 
     def _send(self, status, payload):
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -226,12 +242,18 @@ class RelayHandler(BaseHTTPRequestHandler):
             return _matches(session.agent_token_hash, token)
         if actor == "client":
             return _matches(session.client_token_hash, token)
-        return _matches(session.agent_token_hash, token) or _matches(session.client_token_hash, token)
+        return _matches(session.agent_token_hash, token) or _matches(
+            session.client_token_hash, token
+        )
 
     def _require_auth(self, session, actor="agent"):
         header = self.headers.get("Authorization", "")
         scheme, separator, token = header.partition(" ")
-        if scheme.lower() != "bearer" or not separator or not self._authorized(session, token.strip(), actor):
+        if (
+            scheme.lower() != "bearer"
+            or not separator
+            or not self._authorized(session, token.strip(), actor)
+        ):
             raise PermissionError("Unauthorized")
 
     def do_GET(self):
@@ -246,14 +268,25 @@ class RelayHandler(BaseHTTPRequestHandler):
                 with session.condition:
                     self._send(200, _public_status(session))
                 return
-            if len(parts) == 4 and parts[0] == "v1" and parts[1] == "sessions" and parts[3] == "next":
+            if (
+                len(parts) == 4
+                and parts[0] == "v1"
+                and parts[1] == "sessions"
+                and parts[3] == "next"
+            ):
                 session = self._get_session(parts[2])
                 self._require_auth(session, "client")
                 deadline = time.monotonic() + LONG_POLL_SECONDS
                 with session.condition:
                     _renew_client_lease(session)
-                    while session.active and not session.pending and time.monotonic() < deadline:
-                        session.condition.wait(timeout=max(0, deadline - time.monotonic()))
+                    while (
+                        session.active
+                        and not session.pending
+                        and time.monotonic() < deadline
+                    ):
+                        session.condition.wait(
+                            timeout=max(0, deadline - time.monotonic())
+                        )
                     _renew_client_lease(session)
                     if not session.active:
                         self._send(200, {"command": None, "stop": True})
@@ -284,13 +317,25 @@ class RelayHandler(BaseHTTPRequestHandler):
             if parts == ["v1", "pair"]:
                 self._pair()
                 return
-            if len(parts) == 4 and parts[:2] == ["v1", "sessions"] and parts[3] == "actions":
+            if (
+                len(parts) == 4
+                and parts[:2] == ["v1", "sessions"]
+                and parts[3] == "actions"
+            ):
                 self._run_action(parts[2])
                 return
-            if len(parts) == 4 and parts[:2] == ["v1", "sessions"] and parts[3] == "results":
+            if (
+                len(parts) == 4
+                and parts[:2] == ["v1", "sessions"]
+                and parts[3] == "results"
+            ):
                 self._complete_action(parts[2])
                 return
-            if len(parts) == 4 and parts[:2] == ["v1", "sessions"] and parts[3] == "stop":
+            if (
+                len(parts) == 4
+                and parts[:2] == ["v1", "sessions"]
+                and parts[3] == "stop"
+            ):
                 self._stop(parts[2])
                 return
             self._send(404, {"error": "Not found"})
@@ -310,8 +355,14 @@ class RelayHandler(BaseHTTPRequestHandler):
             self._discard_rejected_body()
             self._send(503, {"error": "Bridge control authentication is unavailable"})
             return False
-        scheme, separator, supplied = self.headers.get("Authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or not separator or not hmac.compare_digest(supplied, expected):
+        scheme, separator, supplied = self.headers.get("Authorization", "").partition(
+            " "
+        )
+        if (
+            scheme.lower() != "bearer"
+            or not separator
+            or not hmac.compare_digest(supplied, expected)
+        ):
             self._discard_rejected_body()
             self._send(401, {"error": "Unauthorized"})
             return False
@@ -329,7 +380,11 @@ class RelayHandler(BaseHTTPRequestHandler):
         with STATE_LOCK:
             _prune_locked(now)
             requests = CREATE_REQUESTS.setdefault(address, [])
-            requests[:] = [timestamp for timestamp in requests if timestamp > now - CREATE_WINDOW_SECONDS]
+            requests[:] = [
+                timestamp
+                for timestamp in requests
+                if timestamp > now - CREATE_WINDOW_SECONDS
+            ]
             if len(requests) >= CREATE_LIMIT_PER_ADDRESS:
                 self._send(429, {"error": "Session creation rate limit reached"})
                 return
@@ -342,13 +397,16 @@ class RelayHandler(BaseHTTPRequestHandler):
             pairing_code = _new_pairing_code()
             session = Session(session_id, agent_token, pairing_code, now)
             SESSIONS[session_id] = session
-        self._send(201, {
-            "session_id": session_id,
-            "agent_token": agent_token,
-            "pairing_code": pairing_code,
-            "expires_at": int(session.expires_at),
-            "expires_in_seconds": TTL_SECONDS,
-        })
+        self._send(
+            201,
+            {
+                "session_id": session_id,
+                "agent_token": agent_token,
+                "pairing_code": pairing_code,
+                "expires_at": int(session.expires_at),
+                "expires_in_seconds": TTL_SECONDS,
+            },
+        )
 
     def _pair(self):
         body = self._read_json()
@@ -359,16 +417,24 @@ class RelayHandler(BaseHTTPRequestHandler):
         with STATE_LOCK:
             _prune_locked(now)
             requests = PAIR_REQUESTS.setdefault(address, [])
-            requests[:] = [timestamp for timestamp in requests if timestamp > now - CREATE_WINDOW_SECONDS]
+            requests[:] = [
+                timestamp
+                for timestamp in requests
+                if timestamp > now - CREATE_WINDOW_SECONDS
+            ]
             if len(requests) >= PAIR_LIMIT_PER_ADDRESS:
                 self._send(429, {"error": "Pairing rate limit reached"})
                 return
             requests.append(now)
             code_hash = _digest(code)
-            session = next((
-                item for item in SESSIONS.values()
-                if hmac.compare_digest(item.pairing_code_hash, code_hash)
-            ), None)
+            session = next(
+                (
+                    item
+                    for item in SESSIONS.values()
+                    if hmac.compare_digest(item.pairing_code_hash, code_hash)
+                ),
+                None,
+            )
         if session is None:
             raise PermissionError("Pairing code is invalid or expired")
         with session.condition:
@@ -381,13 +447,16 @@ class RelayHandler(BaseHTTPRequestHandler):
             session.project_url = project_url
             session.origin = project_origin(project_url)
             _renew_client_lease(session, now)
-        self._send(200, {
-            "session_id": session.session_id,
-            "client_token": client_token,
-            "project_url": session.project_url,
-            "origin": session.origin,
-            "lease_expires_at": int(session.expires_at),
-        })
+        self._send(
+            200,
+            {
+                "session_id": session.session_id,
+                "client_token": client_token,
+                "project_url": session.project_url,
+                "origin": session.origin,
+                "lease_expires_at": int(session.expires_at),
+            },
+        )
 
     def _run_action(self, session_id):
         body = self._read_json()
@@ -402,14 +471,25 @@ class RelayHandler(BaseHTTPRequestHandler):
             if not session.active or session.client_token_hash is None:
                 raise PermissionError("Local browser is not connected")
             if session.in_flight is not None or session.pending:
-                self._send(409, {"error": "Another browser action is still in progress"})
+                self._send(
+                    409, {"error": "Another browser action is still in progress"}
+                )
                 return
             if not _take_action_slot(session):
-                self._send(429, {"error": "Browser action rate limit reached; wait before retrying (limit is per minute)"})
+                self._send(
+                    429,
+                    {
+                        "error": "Browser action rate limit reached; wait before retrying (limit is per minute)"
+                    },
+                )
                 return
             session.pending.append({"command_id": command_id, "action": action})
             session.condition.notify_all()
-            while session.active and command_id not in session.results and time.monotonic() < deadline:
+            while (
+                session.active
+                and command_id not in session.results
+                and time.monotonic() < deadline
+            ):
                 session.condition.wait(timeout=max(0, deadline - time.monotonic()))
             result = session.results.pop(command_id, None)
             if result is None:
@@ -417,7 +497,9 @@ class RelayHandler(BaseHTTPRequestHandler):
                 session.ended_at = time.time()
                 session.pending.clear()
                 session.condition.notify_all()
-                self._send(504, {"error": "Browser action timed out; the session was closed"})
+                self._send(
+                    504, {"error": "Browser action timed out; the session was closed"}
+                )
                 return
             session.in_flight = None
         self._send(200, result)
@@ -428,7 +510,11 @@ class RelayHandler(BaseHTTPRequestHandler):
         self._require_auth(session, "client")
         command_id = body.get("command_id")
         result = body.get("result")
-        if not isinstance(command_id, str) or not isinstance(result, dict) or type(result.get("ok")) is not bool:
+        if (
+            not isinstance(command_id, str)
+            or not isinstance(result, dict)
+            or type(result.get("ok")) is not bool
+        ):
             raise ValueError("Action result is invalid")
         encoded = json.dumps(result, ensure_ascii=False).encode("utf-8")
         if len(encoded) > MAX_BODY_BYTES:
@@ -465,5 +551,7 @@ def serve(port=None):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     serve()

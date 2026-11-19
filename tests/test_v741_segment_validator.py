@@ -20,6 +20,7 @@ from scripts import segment_validator as sv
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _segment(**overrides):
     """A fully valid final segment; overrides poke holes in it."""
     segment = {
@@ -47,6 +48,7 @@ def _warning_codes(result):
 # ---------------------------------------------------------------------------
 # Baseline / contract
 # ---------------------------------------------------------------------------
+
 
 def test_version_constant():
     assert sv.SEGMENT_VALIDATOR_VERSION == "1.0"
@@ -76,11 +78,20 @@ def test_valid_segment_passes():
 
 def test_checks_dict_has_the_full_contract():
     expected = {
-        "start_time_numeric", "end_time_numeric", "end_after_start",
-        "positive_duration", "duration_within_min", "duration_within_max",
-        "within_media_bounds", "transcript_present", "no_word_truncation",
-        "no_sentence_truncation", "edge_silence_ok", "title_status",
-        "safety_ok", "duplicate_ok",
+        "start_time_numeric",
+        "end_time_numeric",
+        "end_after_start",
+        "positive_duration",
+        "duration_within_min",
+        "duration_within_max",
+        "within_media_bounds",
+        "transcript_present",
+        "no_word_truncation",
+        "no_sentence_truncation",
+        "edge_silence_ok",
+        "title_status",
+        "safety_ok",
+        "duplicate_ok",
     }
     result = sv.validate_final_segment(_segment())
     assert expected.issubset(set(result["checks"]))
@@ -100,6 +111,7 @@ def test_result_never_raises_for_malformed_input():
 # Timestamps and duration
 # ---------------------------------------------------------------------------
 
+
 def test_missing_end_time_rejected():
     segment = _segment()
     del segment["end_time"]
@@ -118,13 +130,21 @@ def test_missing_start_time_rejected():
 
 
 def test_none_and_blank_timestamps_treated_as_missing_or_invalid():
-    assert "missing_end_time" in _codes(sv.validate_final_segment(_segment(end_time=None)))
-    assert "invalid_start_time" in _codes(sv.validate_final_segment(_segment(start_time="")))
+    assert "missing_end_time" in _codes(
+        sv.validate_final_segment(_segment(end_time=None))
+    )
+    assert "invalid_start_time" in _codes(
+        sv.validate_final_segment(_segment(start_time=""))
+    )
 
 
 def test_non_finite_timestamps_rejected():
-    assert "invalid_start_time" in _codes(sv.validate_final_segment(_segment(start_time=float("nan"))))
-    assert "invalid_end_time" in _codes(sv.validate_final_segment(_segment(end_time=float("inf"))))
+    assert "invalid_start_time" in _codes(
+        sv.validate_final_segment(_segment(start_time=float("nan")))
+    )
+    assert "invalid_end_time" in _codes(
+        sv.validate_final_segment(_segment(end_time=float("inf")))
+    )
 
 
 def test_numeric_strings_accepted():
@@ -157,7 +177,9 @@ def test_below_min_transcript_limited_is_warning_and_ok():
     # Only a proven source limit excuses an under-min window. ``under_min``
     # merely records that the window is short; a failed extension in a long
     # transcript must still fail validation.
-    result = sv.validate_final_segment(_segment(transcript_limited=True), min_duration=60.0)
+    result = sv.validate_final_segment(
+        _segment(transcript_limited=True), min_duration=60.0
+    )
     assert result["ok"] is True
     result = sv.validate_final_segment(_segment(under_min=True), min_duration=60.0)
     assert result["ok"] is False
@@ -175,6 +197,7 @@ def test_duration_above_max_rejected():
 # Media bounds
 # ---------------------------------------------------------------------------
 
+
 def test_out_of_media_bounds_rejected():
     result = sv.validate_final_segment(_segment(), media_duration=25.0)
     assert result["ok"] is False
@@ -189,13 +212,16 @@ def test_within_media_bounds_passes():
 
 
 def test_negative_start_out_of_bounds():
-    result = sv.validate_final_segment(_segment(start_time=-1.0, end_time=20.0), media_duration=120.0)
+    result = sv.validate_final_segment(
+        _segment(start_time=-1.0, end_time=20.0), media_duration=120.0
+    )
     assert "out_of_media_bounds" in _codes(result)
 
 
 # ---------------------------------------------------------------------------
 # Transcript
 # ---------------------------------------------------------------------------
+
 
 def test_empty_transcript_rejected():
     result = sv.validate_final_segment(_segment(transcript_text="   "))
@@ -205,19 +231,36 @@ def test_empty_transcript_rejected():
 
 
 def test_transcript_falls_back_to_window_analysis_and_text():
-    assert sv.validate_final_segment(_segment(transcript_text=None, window_analysis={"text": "a real window text here"}))["ok"] is True
-    assert sv.validate_final_segment(_segment(transcript_text=None, text="a real raw text here"))["ok"] is True
+    assert (
+        sv.validate_final_segment(
+            _segment(
+                transcript_text=None,
+                window_analysis={"text": "a real window text here"},
+            )
+        )["ok"]
+        is True
+    )
+    assert (
+        sv.validate_final_segment(
+            _segment(transcript_text=None, text="a real raw text here")
+        )["ok"]
+        is True
+    )
 
 
 def test_short_transcript_is_warning_not_error():
-    result = sv.validate_final_segment(_segment(transcript_text="too short"), min_lexical_words=5)
+    result = sv.validate_final_segment(
+        _segment(transcript_text="too short"), min_lexical_words=5
+    )
     assert result["ok"] is True
     assert "short_transcript" in _warning_codes(result)
     assert result["checks"]["transcript_present"] is True
 
 
 def test_transcript_text_argument_overrides_segment():
-    result = sv.validate_final_segment(_segment(transcript_text=""), transcript_text="override text wins")
+    result = sv.validate_final_segment(
+        _segment(transcript_text=""), transcript_text="override text wins"
+    )
     assert result["ok"] is True
     assert result["checks"]["transcript_present"] is True
 
@@ -225,6 +268,7 @@ def test_transcript_text_argument_overrides_segment():
 # ---------------------------------------------------------------------------
 # Truncation
 # ---------------------------------------------------------------------------
+
 
 def test_mid_sentence_window_flags_rejected():
     for flag in ("starts_mid_sentence", "ends_mid_sentence"):
@@ -236,18 +280,24 @@ def test_mid_sentence_window_flags_rejected():
 
 
 def test_quality_flag_mid_sentence_rejected():
-    result = sv.validate_final_segment(_segment(quality_flags=["ends mid-sentence after a dangling word"]))
+    result = sv.validate_final_segment(
+        _segment(quality_flags=["ends mid-sentence after a dangling word"])
+    )
     assert "sentence_truncation" in _codes(result)
 
 
 def test_quality_flag_word_boundary_rejected():
-    result = sv.validate_final_segment(_segment(quality_flags=["starts at a mid-word word_boundary"]))
+    result = sv.validate_final_segment(
+        _segment(quality_flags=["starts at a mid-word word_boundary"])
+    )
     assert "word_truncation" in _codes(result)
     assert result["checks"]["no_word_truncation"] is False
 
 
 def test_ends_incomplete_is_warning():
-    result = sv.validate_final_segment(_segment(window_analysis={"ends_incomplete": True}))
+    result = sv.validate_final_segment(
+        _segment(window_analysis={"ends_incomplete": True})
+    )
     assert result["ok"] is True
     assert "incomplete_ending" in _warning_codes(result)
 
@@ -256,21 +306,28 @@ def test_ends_incomplete_is_warning():
 # Edge silence
 # ---------------------------------------------------------------------------
 
+
 def test_excessive_edge_silence_rejected():
-    result = sv.validate_final_segment(_segment(window_analysis={"leading_silence": 5.0}))
+    result = sv.validate_final_segment(
+        _segment(window_analysis={"leading_silence": 5.0})
+    )
     assert result["ok"] is False
     assert "excessive_edge_silence" in _codes(result)
     assert result["checks"]["edge_silence_ok"] is False
 
 
 def test_edge_silence_near_limit_is_warning():
-    result = sv.validate_final_segment(_segment(window_analysis={"trailing_silence": 1.5}))
+    result = sv.validate_final_segment(
+        _segment(window_analysis={"trailing_silence": 1.5})
+    )
     assert result["ok"] is True
     assert "edge_silence_warning" in _warning_codes(result)
 
 
 def test_custom_edge_silence_limit():
-    result = sv.validate_final_segment(_segment(window_analysis={"leading_silence": 3.0}), max_edge_silence=3.5)
+    result = sv.validate_final_segment(
+        _segment(window_analysis={"leading_silence": 3.0}), max_edge_silence=3.5
+    )
     assert result["ok"] is True
 
 
@@ -278,8 +335,14 @@ def test_custom_edge_silence_limit():
 # Title
 # ---------------------------------------------------------------------------
 
+
 def test_title_rejected_is_error_with_reasons():
-    segment = _segment(title_validation={"status": "rejected", "reasons": ["unsupported claim about the guest"]})
+    segment = _segment(
+        title_validation={
+            "status": "rejected",
+            "reasons": ["unsupported claim about the guest"],
+        }
+    )
     result = sv.validate_final_segment(segment)
     assert result["ok"] is False
     assert "title_rejected" in _codes(result)
@@ -320,15 +383,26 @@ def test_title_validation_read_from_title_data():
 
 
 def test_title_factual_validation_block_derived_status():
-    segment = _segment(title_validation={"matches_transcript": True, "contains_hallucinated_fact": False})
+    segment = _segment(
+        title_validation={
+            "matches_transcript": True,
+            "contains_hallucinated_fact": False,
+        }
+    )
     assert sv.validate_final_segment(segment)["checks"]["title_status"] == "verified"
-    hallu = _segment(title_validation={"matches_transcript": False, "contains_hallucinated_fact": True})
+    hallu = _segment(
+        title_validation={
+            "matches_transcript": False,
+            "contains_hallucinated_fact": True,
+        }
+    )
     assert sv.validate_final_segment(hallu)["checks"]["title_status"] == "rejected"
 
 
 # ---------------------------------------------------------------------------
 # Safety and duplication
 # ---------------------------------------------------------------------------
+
 
 def test_safety_blocked_rejected():
     result = sv.validate_final_segment(_segment(safety_status="blocked"))
@@ -374,14 +448,20 @@ def test_temporal_duplicate_rejected():
 # Immutability / unknown fields
 # ---------------------------------------------------------------------------
 
+
 def test_unknown_fields_pass():
-    result = sv.validate_final_segment(_segment(future_field="whatever", another=[1, 2, 3]))
+    result = sv.validate_final_segment(
+        _segment(future_field="whatever", another=[1, 2, 3])
+    )
     assert result["ok"] is True
 
 
 def test_input_segment_not_mutated():
-    segment = _segment(window_analysis={"leading_silence": 5.0, "starts_mid_sentence": True},
-                       quality_flags=["ends mid-word"], semantic_duplicate=True)
+    segment = _segment(
+        window_analysis={"leading_silence": 5.0, "starts_mid_sentence": True},
+        quality_flags=["ends mid-word"],
+        semantic_duplicate=True,
+    )
     snapshot = copy.deepcopy(segment)
     sv.validate_final_segment(segment)
     assert segment == snapshot
@@ -396,6 +476,7 @@ def test_is_publishable_segment_helper():
 # ---------------------------------------------------------------------------
 # Batch aggregation
 # ---------------------------------------------------------------------------
+
 
 def test_validate_final_segments_aggregates():
     segments = [
@@ -422,6 +503,9 @@ def test_validate_final_segments_all_valid():
 
 def test_validate_final_segments_handles_empty_and_none():
     assert sv.validate_final_segments([]) == {
-        "ok": True, "results": [], "invalid_indices": [], "error_count": 0,
+        "ok": True,
+        "results": [],
+        "invalid_indices": [],
+        "error_count": 0,
     }
     assert sv.validate_final_segments(None)["ok"] is True

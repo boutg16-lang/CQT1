@@ -35,7 +35,7 @@ faster-whisper، فقد يموت عند الاستيراد نفسه. الآن:
 
 ```python
 if VIRALCUTTER_TRANSCRIPTION_BACKEND == "faster-whisper":
-    whisperx = None   # لا تلمس المكتبة الأصلية إطلاقاً
+    whisperx = None  # لا تلمس المكتبة الأصلية إطلاقاً
 ```
 
 فيصل التنفيذ إلى faster-whisper دون المرور بالمسار المنهار.

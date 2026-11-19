@@ -21,6 +21,7 @@ Setup (once):
 The OAuth token is stored at ~/.viralcutter/analytics_token.json (read-only
 scopes only — this tool can never modify anything on your channel).
 """
+
 import argparse
 import json
 import os
@@ -37,12 +38,15 @@ SCOPES = [
 # Auth (mirrors upload_gate's pattern)
 # --------------------------------------------------------------------------
 def _secrets_path():
-    return os.getenv("YT_CLIENT_SECRETS_FILE") or os.path.join(os.getcwd(), "client_secrets.json")
+    return os.getenv("YT_CLIENT_SECRETS_FILE") or os.path.join(
+        os.getcwd(), "client_secrets.json"
+    )
 
 
 def _token_path():
     return os.getenv(TOKEN_ENV) or os.path.join(
-        os.path.expanduser("~"), ".viralcutter", "analytics_token.json")
+        os.path.expanduser("~"), ".viralcutter", "analytics_token.json"
+    )
 
 
 def load_credentials():
@@ -56,7 +60,8 @@ def load_credentials():
             "     (OAuth 2.0 Client ID → Desktop app)\n"
             "  2) Enable 'YouTube Data API v3' + 'YouTube Analytics API' in the console\n"
             "  3) Save the JSON as client_secrets.json (or set YT_CLIENT_SECRETS_FILE)\n"
-            "  Then run: python -m scripts.analytics --check")
+            "  Then run: python -m scripts.analytics --check"
+        )
 
     import google.auth.transport.requests as g_requests
     from google.oauth2.credentials import Credentials
@@ -68,8 +73,11 @@ def load_credentials():
         if creds and creds.valid:
             return creds
     if not os.path.exists(secrets):
-        raise RuntimeError("client_secrets.json not found (set YT_CLIENT_SECRETS_FILE).")
+        raise RuntimeError(
+            "client_secrets.json not found (set YT_CLIENT_SECRETS_FILE)."
+        )
     from google_auth_oauthlib.flow import InstalledAppFlow
+
     flow = InstalledAppFlow.from_client_secrets_file(secrets, SCOPES)
     creds = flow.run_local_server(port=0, prompt="consent")
     os.makedirs(os.path.dirname(token_path), exist_ok=True)
@@ -82,10 +90,14 @@ def _build_services():
     try:
         from googleapiclient.discovery import build
     except ImportError:
-        raise RuntimeError("analytics needs: pip install -r requirements-upload.txt") from None
+        raise RuntimeError(
+            "analytics needs: pip install -r requirements-upload.txt"
+        ) from None
     creds = load_credentials()
-    return (build("youtubeAnalytics", "v2", credentials=creds),
-            build("youtube", "v3", credentials=creds))
+    return (
+        build("youtubeAnalytics", "v2", credentials=creds),
+        build("youtube", "v3", credentials=creds),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -93,6 +105,7 @@ def _build_services():
 # --------------------------------------------------------------------------
 def _date_range(days):
     import datetime
+
     end = datetime.date.today()
     start = end - datetime.timedelta(days=days - 1)
     return start.isoformat(), end.isoformat()
@@ -100,34 +113,48 @@ def _date_range(days):
 
 def fetch_summary(ya, days=28):
     start, end = _date_range(days)
-    resp = ya.reports().query(
-        ids="channel==MINE",
-        startDate=start, endDate=end,
-        metrics="views,estimatedMinutesWatched,averageViewDuration,"
-                "likes,comments,subscribersGained,shares",
-    ).execute()
+    resp = (
+        ya.reports()
+        .query(
+            ids="channel==MINE",
+            startDate=start,
+            endDate=end,
+            metrics="views,estimatedMinutesWatched,averageViewDuration,"
+            "likes,comments,subscribersGained,shares",
+        )
+        .execute()
+    )
     rows = (resp.get("rows") or [[]])[0]
     cols = [c["name"] for c in resp.get("columnHeaders", [])]
-    return {"days": days, "start": start, "end": end,
-            "metrics": dict(zip(cols, rows, strict=False))}
+    return {
+        "days": days,
+        "start": start,
+        "end": end,
+        "metrics": dict(zip(cols, rows, strict=False)),
+    }
 
 
 def fetch_top_videos(ya, yt, days=28, limit=10):
     start, end = _date_range(days)
-    resp = ya.reports().query(
-        ids="channel==MINE",
-        startDate=start, endDate=end,
-        metrics="views,estimatedMinutesWatched,averageViewDuration",
-        dimensions="video",
-        sort="-views",
-        maxResults=limit,
-    ).execute()
+    resp = (
+        ya.reports()
+        .query(
+            ids="channel==MINE",
+            startDate=start,
+            endDate=end,
+            metrics="views,estimatedMinutesWatched,averageViewDuration",
+            dimensions="video",
+            sort="-views",
+            maxResults=limit,
+        )
+        .execute()
+    )
     rows = resp.get("rows") or []
     video_ids = [r[0] for r in rows if r and r[0] != "(none)"]
     titles = {}
     if video_ids:
         for i in range(0, len(video_ids), 50):
-            chunk = ",".join(video_ids[i:i + 50])
+            chunk = ",".join(video_ids[i : i + 50])
             try:
                 vresp = yt.videos().list(id=chunk, part="snippet").execute()
                 for item in vresp.get("items", []):
@@ -137,9 +164,15 @@ def fetch_top_videos(ya, yt, days=28, limit=10):
     out = []
     for r in rows:
         vid, views, minutes, avg_dur = (list(r) + [None, None, None, None])[:4]
-        out.append({"video_id": vid, "title": titles.get(vid, "(none)"),
-                    "views": views or 0, "watch_minutes": round(minutes or 0, 1),
-                    "avg_duration_s": round(avg_dur or 0, 1)})
+        out.append(
+            {
+                "video_id": vid,
+                "title": titles.get(vid, "(none)"),
+                "views": views or 0,
+                "watch_minutes": round(minutes or 0, 1),
+                "avg_duration_s": round(avg_dur or 0, 1),
+            }
+        )
     return {"days": days, "top": out}
 
 
@@ -180,9 +213,10 @@ def summarize_retention(points):
     # "the drop"; the reported point is the centre of the worst segment.
     smoothed = []
     for index in range(len(clean)):
-        window = clean[max(0, index - 1):index + 2]
-        smoothed.append((clean[index][0],
-                         sum(watch for _r, watch in window) / len(window)))
+        window = clean[max(0, index - 1) : index + 2]
+        smoothed.append(
+            (clean[index][0], sum(watch for _r, watch in window) / len(window))
+        )
     max_drop = 0.0
     drop_at = None
     for index in range(1, len(smoothed)):
@@ -203,40 +237,67 @@ def summarize_retention(points):
 def fetch_retention_curve(ya, video_id, days=28):
     """Per-video audience-retention curve (elapsedVideoTimeRatio report)."""
     start, end = _date_range(days)
-    resp = ya.reports().query(
-        ids="channel==MINE",
-        startDate=start, endDate=end,
-        metrics="audienceWatchRatio,relativeRetentionPerformance",
-        dimensions="elapsedVideoTimeRatio",
-        filters="video=={}".format(video_id),
-        sort="elapsedVideoTimeRatio",
-        maxResults=200,
-    ).execute()
+    resp = (
+        ya.reports()
+        .query(
+            ids="channel==MINE",
+            startDate=start,
+            endDate=end,
+            metrics="audienceWatchRatio,relativeRetentionPerformance",
+            dimensions="elapsedVideoTimeRatio",
+            filters="video=={}".format(video_id),
+            sort="elapsedVideoTimeRatio",
+            maxResults=200,
+        )
+        .execute()
+    )
     points = []
     for row in resp.get("rows") or []:
         try:
-            points.append({"ratio": float(row[0]),
-                           "watch": float(row[1]),
-                           "relative": float(row[2]) if row[2] is not None else None})
+            points.append(
+                {
+                    "ratio": float(row[0]),
+                    "watch": float(row[1]),
+                    "relative": float(row[2]) if row[2] is not None else None,
+                }
+            )
         except (TypeError, ValueError, IndexError):
             continue
-    return {"video_id": video_id, "days": days, "start": start, "end": end,
-            "points": points, "summary": summarize_retention(points)}
+    return {
+        "video_id": video_id,
+        "days": days,
+        "start": start,
+        "end": end,
+        "points": points,
+        "summary": summarize_retention(points),
+    }
 
 
 def fetch_trends(ya, days=28):
     start, end = _date_range(days)
-    resp = ya.reports().query(
-        ids="channel==MINE",
-        startDate=start, endDate=end,
-        metrics="views,estimatedMinutesWatched",
-        dimensions="day",
-        sort="day",
-    ).execute()
+    resp = (
+        ya.reports()
+        .query(
+            ids="channel==MINE",
+            startDate=start,
+            endDate=end,
+            metrics="views,estimatedMinutesWatched",
+            dimensions="day",
+            sort="day",
+        )
+        .execute()
+    )
     rows = resp.get("rows") or []
-    return {"days": days, "start": start, "end": end,
-            "points": [{"date": r[0], "views": r[1], "watch_minutes": round(r[2], 1)}
-                       for r in rows if len(r) >= 3]}
+    return {
+        "days": days,
+        "start": start,
+        "end": end,
+        "points": [
+            {"date": r[0], "views": r[1], "watch_minutes": round(r[2], 1)}
+            for r in rows
+            if len(r) >= 3
+        ],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -255,22 +316,28 @@ def _fmt_int(n):
 
 def format_summary(summary):
     m = summary["metrics"]
-    lines = ["📈 Channel performance (%d days: %s → %s)" % (
-        summary["days"], summary["start"], summary["end"]),
+    lines = [
+        "📈 Channel performance (%d days: %s → %s)"
+        % (summary["days"], summary["start"], summary["end"]),
         "  views:                    %s" % _fmt_int(m.get("views", 0)),
-        "  watch time:               %s min" % _fmt_int(m.get("estimatedMinutesWatched", 0)),
+        "  watch time:               %s min"
+        % _fmt_int(m.get("estimatedMinutesWatched", 0)),
         "  avg view duration:        %ss" % round(m.get("averageViewDuration") or 0, 1),
-        "  likes / comments:         %s / %s" % (_fmt_int(m.get("likes", 0)), _fmt_int(m.get("comments", 0))),
+        "  likes / comments:         %s / %s"
+        % (_fmt_int(m.get("likes", 0)), _fmt_int(m.get("comments", 0))),
         "  shares:                   %s" % _fmt_int(m.get("shares", 0)),
-        "  new subscribers:          %s" % _fmt_int(m.get("subscribersGained", 0))]
+        "  new subscribers:          %s" % _fmt_int(m.get("subscribersGained", 0)),
+    ]
     return "\n".join(lines)
 
 
 def format_top(top):
     lines = ["🏆 Top videos (%d days):" % top["days"]]
     for i, v in enumerate(top["top"], 1):
-        lines.append("  %2d. %-50s %s views · %ss avg" % (
-            i, (v["title"] or "")[:50], _fmt_int(v["views"]), v["avg_duration_s"]))
+        lines.append(
+            "  %2d. %-50s %s views · %ss avg"
+            % (i, (v["title"] or "")[:50], _fmt_int(v["views"]), v["avg_duration_s"])
+        )
     return "\n".join(lines)
 
 
@@ -280,8 +347,10 @@ def format_trends(trends):
     total = sum(p["views"] for p in pts)
     if pts:
         peak = max(pts, key=lambda p: p["views"])
-        lines.append("  total: %s · peak: %s on %s" % (
-            _fmt_int(total), _fmt_int(peak["views"]), peak["date"]))
+        lines.append(
+            "  total: %s · peak: %s on %s"
+            % (_fmt_int(total), _fmt_int(peak["views"]), peak["date"])
+        )
     else:
         lines.append("  no data yet — publish some Shorts first!")
     return "\n".join(lines)
@@ -291,22 +360,28 @@ def format_retention(curve, limit=20):
     summary = curve.get("summary") or {}
     if not summary:
         return "📉 Retention: no curve for %s yet (video too new or no views)." % (
-            curve.get("video_id"))
-    lines = ["📉 Retention curve — %s (%d buckets)" % (
-        curve.get("video_id"), summary.get("points", 0)),
+            curve.get("video_id")
+        )
+    lines = [
+        "📉 Retention curve — %s (%d buckets)"
+        % (curve.get("video_id"), summary.get("points", 0)),
         "  hook (first 10%%):  %.1f%%" % ((summary.get("hook_ratio") or 0) * 100),
         "  middle (40-60%%):   %.1f%%" % ((summary.get("mid_ratio") or 0) * 100),
         "  ending (last 10%%): %.1f%%" % ((summary.get("end_ratio") or 0) * 100),
-        "  biggest drop:      %s%% of the clip (-%.1f points)" % (
+        "  biggest drop:      %s%% of the clip (-%.1f points)"
+        % (
             round((summary.get("max_drop_at") or 0) * 100, 1),
-            summary.get("max_drop_pct") or 0.0)]
+            summary.get("max_drop_pct") or 0.0,
+        ),
+    ]
     points = curve.get("points") or []
     if points:
         lines.append("  curve (ratio → watch):")
         step = max(1, len(points) // max(1, int(limit)))
         for point in points[::step]:
-            lines.append("    %5.1f%% → %5.1f%%" % (
-                point["ratio"] * 100, point["watch"] * 100))
+            lines.append(
+                "    %5.1f%% → %5.1f%%" % (point["ratio"] * 100, point["watch"] * 100)
+            )
     return "\n".join(lines)
 
 
@@ -326,16 +401,29 @@ def build_report(summary=None, top=None, trends=None):
 # --------------------------------------------------------------------------
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="ViralCutter performance analytics — YouTube Analytics API (5.4)")
-    parser.add_argument("--check", action="store_true", help="verify OAuth setup + token")
+        description="ViralCutter performance analytics — YouTube Analytics API (5.4)"
+    )
+    parser.add_argument(
+        "--check", action="store_true", help="verify OAuth setup + token"
+    )
     parser.add_argument("--summary", action="store_true", help="channel totals")
     parser.add_argument("--top", action="store_true", help="top videos")
     parser.add_argument("--trends", action="store_true", help="daily views")
-    parser.add_argument("--retention", default=None, metavar="VIDEO_ID",
-                        help="audience-retention curve for one video")
-    parser.add_argument("--days", type=int, default=28, help="lookback days (default 28)")
-    parser.add_argument("--limit", type=int, default=10, help="top N videos (default 10)")
-    parser.add_argument("--export", default=None, help="also write the report JSON to this path")
+    parser.add_argument(
+        "--retention",
+        default=None,
+        metavar="VIDEO_ID",
+        help="audience-retention curve for one video",
+    )
+    parser.add_argument(
+        "--days", type=int, default=28, help="lookback days (default 28)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=10, help="top N videos (default 10)"
+    )
+    parser.add_argument(
+        "--export", default=None, help="also write the report JSON to this path"
+    )
     args = parser.parse_args(argv)
 
     if args.check:
@@ -361,8 +449,11 @@ def main(argv=None):
         summary = fetch_summary(ya, args.days) if args.summary else None
         top = fetch_top_videos(ya, yt, args.days, args.limit) if args.top else None
         trends = fetch_trends(ya, args.days) if args.trends else None
-        curve = (fetch_retention_curve(ya, args.retention, args.days)
-                 if args.retention else None)
+        curve = (
+            fetch_retention_curve(ya, args.retention, args.days)
+            if args.retention
+            else None
+        )
     except Exception as e:
         print("❌ analytics failed: %s" % e)
         return 1

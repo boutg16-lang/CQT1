@@ -1,4 +1,5 @@
 """Append-only, secret-free publish history for long-running projects."""
+
 from __future__ import annotations
 
 import hashlib
@@ -48,15 +49,27 @@ def find_success(project_path, *, platform, video_path):
             continue
         if event.get("status") not in SUCCESS_STATUSES:
             continue
-        same_file = fingerprint is not None and event.get("file_fingerprint") == fingerprint
+        same_file = (
+            fingerprint is not None and event.get("file_fingerprint") == fingerprint
+        )
         same_variant = bool(base_name) and event.get("variant_of") == base_name
         if same_file or same_variant:
             return event
     return None
 
 
-def record(project_path, *, platform, video_path, title, result=None, error=None,
-           privacy_status=None, publish_at=None, extra=None):
+def record(
+    project_path,
+    *,
+    platform,
+    video_path,
+    title,
+    result=None,
+    error=None,
+    privacy_status=None,
+    publish_at=None,
+    extra=None,
+):
     if not project_path or not os.path.isdir(project_path):
         return False
     event = {
@@ -64,7 +77,11 @@ def record(project_path, *, platform, video_path, title, result=None, error=None
         "platform": platform,
         "video": os.path.basename(video_path or ""),
         "title": (title or "")[:200],
-        "status": (result or {}).get("status") if isinstance(result, dict) else "failed" if error else "unknown",
+        "status": (result or {}).get("status")
+        if isinstance(result, dict)
+        else "failed"
+        if error
+        else "unknown",
         "privacy_status": privacy_status,
         "publish_at": publish_at,
         "file_fingerprint": file_fingerprint(video_path),
@@ -73,8 +90,14 @@ def record(project_path, *, platform, video_path, title, result=None, error=None
     # info…) so the performance-learning loop can correlate *content* with
     # outcomes, not just numeric scores. Simple scalars only — never paths.
     if isinstance(extra, dict):
-        for key in ("hashtags", "topic", "angle", "hook_type",
-                    "thumbnail", "variant_of"):
+        for key in (
+            "hashtags",
+            "topic",
+            "angle",
+            "hook_type",
+            "thumbnail",
+            "variant_of",
+        ):
             if extra.get(key) is not None:
                 event[key] = str(extra.get(key))[:1000]
     if isinstance(result, dict):

@@ -26,25 +26,31 @@ REMOTE_CONFIG = {"openai": {"base_url": "https://api.example.com/v1"}}
 
 
 class TestIsLocalUrl:
-    @pytest.mark.parametrize("url", [
-        "http://localhost:11434/v1",
-        "https://localhost:8080/",
-        "http://127.0.0.1:11434/v1",
-        "http://[::1]:11434/v1",
-        "http://0.0.0.0:11434/v1",
-        "HTTP://LOCALHOST:11434/v1",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://localhost:11434/v1",
+            "https://localhost:8080/",
+            "http://127.0.0.1:11434/v1",
+            "http://[::1]:11434/v1",
+            "http://0.0.0.0:11434/v1",
+            "HTTP://LOCALHOST:11434/v1",
+        ],
+    )
     def test_local_urls(self, url):
         assert se._is_local_url(url)
 
-    @pytest.mark.parametrize("url", [
-        "https://api.openai.com/v1",
-        "http://example.com/v1",
-        "http://localhost.evil.com/v1",
-        "http://notlocalhost:11434/v1",
-        "",
-        None,
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://api.openai.com/v1",
+            "http://example.com/v1",
+            "http://localhost.evil.com/v1",
+            "http://notlocalhost:11434/v1",
+            "",
+            None,
+        ],
+    )
     def test_non_local_urls(self, url):
         assert not se._is_local_url(url)
 
@@ -58,8 +64,11 @@ class TestAutoKey:
         assert se._auto_key(REMOTE_CONFIG) == "https://api.example.com/v1"
 
     def test_unresolvable_config_returns_empty(self, monkeypatch):
-        monkeypatch.setattr(openai_compat, "resolve_settings",
-                            lambda config: (_ for _ in ()).throw(RuntimeError("bad")))
+        monkeypatch.setattr(
+            openai_compat,
+            "resolve_settings",
+            lambda config: (_ for _ in ()).throw(RuntimeError("bad")),
+        )
         assert se._auto_key(LOCAL_CONFIG) == ""
 
 
@@ -95,15 +104,19 @@ class TestEnabled:
 
     def test_no_auto_without_allow_auto(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(openai_compat, "list_models",
-                            lambda **kw: calls.append(1) or ["bge-m3"])
+        monkeypatch.setattr(
+            openai_compat, "list_models", lambda **kw: calls.append(1) or ["bge-m3"]
+        )
         assert se.enabled(LOCAL_CONFIG) is False
         assert calls == []
 
     def test_auto_enable_local_server_with_embedding_model(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(openai_compat, "list_models",
-                            lambda **kw: calls.append(1) or ["llama3.1", "bge-m3"])
+        monkeypatch.setattr(
+            openai_compat,
+            "list_models",
+            lambda **kw: calls.append(1) or ["llama3.1", "bge-m3"],
+        )
         assert se.enabled(LOCAL_CONFIG, allow_auto=True) is True
         assert se._AUTO_MODELS["http://localhost:11434/v1"] == "bge-m3"
         # Second call reuses the cached detection (no second probe).
@@ -111,26 +124,30 @@ class TestEnabled:
         assert len(calls) == 1
 
     def test_auto_enable_picks_longest_matching_model(self, monkeypatch):
-        monkeypatch.setattr(openai_compat, "list_models",
-                            lambda **kw: ["bge-m3", "nomic-embed-text-v1"])
+        monkeypatch.setattr(
+            openai_compat, "list_models", lambda **kw: ["bge-m3", "nomic-embed-text-v1"]
+        )
         assert se.enabled(LOCAL_CONFIG, allow_auto=True) is True
         assert se._AUTO_MODELS["http://localhost:11434/v1"] == "nomic-embed-text-v1"
 
     def test_auto_enable_no_embedding_model(self, monkeypatch):
-        monkeypatch.setattr(openai_compat, "list_models",
-                            lambda **kw: ["llama3.1", "mistral"])
+        monkeypatch.setattr(
+            openai_compat, "list_models", lambda **kw: ["llama3.1", "mistral"]
+        )
         assert se.enabled(LOCAL_CONFIG, allow_auto=True) is False
         assert "http://localhost:11434/v1" in se._AUTO_FAILED
 
     def test_auto_enable_never_probes_remote_servers(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(openai_compat, "list_models",
-                            lambda **kw: calls.append(1) or ["bge-m3"])
+        monkeypatch.setattr(
+            openai_compat, "list_models", lambda **kw: calls.append(1) or ["bge-m3"]
+        )
         assert se.enabled(REMOTE_CONFIG, allow_auto=True) is False
         assert calls == []
 
     def test_auto_enable_list_failure_is_cached(self, monkeypatch):
         calls = []
+
         def boom(**kw):
             calls.append(1)
             raise ConnectionError("down")
@@ -195,16 +212,24 @@ class TestEmbedTexts:
     def test_duplicate_texts_embedded_once(self, monkeypatch):
         self._enable(monkeypatch)
         calls = []
-        monkeypatch.setattr(openai_compat, "embed",
-                            lambda texts, config=None: calls.append(list(texts)) or [[0.1]] * len(texts))
+        monkeypatch.setattr(
+            openai_compat,
+            "embed",
+            lambda texts, config=None: (
+                calls.append(list(texts)) or [[0.1]] * len(texts)
+            ),
+        )
         assert se.embed_texts(["same", "same", "other"], config=None) is not None
         assert calls == [["same", "other"]]
 
     def test_whitespace_is_stripped_before_embedding(self, monkeypatch):
         self._enable(monkeypatch)
         calls = []
-        monkeypatch.setattr(openai_compat, "embed",
-                            lambda texts, config=None: calls.append(list(texts)) or [[0.1]])
+        monkeypatch.setattr(
+            openai_compat,
+            "embed",
+            lambda texts, config=None: calls.append(list(texts)) or [[0.1]],
+        )
         se.embed_texts(["  padded  "], config=None)
         assert calls == [["padded"]]
 
@@ -232,22 +257,29 @@ class TestEmbedTexts:
 
     def test_generic_exception_disables_with_type_name(self, monkeypatch):
         self._enable(monkeypatch)
-        monkeypatch.setattr(openai_compat, "embed",
-                            lambda texts, config=None: (_ for _ in ()).throw(ValueError("x")))
+        monkeypatch.setattr(
+            openai_compat,
+            "embed",
+            lambda texts, config=None: (_ for _ in ()).throw(ValueError("x")),
+        )
         assert se.embed_texts(["hello"], config=None) is None
         assert se.disabled_reason() == "ValueError"
 
     def test_vector_count_mismatch_returns_none(self, monkeypatch):
         self._enable(monkeypatch)
-        monkeypatch.setattr(openai_compat, "embed",
-                            lambda texts, config=None: [[0.1]])  # 1 vector for 2 texts
+        monkeypatch.setattr(
+            openai_compat, "embed", lambda texts, config=None: [[0.1]]
+        )  # 1 vector for 2 texts
         assert se.embed_texts(["a", "b"], config=None) is None
         assert se.disabled_reason() == "vector count mismatch"
 
     def test_reset_cache_clears_reason_and_cache(self, monkeypatch):
         self._enable(monkeypatch)
-        monkeypatch.setattr(openai_compat, "embed",
-                            lambda texts, config=None: (_ for _ in ()).throw(ValueError("x")))
+        monkeypatch.setattr(
+            openai_compat,
+            "embed",
+            lambda texts, config=None: (_ for _ in ()).throw(ValueError("x")),
+        )
         se.embed_texts(["hello"], config=None)
         assert se.disabled_reason() == "ValueError"
         se.reset_cache()

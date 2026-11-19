@@ -22,8 +22,8 @@ class _FakeResult:
 def _stub_encoder(monkeypatch, ffmpeg_stdout, works):
     """Stub subprocess.run (ffmpeg -encoders) and scripts.ffmpeg_toolchain."""
     monkeypatch.setattr(
-        subprocess, "run",
-        lambda *a, **k: _FakeResult(stdout=ffmpeg_stdout))
+        subprocess, "run", lambda *a, **k: _FakeResult(stdout=ffmpeg_stdout)
+    )
     stub = types.ModuleType("scripts.ffmpeg_toolchain")
     stub.encoder_works = lambda codec: works.get(codec, False)
     monkeypatch.setitem(sys.modules, "scripts.ffmpeg_toolchain", stub)
@@ -33,11 +33,12 @@ def _stub_encoder(monkeypatch, ffmpeg_stdout, works):
 
 
 def test_filter_value_escapes_colons_and_quotes():
-    assert burn_subtitles._ffmpeg_filter_value("C:\\Videos\\my file.ass") == \
-        "C\\:/Videos/my file.ass"
+    assert (
+        burn_subtitles._ffmpeg_filter_value("C:\\Videos\\my file.ass")
+        == "C\\:/Videos/my file.ass"
+    )
     assert burn_subtitles._ffmpeg_filter_value("it's.ass") == "it\\'s.ass"
-    assert burn_subtitles._ffmpeg_filter_value("D:\\a:b\\c.ass") == \
-        "D\\:/a\\:b/c.ass"
+    assert burn_subtitles._ffmpeg_filter_value("D:\\a:b\\c.ass") == "D\\:/a\\:b/c.ass"
 
 
 def test_filter_value_empty_and_none():
@@ -87,21 +88,22 @@ def test_fonts_dir_returns_repo_fonts_when_present(monkeypatch, tmp_path):
 
 
 def test_detect_best_encoder_prefers_nvenc(monkeypatch):
-    _stub_encoder(monkeypatch, "h264_nvenc h264_amf h264_qsv",
-                  {"h264_nvenc": True})
+    _stub_encoder(monkeypatch, "h264_nvenc h264_amf h264_qsv", {"h264_nvenc": True})
     assert burn_subtitles._detect_best_encoder() == ("h264_nvenc", "p1")
 
 
 def test_detect_best_encoder_skips_listed_but_broken_encoder(monkeypatch):
     # nvenc is compiled in but encoder_works says it fails on this box.
-    _stub_encoder(monkeypatch, "h264_nvenc h264_amf h264_qsv",
-                  {"h264_nvenc": False, "h264_amf": True})
+    _stub_encoder(
+        monkeypatch,
+        "h264_nvenc h264_amf h264_qsv",
+        {"h264_nvenc": False, "h264_amf": True},
+    )
     assert burn_subtitles._detect_best_encoder() == ("h264_amf", "quality")
 
 
 def test_detect_best_encoder_falls_back_to_qsv(monkeypatch):
-    _stub_encoder(monkeypatch, "h264_qsv h264_videotoolbox",
-                  {"h264_qsv": True})
+    _stub_encoder(monkeypatch, "h264_qsv h264_videotoolbox", {"h264_qsv": True})
     assert burn_subtitles._detect_best_encoder() == ("h264_qsv", "veryfast")
 
 
@@ -122,8 +124,8 @@ def test_detect_best_encoder_cpu_when_toolchain_has_no_encoder_works(monkeypatch
     # scripts.ffmpeg_toolchain imports but lacks encoder_works -> the
     # fallback treats every encoder as not working.
     monkeypatch.setattr(
-        subprocess, "run",
-        lambda *a, **k: _FakeResult(stdout="h264_nvenc h264_amf"))
+        subprocess, "run", lambda *a, **k: _FakeResult(stdout="h264_nvenc h264_amf")
+    )
     stub = types.ModuleType("scripts.ffmpeg_toolchain")
     monkeypatch.setitem(sys.modules, "scripts.ffmpeg_toolchain", stub)
     assert burn_subtitles._detect_best_encoder() == ("libx264", "ultrafast")
@@ -165,7 +167,8 @@ def test_burn_video_file_hardware_success(monkeypatch, tmp_path):
     _fake_toolchain(monkeypatch)
     cmds = _stub_ffmpeg(monkeypatch)
     ok, msg = burn_subtitles.burn_video_file(
-        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4"))
+        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4")
+    )
     assert ok is True
     assert msg == "h264_nvenc Success"
     assert len(cmds) == 1
@@ -181,7 +184,8 @@ def test_burn_video_file_hw_failure_falls_back_to_cpu(monkeypatch, tmp_path, cap
     _fake_toolchain(monkeypatch)
     cmds = _stub_ffmpeg(monkeypatch, fail_hw=True)
     ok, msg = burn_subtitles.burn_video_file(
-        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4"))
+        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4")
+    )
     assert ok is True
     assert msg == "CPU Success"
     assert len(cmds) == 2
@@ -193,7 +197,8 @@ def test_burn_video_file_both_fail_reports_fatal(monkeypatch, tmp_path):
     _fake_toolchain(monkeypatch)
     _stub_ffmpeg(monkeypatch, fail_hw=True, fail_cpu=True)
     ok, msg = burn_subtitles.burn_video_file(
-        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4"))
+        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4")
+    )
     assert ok is False
     assert "Fatal error burning subtitles" in msg
     assert "v.mp4" in msg
@@ -204,10 +209,12 @@ def test_burn_video_file_libx264_detected_goes_straight_to_cpu(monkeypatch, tmp_
     _fake_toolchain(monkeypatch)
     cmds = _stub_ffmpeg(monkeypatch)
     # Force the CPU path: pretend no hardware encoder is available.
-    monkeypatch.setattr(burn_subtitles, "_detect_best_encoder",
-                        lambda: ("libx264", "ultrafast"))
+    monkeypatch.setattr(
+        burn_subtitles, "_detect_best_encoder", lambda: ("libx264", "ultrafast")
+    )
     ok, msg = burn_subtitles.burn_video_file(
-        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4"))
+        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4")
+    )
     assert ok is True
     assert msg == "CPU Success"
     assert len(cmds) == 1
@@ -218,11 +225,17 @@ def test_burn_video_file_prefer_no_hw_skips_detection(monkeypatch, tmp_path):
     _fake_toolchain(monkeypatch)
     cmds = _stub_ffmpeg(monkeypatch)
     detected = []
-    monkeypatch.setattr(burn_subtitles, "_detect_best_encoder",
-                        lambda: detected.append(1) or ("h264_nvenc", "p1"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "_detect_best_encoder",
+        lambda: detected.append(1) or ("h264_nvenc", "p1"),
+    )
     ok, msg = burn_subtitles.burn_video_file(
-        str(tmp_path / "v.mp4"), str(tmp_path / "s.ass"), str(tmp_path / "o.mp4"),
-        prefer_hardware_acceleration=False)
+        str(tmp_path / "v.mp4"),
+        str(tmp_path / "s.ass"),
+        str(tmp_path / "o.mp4"),
+        prefer_hardware_acceleration=False,
+    )
     assert ok is True
     assert msg == "CPU Success"
     assert detected == []  # detection never ran
@@ -259,8 +272,11 @@ def test_burn_empty_final_folder_returns_none(tmp_path, capsys):
 def test_burn_skips_temp_video_no_audio(tmp_path, monkeypatch, capsys):
     _project(tmp_path, ["temp_video_no_audio.mp4"], [])
     calls = []
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: calls.append(a) or (True, "ok"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "burn_video_file",
+        lambda *a, **k: calls.append(a) or (True, "ok"),
+    )
     burn_subtitles.burn(str(tmp_path))
     assert calls == []
 
@@ -268,8 +284,11 @@ def test_burn_skips_temp_video_no_audio(tmp_path, monkeypatch, capsys):
 def test_burn_prefers_processed_subtitle(monkeypatch, tmp_path):
     _project(tmp_path, ["clip1.mp4"], ["clip1_processed.ass"])
     calls = []
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: calls.append(a) or (True, "ok"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "burn_video_file",
+        lambda *a, **k: calls.append(a) or (True, "ok"),
+    )
     burn_subtitles.burn(str(tmp_path))
     assert len(calls) == 1
     assert calls[0][1].endswith("clip1_processed.ass")
@@ -282,8 +301,11 @@ def test_burn_prefers_polished_folder(monkeypatch, tmp_path):
     polished.mkdir()
     (polished / "clip1.mp4").write_bytes(b"v")
     calls = []
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: calls.append(a) or (True, "ok"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "burn_video_file",
+        lambda *a, **k: calls.append(a) or (True, "ok"),
+    )
     burn_subtitles.burn(str(tmp_path))
     assert len(calls) == 1
     assert "final_polished" in calls[0][0]
@@ -292,8 +314,11 @@ def test_burn_prefers_polished_folder(monkeypatch, tmp_path):
 def test_burn_reports_missing_subtitle(monkeypatch, tmp_path, capsys):
     _project(tmp_path, ["clip1.mp4"], [])
     calls = []
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: calls.append(a) or (True, "ok"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "burn_video_file",
+        lambda *a, **k: calls.append(a) or (True, "ok"),
+    )
     burn_subtitles.burn(str(tmp_path))
     assert calls == []
     assert "Subtitle not found for: clip1" in capsys.readouterr().out
@@ -301,8 +326,9 @@ def test_burn_reports_missing_subtitle(monkeypatch, tmp_path, capsys):
 
 def test_burn_reports_failure(monkeypatch, tmp_path, capsys):
     _project(tmp_path, ["clip1.mp4"], ["clip1.ass"])
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: (False, "boom"))
+    monkeypatch.setattr(
+        burn_subtitles, "burn_video_file", lambda *a, **k: (False, "boom")
+    )
     burn_subtitles.burn(str(tmp_path))
     assert "Fail: boom" in capsys.readouterr().out
 
@@ -310,7 +336,10 @@ def test_burn_reports_failure(monkeypatch, tmp_path, capsys):
 def test_burn_non_video_files_ignored(monkeypatch, tmp_path):
     _project(tmp_path, ["notes.txt", "clip1.mp4"], ["clip1.ass"])
     calls = []
-    monkeypatch.setattr(burn_subtitles, "burn_video_file",
-                        lambda *a, **k: calls.append(a) or (True, "ok"))
+    monkeypatch.setattr(
+        burn_subtitles,
+        "burn_video_file",
+        lambda *a, **k: calls.append(a) or (True, "ok"),
+    )
     burn_subtitles.burn(str(tmp_path))
     assert len(calls) == 1

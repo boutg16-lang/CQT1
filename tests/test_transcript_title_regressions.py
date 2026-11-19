@@ -9,11 +9,13 @@ from pathlib import Path
 from scripts import create_viral_segments as cvs
 from scripts import title_factual, transcript_window
 
-TRANSCRIPT = [{
-    "start": 0.0,
-    "end": 2.5,
-    "text": "التسويق يحتاج صبر بصح الاستمرارية تصنع النتيجة.",
-}]
+TRANSCRIPT = [
+    {
+        "start": 0.0,
+        "end": 2.5,
+        "text": "التسويق يحتاج صبر بصح الاستمرارية تصنع النتيجة.",
+    }
+]
 WORDS = [
     {"start": 0.00, "end": 0.22, "word": "التسويق"},
     {"start": 0.27, "end": 0.50, "word": "يحتاج"},
@@ -37,11 +39,13 @@ def test_sentence_units_split_single_asr_block_at_short_darija_connector_pause()
 
 
 def test_sentence_units_split_unpunctuated_single_block_without_word_timings():
-    transcript = [{
-        "start": 0.0,
-        "end": 10.0,
-        "text": "التسويق يحتاج صبر بصح الاستمرارية تصنع النتيجة",
-    }]
+    transcript = [
+        {
+            "start": 0.0,
+            "end": 10.0,
+            "text": "التسويق يحتاج صبر بصح الاستمرارية تصنع النتيجة",
+        }
+    ]
 
     units = transcript_window.split_sentence_units(transcript)
 
@@ -67,11 +71,13 @@ def test_sentence_units_split_word_per_segment_when_pause_is_below_600ms():
 
 
 def test_analyze_window_uses_word_timings_for_exact_clip_text():
-    transcript = [{
-        "start": 0.0,
-        "end": 2.0,
-        "text": "قبل المقطع ٩٩ وبعده فقط.",
-    }]
+    transcript = [
+        {
+            "start": 0.0,
+            "end": 2.0,
+            "text": "قبل المقطع ٩٩ وبعده فقط.",
+        }
+    ]
     words = [
         {"start": 0.00, "end": 0.20, "word": "قبل"},
         {"start": 0.24, "end": 0.48, "word": "المقطع"},
@@ -80,20 +86,20 @@ def test_analyze_window_uses_word_timings_for_exact_clip_text():
         {"start": 1.46, "end": 1.80, "word": "فقط."},
     ]
 
-    analysis = transcript_window.analyze_window(
-        transcript, 1.10, 1.80, words=words)
+    analysis = transcript_window.analyze_window(transcript, 1.10, 1.80, words=words)
 
     assert analysis["text"] == "وبعده فقط."
-    assert "99" in title_factual.hallucinated_facts(
-        "المقطع 99", analysis["text"])
+    assert "99" in title_factual.hallucinated_facts("المقطع 99", analysis["text"])
 
 
 def test_malformed_whisperx_word_timings_are_logged_and_fall_back(tmp_path, caplog):
     (tmp_path / "input.json").write_text("{broken", encoding="utf-8")
 
     assert transcript_window.load_word_timings(tmp_path) == []
-    assert any("Could not read WhisperX word timings" in record.message
-               for record in caplog.records)
+    assert any(
+        "Could not read WhisperX word timings" in record.message
+        for record in caplog.records
+    )
 
 
 def test_refine_boundaries_recovers_connector_using_word_timing_in_one_block():
@@ -119,15 +125,18 @@ def test_arabic_cardinal_words_are_checked_against_clip_numbers():
     )
 
     assert "5" in unsupported
-    assert title_factual.hallucinated_facts(
-        "ثلاث خطوات للنجاح", "ثلاث خطوات واضحة للنجاح") == []
+    assert (
+        title_factual.hallucinated_facts("ثلاث خطوات للنجاح", "ثلاث خطوات واضحة للنجاح")
+        == []
+    )
 
 
 def test_arabic_indic_digits_match_ascii_and_written_number_forms():
-    assert title_factual.hallucinated_facts(
-        "١٢ يوماً للإنجاز", "12 يوماً للإنجاز") == []
-    assert title_factual.hallucinated_facts(
-        "خمسة وعشرين يوماً للإنجاز", "25 يوماً للإنجاز") == []
+    assert title_factual.hallucinated_facts("١٢ يوماً للإنجاز", "12 يوماً للإنجاز") == []
+    assert (
+        title_factual.hallucinated_facts("خمسة وعشرين يوماً للإنجاز", "25 يوماً للإنجاز")
+        == []
+    )
 
 
 def test_equal_number_with_a_different_unit_is_rejected():
@@ -142,8 +151,7 @@ def test_equal_number_with_a_different_unit_is_rejected():
 
 
 def test_equivalent_units_are_accepted_across_spelling_variants():
-    assert title_factual.unsupported_claims(
-        "٥ كيلوغرامات", "5 كغ") == []
+    assert title_factual.unsupported_claims("٥ كيلوغرامات", "5 كغ") == []
 
 
 def test_create_viral_segments_import_does_not_replace_windows_stdout():
@@ -186,7 +194,9 @@ def test_windows_stdout_configuration_is_called_by_main_only(monkeypatch):
 
 
 def test_snap_uses_whisperx_word_units_from_input_json(tmp_path):
-    transcript = [{"start": 0.0, "end": 2.2, "text": "صار الصرف كثيراً جداً بصح تغير الوضع."}]
+    transcript = [
+        {"start": 0.0, "end": 2.2, "text": "صار الصرف كثيراً جداً بصح تغير الوضع."}
+    ]
     words = [
         {"start": 0.00, "end": 0.25, "word": "صار"},
         {"start": 0.30, "end": 0.55, "word": "الصرف"},
@@ -201,4 +211,7 @@ def test_snap_uses_whisperx_word_units_from_input_json(tmp_path):
         encoding="utf-8",
     )
     loaded_words = cvs._load_word_timings(str(tmp_path))
-    assert cvs.snap_segment_boundaries(1.5, 2.0, transcript, words=loaded_words) == (1.35, 2.2)
+    assert cvs.snap_segment_boundaries(1.5, 2.0, transcript, words=loaded_words) == (
+        1.35,
+        2.2,
+    )

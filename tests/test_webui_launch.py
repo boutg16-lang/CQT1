@@ -229,12 +229,22 @@ class _FakeJSONResponse:
         self.headers = dict(headers or {})
 
     async def __call__(self, scope, receive, send):
-        headers = [(k.encode("latin-1"), v.encode("latin-1"))
-                   for k, v in self.headers.items()]
-        await send({"type": "http.response.start", "status": self.status_code,
-                    "headers": headers})
-        await send({"type": "http.response.body",
-                    "body": json.dumps(self.content).encode("utf-8")})
+        headers = [
+            (k.encode("latin-1"), v.encode("latin-1")) for k, v in self.headers.items()
+        ]
+        await send(
+            {
+                "type": "http.response.start",
+                "status": self.status_code,
+                "headers": headers,
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": json.dumps(self.content).encode("utf-8"),
+            }
+        )
 
 
 @pytest.fixture
@@ -282,8 +292,10 @@ def _run_middleware(middleware, scope, headers=None):
 
     async def go():
         app = middleware(inner_app)
-        raw_headers = [(k.encode("latin-1"), v.encode("latin-1"))
-                       for k, v in (headers or {}).items()]
+        raw_headers = [
+            (k.encode("latin-1"), v.encode("latin-1"))
+            for k, v in (headers or {}).items()
+        ]
         call_scope = dict(scope)
         call_scope.setdefault("type", "http")
         call_scope["headers"] = raw_headers
@@ -295,12 +307,21 @@ def _run_middleware(middleware, scope, headers=None):
         await app(call_scope, lambda: None, send)
 
     asyncio.run(go())
-    status = next((m["status"] for m in sent if m["type"] == "http.response.start"), None)
-    resp_headers = next((m.get("headers", []) for m in sent
-                         if m["type"] == "http.response.start"), [])
-    body = b"".join(m.get("body", b"") for m in sent
-                    if m["type"] == "http.response.body")
-    return status, {k.decode(): v.decode() for k, v in resp_headers}, body, inner["calls"]
+    status = next(
+        (m["status"] for m in sent if m["type"] == "http.response.start"), None
+    )
+    resp_headers = next(
+        (m.get("headers", []) for m in sent if m["type"] == "http.response.start"), []
+    )
+    body = b"".join(
+        m.get("body", b"") for m in sent if m["type"] == "http.response.body"
+    )
+    return (
+        status,
+        {k.decode(): v.decode() for k, v in resp_headers},
+        body,
+        inner["calls"],
+    )
 
 
 @pytest.fixture
@@ -317,8 +338,7 @@ def _basic(user, password):
 
 
 def test_middleware_allows_correct_credentials(middleware):
-    status, _, body, calls = _run_middleware(
-        middleware, {}, _basic("alice", "s3cr3t"))
+    status, _, body, calls = _run_middleware(middleware, {}, _basic("alice", "s3cr3t"))
     assert (status, body, calls) == (200, b"ok", 1)
 
 
@@ -338,16 +358,19 @@ def test_middleware_rejects_wrong_credentials(middleware, user, password):
 
 def test_middleware_rejects_malformed_header(middleware):
     status, _, _, calls = _run_middleware(
-        middleware, {}, {"Authorization": "Basic !!!not-base64!!!"})
+        middleware, {}, {"Authorization": "Basic !!!not-base64!!!"}
+    )
     assert (status, calls) == (401, 0)
     status, _, _, calls = _run_middleware(
-        middleware, {}, {"Authorization": "Bearer abc"})
+        middleware, {}, {"Authorization": "Bearer abc"}
+    )
     assert (status, calls) == (401, 0)
 
 
 def test_middleware_header_name_case_insensitive(middleware):
     status, _, _, calls = _run_middleware(
-        middleware, {}, {"AUTHORIZATION": _basic("alice", "s3cr3t")["Authorization"]})
+        middleware, {}, {"AUTHORIZATION": _basic("alice", "s3cr3t")["Authorization"]}
+    )
     assert (status, calls) == (200, 1)
 
 
@@ -388,7 +411,6 @@ def test_install_basic_auth_with_real_fastapi():
     real_app = fastapi.FastAPI()
     launch._install_basic_auth(real_app, ("alice", "s3cr3t"))
     assert any(
-        getattr(m, "cls", None) is not None
-        and m.cls.__name__ == "_BasicAuthMiddleware"
+        getattr(m, "cls", None) is not None and m.cls.__name__ == "_BasicAuthMiddleware"
         for m in real_app.user_middleware
     )

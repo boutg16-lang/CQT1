@@ -3,6 +3,7 @@
 401 is expected when HTTP basic auth is enabled and the probe carries no
 credentials — it still proves the server is accepting connections.
 """
+
 import sys
 import urllib.error
 import urllib.request

@@ -25,7 +25,8 @@ def test_binary_updater_checks_releases_from_this_repository(monkeypatch):
 
 def test_safety_updater_uses_this_repository_as_canonical_source():
     expected = "https://raw.githubusercontent.com/{}/main/safety_blocklist.json".format(
-        REPOSITORY)
+        REPOSITORY
+    )
 
     assert safety_updater.REMOTE_URL == expected
     assert safety_updater.REMOTE_SOURCES[0]["url"] == expected

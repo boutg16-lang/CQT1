@@ -17,13 +17,34 @@ FFMPEG = __import__("shutil").which("ffmpeg")
 def _make_video(tmp_path):
     """Two visually different segments (testsrc then blue) in one file."""
     video = tmp_path / "scenes.mp4"
-    subprocess.run([
-        FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=3",
-        "-f", "lavfi", "-i", "color=blue:size=320x180:rate=24:duration=3",
-        "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]",
-        "-map", "[v]", "-c:v", "libx264", "-preset", "ultrafast", str(video),
-    ], check=True, capture_output=True)
+    subprocess.run(
+        [
+            FFMPEG,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=320x180:rate=24:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:size=320x180:rate=24:duration=3",
+            "-filter_complex",
+            "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+            "-map",
+            "[v]",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            str(video),
+        ],
+        check=True,
+        capture_output=True,
+    )
     return str(video)
 
 
@@ -58,12 +79,14 @@ class TestThumbnail:
     def test_requires_pil(self, monkeypatch, tmp_path):
         monkeypatch.setattr(thumbnail_generator, "HAS_PIL", False)
         result = thumbnail_generator.generate_thumbnail(
-            str(tmp_path / "x.mp4"), title="t")
+            str(tmp_path / "x.mp4"), title="t"
+        )
         assert result["ok"] is False
 
     def test_missing_source(self, tmp_path):
         result = thumbnail_generator.generate_thumbnail(
-            str(tmp_path / "missing.mp4"), title="t")
+            str(tmp_path / "missing.mp4"), title="t"
+        )
         assert result["ok"] is False
 
     def test_generates_from_video(self, tmp_path):
@@ -72,25 +95,29 @@ class TestThumbnail:
         video = _make_video(tmp_path)
         out = tmp_path / "thumb.png"
         result = thumbnail_generator.generate_thumbnail(
-            video, title="عنوان تجريبي", hook="سر!", out=str(out))
+            video, title="عنوان تجريبي", hook="سر!", out=str(out)
+        )
         assert result["ok"] is True
         assert os.path.exists(str(out))
         assert os.path.getsize(str(out)) > 1000
 
     def test_generates_from_image(self, tmp_path):
         from PIL import Image
+
         img = tmp_path / "src.png"
         Image.new("RGB", (640, 360), (30, 60, 120)).save(str(img))
         out = tmp_path / "thumb2.png"
         result = thumbnail_generator.generate_thumbnail(
-            str(img), title="Test Title", out=str(out))
+            str(img), title="Test Title", out=str(out)
+        )
         assert result["ok"] is True
         assert os.path.getsize(str(out)) > 1000
 
     def test_wrap_text(self):
         font = thumbnail_generator._load_font(30, bold=True, text="abc")
         lines = thumbnail_generator._wrap_text(
-            "one two three four five six seven eight nine ten", font, 120)
+            "one two three four five six seven eight nine ten", font, 120
+        )
         assert isinstance(lines, list) and lines
         assert all(len(line) <= 30 for line in lines)
 

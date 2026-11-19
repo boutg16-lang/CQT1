@@ -61,11 +61,14 @@ def _detect_best_encoder():
     try:
         from scripts.ffmpeg_toolchain import encoder_works
     except Exception:
+
         def encoder_works(_codec):
             return False
 
     try:
-        result = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True)
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True
+        )
         output = result.stdout or ""
     except Exception as e:
         print(f"Error checking encoders: {e}")
@@ -145,22 +148,30 @@ def _persist_cut_validation(project_folder, allowed_segments, allowed, refused):
     file untouched when it does not match the in-memory list.
     """
     import tempfile
+
     path = os.path.join(project_folder, "viral_segments.txt")
     if not os.path.exists(path):
         return
     try:
         with open(path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
-        if not isinstance(payload, dict) or not isinstance(payload.get("segments"), list):
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("segments"), list
+        ):
             return
-        merged = [seg for _, seg in sorted(list(allowed) + list(refused),
-                                           key=lambda pair: pair[0])]
+        merged = [
+            seg
+            for _, seg in sorted(
+                list(allowed) + list(refused), key=lambda pair: pair[0]
+            )
+        ]
         if len(merged) != len(payload["segments"]):
             return
         payload["segments"] = merged
         directory = os.path.dirname(os.path.abspath(path)) or "."
-        fd, temp_path = tempfile.mkstemp(prefix=".cut_validation.", suffix=".tmp",
-                                         dir=directory)
+        fd, temp_path = tempfile.mkstemp(
+            prefix=".cut_validation.", suffix=".tmp", dir=directory
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, indent=4)
@@ -177,10 +188,26 @@ def _persist_cut_validation(project_folder, allowed_segments, allowed, refused):
     except Exception as exc:
         print("[WARN] Could not persist cut validation: {}".format(exc))
 
-def _process_segment(segment_index, segment, project_folder, input_file, cuts_folder, subs_folder, skip_video, video_codec, video_preset, video_extra_args):
+
+def _process_segment(
+    segment_index,
+    segment,
+    project_folder,
+    input_file,
+    cuts_folder,
+    subs_folder,
+    skip_video,
+    video_codec,
+    video_preset,
+    video_extra_args,
+):
     start_time = segment.get("start_time", segment.get("start", "00:00:00"))
     title = segment.get("title", f"Segment_{segment_index}")
-    safe_title = "".join([c for c in title if c.isalnum() or c in " _-"]).strip().replace(" ", "_")[:60]
+    safe_title = (
+        "".join([c for c in title if c.isalnum() or c in " _-"])
+        .strip()
+        .replace(" ", "_")[:60]
+    )
     base_name = f"{segment_index:03d}_{safe_title}"
 
     output_filename = f"{base_name}_original_scale.mp4"
@@ -190,10 +217,17 @@ def _process_segment(segment_index, segment, project_folder, input_file, cuts_fo
 
     start_time_seconds, duration_seconds = segment_window_seconds(segment)
     if duration_seconds <= 0:
-        return {"ok": False, "index": segment_index, "segment": segment,
-                "error": "non-positive duration (start={}, end={})".format(
-                    start_time, segment.get("end_time", segment.get("end")))}
-    start_time_seconds, duration_seconds = _safe_duration(start_time_seconds, duration_seconds)
+        return {
+            "ok": False,
+            "index": segment_index,
+            "segment": segment,
+            "error": "non-positive duration (start={}, end={})".format(
+                start_time, segment.get("end_time", segment.get("end"))
+            ),
+        }
+    start_time_seconds, duration_seconds = _safe_duration(
+        start_time_seconds, duration_seconds
+    )
     start_time_str = f"{start_time_seconds:.3f}"
     duration_str = f"{duration_seconds:.3f}"
     temporary_output = output_path + ".tmp.mp4"
@@ -203,43 +237,71 @@ def _process_segment(segment_index, segment, project_folder, input_file, cuts_fo
             command = [
                 "ffmpeg",
                 "-y",
-                "-loglevel", "error",
+                "-loglevel",
+                "error",
                 "-hide_banner",
-                "-ss", start_time_str,
-                "-i", input_file,
-                "-t", duration_str,
-                "-c:v", video_codec,
-                "-preset", video_preset,
+                "-ss",
+                start_time_str,
+                "-i",
+                input_file,
+                "-t",
+                duration_str,
+                "-c:v",
+                video_codec,
+                "-preset",
+                video_preset,
                 *video_extra_args,
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-movflags", "+faststart",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-movflags",
+                "+faststart",
                 # v7.18: prevents common ffmpeg failures on long/short clips.
-                "-max_muxing_queue_size", "1024",
-                "-avoid_negative_ts", "make_zero",
+                "-max_muxing_queue_size",
+                "1024",
+                "-avoid_negative_ts",
+                "make_zero",
                 temporary_output,
             ]
             subprocess.run(command, check=True, capture_output=True, text=True)
-            if not os.path.isfile(temporary_output) or os.path.getsize(temporary_output) <= 1024:
+            if (
+                not os.path.isfile(temporary_output)
+                or os.path.getsize(temporary_output) <= 1024
+            ):
                 raise RuntimeError("ffmpeg produced a missing or empty segment")
             media = validate_media_file(temporary_output, min_duration=0.05)
             if not media.get("ok"):
-                raise RuntimeError("segment validation failed: {}".format(
-                    "; ".join(media.get("errors", [media.get("error", "invalid media")]))))
+                raise RuntimeError(
+                    "segment validation failed: {}".format(
+                        "; ".join(
+                            media.get("errors", [media.get("error", "invalid media")])
+                        )
+                    )
+                )
             os.replace(temporary_output, output_path)
-            print(f"Generated segment: {output_filename}, Size: {os.path.getsize(output_path)} bytes")
+            print(
+                f"Generated segment: {output_filename}, Size: {os.path.getsize(output_path)} bytes"
+            )
         else:
             if not os.path.isfile(output_path) or os.path.getsize(output_path) <= 1024:
                 raise FileNotFoundError("existing segment is missing or empty")
             media = validate_media_file(output_path, min_duration=0.05)
             if not media.get("ok"):
-                raise RuntimeError("existing segment validation failed: {}".format(
-                    "; ".join(media.get("errors", [media.get("error", "invalid media")]))))
+                raise RuntimeError(
+                    "existing segment validation failed: {}".format(
+                        "; ".join(
+                            media.get("errors", [media.get("error", "invalid media")])
+                        )
+                    )
+                )
             print(f"Skipping video generation for {output_filename} (using existing).")
 
         end_time_seconds = start_time_seconds + duration_seconds
         input_json_path = os.path.join(project_folder, "input.json")
-        cut_json.cut_json_transcript(input_json_path, json_output_path, start_time_seconds, end_time_seconds)
+        cut_json.cut_json_transcript(
+            input_json_path, json_output_path, start_time_seconds, end_time_seconds
+        )
         return {
             "index": segment_index,
             "ok": True,
@@ -256,9 +318,13 @@ def _process_segment(segment_index, segment, project_folder, input_file, cuts_fo
         try:
             input_json_path = os.path.join(project_folder, "input.json")
             end_time_seconds = start_time_seconds + duration_seconds
-            cut_json.cut_json_transcript(input_json_path, json_output_path, start_time_seconds, end_time_seconds)
+            cut_json.cut_json_transcript(
+                input_json_path, json_output_path, start_time_seconds, end_time_seconds
+            )
         except Exception as json_error:
-            print(f"Error generating JSON for segment {segment_index + 1}: {json_error}")
+            print(
+                f"Error generating JSON for segment {segment_index + 1}: {json_error}"
+            )
         return {
             "index": segment_index,
             "ok": False,
@@ -299,10 +365,17 @@ def _clear_downstream_artifacts(project_folder):
                 os.remove(path)
                 removed.append(path)
             except OSError as exc:
-                print(f"[WARN] Could not remove stale downstream artifact {path}: {exc}")
+                print(
+                    f"[WARN] Could not remove stale downstream artifact {path}: {exc}"
+                )
     for name in (
-        "polish_report.json", "audio_qc_report.json", "tracking_report.json", "face_modes.json",
-        "publish_batch_report.json", "project_report.html", "project_report.json",
+        "polish_report.json",
+        "audio_qc_report.json",
+        "tracking_report.json",
+        "face_modes.json",
+        "publish_batch_report.json",
+        "project_report.html",
+        "project_report.json",
     ):
         path = os.path.join(project_folder, name)
         if os.path.isfile(path):
@@ -316,9 +389,21 @@ def _clear_downstream_artifacts(project_folder):
     return removed
 
 
-def cut(response, project_folder="tmp", skip_video=False, workers=None, source_video=None, force=False, scene_snap=False):
+def cut(
+    response,
+    project_folder="tmp",
+    skip_video=False,
+    workers=None,
+    source_video=None,
+    force=False,
+    scene_snap=False,
+):
     def generate_segments(response, project_folder, skip_video, workers, source_video):
-        input_file = os.path.abspath(source_video) if source_video else os.path.join(project_folder, "input.mp4")
+        input_file = (
+            os.path.abspath(source_video)
+            if source_video
+            else os.path.join(project_folder, "input.mp4")
+        )
         if not os.path.exists(input_file):
             input_file_legacy = os.path.join(project_folder, "input_video.mp4")
             if os.path.exists(input_file_legacy):
@@ -344,10 +429,14 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
         if scene_snap:
             try:
                 from scripts.scene_detect import find_scene_cuts, snap_to_scene
+
                 scene_boundaries = find_scene_cuts(input_file)
                 if scene_boundaries:
-                    print("[cut] scene detection: {} boundaries — snapping cuts".format(
-                        len(scene_boundaries)))
+                    print(
+                        "[cut] scene detection: {} boundaries — snapping cuts".format(
+                            len(scene_boundaries)
+                        )
+                    )
                     snapped = 0
                     for seg in segments_list:
                         try:
@@ -370,7 +459,11 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                             seg["start_time"], seg["end_time"] = new_s0, new_s1
                             seg["scene_snapped"] = True
                             snapped += 1
-                    print("[cut] snapped {} segment(s) to scene boundaries".format(snapped))
+                    print(
+                        "[cut] snapped {} segment(s) to scene boundaries".format(
+                            snapped
+                        )
+                    )
             except Exception as exc:
                 print("[cut] scene detection skipped: {}".format(exc))
 
@@ -393,21 +486,29 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                     allowed.append((original_index, seg))
                     continue
                 report = segment_validator.validate_final_segment(
-                    seg, media_duration=media_duration, require_title=False)
+                    seg, media_duration=media_duration, require_title=False
+                )
                 seg["final_validation"] = report
-                fatal = [item for item in report.get("errors", [])
-                         if item.get("code") in segment_validator.FATAL_ERROR_CODES]
+                fatal = [
+                    item
+                    for item in report.get("errors", [])
+                    if item.get("code") in segment_validator.FATAL_ERROR_CODES
+                ]
                 # Legacy / hand-edited segment without any stored transcript:
                 # the missing-transcript check is not actionable here (the
                 # pipeline validated the window when it was generated), so
                 # only the other fatal codes block the cut.
                 if fatal and not _has_stored_transcript(seg):
-                    fatal = [item for item in fatal
-                             if item.get("code") != "empty_transcript"]
+                    fatal = [
+                        item for item in fatal if item.get("code") != "empty_transcript"
+                    ]
                 if fatal:
-                    print("[cut] Refusing to cut invalid segment '{}': {}".format(
-                        seg.get("title", "Untitled"),
-                        "; ".join(str(item.get("message")) for item in fatal)))
+                    print(
+                        "[cut] Refusing to cut invalid segment '{}': {}".format(
+                            seg.get("title", "Untitled"),
+                            "; ".join(str(item.get("message")) for item in fatal),
+                        )
+                    )
                     seg["cut_status"] = "refused"
                     seg["export_blocked"] = True
                     seg["requires_review"] = True
@@ -427,8 +528,16 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
             # A rerun must reflect the current safe segment list, not stale cuts
             # or downstream files that could otherwise be selected for upload.
             _clear_downstream_artifacts(project_folder)
-            stale_cuts = [name for name in os.listdir(cuts_folder) if name.endswith("_original_scale.mp4")]
-            stale_subs = [name for name in os.listdir(subs_folder) if name.endswith("_processed.json")]
+            stale_cuts = [
+                name
+                for name in os.listdir(cuts_folder)
+                if name.endswith("_original_scale.mp4")
+            ]
+            stale_subs = [
+                name
+                for name in os.listdir(subs_folder)
+                if name.endswith("_processed.json")
+            ]
             for name in stale_cuts:
                 try:
                     os.remove(os.path.join(cuts_folder, name))
@@ -440,15 +549,19 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                 except OSError as exc:
                     print(f"[WARN] Could not remove stale subtitle JSON {name}: {exc}")
             if stale_cuts or stale_subs:
-                print(f"[cut] Cleared {len(stale_cuts)} stale video cut(s) and {len(stale_subs)} stale subtitle file(s).")
+                print(
+                    f"[cut] Cleared {len(stale_cuts)} stale video cut(s) and {len(stale_subs)} stale subtitle file(s)."
+                )
         else:
             # skip_video reruns must still drop stale artifacts of segments
             # that are now refused; otherwise the publish stage can upload a
             # previously rendered video under the new (blocked) segment.
             for original_index, _seg in refused:
                 prefix = f"{original_index:03d}_"
-                for folder, suffix in ((cuts_folder, "_original_scale.mp4"),
-                                       (subs_folder, "_processed.json")):
+                for folder, suffix in (
+                    (cuts_folder, "_original_scale.mp4"),
+                    (subs_folder, "_processed.json"),
+                ):
                     if not os.path.isdir(folder):
                         continue
                     for name in os.listdir(folder):
@@ -469,7 +582,18 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
 
         if workers == 1 or len(segments_list) == 1:
             for i, segment in allowed:
-                result = _process_segment(i, segment, project_folder, input_file, cuts_folder, subs_folder, skip_video, video_codec, video_preset, video_extra_args)
+                result = _process_segment(
+                    i,
+                    segment,
+                    project_folder,
+                    input_file,
+                    cuts_folder,
+                    subs_folder,
+                    skip_video,
+                    video_codec,
+                    video_preset,
+                    video_extra_args,
+                )
                 results.append(result)
                 if result.get("ok"):
                     print("\n" + "=" * 50 + "\n")
@@ -498,26 +622,33 @@ def cut(response, project_folder="tmp", skip_video=False, workers=None, source_v
                     result = future.result()
                     results.append(result)
                     if result.get("ok"):
-                        print(f"Finished segment {result['index'] + 1}/{len(segments_list)}")
+                        print(
+                            f"Finished segment {result['index'] + 1}/{len(segments_list)}"
+                        )
                     else:
-                        print(f"Segment {result['index'] + 1} failed: {result.get('error', 'Unknown error')}")
+                        print(
+                            f"Segment {result['index'] + 1} failed: {result.get('error', 'Unknown error')}"
+                        )
                     print("\n" + "=" * 50 + "\n")
 
         failures = [result for result in results if not result.get("ok")]
         if failures:
             details = "; ".join(
-                "#{}: {}".format(result.get("index", "?"), result.get("error", "unknown error"))
+                "#{}: {}".format(
+                    result.get("index", "?"), result.get("error", "unknown error")
+                )
                 for result in failures[:5]
             )
             raise RuntimeError(
                 "{} segment(s) failed; downstream stages were stopped. {}".format(
-                    len(failures), details)
+                    len(failures), details
+                )
             )
         return results
 
     if response is None:
-        json_path = os.path.join(project_folder, 'viral_segments.txt')
-        with open(json_path, 'r', encoding='utf-8') as file:
+        json_path = os.path.join(project_folder, "viral_segments.txt")
+        with open(json_path, "r", encoding="utf-8") as file:
             response = json.load(file)
 
     generate_segments(response, project_folder, skip_video, workers, source_video)

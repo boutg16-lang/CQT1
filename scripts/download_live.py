@@ -26,6 +26,7 @@ import time
 
 try:
     import yt_dlp
+
     HAS_YTDLP = True
 except ImportError:  # pragma: no cover - environment dependent
     yt_dlp = None
@@ -36,8 +37,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts import download_video  # noqa: E402
 
 DEFAULT_POLL_SECONDS = 60
-DEFAULT_MAX_WAIT_SECONDS = 6 * 3600   # 6 hours
-MAX_POLL_BACKOFF = 10 * 60            # cap the backoff at 10 minutes
+DEFAULT_MAX_WAIT_SECONDS = 6 * 3600  # 6 hours
+MAX_POLL_BACKOFF = 10 * 60  # cap the backoff at 10 minutes
 
 LIVE_KEYS = ("is_live", "live_status", "was_live", "is_upcoming")
 
@@ -45,7 +46,8 @@ LIVE_KEYS = ("is_live", "live_status", "was_live", "is_upcoming")
 def _require_ytdlp():
     if not HAS_YTDLP:
         raise RuntimeError(
-            "yt-dlp is not installed. Install it with: pip install yt-dlp[default]")
+            "yt-dlp is not installed. Install it with: pip install yt-dlp[default]"
+        )
     return yt_dlp
 
 
@@ -81,19 +83,30 @@ def _classify_error(exc, url):
     """Map known yt-dlp errors (upcoming/live events raise instead of
     returning info) to a status dict."""
     msg = str(exc).lower()
-    if "will begin in a few moments" in msg or "is scheduled" in msg \
-            or "will premiere" in msg or "not yet started" in msg \
-            or "upcoming" in msg and "live" in msg:
-        return {"status": "upcoming", "url": url,
-                "error": str(exc), "is_upcoming": True,
-                "message": "scheduled live event — not started yet"}
+    if (
+        "will begin in a few moments" in msg
+        or "is scheduled" in msg
+        or "will premiere" in msg
+        or "not yet started" in msg
+        or "upcoming" in msg
+        and "live" in msg
+    ):
+        return {
+            "status": "upcoming",
+            "url": url,
+            "error": str(exc),
+            "is_upcoming": True,
+            "message": "scheduled live event — not started yet",
+        }
     if "is live" in msg or "currently live" in msg or "streaming now" in msg:
-        return {"status": "live", "url": url,
-                "error": str(exc), "is_live": True}
-    if "completed" in msg and ("live" in msg or "stream" in msg) \
-            or "ended" in msg and "live" in msg:
-        return {"status": "ended", "url": url,
-                "error": str(exc), "was_live": True}
+        return {"status": "live", "url": url, "error": str(exc), "is_live": True}
+    if (
+        "completed" in msg
+        and ("live" in msg or "stream" in msg)
+        or "ended" in msg
+        and "live" in msg
+    ):
+        return {"status": "ended", "url": url, "error": str(exc), "was_live": True}
     return {"status": "unknown", "error": str(exc), "url": url}
 
 
@@ -128,10 +141,16 @@ def _classify_info(info, url):
     }
 
 
-def wait_until_ended(url, *, poll_seconds=DEFAULT_POLL_SECONDS,
-                     max_wait_seconds=DEFAULT_MAX_WAIT_SECONDS,
-                     cookies_from_browser=None, cookies_file=None,
-                     progress=None, sleep=None):
+def wait_until_ended(
+    url,
+    *,
+    poll_seconds=DEFAULT_POLL_SECONDS,
+    max_wait_seconds=DEFAULT_MAX_WAIT_SECONDS,
+    cookies_from_browser=None,
+    cookies_file=None,
+    progress=None,
+    sleep=None,
+):
     """Poll until the stream is no longer live/upcoming.
 
     ``progress`` receives a dict after every poll (status, waited_seconds,
@@ -151,9 +170,16 @@ def wait_until_ended(url, *, poll_seconds=DEFAULT_POLL_SECONDS,
         current = state.get("status")
         if current in ("ended", "not_live"):
             if progress:
-                progress({"status": current, "waited_seconds": waited,
-                          "elapsed": round(time.monotonic() - (deadline - max_wait_seconds), 1),
-                          "message": "stream finished — ready to download"})
+                progress(
+                    {
+                        "status": current,
+                        "waited_seconds": waited,
+                        "elapsed": round(
+                            time.monotonic() - (deadline - max_wait_seconds), 1
+                        ),
+                        "message": "stream finished — ready to download",
+                    }
+                )
             return state
 
         if current == "live":
@@ -165,79 +191,138 @@ def wait_until_ended(url, *, poll_seconds=DEFAULT_POLL_SECONDS,
         else:
             consecutive_errors += 1
             message = "cannot read stream state ({}) — retrying".format(
-                state.get("error", current))
+                state.get("error", current)
+            )
 
         if progress:
-            progress({"status": current or "unknown", "waited_seconds": waited,
-                      "elapsed": round(time.monotonic() - (deadline - max_wait_seconds), 1),
-                      "message": message})
+            progress(
+                {
+                    "status": current or "unknown",
+                    "waited_seconds": waited,
+                    "elapsed": round(
+                        time.monotonic() - (deadline - max_wait_seconds), 1
+                    ),
+                    "message": message,
+                }
+            )
 
         # backoff on repeated errors (max 10 min), fixed poll otherwise
-        delay = poll_seconds if consecutive_errors == 0 else min(
-            poll_seconds * (2 ** min(consecutive_errors, 4)), MAX_POLL_BACKOFF)
+        delay = (
+            poll_seconds
+            if consecutive_errors == 0
+            else min(poll_seconds * (2 ** min(consecutive_errors, 4)), MAX_POLL_BACKOFF)
+        )
         sleep(max(1, delay))
         waited += delay
         if time.monotonic() >= deadline:
             raise TimeoutError(
                 "Timed out after {:.0f}s waiting for the live stream to end "
                 "(last state: {}). Use --max-wait to extend.".format(
-                    waited, last_state or current))
+                    waited, last_state or current
+                )
+            )
 
 
-def download_when_live_ends(url, *, base_root="VIRALS", quality="best",
-                            cookies_from_browser=None, cookies_file=None,
-                            poll_seconds=DEFAULT_POLL_SECONDS,
-                            max_wait_seconds=DEFAULT_MAX_WAIT_SECONDS,
-                            progress=None, sleep=None):
+def download_when_live_ends(
+    url,
+    *,
+    base_root="VIRALS",
+    quality="best",
+    cookies_from_browser=None,
+    cookies_file=None,
+    poll_seconds=DEFAULT_POLL_SECONDS,
+    max_wait_seconds=DEFAULT_MAX_WAIT_SECONDS,
+    progress=None,
+    sleep=None,
+):
     """Wait for a live stream to end, then download it as a normal VOD."""
     wait_until_ended(
-        url, poll_seconds=poll_seconds, max_wait_seconds=max_wait_seconds,
-        cookies_from_browser=cookies_from_browser, cookies_file=cookies_file,
-        progress=progress, sleep=sleep)
+        url,
+        poll_seconds=poll_seconds,
+        max_wait_seconds=max_wait_seconds,
+        cookies_from_browser=cookies_from_browser,
+        cookies_file=cookies_file,
+        progress=progress,
+        sleep=sleep,
+    )
     if progress:
         progress({"status": "downloading", "message": "stream ended — downloading VOD"})
     return download_video.download(
-        url, base_root=base_root, download_subs=True, quality=quality,
-        cookies_from_browser=cookies_from_browser, cookies_file=cookies_file)
+        url,
+        base_root=base_root,
+        download_subs=True,
+        quality=quality,
+        cookies_from_browser=cookies_from_browser,
+        cookies_file=cookies_file,
+    )
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Download a YouTube live stream automatically after it ends "
-                    "(supports https://youtube.com/live/ID URLs).")
-    parser.add_argument("url", help="YouTube URL (e.g. https://youtube.com/live/gowpuk4jk5U)")
-    parser.add_argument("--check", action="store_true",
-                        help="print the current live state and exit (no waiting)")
-    parser.add_argument("--poll", type=float, default=DEFAULT_POLL_SECONDS,
-                        help="seconds between status polls (default: 60)")
-    parser.add_argument("--max-wait", type=float, default=DEFAULT_MAX_WAIT_SECONDS,
-                        help="max seconds to wait for the stream to end (default: 21600)")
-    parser.add_argument("--base-root", default="VIRALS",
-                        help="project root folder (default: VIRALS)")
-    parser.add_argument("--quality", default="best",
-                        choices=["best", "1080p", "720p", "480p"])
-    parser.add_argument("--cookies-from-browser",
-                        choices=["chrome", "firefox", "edge", "safari", "brave", "opera", "vivaldi"],
-                        default=None)
+        "(supports https://youtube.com/live/ID URLs)."
+    )
+    parser.add_argument(
+        "url", help="YouTube URL (e.g. https://youtube.com/live/gowpuk4jk5U)"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="print the current live state and exit (no waiting)",
+    )
+    parser.add_argument(
+        "--poll",
+        type=float,
+        default=DEFAULT_POLL_SECONDS,
+        help="seconds between status polls (default: 60)",
+    )
+    parser.add_argument(
+        "--max-wait",
+        type=float,
+        default=DEFAULT_MAX_WAIT_SECONDS,
+        help="max seconds to wait for the stream to end (default: 21600)",
+    )
+    parser.add_argument(
+        "--base-root", default="VIRALS", help="project root folder (default: VIRALS)"
+    )
+    parser.add_argument(
+        "--quality", default="best", choices=["best", "1080p", "720p", "480p"]
+    )
+    parser.add_argument(
+        "--cookies-from-browser",
+        choices=["chrome", "firefox", "edge", "safari", "brave", "opera", "vivaldi"],
+        default=None,
+    )
     parser.add_argument("--cookies", default=None)
     args = parser.parse_args(argv)
 
     if args.check:
         state = fetch_status(args.url, args.cookies_from_browser, args.cookies)
-        print("[live] status={} id={} title={!r}".format(
-            state.get("status"), state.get("id"), state.get("title")))
+        print(
+            "[live] status={} id={} title={!r}".format(
+                state.get("status"), state.get("id"), state.get("title")
+            )
+        )
         return 0
 
     def _progress(info):
-        print("[live] {:.0f}s waited | {} — {}".format(
-            info.get("elapsed", 0), info.get("status"), info.get("message")))
+        print(
+            "[live] {:.0f}s waited | {} — {}".format(
+                info.get("elapsed", 0), info.get("status"), info.get("message")
+            )
+        )
 
     try:
         path, folder = download_when_live_ends(
-            args.url, base_root=args.base_root, quality=args.quality,
+            args.url,
+            base_root=args.base_root,
+            quality=args.quality,
             cookies_from_browser=args.cookies_from_browser,
-            cookies_file=args.cookies, poll_seconds=args.poll,
-            max_wait_seconds=args.max_wait, progress=_progress)
+            cookies_file=args.cookies,
+            poll_seconds=args.poll,
+            max_wait_seconds=args.max_wait,
+            progress=_progress,
+        )
         print("[live] downloaded: {}".format(path))
         return 0
     except TimeoutError as exc:

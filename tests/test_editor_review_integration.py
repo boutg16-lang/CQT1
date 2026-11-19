@@ -21,12 +21,15 @@ def _raw():
 
 def test_process_segments_honours_editor_rejection():
     def fake_llm(prompt):
-        reviews = [{"id": "c0", "verdict": "keep", "hook_score": 92.0},
-                   {"id": "c1", "verdict": "reject", "reason": "بلا لحظة"}]
+        reviews = [
+            {"id": "c0", "verdict": "keep", "hook_score": 92.0},
+            {"id": "c1", "verdict": "reject", "reason": "بلا لحظة"},
+        ]
         return json.dumps({"reviews": reviews})
 
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, editor_review_llm=fake_llm)
+        _raw(), _transcript(), 15, 90, editor_review_llm=fake_llm
+    )
 
     titles = [seg.get("title") for seg in result["segments"]]
     assert "لحظة قوية" in titles
@@ -39,13 +42,23 @@ def test_process_segments_honours_editor_rejection():
 
 def test_process_segments_editor_trim_is_applied():
     def fake_llm(prompt):
-        return json.dumps({"reviews": [
-            {"id": "c0", "verdict": "trim", "trim_start": 15.0, "trim_end": 35.0},
-            {"id": "c1", "verdict": "keep"},
-        ]})
+        return json.dumps(
+            {
+                "reviews": [
+                    {
+                        "id": "c0",
+                        "verdict": "trim",
+                        "trim_start": 15.0,
+                        "trim_end": 35.0,
+                    },
+                    {"id": "c1", "verdict": "keep"},
+                ]
+            }
+        )
 
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, editor_review_llm=fake_llm)
+        _raw(), _transcript(), 15, 90, editor_review_llm=fake_llm
+    )
     first = result["segments"][0]
     assert first["start_time"] == 15.0
     assert first["end_time"] == 35.0
@@ -64,7 +77,8 @@ def test_process_segments_editor_failure_is_fail_open():
         raise RuntimeError("backend exploded")
 
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, editor_review_llm=broken_llm)
+        _raw(), _transcript(), 15, 90, editor_review_llm=broken_llm
+    )
     assert len(result["segments"]) == 2  # selection preserved
     assert result["editor_review_summary"]["errors"]
 
@@ -84,8 +98,11 @@ def test_editor_review_call_respects_env_flag(monkeypatch):
 def test_editor_review_call_uses_backend(monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_EDITOR_REVIEW", "true")
     calls = []
-    monkeypatch.setattr(cvs, "call_gemini",
-                        lambda prompt, key, model_name=None: calls.append(prompt) or "{}")
+    monkeypatch.setattr(
+        cvs,
+        "call_gemini",
+        lambda prompt, key, model_name=None: calls.append(prompt) or "{}",
+    )
     review_call = cvs._editor_review_call("gemini", "k", "m")
     review_call("prompt-1")
     assert calls == ["prompt-1"]

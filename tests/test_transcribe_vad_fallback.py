@@ -5,6 +5,7 @@ When pyannote cannot import asteroid_filterbanks (or any VAD dependency),
 the pipeline switches to the independent faster-whisper backend instead of
 raising the raw ModuleNotFoundError after the user waited for model load.
 """
+
 import os
 import sys
 from types import SimpleNamespace
@@ -16,11 +17,14 @@ from scripts import transcribe_video as tv
 
 def test_vad_dependency_errors_are_recognized():
     assert tv._is_vad_dependency_error(
-        ModuleNotFoundError("No module named 'asteroid_filterbanks'"))
+        ModuleNotFoundError("No module named 'asteroid_filterbanks'")
+    )
     assert tv._is_vad_dependency_error(
-        ImportError("cannot import name Encoder from asteroid_filterbanks"))
+        ImportError("cannot import name Encoder from asteroid_filterbanks")
+    )
     assert tv._is_vad_dependency_error(
-        RuntimeError("pyannote.audio failed to load the VAD model"))
+        RuntimeError("pyannote.audio failed to load the VAD model")
+    )
     assert not tv._is_vad_dependency_error(ValueError("Invalid model size"))
 
 
@@ -33,8 +37,9 @@ def test_transcribe_switches_to_faster_whisper_on_vad_error(tmp_path, monkeypatc
         cuda = SimpleNamespace(is_available=lambda: False)
 
     monkeypatch.setattr(tv, "torch", FakeTorch())
-    monkeypatch.setattr(tv, "whisperx",
-                        SimpleNamespace(load_audio=lambda path: object()))
+    monkeypatch.setattr(
+        tv, "whisperx", SimpleNamespace(load_audio=lambda path: object())
+    )
     monkeypatch.setattr(tv, "_cache_matches", lambda *a, **k: False)
     monkeypatch.setattr(tv, "_transcript_artifacts_ok", lambda *a, **k: False)
     monkeypatch.setattr(tv, "apply_safe_globals_hack", lambda: None)
@@ -47,8 +52,17 @@ def test_transcribe_switches_to_faster_whisper_on_vad_error(tmp_path, monkeypatc
 
     called = {}
 
-    def fake_fallback(input_file, model_name, project_folder, srt_file,
-                      tsv_file, json_file, cache_path, device, reason="memory"):
+    def fake_fallback(
+        input_file,
+        model_name,
+        project_folder,
+        srt_file,
+        tsv_file,
+        json_file,
+        cache_path,
+        device,
+        reason="memory",
+    ):
         called["reason"] = reason
         called["model"] = model_name
         return srt_file, tsv_file
@@ -70,8 +84,9 @@ def test_any_model_load_failure_falls_back(tmp_path, monkeypatch):
         cuda = SimpleNamespace(is_available=lambda: False)
 
     monkeypatch.setattr(tv, "torch", FakeTorch())
-    monkeypatch.setattr(tv, "whisperx",
-                        SimpleNamespace(load_audio=lambda path: object()))
+    monkeypatch.setattr(
+        tv, "whisperx", SimpleNamespace(load_audio=lambda path: object())
+    )
     monkeypatch.setattr(tv, "_cache_matches", lambda *a, **k: False)
     monkeypatch.setattr(tv, "_transcript_artifacts_ok", lambda *a, **k: False)
     monkeypatch.setattr(tv, "apply_safe_globals_hack", lambda: None)
@@ -83,8 +98,17 @@ def test_any_model_load_failure_falls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(tv, "_load_whisperx_model", broken_load)
     called = {}
 
-    def fake_fallback(input_file, model_name, project_folder, srt_file,
-                      tsv_file, json_file, cache_path, device, reason="memory"):
+    def fake_fallback(
+        input_file,
+        model_name,
+        project_folder,
+        srt_file,
+        tsv_file,
+        json_file,
+        cache_path,
+        device,
+        reason="memory",
+    ):
         called["reason"] = reason
         return srt_file, tsv_file
 
@@ -106,18 +130,29 @@ def test_tokenizer_failure_during_transcribe_falls_back(tmp_path, monkeypatch):
             raise RuntimeError("tokenizers native extension failed")
 
     monkeypatch.setattr(tv, "torch", FakeTorch())
-    monkeypatch.setattr(tv, "whisperx",
-                        SimpleNamespace(load_audio=lambda path: object()))
+    monkeypatch.setattr(
+        tv, "whisperx", SimpleNamespace(load_audio=lambda path: object())
+    )
     monkeypatch.setattr(tv, "_cache_matches", lambda *a, **k: False)
     monkeypatch.setattr(tv, "_transcript_artifacts_ok", lambda *a, **k: False)
     monkeypatch.setattr(tv, "apply_safe_globals_hack", lambda: None)
     monkeypatch.setattr(tv, "_log_memory_state", lambda *a, **k: None)
-    monkeypatch.setattr(tv, "_load_whisperx_model",
-                        lambda *a, **k: (FakeModel(), "cpu", "float32"))
+    monkeypatch.setattr(
+        tv, "_load_whisperx_model", lambda *a, **k: (FakeModel(), "cpu", "float32")
+    )
     called = {}
 
-    def fake_fallback(input_file, model_name, project_folder, srt_file,
-                      tsv_file, json_file, cache_path, device, reason="memory"):
+    def fake_fallback(
+        input_file,
+        model_name,
+        project_folder,
+        srt_file,
+        tsv_file,
+        json_file,
+        cache_path,
+        device,
+        reason="memory",
+    ):
         called["reason"] = reason
         return srt_file, tsv_file
 

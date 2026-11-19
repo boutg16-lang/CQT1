@@ -33,6 +33,7 @@ def box(cx, cy, half=50):
 # FaceTracker: time-normalised velocity
 # ---------------------------------------------------------------------------
 
+
 def test_velocity_normalised_per_frame_after_long_cycle():
     """A 4px/frame face measured over a 30-frame cycle must NOT store
     120px/cycle as its velocity — prediction would overshoot massively."""
@@ -70,9 +71,10 @@ def test_reacquires_moving_face_at_predicted_position_after_gap():
 # InsightFace crop: headroom + face_zoom
 # ---------------------------------------------------------------------------
 
+
 def _stripe_frame(h=1000, w=2000, stripe_rows=(430, 440)):
     frame = np.zeros((h, w, 3), dtype=np.uint8)
-    frame[stripe_rows[0]:stripe_rows[1], :, :] = 255
+    frame[stripe_rows[0] : stripe_rows[1], :, :] = 255
     return frame
 
 
@@ -121,8 +123,10 @@ def test_face_zoom_makes_face_fill_fraction_of_frame():
 # Clip window clamping + sentence snapping
 # ---------------------------------------------------------------------------
 
+
 def _cvs():
     from scripts import create_viral_segments as cvs
+
     return cvs
 
 
@@ -132,8 +136,15 @@ def test_min_duration_extension_never_exceeds_transcript_end():
         {"start": 0.0, "end": 10.0, "text": "opening words here"},
         {"start": 15.0, "end": 20.0, "text": "later detail"},
     ]
-    raw = [{"title": "End hook", "start_time_ref": "15s",
-            "start_text": "later detail", "end_text": "", "score": 90}]
+    raw = [
+        {
+            "title": "End hook",
+            "start_time_ref": "15s",
+            "start_text": "later detail",
+            "end_text": "",
+            "score": 90,
+        }
+    ]
     result = cvs.process_segments(raw, transcript, 30, 90)
     seg = result["segments"][0]
     assert seg["end_time"] <= 20.0
@@ -186,8 +197,10 @@ def test_snap_never_jumps_start_forward_past_hook():
 
 def test_process_segments_keeps_explicit_window_unsnapped():
     cvs = _cvs()
-    transcript = [{"start": float(i), "end": float(i + 1), "text": f"word {i}"}
-                  for i in range(0, 61, 5)]
+    transcript = [
+        {"start": float(i), "end": float(i + 1), "text": f"word {i}"}
+        for i in range(0, 61, 5)
+    ]
     raw = [{"title": "Exact", "start_time": 10, "end_time": 20, "score": 90}]
     result = cvs.process_segments(raw, transcript, 5, 30)
     seg = result["segments"][0]
@@ -196,8 +209,10 @@ def test_process_segments_keeps_explicit_window_unsnapped():
 
 def test_process_segments_sorts_mixed_score_types():
     cvs = _cvs()
-    transcript = [{"start": float(i * 30), "end": float(i * 30 + 10),
-                   "text": f"moment {i}"} for i in range(6)]
+    transcript = [
+        {"start": float(i * 30), "end": float(i * 30 + 10), "text": f"moment {i}"}
+        for i in range(6)
+    ]
     raw = [
         {"title": "floaty", "start_time": 0, "end_time": 20, "score": "95.5"},
         {"title": "inty", "start_time": 30, "end_time": 50, "score": 80},
@@ -212,11 +227,9 @@ def test_process_segments_sorts_mixed_score_types():
 def test_load_transcript_returns_chronological_order(tmp_path):
     cvs = _cvs()
     (tmp_path / "input.tsv").write_text(
-        "start\tend\ttext\n"
-        "30000\t31000\tthird\n"
-        "0\t1000\tfirst\n"
-        "15000\t16000\tsecond\n",
-        encoding="utf-8")
+        "start\tend\ttext\n30000\t31000\tthird\n0\t1000\tfirst\n15000\t16000\tsecond\n",
+        encoding="utf-8",
+    )
     segments = cvs.load_transcript(str(tmp_path))
     assert [s["start"] for s in segments] == [0.0, 15.0, 30.0]
 
@@ -225,11 +238,17 @@ def test_load_transcript_returns_chronological_order(tmp_path):
 # clean_json_response: valid escaped content must survive
 # ---------------------------------------------------------------------------
 
+
 def test_clean_json_preserves_escaped_newline_inside_title():
     cvs = _cvs()
-    payload = json.dumps({"segments": [
-        {"title": "سطر أول\nسطر ثاني", "start_time": 1, "end_time": 5},
-    ]}, ensure_ascii=False)
+    payload = json.dumps(
+        {
+            "segments": [
+                {"title": "سطر أول\nسطر ثاني", "start_time": 1, "end_time": 5},
+            ]
+        },
+        ensure_ascii=False,
+    )
     parsed = cvs.clean_json_response(payload)
     assert len(parsed["segments"]) == 1
     assert parsed["segments"][0]["title"] == "سطر أول\nسطر ثاني"
@@ -237,9 +256,11 @@ def test_clean_json_preserves_escaped_newline_inside_title():
 
 def test_clean_json_still_recovers_double_escaped_payload():
     cvs = _cvs()
-    response = ('Here is the result:\\n```JSON\\n'
-                '{\\"segments\\": [{\\"start_time\\": 1, \\"end_time\\": 5}]}'
-                '\\n```')
+    response = (
+        "Here is the result:\\n```JSON\\n"
+        '{\\"segments\\": [{\\"start_time\\": 1, \\"end_time\\": 5}]}'
+        "\\n```"
+    )
     parsed = cvs.clean_json_response(response)
     assert len(parsed["segments"]) == 1
 
@@ -247,6 +268,7 @@ def test_clean_json_still_recovers_double_escaped_payload():
 # ---------------------------------------------------------------------------
 # SEO titles
 # ---------------------------------------------------------------------------
+
 
 def test_generate_titles_deterministic_across_processes():
     code = (
@@ -257,15 +279,22 @@ def test_generate_titles_deterministic_across_processes():
     )
     env1 = dict(os.environ, PYTHONHASHSEED="1")
     env2 = dict(os.environ, PYTHONHASHSEED="2")
-    out1 = subprocess.check_output([sys.executable, "-c", code], env=env1,
-                                   cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    out2 = subprocess.check_output([sys.executable, "-c", code], env=env2,
-                                   cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    out1 = subprocess.check_output(
+        [sys.executable, "-c", code],
+        env=env1,
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
+    out2 = subprocess.check_output(
+        [sys.executable, "-c", code],
+        env=env2,
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
     assert out1 == out2
 
 
 def test_hook_words_match_on_word_boundaries_only():
     from scripts import seo_titles
+
     show = seo_titles.score_title("Show me the money in 5 steps")
     how = seo_titles.score_title("How to make money in 5 steps")
     # "show" must not collect the "how" hook bonus.
@@ -274,6 +303,7 @@ def test_hook_words_match_on_word_boundaries_only():
 
 def test_arabic_hook_words_still_detected():
     from scripts import seo_titles
+
     plain = seo_titles.score_title("نتيجة مفاجئة في خمس خطوات")
     hooked = seo_titles.score_title("كيف تصل إلى نتيجة في خمس خطوات")
     assert hooked["breakdown"]["hook"] > plain["breakdown"]["hook"]

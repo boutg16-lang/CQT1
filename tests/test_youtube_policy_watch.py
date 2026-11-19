@@ -24,12 +24,19 @@ PAGE_B = "<html><body>COMPLETELY different hate policy do not post hateful slurs
 # _normalize_html / _page_hash / _extract_markers
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeAndHash:
     def test_strips_script_style_and_tags(self):
-        assert ypw._normalize_html(PAGE_A) == "hate policy text do not post hateful slurs here."
+        assert (
+            ypw._normalize_html(PAGE_A)
+            == "hate policy text do not post hateful slurs here."
+        )
 
     def test_casefold_and_whitespace_collapse(self):
-        assert ypw._normalize_html("<p>  Hello   WORLD\n\nagain </p>") == "hello world again"
+        assert (
+            ypw._normalize_html("<p>  Hello   WORLD\n\nagain </p>")
+            == "hello world again"
+        )
 
     def test_empty_html(self):
         assert ypw._normalize_html("") == ""
@@ -53,14 +60,17 @@ class TestExtractMarkers:
         text = "do not upload hateful content here. this is fine. policy: be kind to others always."
         assert ypw._extract_markers(text) == [
             "do not upload hateful content here.",
-            "policy: be kind to others always."]
+            "policy: be kind to others always.",
+        ]
 
     def test_short_and_long_snippets_skipped(self):
         assert ypw._extract_markers("do not x.") == []
         assert ypw._extract_markers("do not " + "a" * 200 + ".") == []
 
     def test_caps_at_eight(self):
-        text = " ".join("do not do thing number {} here please.".format(i) for i in range(20))
+        text = " ".join(
+            "do not do thing number {} here please.".format(i) for i in range(20)
+        )
         assert len(ypw._extract_markers(text)) == 8
 
     def test_no_markers(self):
@@ -70,6 +80,7 @@ class TestExtractMarkers:
 # ---------------------------------------------------------------------------
 # feed helpers
 # ---------------------------------------------------------------------------
+
 
 class TestFeedHelpers:
     def test_feed_path_default_is_repo_root(self):
@@ -99,8 +110,10 @@ class TestFeedHelpers:
 # check_policy_pages (stubbed fetcher)
 # ---------------------------------------------------------------------------
 
+
 def _stub_fetch(monkeypatch, pages):
     """pages: dict key -> html, or Exception to raise for every fetch."""
+
     def _fetch(url):
         if isinstance(pages, Exception):
             raise pages
@@ -189,6 +202,7 @@ class TestCheckPolicyPages:
 # watch / main
 # ---------------------------------------------------------------------------
 
+
 class TestWatch:
     def test_one_cycle(self, monkeypatch):
         calls = {"n": 0}
@@ -204,23 +218,34 @@ class TestWatch:
     def test_two_cycles_sleeps_once(self, monkeypatch):
         sleeps = []
         monkeypatch.setattr(time, "sleep", lambda seconds: sleeps.append(seconds))
-        monkeypatch.setattr(ypw, "check_policy_pages",
-                            lambda base_dir=None, force=False: {"status": "unchanged"})
+        monkeypatch.setattr(
+            ypw,
+            "check_policy_pages",
+            lambda base_dir=None, force=False: {"status": "unchanged"},
+        )
         assert ypw.watch(interval_hours=2, max_cycles=2) == 2
         assert sleeps == [2 * 3600]
 
     def test_interval_clamped_to_one_hour(self, monkeypatch):
         sleeps = []
         monkeypatch.setattr(time, "sleep", lambda seconds: sleeps.append(seconds))
-        monkeypatch.setattr(ypw, "check_policy_pages",
-                            lambda base_dir=None, force=False: {"status": "unchanged"})
+        monkeypatch.setattr(
+            ypw,
+            "check_policy_pages",
+            lambda base_dir=None, force=False: {"status": "unchanged"},
+        )
         ypw.watch(interval_hours=0.001, max_cycles=2)
         assert sleeps == [3600.0]
 
     def test_changed_cycle_printed(self, monkeypatch, capsys):
-        monkeypatch.setattr(ypw, "check_policy_pages",
-                            lambda base_dir=None, force=False: {
-                                "status": "changed", "changes": ["hate_speech"]})
+        monkeypatch.setattr(
+            ypw,
+            "check_policy_pages",
+            lambda base_dir=None, force=False: {
+                "status": "changed",
+                "changes": ["hate_speech"],
+            },
+        )
         assert ypw.watch(max_cycles=1) == 1
         out = capsys.readouterr().out
         assert "cycle 1: changed" in out
@@ -229,21 +254,27 @@ class TestWatch:
 
 class TestMain:
     def test_one_shot_prints_status(self, monkeypatch, capsys):
-        monkeypatch.setattr(ypw, "check_policy_pages",
-                            lambda: {"status": "unchanged", "changes": []})
+        monkeypatch.setattr(
+            ypw, "check_policy_pages", lambda: {"status": "unchanged", "changes": []}
+        )
         monkeypatch.setattr(sys, "argv", ["prog"])
         ypw.main()
         assert "status=unchanged changes=none" in capsys.readouterr().out
 
     def test_one_shot_with_changes(self, monkeypatch, capsys):
-        monkeypatch.setattr(ypw, "check_policy_pages",
-                            lambda: {"status": "changed", "changes": ["harassment"]})
+        monkeypatch.setattr(
+            ypw,
+            "check_policy_pages",
+            lambda: {"status": "changed", "changes": ["harassment"]},
+        )
         monkeypatch.setattr(sys, "argv", ["prog"])
         ypw.main()
         assert "status=changed changes=harassment" in capsys.readouterr().out
 
     def test_watch_mode(self, monkeypatch, capsys):
-        monkeypatch.setattr(ypw, "watch", lambda interval_hours=None, max_cycles=None: 3)
+        monkeypatch.setattr(
+            ypw, "watch", lambda interval_hours=None, max_cycles=None: 3
+        )
         monkeypatch.setattr(sys, "argv", ["prog", "--watch", "24", "--cycles", "3"])
         ypw.main()
         assert "finished after 3 cycle(s)" in capsys.readouterr().out

@@ -28,15 +28,18 @@ _DOWNLOAD_RETRY_BASE_SECONDS = 2
 def _require_yt_dlp():
     if yt_dlp is None:
         raise RuntimeError(
-            "yt-dlp is not installed. Install it with: pip install yt-dlp")
+            "yt-dlp is not installed. Install it with: pip install yt-dlp"
+        )
     return yt_dlp
+
 
 _COOKIES_HINT = (
     "\n"
     "  Private / age-restricted video? Authenticate yt-dlp and retry:\n"
-    "    python main_improved.py --url \"...\" --cookies-from-browser chrome\n"
+    '    python main_improved.py --url "..." --cookies-from-browser chrome\n'
     "  (or export cookies with a browser extension: yt-dlp.github.io/yt-dlp FAQ)\n"
-    "  Docs: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp")
+    "  Docs: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+)
 
 
 class AuthNeededError(RuntimeError):
@@ -51,37 +54,67 @@ def _friendly_download_error(e, url=""):
     """Map common yt-dlp failures to clear, actionable messages."""
     msg = str(e)
     low = msg.lower()
-    if "private video" in low or "sign in" in low or "private" in low and "video" in low:
-        return (i18n("\n[ERROR] This YouTube video is PRIVATE — it can only be downloaded "
-                     "by accounts granted access.\nSolutions:") + _COOKIES_HINT)
+    if (
+        "private video" in low
+        or "sign in" in low
+        or "private" in low
+        and "video" in low
+    ):
+        return (
+            i18n(
+                "\n[ERROR] This YouTube video is PRIVATE — it can only be downloaded "
+                "by accounts granted access.\nSolutions:"
+            )
+            + _COOKIES_HINT
+        )
     if "age" in low and ("restrict" in low or "confirm" in low):
-        return (i18n("\n[ERROR] This video is age-restricted. Authenticate with "
-                     "--cookies-from-browser to download it.") + _COOKIES_HINT)
+        return (
+            i18n(
+                "\n[ERROR] This video is age-restricted. Authenticate with "
+                "--cookies-from-browser to download it."
+            )
+            + _COOKIES_HINT
+        )
     if "video unavailable" in low or "not available" in low:
-        return i18n("\n[ERROR] This video is unavailable (removed, geo-blocked or "
-                    "deleted). Check the link on your browser.")
+        return i18n(
+            "\n[ERROR] This video is unavailable (removed, geo-blocked or "
+            "deleted). Check the link on your browser."
+        )
     if "copyright" in low or "removed" in low:
         return i18n("\n[ERROR] This video was removed (copyright or creator takedown).")
     if "no supported javascript runtime" in low or "javascript runtime" in low:
-        return (i18n("\n[ERROR] YouTube now requires a JavaScript runtime for full extraction.\n")
-                + "  Install Deno 2.3+ and yt-dlp[default], then retry.\n"
-                + "  Windows: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade \"yt-dlp[default]\"\n"
-                + "  Deno: install it and ensure deno.exe is in PATH.")
+        return (
+            i18n(
+                "\n[ERROR] YouTube now requires a JavaScript runtime for full extraction.\n"
+            )
+            + "  Install Deno 2.3+ and yt-dlp[default], then retry.\n"
+            + '  Windows: uv pip install --python .\\.venv\\Scripts\\python.exe --upgrade "yt-dlp[default]"\n'
+            + "  Deno: install it and ensure deno.exe is in PATH."
+        )
     if "is not a valid url" in low:
         return i18n("\n[ERROR] The link is not a valid YouTube URL.")
     if "ffmpeg is not installed" in low:
-        return (i18n("\n[ERROR] yt-dlp could not run ffmpeg even though it was found on PATH.\n")
-                + "  " + FFMPEG_BROKEN_GUIDANCE)
+        return (
+            i18n(
+                "\n[ERROR] yt-dlp could not run ffmpeg even though it was found on PATH.\n"
+            )
+            + "  "
+            + FFMPEG_BROKEN_GUIDANCE
+        )
     if "unable to download video subtitles" in low or "429" in low:
         return None  # handled by the retry-without-subs branch
     if _is_transient_download_error(msg):
-        return i18n("\n[ERROR] The video transfer kept failing after resumable retries. Retry this project on a stable connection; yt-dlp will resume its partial download. Choose 720p or 480p if the connection is slow.")
+        return i18n(
+            "\n[ERROR] The video transfer kept failing after resumable retries. Retry this project on a stable connection; yt-dlp will resume its partial download. Choose 720p or 480p if the connection is slow."
+        )
     if "403" in msg or "forbidden" in low:
-        return (i18n("\n[ERROR] YouTube blocked the download (HTTP 403).\n"
-                     "Fixes (try in order):\n"
-                     "  1) Update yt-dlp:  uv pip install -U yt-dlp\n"
-                     "  2) Use browser cookies: --cookies-from-browser chrome (or the 🔒 list in the WebUI)\n"
-                     "  3) Retry in a few minutes (YouTube rate-limits aggressively)"))
+        return i18n(
+            "\n[ERROR] YouTube blocked the download (HTTP 403).\n"
+            "Fixes (try in order):\n"
+            "  1) Update yt-dlp:  uv pip install -U yt-dlp\n"
+            "  2) Use browser cookies: --cookies-from-browser chrome (or the 🔒 list in the WebUI)\n"
+            "  3) Retry in a few minutes (YouTube rate-limits aggressively)"
+        )
     return i18n("\n[ERROR] YouTube download failed: {}").format(e)
 
 
@@ -91,12 +124,15 @@ def _print_friendly_and_exit(e, url=""):
         try:
             print(msg)
         except UnicodeEncodeError:
-            print(msg.encode('ascii', 'replace').decode('ascii'))
+            print(msg.encode("ascii", "replace").decode("ascii"))
     low = str(e).lower()
-    auth_cases = ("private video" in low or "sign in" in low
-                  or ("age" in low and "restrict" in low))
+    auth_cases = (
+        "private video" in low
+        or "sign in" in low
+        or ("age" in low and "restrict" in low)
+    )
     if auth_cases:
-        raise AuthNeededError(msg)   # let the CLI offer a cookies retry
+        raise AuthNeededError(msg)  # let the CLI offer a cookies retry
     raise SystemExit(1)
 
 
@@ -125,7 +161,10 @@ def progress_hook(d):
         except (OSError, UnicodeError, ValueError) as exc:
             logger.debug("Could not print download progress (%s).", type(exc).__name__)
     elif status == "finished":
-        print(f"[download] Download concluído: {d.get('filename', 'unknown file')}", flush=True)
+        print(
+            f"[download] Download concluído: {d.get('filename', 'unknown file')}",
+            flush=True,
+        )
 
 
 def _runtime_options():
@@ -135,13 +174,25 @@ def _runtime_options():
     app remains usable without Deno, but reports a precise Windows fix instead
     of hiding the warning in a generic 403 error.
     """
-    deno_path = os.environ.get("VIRALCUTTER_DENO_PATH", "").strip() or shutil.which("deno")
+    deno_path = os.environ.get("VIRALCUTTER_DENO_PATH", "").strip() or shutil.which(
+        "deno"
+    )
     if not deno_path:
         return {}
     return {"js_runtimes": {"deno": {"path": deno_path}}}
 
 
-_VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi", ".ts", ".m2ts", ".3gp"}
+_VIDEO_EXTENSIONS = {
+    ".mp4",
+    ".m4v",
+    ".mkv",
+    ".webm",
+    ".mov",
+    ".avi",
+    ".ts",
+    ".m2ts",
+    ".3gp",
+}
 _SUBTITLE_EXTENSIONS = {".srt", ".vtt", ".ass", ".lrc"}
 
 
@@ -153,6 +204,7 @@ def _adopt_downloaded_video(project_folder, output_path_base, final_video_path):
     falsely reported a missing download. Prefer the exact extension-less file,
     then known media extensions; never adopt subtitles, partial files, or JSON.
     """
+
     def valid(path):
         try:
             return os.path.isfile(path) and os.path.getsize(path) >= 1024
@@ -190,15 +242,33 @@ def _adopt_downloaded_video(project_folder, output_path_base, final_video_path):
         if suffix in {"", ".mp4", ".m4v"}:
             if source != final_video_path:
                 os.replace(source, final_video_path)
-            print(i18n("Adopted downloaded video output: {} -> {}").format(source, final_video_path))
+            print(
+                i18n("Adopted downloaded video output: {} -> {}").format(
+                    source, final_video_path
+                )
+            )
             return final_video_path if valid(final_video_path) else None
 
         ffmpeg = shutil.which("ffmpeg")
         if not ffmpeg:
-            print(i18n("Downloaded video found at {}, but FFmpeg is required to normalize its extension.").format(source))
+            print(
+                i18n(
+                    "Downloaded video found at {}, but FFmpeg is required to normalize its extension."
+                ).format(source)
+            )
             return source
         proc = subprocess.run(
-            [ffmpeg, "-y", "-i", source, "-c", "copy", "-movflags", "faststart", final_video_path],
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                source,
+                "-c",
+                "copy",
+                "-movflags",
+                "faststart",
+                final_video_path,
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             check=False,
@@ -208,14 +278,25 @@ def _adopt_downloaded_video(project_folder, output_path_base, final_video_path):
             try:
                 os.remove(source)
             except OSError as exc:
-                logger.warning("Could not remove normalized source file %s (%s).",
-                               os.path.basename(source), type(exc).__name__)
-            print(i18n("Normalized downloaded video: {} -> {}").format(source, final_video_path))
+                logger.warning(
+                    "Could not remove normalized source file %s (%s).",
+                    os.path.basename(source),
+                    type(exc).__name__,
+                )
+            print(
+                i18n("Normalized downloaded video: {} -> {}").format(
+                    source, final_video_path
+                )
+            )
             return final_video_path
     except OSError as error:
         print(i18n("Could not normalize downloaded video {}: {}").format(source, error))
     except subprocess.TimeoutExpired:
-        print(i18n("Could not normalize downloaded video {}: ffmpeg timed out after 600s").format(source))
+        print(
+            i18n(
+                "Could not normalize downloaded video {}: ffmpeg timed out after 600s"
+            ).format(source)
+        )
     return None
 
 
@@ -250,12 +331,17 @@ def _run_download_with_retries(run_download, options, sleep=None):
         try:
             return run_download(options)
         except Exception as exc:
-            if (not _is_transient_download_error(exc)
-                    or retry_index >= _DOWNLOAD_TRANSPORT_RETRIES):
+            if (
+                not _is_transient_download_error(exc)
+                or retry_index >= _DOWNLOAD_TRANSPORT_RETRIES
+            ):
                 raise
-            delay = _DOWNLOAD_RETRY_BASE_SECONDS * (2 ** retry_index)
-            print(i18n("YouTube download was interrupted; retrying in {} seconds (attempt {}/{}).")
-                  .format(delay, retry_index + 1, _DOWNLOAD_TRANSPORT_RETRIES))
+            delay = _DOWNLOAD_RETRY_BASE_SECONDS * (2**retry_index)
+            print(
+                i18n(
+                    "YouTube download was interrupted; retrying in {} seconds (attempt {}/{})."
+                ).format(delay, retry_index + 1, _DOWNLOAD_TRANSPORT_RETRIES)
+            )
             sleeper(delay)
 
 
@@ -274,8 +360,15 @@ def _format_attempts(selected_format):
     return attempts
 
 
-def download(url, base_root="VIRALS", download_subs=True, quality="best",
-             cookies_from_browser=None, cookies_file=None, sponsorblock=None):
+def download(
+    url,
+    base_root="VIRALS",
+    download_subs=True,
+    quality="best",
+    cookies_from_browser=None,
+    cookies_file=None,
+    sponsorblock=None,
+):
     _require_yt_dlp()
     # 1. Extrair informações do vídeo para pegar o título
     print(i18n("Extracting video information..."))
@@ -284,16 +377,16 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
     # Título: usa cookies apenas quando o usuário pediu explicitamente
     # (--cookies-from-browser / --cookies). Forçar chrome antes causava
     # "Could not copy Chrome cookie database" em Windows (yt-dlp#7271).
-    info_opts = {'quiet': True, 'no_warnings': True}
+    info_opts = {"quiet": True, "no_warnings": True}
     info_opts.update(_runtime_options())
     if cookies_from_browser:
-        info_opts['cookiesfrombrowser'] = (cookies_from_browser,)
+        info_opts["cookiesfrombrowser"] = (cookies_from_browser,)
     if cookies_file:
-        info_opts['cookiefile'] = cookies_file
+        info_opts["cookiefile"] = cookies_file
     try:
         with yt_dlp.YoutubeDL(info_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            title = info.get('title')
+            title = info.get("title")
     except Exception as e:
         try:
             print(i18n("Error getting video info: {}").format(e))
@@ -307,7 +400,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
             print(i18n("Detected title: {}").format(title))
         except UnicodeEncodeError:
             # Fallback for Windows consoles that choke on Emojis
-            clean_title = title.encode('ascii', 'replace').decode('ascii')
+            clean_title = title.encode("ascii", "replace").decode("ascii")
             print(i18n("Detected title: {}").format(clean_title))
     else:
         print(i18n("WARNING: Title could not be obtained. Using 'Unknown_Video'."))
@@ -318,7 +411,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
     os.makedirs(project_folder, exist_ok=True)
 
     # Caminho final do vídeo
-    output_filename = 'input'
+    output_filename = "input"
     output_path_base = os.path.join(project_folder, output_filename)
     final_video_path = f"{output_path_base}.mp4"
 
@@ -328,16 +421,27 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
             try:
                 print(i18n("Video already exists at: {}").format(final_video_path))
             except UnicodeEncodeError:
-                print(i18n("Video already exists at: {}").format(final_video_path.encode('ascii', 'replace').decode('ascii')))
+                print(
+                    i18n("Video already exists at: {}").format(
+                        final_video_path.encode("ascii", "replace").decode("ascii")
+                    )
+                )
             print(i18n("Skipping download and reusing local file."))
             return final_video_path, project_folder
         else:
-            print(i18n("Existing file found but seems corrupted/empty. Downloading again..."))
+            print(
+                i18n(
+                    "Existing file found but seems corrupted/empty. Downloading again..."
+                )
+            )
             try:
                 os.remove(final_video_path)
             except OSError as exc:
-                logger.warning("Could not remove stale video file %s (%s).",
-                               os.path.basename(final_video_path), type(exc).__name__)
+                logger.warning(
+                    "Could not remove stale video file %s (%s).",
+                    os.path.basename(final_video_path),
+                    type(exc).__name__,
+                )
 
     # Limpeza de temp
     temp_path = f"{output_path_base}.temp.mp4"
@@ -345,49 +449,54 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
         try:
             os.remove(temp_path)
         except OSError as exc:
-            logger.warning("Could not remove stale download temporary %s (%s).",
-                           os.path.basename(temp_path), type(exc).__name__)
+            logger.warning(
+                "Could not remove stale download temporary %s (%s).",
+                os.path.basename(temp_path),
+                type(exc).__name__,
+            )
 
     # Mapeamento de Qualidade
     quality_map = {
-        "best": 'bestvideo+bestaudio/best',
-        "1080p": 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
-        "720p": 'bestvideo[height<=720]+bestaudio/best[height<=720]',
-        "480p": 'bestvideo[height<=480]+bestaudio/best[height<=480]'
+        "best": "bestvideo+bestaudio/best",
+        "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]",
     }
-    selected_format = quality_map.get(quality, 'bestvideo+bestaudio/best')
-    print(i18n("Configuring download quality: {} -> {}").format(quality, selected_format))
+    selected_format = quality_map.get(quality, "bestvideo+bestaudio/best")
+    print(
+        i18n("Configuring download quality: {} -> {}").format(quality, selected_format)
+    )
 
     ydl_opts = {
-        'format': selected_format,
-        'overwrites': True,
-        'continuedl': True,
-        'outtmpl': output_path_base,
-        'postprocessor_args': [
-            '-movflags', 'faststart'
-        ],
-        'merge_output_format': 'mp4',
-        'progress_hooks': [progress_hook],
+        "format": selected_format,
+        "overwrites": True,
+        "continuedl": True,
+        "outtmpl": output_path_base,
+        "postprocessor_args": ["-movflags", "faststart"],
+        "merge_output_format": "mp4",
+        "progress_hooks": [progress_hook],
         # Download video first. Subtitles are fetched in a separate best-effort
         # request below so a YouTube subtitle 429 never invalidates the video.
-        'writesubtitles': False,
-        'writeautomaticsub': False,
-        'subtitleslangs': ['pt.*', 'en.*', 'sp.*'],
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        "writesubtitles": False,
+        "writeautomaticsub": False,
+        "subtitleslangs": ["pt.*", "en.*", "sp.*"],
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
-        'skip_download': False,
-        'quiet': False,
-        'no_warnings': False,
-        'force_ipv4': True,
+        "skip_download": False,
+        "quiet": False,
+        "no_warnings": False,
+        "force_ipv4": True,
         # v7.19: SponsorBlock — remove in-video sponsor / intro / outro /
         # self-promo segments at download time so cuts never include them.
         # Uses yt-dlp's native sponsorblock support (no extra dependency).
-        'sponsorblock': sponsorblock or None,
-        'sponsorblock_remove': (sponsorblock or "").split(",") if sponsorblock else None,
+        "sponsorblock": sponsorblock or None,
+        "sponsorblock_remove": (sponsorblock or "").split(",")
+        if sponsorblock
+        else None,
         # Authentication for private / age-restricted videos (v6.2)
-        'cookiesfrombrowser': (cookies_from_browser,) if cookies_from_browser else None,
-        'cookiefile': cookies_file or None,
+        "cookiesfrombrowser": (cookies_from_browser,) if cookies_from_browser else None,
+        "cookiefile": cookies_file or None,
     }
     ydl_opts.update(_runtime_options())
 
@@ -398,20 +507,33 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
     # rescue a working copy from a sibling install, or fail with guidance.
     toolchain = resolve_toolchain()
     if not toolchain["ok"]:
-        print(i18n("\n[ERROR] ffmpeg/ffprobe problem: {}").format("; ".join(toolchain["problems"])))
+        print(
+            i18n("\n[ERROR] ffmpeg/ffprobe problem: {}").format(
+                "; ".join(toolchain["problems"])
+            )
+        )
         print("  " + FFMPEG_BROKEN_GUIDANCE)
         raise SystemExit(1)
-    rescued = {n: p for n, p in toolchain["programs"].items() if p["state"] == "rescued"}
+    rescued = {
+        n: p for n, p in toolchain["programs"].items() if p["state"] == "rescued"
+    }
     if rescued:
         for name, info in rescued.items():
-            print(i18n("[ffmpeg] PATH copy is broken/missing — using verified {} from {}")
-                  .format(name, info["path"]))
+            print(
+                i18n(
+                    "[ffmpeg] PATH copy is broken/missing — using verified {} from {}"
+                ).format(name, info["path"])
+            )
         ydl_opts["ffmpeg_location"] = toolchain["location"]
 
     try:
         print(i18n("Downloading video to: {}...").format(project_folder))
     except UnicodeEncodeError:
-        print(i18n("Downloading video to: {}...").format(project_folder.encode('ascii', 'replace').decode('ascii')))
+        print(
+            i18n("Downloading video to: {}...").format(
+                project_folder.encode("ascii", "replace").decode("ascii")
+            )
+        )
 
     def _run_download(opts):
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -426,10 +548,16 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
         attempt_opts = dict(ydl_opts)
         attempt_opts["format"] = attempt_format
         if player_client:
-            attempt_opts["extractor_args"] = {"youtube": {"player_client": player_client}}
+            attempt_opts["extractor_args"] = {
+                "youtube": {"player_client": player_client}
+            }
         try:
             if attempt_index > 1:
-                print(i18n("Retrying YouTube video with fallback {} (format/player)...").format(attempt_index))
+                print(
+                    i18n(
+                        "Retrying YouTube video with fallback {} (format/player)..."
+                    ).format(attempt_index)
+                )
             _run_download_with_retries(_run_download, attempt_opts)
             ydl_opts = attempt_opts
             video_downloaded = True
@@ -438,21 +566,36 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
             last_error = exc
             error_str = str(exc)
             low_error = error_str.lower()
-            if ("no address associated with hostname" in low_error
-                    or "failed to resolve" in low_error):
-                print(i18n("\n[CRITICAL ERROR] Connection Failure: Could not access YouTube."))
-                print(i18n("Check your internet connection or if there is any DNS block."))
+            if (
+                "no address associated with hostname" in low_error
+                or "failed to resolve" in low_error
+            ):
+                print(
+                    i18n(
+                        "\n[CRITICAL ERROR] Connection Failure: Could not access YouTube."
+                    )
+                )
+                print(
+                    i18n("Check your internet connection or if there is any DNS block.")
+                )
                 print(i18n("Details: {}").format(exc))
                 raise SystemExit(1) from exc
-            if ("private video" in low_error or "sign in" in low_error
-                    or ("age" in low_error and "restrict" in low_error)):
+            if (
+                "private video" in low_error
+                or "sign in" in low_error
+                or ("age" in low_error and "restrict" in low_error)
+            ):
                 _print_friendly_and_exit(exc, url)
             if "is not a valid url" in low_error:
                 print(i18n("Error: the entered link is not valid."))
                 _print_friendly_and_exit(exc, url)
             if not _is_http_block(error_str):
                 _print_friendly_and_exit(exc, url)
-            print(i18n("YouTube blocked this format/player attempt ({}); trying a safe fallback.").format(error_str))
+            print(
+                i18n(
+                    "YouTube blocked this format/player attempt ({}); trying a safe fallback."
+                ).format(error_str)
+            )
         except Exception as exc:
             last_error = exc
             break
@@ -467,50 +610,80 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
     # 429/403 here leaves the video usable because WhisperX can transcribe it.
     if download_subs:
         subtitle_opts = dict(ydl_opts)
-        subtitle_opts.update({
-            "skip_download": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "srt"}],
-        })
+        subtitle_opts.update(
+            {
+                "skip_download": True,
+                "writesubtitles": True,
+                "writeautomaticsub": True,
+                "postprocessors": [
+                    {"key": "FFmpegSubtitlesConvertor", "format": "srt"}
+                ],
+            }
+        )
         try:
             print(i18n("Trying to download subtitles separately (optional)..."))
             _run_download(subtitle_opts)
         except Exception as subtitle_error:
-            print(i18n("Warning: subtitles were not downloaded ({}). The video remains ready for WhisperX transcription.").format(subtitle_error))
+            print(
+                i18n(
+                    "Warning: subtitles were not downloaded ({}). The video remains ready for WhisperX transcription."
+                ).format(subtitle_error)
+            )
 
     # yt-dlp may have written ``input`` (without an extension) because the
     # output template is extension-less. Adopt it before declaring failure.
-    adopted_path = _adopt_downloaded_video(project_folder, output_path_base, final_video_path)
+    adopted_path = _adopt_downloaded_video(
+        project_folder, output_path_base, final_video_path
+    )
     if adopted_path:
         final_video_path = adopted_path
 
     # Safety net: if the video file still does not exist after all attempts,
     # fail loudly instead of returning a bogus path (v6.3b).
     if not os.path.exists(final_video_path) or os.path.getsize(final_video_path) < 1024:
-        print(i18n("\n[ERROR] Download finished but the video file is missing/empty: {}")
-              .format(final_video_path))
+        print(
+            i18n(
+                "\n[ERROR] Download finished but the video file is missing/empty: {}"
+            ).format(final_video_path)
+        )
         raise SystemExit(1)
 
     # RENOMEAR LEGENDA PARA PADRÃO (input.vtt ou input.srt)
     # Se for VTT, converte para SRT para garantir compatibilidade.
     try:
         import glob
+
         # Pega a primeira que encontrar
-        potential_subs = glob.glob(os.path.join(project_folder, "input.*.vtt")) + glob.glob(os.path.join(project_folder, "input.*.srt"))
+        potential_subs = glob.glob(
+            os.path.join(project_folder, "input.*.vtt")
+        ) + glob.glob(os.path.join(project_folder, "input.*.srt"))
 
         if potential_subs:
             best_sub = potential_subs[0]
             ext = os.path.splitext(best_sub)[1]
-            new_name = os.path.join(project_folder, "input.srt")  # Vamos padronizar tudo para .srt
+            new_name = os.path.join(
+                project_folder, "input.srt"
+            )  # Vamos padronizar tudo para .srt
 
-            if ext.lower() == '.vtt':
+            if ext.lower() == ".vtt":
                 try:
-                    print(i18n("Formatting complex VTT subtitle ({}) to clean SRT...").format(os.path.basename(best_sub)))
+                    print(
+                        i18n(
+                            "Formatting complex VTT subtitle ({}) to clean SRT..."
+                        ).format(os.path.basename(best_sub))
+                    )
                 except UnicodeEncodeError:
-                    print(i18n("Formatting complex VTT subtitle ({}) to clean SRT...").format(os.path.basename(best_sub).encode('ascii', 'replace').decode('ascii')))
+                    print(
+                        i18n(
+                            "Formatting complex VTT subtitle ({}) to clean SRT..."
+                        ).format(
+                            os.path.basename(best_sub)
+                            .encode("ascii", "replace")
+                            .decode("ascii")
+                        )
+                    )
                 try:
-                    with open(best_sub, 'r', encoding='utf-8') as f:
+                    with open(best_sub, "r", encoding="utf-8") as f:
                         lines = f.readlines()
 
                     srt_content = []
@@ -521,11 +694,13 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                     for line in lines:
                         clean_line = line.strip()
                         # Ignora Headers e Metadados do VTT/Youtube
-                        if clean_line.startswith("WEBVTT") or \
-                           clean_line.startswith("X-TIMESTAMP") or \
-                           clean_line.startswith("NOTE") or \
-                           clean_line.startswith("Kind:") or \
-                           clean_line.startswith("Language:"):
+                        if (
+                            clean_line.startswith("WEBVTT")
+                            or clean_line.startswith("X-TIMESTAMP")
+                            or clean_line.startswith("NOTE")
+                            or clean_line.startswith("Kind:")
+                            or clean_line.startswith("Language:")
+                        ):
                             continue
 
                         if "-->" in clean_line:
@@ -533,11 +708,11 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                             parts = clean_line.split("-->")
                             start = parts[0].strip()
                             # Remove tags de posicionamento "align:start position:0%"
-                            end = parts[1].strip().split(' ')[0]
+                            end = parts[1].strip().split(" ")[0]
 
                             def fix_time(t):
-                                t = t.replace('.', ',')
-                                if t.count(':') == 1:
+                                t = t.replace(".", ",")
+                                if t.count(":") == 1:
                                     t = "00:" + t
                                 return t
 
@@ -546,13 +721,13 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
 
                         elif clean_line:
                             # Texto: remover tags complexas <00:00:00.560><c> etc
-                            text = re.sub(r'<[^>]+>', '', clean_line).strip()
+                            text = re.sub(r"<[^>]+>", "", clean_line).strip()
 
                             if not text:
                                 continue
 
                             # Pega apenas a ULTIMA linha se tiver quebras
-                            lines_in_text = text.split('\n')
+                            lines_in_text = text.split("\n")
                             final_line = lines_in_text[-1].strip()
 
                             if not final_line:
@@ -569,29 +744,48 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                             last_text = final_line
                             counter += 1
 
-                    with open(new_name, 'w', encoding='utf-8') as f_out:
+                    with open(new_name, "w", encoding="utf-8") as f_out:
                         f_out.writelines(srt_content)
 
                     try:
-                        print(i18n("Subtitle converted and cleaned: {}").format(new_name))
+                        print(
+                            i18n("Subtitle converted and cleaned: {}").format(new_name)
+                        )
                     except UnicodeEncodeError:
-                        print(i18n("Subtitle converted and cleaned: {}").format(new_name.encode('ascii', 'replace').decode('ascii')))
+                        print(
+                            i18n("Subtitle converted and cleaned: {}").format(
+                                new_name.encode("ascii", "replace").decode("ascii")
+                            )
+                        )
                     try:
                         os.remove(best_sub)
                     except OSError as exc:
-                        logger.warning("Could not remove converted subtitle %s (%s).",
-                                       os.path.basename(best_sub), type(exc).__name__)
+                        logger.warning(
+                            "Could not remove converted subtitle %s (%s).",
+                            os.path.basename(best_sub),
+                            type(exc).__name__,
+                        )
 
                 except Exception as e_conv:
-                    print(i18n("Failed to convert VTT: {}. Keeping original.").format(e_conv))
+                    print(
+                        i18n("Failed to convert VTT: {}. Keeping original.").format(
+                            e_conv
+                        )
+                    )
                     # Fallback: rename apenas
                     new_name_fallback = os.path.join(project_folder, "input.vtt")
-                    if os.path.exists(new_name_fallback) and new_name_fallback != best_sub:
+                    if (
+                        os.path.exists(new_name_fallback)
+                        and new_name_fallback != best_sub
+                    ):
                         try:
                             os.remove(new_name_fallback)
                         except OSError as exc:
-                            logger.warning("Could not replace fallback subtitle %s (%s).",
-                                           os.path.basename(new_name_fallback), type(exc).__name__)
+                            logger.warning(
+                                "Could not replace fallback subtitle %s (%s).",
+                                os.path.basename(new_name_fallback),
+                                type(exc).__name__,
+                            )
                     os.rename(best_sub, new_name_fallback)
 
             else:
@@ -600,29 +794,42 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best",
                     try:
                         os.remove(new_name)
                     except OSError as exc:
-                        logger.warning("Could not replace subtitle %s (%s).",
-                                       os.path.basename(new_name), type(exc).__name__)
+                        logger.warning(
+                            "Could not replace subtitle %s (%s).",
+                            os.path.basename(new_name),
+                            type(exc).__name__,
+                        )
                 os.rename(best_sub, new_name)
                 try:
                     print(i18n("SRT subtitle renamed to: {}").format(new_name))
                 except UnicodeEncodeError:
-                    print(i18n("SRT subtitle renamed to: {}").format(new_name.encode('ascii', 'replace').decode('ascii')))
+                    print(
+                        i18n("SRT subtitle renamed to: {}").format(
+                            new_name.encode("ascii", "replace").decode("ascii")
+                        )
+                    )
 
             # Limpa sobras
             for extra in potential_subs[1:]:
                 try:
                     os.remove(extra)
                 except OSError as exc:
-                    logger.warning("Could not remove extra subtitle %s (%s).",
-                                   os.path.basename(extra), type(exc).__name__)
+                    logger.warning(
+                        "Could not remove extra subtitle %s (%s).",
+                        os.path.basename(extra),
+                        type(exc).__name__,
+                    )
 
     except Exception as e_ren:
         print(i18n("Error processing subtitles: {}").format(e_ren))
 
     # Absolute last resort: never return a missing/empty file (v6.3c).
     if not os.path.exists(final_video_path) or os.path.getsize(final_video_path) < 1024:
-        print(i18n("\n[ERROR] Download finished but the video file is missing/empty: {}")
-              .format(final_video_path))
+        print(
+            i18n(
+                "\n[ERROR] Download finished but the video file is missing/empty: {}"
+            ).format(final_video_path)
+        )
         raise SystemExit(1)
 
     return final_video_path, project_folder

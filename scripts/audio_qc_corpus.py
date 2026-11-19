@@ -75,6 +75,7 @@ def _now() -> str:
 # Manifest
 # ---------------------------------------------------------------------------
 
+
 def manifest_path(corpus_dir: str) -> str:
     return os.path.join(os.path.abspath(os.fspath(corpus_dir)), MANIFEST_NAME)
 
@@ -109,24 +110,35 @@ def _write_json(path: str, payload: Dict[str, Any]) -> None:
                 pass
 
 
-def init_corpus(corpus_dir: str, *, source: str, license_id: str,
-                source_url: str = "", attribution: str = "",
-                license_note: str = "", name: str = "") -> Dict[str, Any]:
+def init_corpus(
+    corpus_dir: str,
+    *,
+    source: str,
+    license_id: str,
+    source_url: str = "",
+    attribution: str = "",
+    license_note: str = "",
+    name: str = "",
+) -> Dict[str, Any]:
     """Create a corpus folder with its provenance manifest."""
     if os.path.exists(manifest_path(corpus_dir)):
-        raise SystemExit("corpus already initialised: {}".format(manifest_path(corpus_dir)))
+        raise SystemExit(
+            "corpus already initialised: {}".format(manifest_path(corpus_dir))
+        )
     license_id = str(license_id or "").strip().lower()
     if license_id not in KNOWN_LICENSES:
         raise SystemExit(
             "unknown license id {!r} — known ids: {}".format(
-                license_id, ", ".join(sorted(KNOWN_LICENSES))))
+                license_id, ", ".join(sorted(KNOWN_LICENSES))
+            )
+        )
     if license_id == "custom" and not str(license_note).strip():
         raise SystemExit(
             "--license custom requires --license-note describing the terms "
-            "(fail closed on provenance)")
+            "(fail closed on provenance)"
+        )
     if KNOWN_LICENSES[license_id]["attribution_required"] and not attribution.strip():
-        raise SystemExit(
-            "license {} requires --attribution text".format(license_id))
+        raise SystemExit("license {} requires --attribution text".format(license_id))
     if not str(source).strip():
         raise SystemExit("--source is required (where did these clips come from?)")
 
@@ -159,18 +171,21 @@ def require_license(corpus_dir: str) -> Dict[str, Any]:
     if manifest is None:
         raise SystemExit(
             "no corpus manifest at {} — run `init` first and declare the "
-            "source license".format(manifest_path(corpus_dir)))
+            "source license".format(manifest_path(corpus_dir))
+        )
     license_id = str((manifest.get("license") or {}).get("id") or "").lower()
     if license_id not in KNOWN_LICENSES:
         raise SystemExit(
             "corpus manifest has no recognised license id ({!r}) — "
-            "calibration is refused on unlicensed data".format(license_id))
+            "calibration is refused on unlicensed data".format(license_id)
+        )
     return manifest
 
 
 # ---------------------------------------------------------------------------
 # Clip normalisation
 # ---------------------------------------------------------------------------
+
 
 def _slug(text: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9_-]+", "-", str(text or "")).strip("-").lower()
@@ -198,24 +213,53 @@ def normalize_clip(source: str, target: str, *, timeout: int = 300) -> Dict[str,
     if not os.path.isfile(source):
         return {"ok": False, "error": "file not found: {}".format(source)}
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", source,
-        "-f", "lavfi", "-i", "color=c=black:s={}x{}:r=1".format(
-            CANONICAL_WIDTH, CANONICAL_HEIGHT),
-        "-map", "0:a:0?", "-map", "1:v:0",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        source,
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s={}x{}:r=1".format(CANONICAL_WIDTH, CANONICAL_HEIGHT),
+        "-map",
+        "0:a:0?",
+        "-map",
+        "1:v:0",
         "-shortest",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "40",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-ac", "1", "-ar", "16000", "-b:a", "48k",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "40",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-b:a",
+        "48k",
         target,
     ]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:300]}
-    if proc.returncode != 0 or not os.path.isfile(target) or os.path.getsize(target) == 0:
-        return {"ok": False,
-                "error": (proc.stderr or proc.stdout or "ffmpeg failed")[-400:]}
+    if (
+        proc.returncode != 0
+        or not os.path.isfile(target)
+        or os.path.getsize(target) == 0
+    ):
+        return {
+            "ok": False,
+            "error": (proc.stderr or proc.stdout or "ffmpeg failed")[-400:],
+        }
     return {"ok": True, "path": target, "size": os.path.getsize(target)}
 
 
@@ -243,7 +287,10 @@ def add_clips(corpus_dir: str, sources: Sequence[str]) -> Dict[str, Any]:
 # Mozilla Common Voice import (CC0)
 # ---------------------------------------------------------------------------
 
-def import_common_voice(corpus_dir: str, cv_dir: str, *, limit: Optional[int] = None) -> Dict[str, Any]:
+
+def import_common_voice(
+    corpus_dir: str, cv_dir: str, *, limit: Optional[int] = None
+) -> Dict[str, Any]:
     """Import a Mozilla Common Voice export (``clips/*.mp3`` + TSV files).
 
     Common Voice is CC0; the manifest is created automatically when missing.
@@ -253,7 +300,9 @@ def import_common_voice(corpus_dir: str, cv_dir: str, *, limit: Optional[int] = 
     cv_dir = os.path.abspath(os.path.expanduser(cv_dir))
     clips_src = os.path.join(cv_dir, "clips")
     if not os.path.isdir(clips_src):
-        raise SystemExit("Common Voice export not found (no clips/ dir): {}".format(cv_dir))
+        raise SystemExit(
+            "Common Voice export not found (no clips/ dir): {}".format(cv_dir)
+        )
 
     if load_manifest(corpus_dir) is None:
         init_corpus(
@@ -303,12 +352,15 @@ def import_common_voice(corpus_dir: str, cv_dir: str, *, limit: Optional[int] = 
 # Status + calibration
 # ---------------------------------------------------------------------------
 
+
 def corpus_status(corpus_dir: str) -> Dict[str, Any]:
     manifest = load_manifest(corpus_dir)
     clips_dir = os.path.join(corpus_dir, CLIPS_SUBDIR)
-    clips = sorted(
-        name for name in os.listdir(clips_dir)
-        if name.endswith(".mp4")) if os.path.isdir(clips_dir) else []
+    clips = (
+        sorted(name for name in os.listdir(clips_dir) if name.endswith(".mp4"))
+        if os.path.isdir(clips_dir)
+        else []
+    )
     license_id = str(((manifest or {}).get("license") or {}).get("id") or "")
     return {
         "corpus_dir": os.path.abspath(corpus_dir),
@@ -319,12 +371,18 @@ def corpus_status(corpus_dir: str) -> Dict[str, Any]:
         "clip_names": clips[:10],
         "calibration_ready": manifest is not None and len(clips) >= 5,
         "thresholds_present": os.path.isfile(
-            os.path.join(corpus_dir, "audio_qc_thresholds.json")),
+            os.path.join(corpus_dir, "audio_qc_thresholds.json")
+        ),
     }
 
 
-def calibrate_corpus(corpus_dir: str, *, output: Optional[str] = None,
-                     min_files: int = 5, limit: Optional[int] = None) -> Dict[str, Any]:
+def calibrate_corpus(
+    corpus_dir: str,
+    *,
+    output: Optional[str] = None,
+    min_files: int = 5,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
     """License-gated calibration: refuse unlicensed corpora, then delegate to
     ``scripts.audio_qc_calibrate``."""
     manifest = require_license(corpus_dir)
@@ -333,8 +391,7 @@ def calibrate_corpus(corpus_dir: str, *, output: Optional[str] = None,
     clips_dir = os.path.join(corpus_dir, CLIPS_SUBDIR)
     if not os.path.isdir(clips_dir):
         raise SystemExit("corpus has no clips/ folder: {}".format(corpus_dir))
-    report = audio_qc_calibrate.calibrate(
-        clips_dir, min_files=min_files, limit=limit)
+    report = audio_qc_calibrate.calibrate(clips_dir, min_files=min_files, limit=limit)
     report["corpus_manifest"] = {
         "source": (manifest.get("source") or {}).get("name"),
         "license": (manifest.get("license") or {}).get("id"),
@@ -349,13 +406,22 @@ def calibrate_corpus(corpus_dir: str, *, output: Optional[str] = None,
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _cmd_init(args: argparse.Namespace) -> int:
     manifest = init_corpus(
-        args.corpus_dir, source=args.source, license_id=args.license,
-        source_url=args.source_url, attribution=args.attribution,
-        license_note=args.license_note, name=args.name)
-    print("تم إنشاء corpus بترخيص {} في {}".format(
-        manifest["license"]["id"], os.path.abspath(args.corpus_dir)))
+        args.corpus_dir,
+        source=args.source,
+        license_id=args.license,
+        source_url=args.source_url,
+        attribution=args.attribution,
+        license_note=args.license_note,
+        name=args.name,
+    )
+    print(
+        "تم إنشاء corpus بترخيص {} في {}".format(
+            manifest["license"]["id"], os.path.abspath(args.corpus_dir)
+        )
+    )
     return 0
 
 
@@ -371,9 +437,13 @@ def _cmd_add(args: argparse.Namespace) -> int:
 
 def _cmd_import_cv(args: argparse.Namespace) -> int:
     result = import_common_voice(args.corpus_dir, args.cv_dir, limit=args.limit)
-    print("Common Voice: أُضيف {} مقطعاً، فشل {}، غير موجود {}".format(
-        len(result["added"]), len(result["failed"]),
-        result.get("skipped_missing_files", 0)))
+    print(
+        "Common Voice: أُضيف {} مقطعاً، فشل {}، غير موجود {}".format(
+            len(result["added"]),
+            len(result["failed"]),
+            result.get("skipped_missing_files", 0),
+        )
+    )
     return 0 if not result["failed"] else 1
 
 
@@ -384,24 +454,38 @@ def _cmd_status(args: argparse.Namespace) -> int:
         return 0
     print("corpus: {}".format(status["corpus_dir"]))
     print("  الترخيص: {} — المصدر: {}".format(status["license"], status["source"]))
-    print("  المقاطع: {} — جاهز للمعايرة: {}".format(
-        status["clips"], "نعم" if status["calibration_ready"] else "لا (يحتاج 5 على الأقل)"))
-    print("  thresholds موجودة: {}".format("نعم" if status["thresholds_present"] else "لا"))
+    print(
+        "  المقاطع: {} — جاهز للمعايرة: {}".format(
+            status["clips"],
+            "نعم" if status["calibration_ready"] else "لا (يحتاج 5 على الأقل)",
+        )
+    )
+    print(
+        "  thresholds موجودة: {}".format(
+            "نعم" if status["thresholds_present"] else "لا"
+        )
+    )
     return 0 if status["calibration_ready"] else 2
 
 
 def _cmd_calibrate(args: argparse.Namespace) -> int:
     report = calibrate_corpus(
-        args.corpus_dir, output=args.output, min_files=args.min_files,
-        limit=args.limit)
+        args.corpus_dir, output=args.output, min_files=args.min_files, limit=args.limit
+    )
     if report.get("ok"):
         recommended = report.get("recommended") or {}
-        print("المعايرة نجحت: {} مقطعاً مقاساً — العتبات المقترحة: {}".format(
-            report["corpus"]["files_measured"],
-            json.dumps(recommended, ensure_ascii=False)))
+        print(
+            "المعايرة نجحت: {} مقطعاً مقاساً — العتبات المقترحة: {}".format(
+                report["corpus"]["files_measured"],
+                json.dumps(recommended, ensure_ascii=False),
+            )
+        )
         print("التقرير: {}".format(report["output"]))
-        print("لاستخدامها: python -m scripts.audio_qc --project <مشروع> --thresholds-file {}".format(
-            report["output"]))
+        print(
+            "لاستخدامها: python -m scripts.audio_qc --project <مشروع> --thresholds-file {}".format(
+                report["output"]
+            )
+        )
         return 0
     print("فشلت المعايرة: {}".format(report.get("error", "unknown")), file=sys.stderr)
     return 1
@@ -409,14 +493,16 @@ def _cmd_calibrate(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Licensed-corpus management for audio-QC calibration")
+        description="Licensed-corpus management for audio-QC calibration"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser("init", help="create a corpus with its license manifest")
     p_init.add_argument("corpus_dir")
     p_init.add_argument("--source", required=True)
-    p_init.add_argument("--license", required=True, dest="license",
-                        choices=sorted(KNOWN_LICENSES))
+    p_init.add_argument(
+        "--license", required=True, dest="license", choices=sorted(KNOWN_LICENSES)
+    )
     p_init.add_argument("--source-url", default="")
     p_init.add_argument("--attribution", default="")
     p_init.add_argument("--license-note", default="")

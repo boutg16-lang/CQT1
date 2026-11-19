@@ -6,6 +6,7 @@ package: Arabic dialogue analysis, contextual timing suggestions, diverse
 selection, final-segment validation, speaker-turn context and optional QC of
 already-rendered media. It never renders, uploads, or silently approves clips.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,8 +41,11 @@ def _finite_number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _speaker_context(segments: list[dict[str, Any]], gap_limit: float = 3.0) -> list[dict[str, Any]]:
+def _speaker_context(
+    segments: list[dict[str, Any]], gap_limit: float = 3.0
+) -> list[dict[str, Any]]:
     """Annotate whether adjacent source segments continue the same speaker."""
+
     def sort_start(item: dict[str, Any]) -> float:
         value = item.get("start", 0)
         if value is None or value == "":
@@ -56,30 +60,47 @@ def _speaker_context(segments: list[dict[str, Any]], gap_limit: float = 3.0) -> 
     result = []
     for index, item in enumerate(ordered):
         previous = ordered[index - 1] if index else None
-        current_speaker = item.get("speaker_id", item.get("speaker", item.get("speaker_label")))
-        previous_speaker = None if previous is None else previous.get(
-            "speaker_id", previous.get("speaker", previous.get("speaker_label")))
+        current_speaker = item.get(
+            "speaker_id", item.get("speaker", item.get("speaker_label"))
+        )
+        previous_speaker = (
+            None
+            if previous is None
+            else previous.get(
+                "speaker_id", previous.get("speaker", previous.get("speaker_label"))
+            )
+        )
         current_start = _finite_number(item.get("start"))
         previous_end = _finite_number(previous.get("end")) if previous else None
-        gap = (current_start - previous_end
-               if current_start is not None and previous_end is not None else None)
-        same = bool(previous is not None and current_speaker is not None
-                    and previous_speaker == current_speaker and gap is not None
-                    and -0.001 <= gap <= gap_limit)
+        gap = (
+            current_start - previous_end
+            if current_start is not None and previous_end is not None
+            else None
+        )
+        same = bool(
+            previous is not None
+            and current_speaker is not None
+            and previous_speaker == current_speaker
+            and gap is not None
+            and -0.001 <= gap <= gap_limit
+        )
         item["speaker_turn_context"] = {
             "speaker_id": current_speaker,
             "continues_previous_speaker": same,
             "gap_from_previous_seconds": round(gap, 3) if gap is not None else None,
             "review_note": (
                 "راجع حدود المقطع مع الجملة السابقة للمتحدث نفسه."
-                if same else "تحقق من انتقال المتحدث والسياق السمعي."
+                if same
+                else "تحقق من انتقال المتحدث والسياق السمعي."
             ),
         }
         result.append(item)
     return result
 
 
-def _validate_candidate(item: dict[str, Any], min_duration: float, max_duration: float) -> dict[str, Any]:
+def _validate_candidate(
+    item: dict[str, Any], min_duration: float, max_duration: float
+) -> dict[str, Any]:
     # Validator's stable contract uses start_time/end_time; preserve source keys.
     normalized = dict(item)
     if "start_time" not in normalized:
@@ -89,8 +110,11 @@ def _validate_candidate(item: dict[str, Any], min_duration: float, max_duration:
     if "transcript_text" not in normalized:
         normalized["transcript_text"] = _text(normalized)
     verdict = validate_final_segment(
-        normalized, min_duration=min_duration, max_duration=max_duration,
-        require_title=False, min_lexical_words=3,
+        normalized,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        require_title=False,
+        min_lexical_words=3,
     )
     return {
         "ok": bool(verdict.get("ok")),
@@ -98,14 +122,21 @@ def _validate_candidate(item: dict[str, Any], min_duration: float, max_duration:
         "warnings": verdict.get("warnings", []),
         "checks": verdict.get("checks", {}),
         "duration": verdict.get("duration"),
-        "decision": "eligible_for_human_review" if verdict.get("ok") else "fix_required",
+        "decision": "eligible_for_human_review"
+        if verdict.get("ok")
+        else "fix_required",
     }
 
 
-def run_workflow(segments: list[dict[str, Any]], *, limit: int = 5,
-                 max_per_topic: int = 2, min_duration: float = 0.0,
-                 max_duration: float = 180.0,
-                 rendered_media: list[str] | None = None) -> dict[str, Any]:
+def run_workflow(
+    segments: list[dict[str, Any]],
+    *,
+    limit: int = 5,
+    max_per_topic: int = 2,
+    min_duration: float = 0.0,
+    max_duration: float = 180.0,
+    rendered_media: list[str] | None = None,
+) -> dict[str, Any]:
     if not isinstance(segments, list):
         raise TypeError("segments must be a list")
     if limit < 1 or max_per_topic < 1:
@@ -116,7 +147,9 @@ def run_workflow(segments: list[dict[str, Any]], *, limit: int = 5,
     valid_inputs = [dict(x) for x in segments if isinstance(x, dict)]
     speaker_annotated = _speaker_context(valid_inputs)
     package = build_editorial_package(
-        speaker_annotated, limit=limit, max_per_topic=max_per_topic,
+        speaker_annotated,
+        limit=limit,
+        max_per_topic=max_per_topic,
     )
     selected = []
     for candidate in package.get("selected", []):
@@ -153,7 +186,9 @@ def run_workflow(segments: list[dict[str, Any]], *, limit: int = 5,
             "human_review_required_count": len(selected),
         },
         "release_gate": {
-            "status": "blocked" if fix_required or audio_blocked else "human_review_required",
+            "status": "blocked"
+            if fix_required or audio_blocked
+            else "human_review_required",
             "automatic_publish_allowed": False,
             "reason": "اجتياز الفحوص الآلية لا يثبت صحة المحتوى أو اكتمال السياق أو موافقة المنصة. يلزم اعتماد بشري قبل النشر.",
         },
@@ -167,26 +202,47 @@ def run_workflow(segments: list[dict[str, Any]], *, limit: int = 5,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the unified OUSSAMA Cutter review-first production workflow")
-    parser.add_argument("input", type=Path, help="JSON list or object containing segments")
-    parser.add_argument("--output", type=Path, default=Path("production_workflow_report.json"))
+    parser = argparse.ArgumentParser(
+        description="Run the unified OUSSAMA Cutter review-first production workflow"
+    )
+    parser.add_argument(
+        "input", type=Path, help="JSON list or object containing segments"
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("production_workflow_report.json")
+    )
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--max-per-topic", type=int, default=2)
     parser.add_argument("--min-duration", type=float, default=0.0)
     parser.add_argument("--max-duration", type=float, default=180.0)
-    parser.add_argument("--rendered-media", nargs="*", default=[], help="Optional already-rendered clips to audio-QC")
+    parser.add_argument(
+        "--rendered-media",
+        nargs="*",
+        default=[],
+        help="Optional already-rendered clips to audio-QC",
+    )
     args = parser.parse_args(argv)
     try:
         payload = json.loads(args.input.read_text(encoding="utf-8-sig"))
         segments = payload.get("segments", []) if isinstance(payload, dict) else payload
         report = run_workflow(
-            segments, limit=args.limit, max_per_topic=args.max_per_topic,
-            min_duration=args.min_duration, max_duration=args.max_duration,
+            segments,
+            limit=args.limit,
+            max_per_topic=args.max_per_topic,
+            min_duration=args.min_duration,
+            max_duration=args.max_duration,
             rendered_media=args.rendered_media,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"summary": report["summary"], "release_gate": report["release_gate"]}, ensure_ascii=False))
+        args.output.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(
+            json.dumps(
+                {"summary": report["summary"], "release_gate": report["release_gate"]},
+                ensure_ascii=False,
+            )
+        )
         return 0 if report["release_gate"]["status"] != "blocked" else 2
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         parser.error(str(exc))

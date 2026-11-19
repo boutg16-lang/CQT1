@@ -67,6 +67,7 @@ class ManifestError(Exception):
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 def channel() -> str:
     """Active update channel: ``github`` (default), ``manifest`` or ``off``."""
     raw = str(os.getenv(CHANNEL_ENV, "github") or "github").strip().lower()
@@ -89,14 +90,17 @@ PINNED_KEY_REL = os.path.join("keys", "maintainer-signing.pub")
 
 def _pinned_key_candidates() -> Sequence[str]:
     candidates = []
-    meipass = getattr(sys, "_MEIPASS", None)          # PyInstaller onefile
+    meipass = getattr(sys, "_MEIPASS", None)  # PyInstaller onefile
     if meipass:
         candidates.append(os.path.join(meipass, PINNED_KEY_REL))
-    if getattr(sys, "frozen", False):                  # onedir / sidecar
+    if getattr(sys, "frozen", False):  # onedir / sidecar
         candidates.append(os.path.join(os.path.dirname(sys.executable), PINNED_KEY_REL))
     # source checkout: <repo root>/keys/maintainer-signing.pub
-    candidates.append(os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), PINNED_KEY_REL))
+    candidates.append(
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), PINNED_KEY_REL
+        )
+    )
     return candidates
 
 
@@ -131,7 +135,11 @@ def allow_unsigned_update() -> bool:
     accepted four spellings).
     """
     return str(os.getenv(ALLOW_UNSIGNED_ENV, "") or "").strip().lower() in {
-        "1", "true", "yes", "on"}
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _allow_unsigned() -> bool:
@@ -153,10 +161,14 @@ def _warn_env_trust_root_once() -> None:
     if _WARNED_ENV_TRUST_ROOT:
         return
     if str(os.getenv(PUBLIC_KEY_ENV, "") or "").strip():
-        overrode = " (overrides the build-pinned key)" if pinned_public_key_path() else ""
-        print("note: update verification trusts the key named by {}{} — any "
-              "local process can repoint it".format(PUBLIC_KEY_ENV, overrode),
-              file=sys.stderr)
+        overrode = (
+            " (overrides the build-pinned key)" if pinned_public_key_path() else ""
+        )
+        print(
+            "note: update verification trusts the key named by {}{} — any "
+            "local process can repoint it".format(PUBLIC_KEY_ENV, overrode),
+            file=sys.stderr,
+        )
         _WARNED_ENV_TRUST_ROOT = True
 
 
@@ -172,8 +184,14 @@ def current_platform() -> str:
 # Build / sign / verify
 # ---------------------------------------------------------------------------
 
-def build_manifest(version: str, assets: Dict[str, Dict[str, str]], *,
-                   notes: str = "", published_at: Optional[str] = None) -> Dict[str, Any]:
+
+def build_manifest(
+    version: str,
+    assets: Dict[str, Dict[str, str]],
+    *,
+    notes: str = "",
+    published_at: Optional[str] = None,
+) -> Dict[str, Any]:
     """Assemble a manifest. ``assets`` maps platform → {"url", "sha256"}."""
     if not str(version or "").strip():
         raise ManifestError("version is required")
@@ -181,8 +199,9 @@ def build_manifest(version: str, assets: Dict[str, Dict[str, str]], *,
     for name, asset in (assets or {}).items():
         platform = str(name).strip().lower()
         if platform not in PLATFORMS:
-            raise ManifestError("unknown platform {!r} (expected {})".format(
-                name, "/".join(PLATFORMS)))
+            raise ManifestError(
+                "unknown platform {!r} (expected {})".format(name, "/".join(PLATFORMS))
+            )
         if not isinstance(asset, dict):
             raise ManifestError("asset {} must be an object".format(platform))
         url = str(asset.get("url") or "").strip()
@@ -191,14 +210,16 @@ def build_manifest(version: str, assets: Dict[str, Dict[str, str]], *,
             raise ManifestError("asset {} has no url".format(platform))
         if len(sha) != 64 or any(ch not in "0123456789abcdef" for ch in sha):
             raise ManifestError(
-                "asset {} needs a 64-hex sha256 (got {!r})".format(platform, sha))
+                "asset {} needs a 64-hex sha256 (got {!r})".format(platform, sha)
+            )
         clean[platform] = {"url": url, "sha256": sha}
     if not clean:
         raise ManifestError("a manifest needs at least one platform asset")
     return {
         "schema": SCHEMA,
         "version": str(version).strip(),
-        "published_at": published_at or _dt.datetime.now(tz=_dt.timezone.utc).isoformat(),
+        "published_at": published_at
+        or _dt.datetime.now(tz=_dt.timezone.utc).isoformat(),
         "notes": str(notes or "")[:1000],
         "assets": clean,
     }
@@ -206,26 +227,34 @@ def build_manifest(version: str, assets: Dict[str, Dict[str, str]], *,
 
 def canonical_bytes(manifest: Dict[str, Any]) -> bytes:
     """Deterministic bytes that the signature covers (no ``signature`` field)."""
-    payload = {key: value for key, value in manifest.items()
-               if key != ASSET_SIGNATURE_KEY}
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True,
-                      separators=(",", ":")).encode("utf-8")
+    payload = {
+        key: value for key, value in manifest.items() if key != ASSET_SIGNATURE_KEY
+    }
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
 
 
-def sign_manifest(manifest: Dict[str, Any], *, key_path: str,
-                  passphrase: Optional[str] = None) -> Dict[str, Any]:
+def sign_manifest(
+    manifest: Dict[str, Any], *, key_path: str, passphrase: Optional[str] = None
+) -> Dict[str, Any]:
     """Return a copy of *manifest* carrying an Ed25519 detached signature."""
     from scripts import sign_artifacts
 
     signature = sign_artifacts.sign_detached(
-        canonical_bytes(manifest), key_path=key_path, passphrase=passphrase)
+        canonical_bytes(manifest), key_path=key_path, passphrase=passphrase
+    )
     signed = dict(manifest)
     signed[ASSET_SIGNATURE_KEY] = base64.b64encode(signature).decode("ascii")
     return signed
 
 
-def verify_manifest(manifest: Dict[str, Any], *, public_key_path_override: Optional[str] = None,
-                    allow_unsigned: Optional[bool] = None) -> Dict[str, Any]:
+def verify_manifest(
+    manifest: Dict[str, Any],
+    *,
+    public_key_path_override: Optional[str] = None,
+    allow_unsigned: Optional[bool] = None,
+) -> Dict[str, Any]:
     """Validate shape + signature. Never raises for verification failures."""
     report: Dict[str, Any] = {
         "ok": False,
@@ -242,7 +271,8 @@ def verify_manifest(manifest: Dict[str, Any], *, public_key_path_override: Optio
             manifest.get("version", ""),
             manifest.get("assets") or {},
             notes=manifest.get("notes", ""),
-            published_at=manifest.get("published_at"))
+            published_at=manifest.get("published_at"),
+        )
     except ManifestError as exc:
         report["error"] = str(exc)
         return report
@@ -262,17 +292,29 @@ def verify_manifest(manifest: Dict[str, Any], *, public_key_path_override: Optio
         if allow_unsigned is None:
             allow_unsigned = _allow_unsigned()
         if allow_unsigned:
-            report.update({"ok": True, "signature_valid": False,
-                           "error": None, "warning": "unsigned manifest accepted via {}".format(
-                               ALLOW_UNSIGNED_ENV)})
+            report.update(
+                {
+                    "ok": True,
+                    "signature_valid": False,
+                    "error": None,
+                    "warning": "unsigned manifest accepted via {}".format(
+                        ALLOW_UNSIGNED_ENV
+                    ),
+                }
+            )
         else:
-            report["error"] = ("manifest is not signed — set {} to a public key, "
-                               "or opt in with {}=1".format(PUBLIC_KEY_ENV, ALLOW_UNSIGNED_ENV))
+            report["error"] = (
+                "manifest is not signed — set {} to a public key, "
+                "or opt in with {}=1".format(PUBLIC_KEY_ENV, ALLOW_UNSIGNED_ENV)
+            )
         return report
 
     if not key_path:
-        report["error"] = ("manifest is signed but {} is not set, so it cannot "
-                           "be verified".format(PUBLIC_KEY_ENV))
+        report["error"] = (
+            "manifest is signed but {} is not set, so it cannot be verified".format(
+                PUBLIC_KEY_ENV
+            )
+        )
         return report
     try:
         signature = base64.b64decode(signature_b64, validate=True)
@@ -283,17 +325,21 @@ def verify_manifest(manifest: Dict[str, Any], *, public_key_path_override: Optio
     from scripts import sign_artifacts
 
     valid = sign_artifacts.verify_detached(
-        canonical_bytes(rebuilt), signature, key_path=key_path)
+        canonical_bytes(rebuilt), signature, key_path=key_path
+    )
     report["signature_valid"] = bool(valid)
     if not valid:
-        report["error"] = "signature does not match the manifest (tampered or wrong key)"
+        report["error"] = (
+            "signature does not match the manifest (tampered or wrong key)"
+        )
         return report
     report["ok"] = True
     return report
 
 
-def asset_for_platform(manifest: Dict[str, Any],
-                       platform: Optional[str] = None) -> Optional[Dict[str, str]]:
+def asset_for_platform(
+    manifest: Dict[str, Any], platform: Optional[str] = None
+) -> Optional[Dict[str, str]]:
     assets = (manifest or {}).get("assets") or {}
     if not isinstance(assets, dict):
         return None
@@ -317,7 +363,9 @@ def load_manifest(source: str, *, timeout: int = 8, urlopen=None) -> Dict[str, A
         raise ManifestError("no manifest source configured")
     if text.lower().startswith(("http://", "https://")):
         opener = urlopen or urllib.request.urlopen
-        request = urllib.request.Request(text, headers={"User-Agent": "OUSSAMA-update-manifest"})
+        request = urllib.request.Request(
+            text, headers={"User-Agent": "OUSSAMA-update-manifest"}
+        )
         try:
             with opener(request, timeout=timeout) as response:
                 try:
@@ -334,18 +382,24 @@ def load_manifest(source: str, *, timeout: int = 8, urlopen=None) -> Dict[str, A
         except Exception as exc:
             raise ManifestError("cannot fetch manifest: {}".format(exc)) from exc
         if isinstance(raw, (bytes, bytearray)) and len(raw) > MAX_MANIFEST_BYTES:
-            raise ManifestError("manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES))
+            raise ManifestError(
+                "manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES)
+            )
         text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
     else:
         path = os.path.abspath(os.path.expanduser(text))
         if not os.path.isfile(path):
             raise ManifestError("manifest not found: {}".format(path))
         if os.path.getsize(path) > MAX_MANIFEST_BYTES:
-            raise ManifestError("manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES))
+            raise ManifestError(
+                "manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES)
+            )
         with open(path, "r", encoding="utf-8") as handle:
             text = handle.read()
     if len(text) > MAX_MANIFEST_BYTES * 2:
-        raise ManifestError("manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES))
+        raise ManifestError(
+            "manifest is too large (>{} bytes)".format(MAX_MANIFEST_BYTES)
+        )
     try:
         data = json.loads(text)
     except ValueError as exc:
@@ -355,8 +409,12 @@ def load_manifest(source: str, *, timeout: int = 8, urlopen=None) -> Dict[str, A
     return data
 
 
-def fetch_verified_manifest(*, source: Optional[str] = None, timeout: int = 8,
-                            allow_unsigned: Optional[bool] = None) -> Dict[str, Any]:
+def fetch_verified_manifest(
+    *,
+    source: Optional[str] = None,
+    timeout: int = 8,
+    allow_unsigned: Optional[bool] = None,
+) -> Dict[str, Any]:
     """Load + verify in one step. Raises ManifestError with a human reason.
 
     Returns the *normalized* manifest the signature was verified over (with
@@ -401,6 +459,7 @@ def write_manifest(path: str, manifest: Dict[str, Any]) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _sha256_file(path: str) -> str:
     import hashlib
 
@@ -411,15 +470,18 @@ def _sha256_file(path: str) -> str:
     return digest.hexdigest()
 
 
-def _resolve_asset(value: Optional[str], explicit_sha: Optional[str],
-                   base_url: Optional[str]) -> Optional[Dict[str, str]]:
+def _resolve_asset(
+    value: Optional[str], explicit_sha: Optional[str], base_url: Optional[str]
+) -> Optional[Dict[str, str]]:
     if not value:
         return None
     text = str(value).strip()
     if text.lower().startswith(("http://", "https://")):
         if not explicit_sha:
-            raise ManifestError("{}: a URL asset needs --sha256-… (the hash cannot "
-                                "be computed locally)".format(text))
+            raise ManifestError(
+                "{}: a URL asset needs --sha256-… (the hash cannot "
+                "be computed locally)".format(text)
+            )
         return {"url": text, "sha256": str(explicit_sha).strip().lower()}
     path = os.path.abspath(os.path.expanduser(text))
     if not os.path.isfile(path):
@@ -433,38 +495,57 @@ def _resolve_asset(value: Optional[str], explicit_sha: Optional[str],
 def _cmd_create(args: argparse.Namespace) -> int:
     assets: Dict[str, Dict[str, str]] = {}
     for platform in PLATFORMS:
-        asset = _resolve_asset(getattr(args, platform, None),
-                               getattr(args, "sha256_" + platform, None),
-                               args.base_url)
+        asset = _resolve_asset(
+            getattr(args, platform, None),
+            getattr(args, "sha256_" + platform, None),
+            args.base_url,
+        )
         if asset:
             assets[platform] = asset
-    manifest = build_manifest(args.version, assets, notes=args.notes,
-                              published_at=args.published_at)
+    manifest = build_manifest(
+        args.version, assets, notes=args.notes, published_at=args.published_at
+    )
     if args.sign:
-        manifest = sign_manifest(manifest, key_path=args.key,
-                                 passphrase=args.passphrase)
+        manifest = sign_manifest(
+            manifest, key_path=args.key, passphrase=args.passphrase
+        )
     target = write_manifest(args.out or DEFAULT_NAME, manifest)
     report = verify_manifest(manifest)
-    print("[manifest] {} (v{}, {} platform asset(s), {})".format(
-        target, manifest["version"], len(manifest["assets"]),
-        "signed" if report["signed"] else "UNSIGNED"))
+    print(
+        "[manifest] {} (v{}, {} platform asset(s), {})".format(
+            target,
+            manifest["version"],
+            len(manifest["assets"]),
+            "signed" if report["signed"] else "UNSIGNED",
+        )
+    )
     if not report["signed"]:
-        print("[manifest] NOTE: unsigned manifests require {}=1 on the client".format(
-            ALLOW_UNSIGNED_ENV))
-        print("[manifest] sign with: --sign --key <private key from scripts.sign_artifacts>")
+        print(
+            "[manifest] NOTE: unsigned manifests require {}=1 on the client".format(
+                ALLOW_UNSIGNED_ENV
+            )
+        )
+        print(
+            "[manifest] sign with: --sign --key <private key from scripts.sign_artifacts>"
+        )
     return 0
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:
     raw = load_manifest(args.manifest)
-    report = verify_manifest(raw, public_key_path_override=args.key,
-                             allow_unsigned=args.allow_unsigned)
+    report = verify_manifest(
+        raw, public_key_path_override=args.key, allow_unsigned=args.allow_unsigned
+    )
     if report.get("error"):
         print("[manifest] {}".format(report["error"]), file=sys.stderr)
     if report.get("ok"):
-        print("[manifest] OK — v{} ({}), signature {}".format(
-            report.get("version"), ", ".join(report.get("assets") or []),
-            "valid" if report["signature_valid"] else "not required"))
+        print(
+            "[manifest] OK — v{} ({}), signature {}".format(
+                report.get("version"),
+                ", ".join(report.get("assets") or []),
+                "valid" if report["signature_valid"] else "not required",
+            )
+        )
         return 0
     return 1
 
@@ -472,26 +553,35 @@ def _cmd_verify(args: argparse.Namespace) -> int:
 def _cmd_show(args: argparse.Namespace) -> int:
     raw = load_manifest(args.manifest)
     report = verify_manifest(raw, allow_unsigned=True)
-    print(json.dumps({"manifest": raw, "verification": report},
-                     ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {"manifest": raw, "verification": report}, ensure_ascii=False, indent=2
+        )
+    )
     return 0
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Build, sign and verify signed update manifests (channel: manifest)")
+        description="Build, sign and verify signed update manifests (channel: manifest)"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     create = sub.add_parser("create", help="build a manifest for release assets")
     create.add_argument("--version", required=True)
-    create.add_argument("--windows", default=None, help="local path or URL of the Windows build")
+    create.add_argument(
+        "--windows", default=None, help="local path or URL of the Windows build"
+    )
     create.add_argument("--linux", default=None)
     create.add_argument("--macos", default=None)
     create.add_argument("--sha256-windows", default=None, dest="sha256_windows")
     create.add_argument("--sha256-linux", default=None, dest="sha256_linux")
     create.add_argument("--sha256-macos", default=None, dest="sha256_macos")
-    create.add_argument("--base-url", default=None,
-                        help="prefix the local file names to form the download URL")
+    create.add_argument(
+        "--base-url",
+        default=None,
+        help="prefix the local file names to form the download URL",
+    )
     create.add_argument("--notes", default="")
     create.add_argument("--published-at", default=None)
     create.add_argument("--out", default=None)
@@ -502,8 +592,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     verify = sub.add_parser("verify", help="verify a manifest (URL or path)")
     verify.add_argument("manifest")
-    verify.add_argument("--key", default=None,
-                        help="public key path (default: ${})".format(PUBLIC_KEY_ENV))
+    verify.add_argument(
+        "--key",
+        default=None,
+        help="public key path (default: ${})".format(PUBLIC_KEY_ENV),
+    )
     verify.add_argument("--allow-unsigned", action="store_true")
     verify.set_defaults(func=_cmd_verify)
 

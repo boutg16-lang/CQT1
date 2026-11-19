@@ -31,8 +31,10 @@ import re
 import sys
 import urllib.request
 
-LEXICON_URL = ("https://raw.githubusercontent.com/"
-               "mohammedattia/arabic-offensive-words/main/README.md")
+LEXICON_URL = (
+    "https://raw.githubusercontent.com/"
+    "mohammedattia/arabic-offensive-words/main/README.md"
+)
 FETCH_TIMEOUT = 20
 OUT_FILENAME = "safety_terms_arabic.json"
 
@@ -42,7 +44,7 @@ OUT_FILENAME = "safety_terms_arabic.json"
 # still blocks in default mode without over-censoring normal speech.
 IMPORT_SECTIONS = [
     ("4. Identity-Based Slurs", "hate_slur", "high"),
-    ("4.1", "hate_slur", "high"),          # fallback numbering variants
+    ("4.1", "hate_slur", "high"),  # fallback numbering variants
     ("4.2", "hate_slur", "high"),
     ("4.3", "hate_slur", "high"),
     ("4.4", "harassment", "medium"),
@@ -52,7 +54,9 @@ IMPORT_SECTIONS = [
 
 
 def _fetch(url=LEXICON_URL):
-    req = urllib.request.Request(url, headers={"User-Agent": "ViralCutter-lexicon-importer"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "ViralCutter-lexicon-importer"}
+    )
     with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
         return resp.read(4 * 1024 * 1024).decode("utf-8", errors="replace")
 
@@ -132,19 +136,27 @@ def build_terms(text):
             if key in seen:
                 continue
             seen.add(key)
-            out.append({"term": term, "lang": "ar", "severity": severity,
-                        "category": category})
+            out.append(
+                {"term": term, "lang": "ar", "severity": severity, "category": category}
+            )
     return out
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="print stats only, write nothing")
-    parser.add_argument("--write", action="store_true",
-                        help="write safety_terms_arabic.json (repo root)")
-    parser.add_argument("--merge-blocklist", action="store_true",
-                        help="append terms to scripts/safety_filter.py BLOCKLIST")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="print stats only, write nothing"
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="write safety_terms_arabic.json (repo root)",
+    )
+    parser.add_argument(
+        "--merge-blocklist",
+        action="store_true",
+        help="append terms to scripts/safety_filter.py BLOCKLIST",
+    )
     args = parser.parse_args()
 
     try:
@@ -166,13 +178,14 @@ def main():
 
     if args.write:
         import hashlib
+
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         path = os.path.join(base, OUT_FILENAME)
         pack = {
             "version": 1,
             "updated": __import__("datetime").date.today().isoformat(),
             "source": "Mohammed Attia Arabic Offensive Lexicon (Google Research), "
-                      "https://github.com/mohammedattia/arabic-offensive-words",
+            "https://github.com/mohammedattia/arabic-offensive-words",
             "upstream_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "terms": terms,
         }
@@ -196,7 +209,8 @@ def _merge_into_blocklist(terms):
         if (item["term"].casefold(), item["lang"]) in existing:
             continue
         safety_filter.BLOCKLIST.append(
-            (item["term"], item["lang"], item["severity"], item["category"]))
+            (item["term"], item["lang"], item["severity"], item["category"])
+        )
         existing.add((item["term"].casefold(), item["lang"]))
         added += 1
     print("[arabic-lexicon] appended {} new terms to BLOCKLIST".format(added))

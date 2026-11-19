@@ -23,12 +23,16 @@ class TestCropAndResizeSingleFace:
         assert out.dtype == np.uint8
 
     def test_constant_frame_stays_constant(self):
-        out = one_face.crop_and_resize_single_face(_frame(value=7), (100, 100, 200, 200))
+        out = one_face.crop_and_resize_single_face(
+            _frame(value=7), (100, 100, 200, 200)
+        )
         assert np.all(out == 7)
 
     def test_tall_frame_output_shape(self):
         # Portrait source: crop is height-limited instead of width-limited.
-        out = one_face.crop_and_resize_single_face(_frame(h=1920, w=1080), (100, 100, 200, 200))
+        out = one_face.crop_and_resize_single_face(
+            _frame(h=1920, w=1080), (100, 100, 200, 200)
+        )
         assert out.shape == (1920, 1080, 3)
 
     def test_face_at_right_edge_clamps_inside_frame(self):
@@ -53,10 +57,18 @@ class TestResizeWithPadding:
         assert one_face.resize_with_padding(_frame()).shape == (1920, 1080, 3)
 
     def test_tall_frame_output_shape(self):
-        assert one_face.resize_with_padding(_frame(h=1920, w=1080)).shape == (1920, 1080, 3)
+        assert one_face.resize_with_padding(_frame(h=1920, w=1080)).shape == (
+            1920,
+            1080,
+            3,
+        )
 
     def test_square_frame_output_shape(self):
-        assert one_face.resize_with_padding(_frame(h=500, w=500)).shape == (1920, 1080, 3)
+        assert one_face.resize_with_padding(_frame(h=500, w=500)).shape == (
+            1920,
+            1080,
+            3,
+        )
 
     def test_padding_is_black_and_frame_is_centered(self):
         frame = _frame(h=100, w=200, value=9)
@@ -71,7 +83,11 @@ class TestCropCenterZoom:
         assert one_face.crop_center_zoom(_frame()).shape == (1920, 1080, 3)
 
     def test_tall_frame_output_shape(self):
-        assert one_face.crop_center_zoom(_frame(h=1920, w=1080)).shape == (1920, 1080, 3)
+        assert one_face.crop_center_zoom(_frame(h=1920, w=1080)).shape == (
+            1920,
+            1080,
+            3,
+        )
 
     def test_constant_frame_stays_constant(self):
         out = one_face.crop_center_zoom(_frame(value=3))
@@ -92,20 +108,29 @@ def _fake_detection(xmin, ymin, width, height):
 
 
 def _fake_results(*, detections=None, landmarks=None, pose=None):
-    face_detection = SimpleNamespace(process=lambda _f: SimpleNamespace(detections=detections))
+    face_detection = SimpleNamespace(
+        process=lambda _f: SimpleNamespace(detections=detections)
+    )
     face_mesh = SimpleNamespace(
-        process=lambda _f: SimpleNamespace(multi_face_landmarks=landmarks))
+        process=lambda _f: SimpleNamespace(multi_face_landmarks=landmarks)
+    )
     # Bind `pose` as a default arg: the lambda must capture the parameter,
     # not the SimpleNamespace being assigned to the same name.
-    pose_obj = SimpleNamespace(process=lambda _f, _p=pose: SimpleNamespace(pose_landmarks=_p))
+    pose_obj = SimpleNamespace(
+        process=lambda _f, _p=pose: SimpleNamespace(pose_landmarks=_p)
+    )
     return face_detection, face_mesh, pose_obj
 
 
 class TestDetectFaceOrBody:
     def test_detection_path_uses_first_face(self):
         frame = _frame(h=480, w=640)
-        fd, fm, pose = _fake_results(detections=[_fake_detection(0.1, 0.2, 0.25, 0.3),
-                                                 _fake_detection(0.5, 0.5, 0.1, 0.1)])
+        fd, fm, pose = _fake_results(
+            detections=[
+                _fake_detection(0.1, 0.2, 0.25, 0.3),
+                _fake_detection(0.5, 0.5, 0.1, 0.1),
+            ]
+        )
         result = one_face.detect_face_or_body(frame, fd, fm, pose)
         assert result == [(64, 96, 160, 144)]
 
@@ -133,7 +158,8 @@ class TestDetectFaceOrBody:
         lm = [SimpleNamespace(x=0.1, y=0.1), SimpleNamespace(x=0.2, y=0.2)]
         fd, fm, pose = _fake_results(
             detections=[_fake_detection(0.0, 0.0, 0.1, 0.1)],
-            landmarks=[SimpleNamespace(landmark=lm)])
+            landmarks=[SimpleNamespace(landmark=lm)],
+        )
         result = one_face.detect_face_or_body(frame, fd, fm, pose)
         assert result == [(0, 0, 20, 10), (20, 10, 20, 10)]
 

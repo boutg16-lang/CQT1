@@ -33,7 +33,13 @@ def _import_with_fake_cv2(block_mediapipe):
     # (re)imported under the fakes and must not survive the helper.
     before = set(sys.modules)
     saved = {}
-    names = ["cv2", "numpy", "scripts.edit_video", "scripts.one_face", "scripts.two_face"]
+    names = [
+        "cv2",
+        "numpy",
+        "scripts.edit_video",
+        "scripts.one_face",
+        "scripts.two_face",
+    ]
     for n in names:
         saved[n] = sys.modules.get(n)
         sys.modules.pop(n, None)
@@ -72,6 +78,7 @@ def _import_with_fake_cv2(block_mediapipe):
         import scripts.edit_video as ev
         import scripts.one_face as of
         import scripts.two_face as tf
+
         importlib.reload(of)
         importlib.reload(tf)
         importlib.reload(ev)
@@ -101,8 +108,12 @@ def test_imports_survive_without_mediapipe():
 
 def test_modules_expose_expected_functions():
     ev, of, tf = _import_with_fake_cv2(block_mediapipe=True)
-    for fn in ("crop_and_resize_single_face", "resize_with_padding",
-               "detect_face_or_body", "crop_center_zoom"):
+    for fn in (
+        "crop_and_resize_single_face",
+        "resize_with_padding",
+        "detect_face_or_body",
+        "crop_center_zoom",
+    ):
         assert callable(getattr(of, fn)), fn
     assert callable(tf.detect_face_or_body_two_faces)
     assert callable(ev.get_best_encoder)
@@ -129,7 +140,8 @@ def test_fake_cv2_does_not_leak_into_later_imports():
         assert hasattr(mod.cv2, "resize"), "cv2 leaked the test fake"
         frame = np.zeros((100, 200, 3), dtype=np.uint8)
         out = mod.crop_and_resize_insightface(
-            frame, [90, 40, 110, 60], headroom=0.0, face_zoom=0.0)
+            frame, [90, 40, 110, 60], headroom=0.0, face_zoom=0.0
+        )
         assert out.shape == (1920, 1080, 3)
     finally:
         sys.modules.pop(target, None)

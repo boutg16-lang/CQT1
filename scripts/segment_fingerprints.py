@@ -43,16 +43,24 @@ if _arabic_text is not None:
     _ARABIC_NUM_TRANSLATION = str.maketrans({})
     _normalize_timestamp_digits = _arabic_text.normalize_digits
 else:
-    _ARABIC_NUM_TRANSLATION = str.maketrans({
-        # Arabic-Indic digits U+0660..U+0669 (٠١٢٣٤٥٦٧٨٩)
-        **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
-        # Persian digits U+06F0..U+06F9 (۰۱۲۳۴۵۶۷۸۹)
-        **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
-        # Arabic decimal separator ٫ (U+066B) and the Arabic comma ٬ (U+066C)
-        # — Arabic/Darija LLM output routinely uses both as a decimal point.
-        0x066B: ".",
-        0x066C: ".",
-    })
+    _ARABIC_NUM_TRANSLATION = str.maketrans(
+        {
+            # Arabic-Indic digits U+0660..U+0669 (٠١٢٣٤٥٦٧٨٩)
+            **{
+                ord(src): dst
+                for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)
+            },
+            # Persian digits U+06F0..U+06F9 (۰۱۲۳۴۵۶۷۸۹)
+            **{
+                ord(src): dst
+                for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)
+            },
+            # Arabic decimal separator ٫ (U+066B) and the Arabic comma ٬ (U+066C)
+            # — Arabic/Darija LLM output routinely uses both as a decimal point.
+            0x066B: ".",
+            0x066C: ".",
+        }
+    )
 
     def _normalize_timestamp_digits(value):
         return str(value).translate(_ARABIC_NUM_TRANSLATION)
@@ -87,7 +95,9 @@ def _parse_segment_time(value, default=0.0):
         parts = text.split(":")
         try:
             if len(parts) == 3:
-                return max(0.0, int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2]))
+                return max(
+                    0.0, int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                )
             if len(parts) == 2:
                 return max(0.0, int(parts[0]) * 60 + float(parts[1]))
         except (TypeError, ValueError):
@@ -115,11 +125,17 @@ def segments_manifest_fingerprint(segments):
         # Titles are metadata, not footage. Including them here made every
         # title/A-B edit invalidate the manifest and force a full re-cut of
         # clips whose windows had not moved.
-        payload.append({
-            "start_time": round(_parse_segment_time(item.get("start_time"), 0.0), 3),
-            "end_time": round(_parse_segment_time(item.get("end_time"), 0.0), 3),
-        })
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        payload.append(
+            {
+                "start_time": round(
+                    _parse_segment_time(item.get("start_time"), 0.0), 3
+                ),
+                "end_time": round(_parse_segment_time(item.get("end_time"), 0.0), 3),
+            }
+        )
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -169,8 +185,11 @@ def segments_source_fingerprint(data):
 
 
 def segment_cache_staleness_reason(
-        data, current_source_fingerprint, current_config_fingerprint,
-        current_transcript_fingerprint=None):
+    data,
+    current_source_fingerprint,
+    current_config_fingerprint,
+    current_transcript_fingerprint=None,
+):
     """Return why saved segment choices cannot be safely reused, or None."""
     if not isinstance(data, dict):
         return "invalid_cache"
@@ -233,12 +252,21 @@ def prompt_version_fingerprint():
             with open(prompt_path, "r", encoding="utf-8") as handle:
                 template = handle.read()
     except (OSError, UnicodeError) as exc:
-        logger.warning("Could not read prompt.txt for cache fingerprinting: %s", type(exc).__name__)
+        logger.warning(
+            "Could not read prompt.txt for cache fingerprinting: %s", type(exc).__name__
+        )
         template = ""
-    scoring_version = getattr(clip_scoring, "SCORING_VERSION", "legacy") if clip_scoring else "legacy"
-    title_schema = getattr(title_factual, "TITLE_VALIDATION_SCHEMA_VERSION", "legacy") if title_factual else "legacy"
+    scoring_version = (
+        getattr(clip_scoring, "SCORING_VERSION", "legacy") if clip_scoring else "legacy"
+    )
+    title_schema = (
+        getattr(title_factual, "TITLE_VALIDATION_SCHEMA_VERSION", "legacy")
+        if title_factual
+        else "legacy"
+    )
     payload = "{}|{}|{}|{}".format(
-        SEGMENTS_SCHEMA_VERSION, scoring_version, title_schema, template)
+        SEGMENTS_SCHEMA_VERSION, scoring_version, title_schema, template
+    )
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -249,7 +277,9 @@ def selection_weights_fingerprint():
     try:
         return clip_scoring.weights_fingerprint()
     except Exception as exc:
-        logger.warning("Could not fingerprint selection weights: %s", type(exc).__name__)
+        logger.warning(
+            "Could not fingerprint selection weights: %s", type(exc).__name__
+        )
         return "legacy"
 
 
@@ -265,13 +295,16 @@ def transcript_fingerprint(transcript_segments):
     for line in transcript_segments or []:
         if not isinstance(line, dict):
             continue
-        payload.append([
-            round(float(line.get("start", 0.0) or 0.0), 3),
-            round(float(line.get("end", 0.0) or 0.0), 3),
-            str(line.get("text") or ""),
-        ])
+        payload.append(
+            [
+                round(float(line.get("start", 0.0) or 0.0), 3),
+                round(float(line.get("end", 0.0) or 0.0), 3),
+                str(line.get("text") or ""),
+            ]
+        )
     if not payload:
         return None
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True,
-                         separators=(",", ":")).encode("utf-8")
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:16]

@@ -3,6 +3,7 @@
 Pure logic (no gradio imports) — unit-testable. The WebUI drives one
 pipeline run per item and uses this module for parsing + status rows.
 """
+
 import os
 import sys
 import urllib.parse
@@ -41,7 +42,13 @@ def parse_queue_text(text):
     return urls
 
 
-SUPPORTED_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+SUPPORTED_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
 
 
 def is_supported_url(url):
@@ -77,8 +84,10 @@ def status_display(status):
 
 
 def rows_from_items(items):
-    return [[i + 1, item["url"], status_display(item["status"])]
-            for i, item in enumerate(items)]
+    return [
+        [i + 1, item["url"], status_display(item["status"])]
+        for i, item in enumerate(items)
+    ]
 
 
 def summary_counts(items):

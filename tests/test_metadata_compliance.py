@@ -18,8 +18,10 @@ class TestHashtags:
     def test_banned_hashtag_high(self):
         ok, findings = mc.check_hashtags(["shorts", "freebitcoin"])
         assert ok is False
-        assert any(f["category"] == "banned_hashtag" and f["severity"] == "high"
-                   for f in findings)
+        assert any(
+            f["category"] == "banned_hashtag" and f["severity"] == "high"
+            for f in findings
+        )
 
     def test_hashtag_with_hash_symbol_stripped(self):
         ok, findings = mc.check_hashtags(["#casino", "#Shorts"])
@@ -35,8 +37,10 @@ class TestPatterns:
     def test_medical_claim_high(self):
         res = mc.check_metadata("This cures cancer instantly", "", [])
         assert res["ok"] is False
-        assert any(f["category"] == "medical_claim" and f["severity"] == "high"
-                   for f in res["findings"])
+        assert any(
+            f["category"] == "medical_claim" and f["severity"] == "high"
+            for f in res["findings"]
+        )
 
     def test_financial_claim(self):
         res = mc.check_metadata("Make $5000 a day guaranteed", "", [])
@@ -58,7 +62,9 @@ class TestPatterns:
         assert any(f["category"] == "keyword_stuffing" for f in res["findings"])
 
     def test_clean_metadata(self):
-        res = mc.check_metadata("Top 5 Editing Tips", "Full breakdown inside", ["editing"])
+        res = mc.check_metadata(
+            "Top 5 Editing Tips", "Full breakdown inside", ["editing"]
+        )
         assert res["ok"] is True
         assert res["findings"] == []
 
@@ -67,17 +73,20 @@ class TestExtras:
     def test_extra_rules_file(self, tmp_path):
         extra = tmp_path / "extra.json"
         extra.write_text(
-            '{"hashtags": ["mybrand"], '
-            '"patterns": [["brandsecret", "brand", "high"]]}',
-            encoding="utf-8")
-        res = mc.check_metadata("brandsecret tip", "", ["mybrand"],
-                                extra_rules_path=str(extra))
+            '{"hashtags": ["mybrand"], "patterns": [["brandsecret", "brand", "high"]]}',
+            encoding="utf-8",
+        )
+        res = mc.check_metadata(
+            "brandsecret tip", "", ["mybrand"], extra_rules_path=str(extra)
+        )
         assert res["ok"] is False
         assert any(f["category"] == "brand" for f in res["findings"])
         assert any(f["category"] == "banned_hashtag" for f in res["findings"])
 
     def test_missing_extra_rules_is_noop(self, tmp_path):
-        res = mc.check_metadata("hello", "world", [], extra_rules_path=str(tmp_path / "nope.json"))
+        res = mc.check_metadata(
+            "hello", "world", [], extra_rules_path=str(tmp_path / "nope.json")
+        )
         assert res["ok"] is True
 
 

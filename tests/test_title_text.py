@@ -16,6 +16,7 @@ from scripts import title_text as tt  # noqa: E402
 # is_arabic_script
 # ---------------------------------------------------------------------------
 
+
 def test_is_arabic_script_arabic():
     assert tt.is_arabic_script("مرحبا بالعالم") is True
 
@@ -50,6 +51,7 @@ def test_is_arabic_script_mixed():
 # ---------------------------------------------------------------------------
 # detect_text_script
 # ---------------------------------------------------------------------------
+
 
 def test_detect_arabic_dominant():
     assert tt.detect_text_script("مرحبا بالعالم الجميل") == "ar"
@@ -90,6 +92,7 @@ def test_detect_en_boundary_ratio_02():
 # scripts_match
 # ---------------------------------------------------------------------------
 
+
 def test_scripts_match_same_script():
     assert tt.scripts_match("مرحبا بالعالم", "هذا نص عربي") is True
     assert tt.scripts_match("Hello world", "English caption here") is True
@@ -115,6 +118,7 @@ def test_scripts_match_empty_or_none_side():
 # ---------------------------------------------------------------------------
 # count_emoji / strip_excess_emoji
 # ---------------------------------------------------------------------------
+
 
 def test_count_emoji_none():
     assert tt.count_emoji("plain text") == 0
@@ -165,6 +169,7 @@ def test_strip_excess_emoji_empty():
 # fit_publish_title
 # ---------------------------------------------------------------------------
 
+
 def test_fit_none_and_empty():
     assert tt.fit_publish_title(None) == ""
     assert tt.fit_publish_title("") == ""
@@ -200,14 +205,12 @@ def test_fit_single_long_token_hard_cut():
 
 def test_fit_drops_dangling_tail_word():
     # Prefix would end on "the" — a bare function word — so it is dropped.
-    result = tt.fit_publish_title(
-        "Learn Python the easy way for beginners today", 20)
+    result = tt.fit_publish_title("Learn Python the easy way for beginners today", 20)
     assert result == "Learn Python…"
 
 
 def test_fit_drops_arabic_dangling_tail():
-    result = tt.fit_publish_title(
-        "الدرس الأول من سلسلة تعلم البرمجة للمبتدئين", 20)
+    result = tt.fit_publish_title("الدرس الأول من سلسلة تعلم البرمجة للمبتدئين", 20)
     assert not result.rstrip("…").endswith("من")
     assert result.endswith("…")
 

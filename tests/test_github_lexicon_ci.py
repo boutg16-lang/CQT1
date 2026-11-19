@@ -38,8 +38,8 @@ class _FakeResponse:
 
 def _stub_urlopen(monkeypatch, data=UPSTREAM_BYTES):
     monkeypatch.setattr(
-        urllib.request, "urlopen",
-        lambda req, timeout=None: _FakeResponse(data))
+        urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse(data)
+    )
 
 
 class TestGithubOutput:
@@ -49,7 +49,9 @@ class TestGithubOutput:
         glc._github_output("changed", "yes")
         glc._github_output("upstream_sha256", UPSTREAM_DIGEST)
         assert out_path.read_text(encoding="utf-8").splitlines() == [
-            "changed=yes", "upstream_sha256=" + UPSTREAM_DIGEST]
+            "changed=yes",
+            "upstream_sha256=" + UPSTREAM_DIGEST,
+        ]
 
     def test_appends_to_existing_file(self, tmp_path, monkeypatch):
         out_path = tmp_path / "gh_out"
@@ -57,7 +59,9 @@ class TestGithubOutput:
         monkeypatch.setenv("GITHUB_OUTPUT", str(out_path))
         glc._github_output("changed", "no")
         assert out_path.read_text(encoding="utf-8").splitlines() == [
-            "previous=1", "changed=no"]
+            "previous=1",
+            "changed=no",
+        ]
 
     def test_prints_legacy_set_output_without_env(self, monkeypatch, capsys):
         monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
@@ -77,8 +81,9 @@ class TestMain:
 
     def test_unchanged_when_stored_matches(self, monkeypatch, capsys):
         _stub_urlopen(monkeypatch)
-        monkeypatch.setattr(json, "load",
-                            lambda f: {"upstream_sha256": UPSTREAM_DIGEST})
+        monkeypatch.setattr(
+            json, "load", lambda f: {"upstream_sha256": UPSTREAM_DIGEST}
+        )
         assert glc.main() == 0
         assert "changed=no" in capsys.readouterr().out
 

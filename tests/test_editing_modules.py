@@ -21,43 +21,101 @@ def _probe_duration(path):
     if not os.path.exists(path):
         return None
     res = subprocess.run(
-        [FFPROBE, "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", path],
-        capture_output=True, text=True)
+        [
+            FFPROBE,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+    )
     return float(res.stdout.strip())
 
 
-def _make_video_with_silence(path, tone_segments=((0, 1.2), (1.2, 2.6), (2.6, 4.0)),
-                             silence_window=(1.2, 2.6)):
+def _make_video_with_silence(
+    path, tone_segments=((0, 1.2), (1.2, 2.6), (2.6, 4.0)), silence_window=(1.2, 2.6)
+):
     """Video with tone during tone windows and digital silence in between."""
     # audio: tone 0-1.2, silence 1.2-2.6, tone 2.6-4.0
     cmd = [
-        FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=4",
-        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=4",
+        FFMPEG,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=320x240:rate=30:duration=4",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=44100:duration=4",
         "-filter_complex",
         "[1:a]volume=0:enable='between(t,1.2,2.6)',volume=0.6:enable='not(between(t,1.2,2.6))'[a]",
-        "-map", "0:v", "-map", "[a]",
-        "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
-        "-shortest", str(path),
+        "-map",
+        "0:v",
+        "-map",
+        "[a]",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(path),
     ]
     subprocess.run(cmd, check=True, capture_output=True, timeout=120)
 
 
 def _make_audio(path, duration=3.0, freq=880):
     subprocess.run(
-        [FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-         "-f", "lavfi", "-i", "sine=frequency={}:sample_rate=44100:duration={}".format(freq, duration),
-         "-c:a", "aac", str(path)],
-        check=True, capture_output=True, timeout=60)
+        [
+            FFMPEG,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency={}:sample_rate=44100:duration={}".format(freq, duration),
+            "-c:a",
+            "aac",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
 
 
 def _make_logo(path):
     subprocess.run(
-        [FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-         "-f", "lavfi", "-i", "color=red:size=100x100,format=rgba",
-         "-frames:v", "1", str(path)],
-        check=True, capture_output=True, timeout=60)
+        [
+            FFMPEG,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:size=100x100,format=rgba",
+            "-frames:v",
+            "1",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
 
 
 SAMPLE_WORDS = [
@@ -74,14 +132,16 @@ SAMPLE_WORDS = [
 # jump_cuts — pure logic
 # ---------------------------------------------------------------------------
 
+
 class TestJumpCutsLogic:
     def test_filler_spans_merged(self):
         spans = jump_cuts.find_filler_spans(SAMPLE_WORDS)
         assert any(abs(s - 0.7) < 0.01 and abs(e - 1.2) < 0.01 for s, e in spans)
 
     def test_plan_cuts_merges_close(self):
-        cuts = jump_cuts.plan_cuts([(0.5, 1.0, 0.5)], [(1.05, 1.5)],
-                                   duration=5.0, min_keep=0.35)
+        cuts = jump_cuts.plan_cuts(
+            [(0.5, 1.0, 0.5)], [(1.05, 1.5)], duration=5.0, min_keep=0.35
+        )
         assert len(cuts) == 1
         assert abs(cuts[0][0] - 0.5) < 0.01
 
@@ -101,12 +161,15 @@ class TestJumpCutsLogic:
 # jump_cuts — ffmpeg integration
 # ---------------------------------------------------------------------------
 
+
 class TestJumpCutsVideo:
     @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
     def test_silence_detected(self, tmp_path):
         video = tmp_path / "clip.mp4"
         _make_video_with_silence(video)
-        silences = jump_cuts.detect_silences(str(video), threshold_db=-30, min_duration=0.4)
+        silences = jump_cuts.detect_silences(
+            str(video), threshold_db=-30, min_duration=0.4
+        )
         assert any(e - s >= 0.9 for s, e, _ in silences)
 
     @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
@@ -134,9 +197,12 @@ class TestJumpCutsVideo:
 # punch_zoom — logic + integration
 # ---------------------------------------------------------------------------
 
+
 class TestPunchZoom:
     def test_plan_keyword_punch(self):
-        punches = punch_zoom.plan_punches(SAMPLE_WORDS, keywords=["world"], emotional=False)
+        punches = punch_zoom.plan_punches(
+            SAMPLE_WORDS, keywords=["world"], emotional=False
+        )
         assert any(p[0] <= 1.4 and p[1] >= 1.8 for p in punches)
 
     def test_plan_emotional_word(self):
@@ -148,8 +214,9 @@ class TestPunchZoom:
         assert punches[0][0] <= 0.3
 
     def test_plan_auto_interval(self):
-        punches = punch_zoom.plan_punches([], hook=False, emotional=False,
-                                          auto_interval=1.0, duration=4.0)
+        punches = punch_zoom.plan_punches(
+            [], hook=False, emotional=False, auto_interval=1.0, duration=4.0
+        )
         assert len(punches) >= 2
 
     @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg required")
@@ -167,6 +234,7 @@ class TestPunchZoom:
 # background_music
 # ---------------------------------------------------------------------------
 
+
 class TestBackgroundMusic:
     def test_find_music_in_folder(self, tmp_path):
         music_dir = tmp_path / "music"
@@ -182,7 +250,9 @@ class TestBackgroundMusic:
         music = tmp_path / "bed.m4a"
         _make_audio(str(music), duration=1.0)
         out = tmp_path / "with_music.mp4"
-        report = background_music.apply_background_music(str(video), str(music), str(out))
+        report = background_music.apply_background_music(
+            str(video), str(music), str(out)
+        )
         assert report["ok"] is True
         assert report["music"] == "bed.m4a"
         assert os.path.exists(out)
@@ -200,6 +270,7 @@ class TestBackgroundMusic:
 # ---------------------------------------------------------------------------
 # branding
 # ---------------------------------------------------------------------------
+
 
 class TestBranding:
     @pytest.mark.skipif(not FFMPEG, reason="ffmpeg required")
@@ -227,7 +298,9 @@ class TestBranding:
         video = tmp_path / "clip.mp4"
         _make_video_with_silence(video)
         out = tmp_path / "branded.mp4"
-        report = branding.process_file(str(video), str(out), logo_path=str(tmp_path / "missing.png"))
+        report = branding.process_file(
+            str(video), str(out), logo_path=str(tmp_path / "missing.png")
+        )
         assert report["ok"] is False
         assert report["degraded"] is True
         assert out.exists()
@@ -241,8 +314,9 @@ class TestBranding:
         outro = tmp_path / "outro.mp4"
         _make_video_with_silence(outro)
         out = tmp_path / "branded.mp4"
-        applied = branding.apply_intro_outro(str(video), str(out),
-                                             intro=str(intro), outro=str(outro))
+        applied = branding.apply_intro_outro(
+            str(video), str(out), intro=str(intro), outro=str(outro)
+        )
         assert applied is True
         assert os.path.exists(out)
         assert _probe_duration(str(out)) > _probe_duration(str(video))
@@ -252,16 +326,29 @@ class TestBranding:
 # polish orchestrator + retime
 # ---------------------------------------------------------------------------
 
+
 class TestPolish:
     def test_retime_subs(self, tmp_path):
         subs = tmp_path / "clip_processed.json"
-        subs.write_text(json.dumps({
-            "segments": [
-                {"start": 0.0, "end": 5.0, "text": "a", "words": [
-                    {"word": "a", "start": 0.1, "end": 0.5},
-                    {"word": "b", "start": 2.0, "end": 2.5},
-                    {"word": "c", "start": 4.0, "end": 4.5}]}
-            ]}), encoding="utf-8")
+        subs.write_text(
+            json.dumps(
+                {
+                    "segments": [
+                        {
+                            "start": 0.0,
+                            "end": 5.0,
+                            "text": "a",
+                            "words": [
+                                {"word": "a", "start": 0.1, "end": 0.5},
+                                {"word": "b", "start": 2.0, "end": 2.5},
+                                {"word": "c", "start": 4.0, "end": 4.5},
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
         polish.retime_subs(str(subs), [(1.0, 3.0)], intro_duration=0.5)
         data = json.loads(subs.read_text(encoding="utf-8"))
         words = data["segments"][0]["words"]
@@ -274,11 +361,24 @@ class TestPolish:
 
     def test_retime_subs_maps_partial_cut_intersections(self, tmp_path):
         subs = tmp_path / "partial.json"
-        subs.write_text(json.dumps({"segments": [{
-            "start": 0.0, "end": 4.0, "text": "partial",
-            "words": [{"word": "cross", "start": 0.8, "end": 1.4},
-                      {"word": "after", "start": 3.2, "end": 3.8}],
-        }]}), encoding="utf-8")
+        subs.write_text(
+            json.dumps(
+                {
+                    "segments": [
+                        {
+                            "start": 0.0,
+                            "end": 4.0,
+                            "text": "partial",
+                            "words": [
+                                {"word": "cross", "start": 0.8, "end": 1.4},
+                                {"word": "after", "start": 3.2, "end": 3.8},
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
         polish.retime_subs(str(subs), [(1.0, 3.0)])
         words = json.loads(subs.read_text(encoding="utf-8"))["segments"][0]["words"]
         assert words[0]["start"] == pytest.approx(0.8)
@@ -293,7 +393,9 @@ class TestPolish:
         assert polish.prepare_subs_for_polish(str(subs)) is True
         polish.retime_subs(str(subs), [(1.0, 3.0)], intro_duration=0.5)
         polish._record_subs_polish_output(str(subs))
-        assert json.loads(subs.read_text(encoding="utf-8"))["segments"][0]["end"] == pytest.approx(3.5)
+        assert json.loads(subs.read_text(encoding="utf-8"))["segments"][0][
+            "end"
+        ] == pytest.approx(3.5)
         assert polish.prepare_subs_for_polish(str(subs)) is True
         assert json.loads(subs.read_text(encoding="utf-8")) == original
         edited = {"segments": [{"start": 0.0, "end": 8.0, "text": "edited"}]}
@@ -325,10 +427,21 @@ class TestPolish:
         video = final / "000_Test.mp4"
         _make_video_with_silence(video)
         subs_json = subs / "000_Test_processed.json"
-        subs_json.write_text(json.dumps({
-            "segments": [{"start": 0.0, "end": 4.0, "text": "hello",
-                          "words": [{"word": "hello", "start": 0.1, "end": 0.5}]}]
-        }), encoding="utf-8")
+        subs_json.write_text(
+            json.dumps(
+                {
+                    "segments": [
+                        {
+                            "start": 0.0,
+                            "end": 4.0,
+                            "text": "hello",
+                            "words": [{"word": "hello", "start": 0.1, "end": 0.5}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
         music = tmp_path / "music"
         music.mkdir()
         _make_audio(str(music / "bed.m4a"), duration=1.0)
@@ -336,8 +449,11 @@ class TestPolish:
         _make_logo(str(logo))
 
         reports = polish.polish_project(
-            str(project), enable=["jump_cuts", "punch_zoom", "background_music", "branding"],
-            logo_path=str(logo), music_volume=0.1)
+            str(project),
+            enable=["jump_cuts", "punch_zoom", "background_music", "branding"],
+            logo_path=str(logo),
+            music_volume=0.1,
+        )
         assert len(reports) == 1
         assert reports[0]["ok"] is True
         assert reports[0]["quality_status"] in {"enhanced", "partial"}

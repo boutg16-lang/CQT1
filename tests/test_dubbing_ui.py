@@ -6,6 +6,7 @@ what makes it usable by a person: the ``publish_panel`` wrapper, the explicit
 network-consent path (a checkbox, not only an env var), and the presence of the
 controls in the Publish tab.
 """
+
 import json
 import os
 import shutil
@@ -25,27 +26,67 @@ FFMPEG = shutil.which("ffmpeg")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _project(tmp_path, with_translation=False):
     project = tmp_path / "proj"
     (project / "subs").mkdir(parents=True)
     (project / "final").mkdir(parents=True)
     clip = project / "final" / "000_clip.mp4"
     if FFMPEG:
-        subprocess.run([
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=15:duration=8",
-            "-f", "lavfi", "-i", "sine=frequency=300:sample_rate=44100,volume=0.4",
-            "-t", "8", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
-            str(clip)], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=15:duration=8",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=300:sample_rate=44100,volume=0.4",
+                "-t",
+                "8",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                str(clip),
+            ],
+            check=True,
+        )
     else:
         clip.write_bytes(b"\x00" * 4096)
-    with open(project / "subs" / "000_clip_processed.json", "w", encoding="utf-8") as handle:
-        json.dump({"segments": [{"start": 0.5, "end": 3.0, "text": "نص تجريبي", "words": []}]}, handle)
+    with open(
+        project / "subs" / "000_clip_processed.json", "w", encoding="utf-8"
+    ) as handle:
+        json.dump(
+            {
+                "segments": [
+                    {"start": 0.5, "end": 3.0, "text": "نص تجريبي", "words": []}
+                ]
+            },
+            handle,
+        )
     if with_translation:
-        with open(project / "subs" / "000_clip_processed_translated_en.json",
-                  "w", encoding="utf-8") as handle:
-            json.dump({"segments": [{"start": 0.5, "end": 3.0, "text": "sample text",
-                                     "words": []}]}, handle)
+        with open(
+            project / "subs" / "000_clip_processed_translated_en.json",
+            "w",
+            encoding="utf-8",
+        ) as handle:
+            json.dump(
+                {
+                    "segments": [
+                        {"start": 0.5, "end": 3.0, "text": "sample text", "words": []}
+                    ]
+                },
+                handle,
+            )
     return project, str(clip)
 
 
@@ -53,11 +94,25 @@ def _voices(tmp_path, durations=(1.5,)):
     folder = tmp_path / "voices"
     folder.mkdir(exist_ok=True)
     for index, duration in enumerate(durations, start=1):
-        subprocess.run([
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency={}:sample_rate=44100,volume=0.5".format(
-                500 + index * 50),
-            "-t", str(duration), str(folder / "line{}.wav".format(index))], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency={}:sample_rate=44100,volume=0.5".format(
+                    500 + index * 50
+                ),
+                "-t",
+                str(duration),
+                str(folder / "line{}.wav".format(index)),
+            ],
+            check=True,
+        )
     return folder
 
 
@@ -65,18 +120,21 @@ def _voices(tmp_path, durations=(1.5,)):
 # tts_providers: the consent switch
 # ---------------------------------------------------------------------------
 
+
 def test_allow_network_false_overrides_an_enabled_env(tmp_path, monkeypatch):
     monkeypatch.setenv(tts_providers.NETWORK_OPT_IN_ENV, "1")
-    result = tts_providers.synthesize("x", str(tmp_path / "a.mp3"), provider="edge",
-                                      allow_network=False)
+    result = tts_providers.synthesize(
+        "x", str(tmp_path / "a.mp3"), provider="edge", allow_network=False
+    )
     assert result["ok"] is False
     assert tts_providers.NETWORK_OPT_IN_ENV in result["error"]
 
 
 def test_allow_network_true_is_explicit_consent(tmp_path, monkeypatch):
     monkeypatch.delenv(tts_providers.NETWORK_OPT_IN_ENV, raising=False)
-    result = tts_providers.synthesize("x", str(tmp_path / "a.mp3"), provider="edge",
-                                      allow_network=True)
+    result = tts_providers.synthesize(
+        "x", str(tmp_path / "a.mp3"), provider="edge", allow_network=True
+    )
     assert result["ok"] is False
     # refused because the backend is absent / synthesis failed — never for consent
     assert tts_providers.NETWORK_OPT_IN_ENV not in (result["error"] or "")
@@ -85,6 +143,7 @@ def test_allow_network_true_is_explicit_consent(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # publish_panel wrapper
 # ---------------------------------------------------------------------------
+
 
 def test_dub_clip_rejects_an_unknown_provider(tmp_path):
     project, clip = _project(tmp_path)
@@ -117,8 +176,9 @@ def test_dub_clip_needs_a_voice_folder_for_the_file_provider(tmp_path):
 def test_dub_clip_reports_missing_subtitles(tmp_path):
     project, clip = _project(tmp_path)
     os.remove(project / "subs" / "000_clip_processed.json")
-    ok, message = publish_panel.dub_clip(str(project), clip, provider="file",
-                                         voice=str(tmp_path))
+    ok, message = publish_panel.dub_clip(
+        str(project), clip, provider="file", voice=str(tmp_path)
+    )
     assert ok is False
     assert "subtitle" in message.lower()
 
@@ -128,11 +188,12 @@ def test_dub_clip_end_to_end_writes_final_dubbed(tmp_path):
     project, clip = _project(tmp_path)
     voices = _voices(tmp_path)
 
-    ok, message = publish_panel.dub_clip(str(project), clip, provider="file",
-                                         voice=str(voices), mode="replace")
+    ok, message = publish_panel.dub_clip(
+        str(project), clip, provider="file", voice=str(voices), mode="replace"
+    )
     assert ok is True, message
     assert "final_dubbed" in message or "المقطع المدبلج" in message
-    assert "مُصنَّع" in message            # disclosure reminder is always shown
+    assert "مُصنَّع" in message  # disclosure reminder is always shown
 
     produced = project / "final_dubbed" / "000_clip_dubbed.mp4"
     assert produced.is_file()
@@ -143,8 +204,9 @@ def test_dub_clip_end_to_end_writes_final_dubbed(tmp_path):
 def test_dub_clip_prefers_the_translated_subtitles(tmp_path):
     project, clip = _project(tmp_path, with_translation=True)
     voices = _voices(tmp_path)
-    ok, message = publish_panel.dub_clip(str(project), clip, provider="file",
-                                         voice=str(voices))
+    ok, message = publish_panel.dub_clip(
+        str(project), clip, provider="file", voice=str(voices)
+    )
     assert ok is True, message
     # the translated file is the one handed to the pipeline
     subs = publish_panel._translated_or_original_subs(str(project), clip)
@@ -161,11 +223,18 @@ def test_translated_subs_fall_back_to_the_clip_subtitles(tmp_path):
 # UI wiring (source-level, same approach as other UI shell tests)
 # ---------------------------------------------------------------------------
 
+
 def test_publish_tab_exposes_the_dubbing_controls():
     source = (ROOT / "webui" / "app.py").read_text(encoding="utf-8")
-    for token in ("pub_dub_provider", "pub_dub_mode", "pub_dub_voice",
-                  "pub_dub_allow_network", "pub_dub_btn", "pub_dub_out",
-                  "dub_publish_clip"):
+    for token in (
+        "pub_dub_provider",
+        "pub_dub_mode",
+        "pub_dub_voice",
+        "pub_dub_allow_network",
+        "pub_dub_btn",
+        "pub_dub_out",
+        "dub_publish_clip",
+    ):
         assert token in source, token
     # the click is wired to the handler
     assert "pub_dub_btn.click(" in source
@@ -175,10 +244,17 @@ def test_publish_tab_exposes_the_dubbing_controls():
 def test_dubbing_controls_default_to_the_offline_provider():
     source = (ROOT / "webui" / "app.py").read_text(encoding="utf-8")
     start = source.index("pub_dub_provider = gr.Dropdown(")
-    block = source[start:start + 400]
-    assert 'value="file"' in block          # offline by default
-    assert 'value=False' in source[source.index("pub_dub_allow_network = gr.Checkbox("):
-                                  source.index("pub_dub_allow_network = gr.Checkbox(") + 200]
+    block = source[start : start + 400]
+    assert 'value="file"' in block  # offline by default
+    assert (
+        "value=False"
+        in source[
+            source.index("pub_dub_allow_network = gr.Checkbox(") : source.index(
+                "pub_dub_allow_network = gr.Checkbox("
+            )
+            + 200
+        ]
+    )
 
 
 def test_dubbing_requirements_are_documented_as_optional():

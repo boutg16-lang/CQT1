@@ -86,11 +86,13 @@ def update(text, chat_id="10"):
 
 def test_config_and_token_redaction_are_fail_closed():
     assert parse_chat_ids("10, -20 bad") == frozenset({"10", "-20"})
-    config = config_from_env({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "1",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10",
-    })
+    config = config_from_env(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "1",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10",
+        }
+    )
     assert config.ready
     assert "123456:" not in redact("token=123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh")
     assert not config_from_env({"VIRALCUTTER_TELEGRAM_ENABLED": "1"}).ready
@@ -98,11 +100,13 @@ def test_config_and_token_redaction_are_fail_closed():
 
 def test_status_html_is_secret_free_and_reports_configuration_state():
     token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
-    ready = status_html({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "1",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10, 20",
-    })
+    ready = status_html(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "1",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10, 20",
+        }
+    )
     assert "مفعّل" in ready
     assert "2" in ready
     assert token not in ready
@@ -114,7 +118,11 @@ def test_status_html_is_secret_free_and_reports_configuration_state():
 
 def test_unknown_chat_is_ignored_without_response():
     session = FakeSession()
-    api = TelegramAPI("123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh", session=session, base_url="http://test")
+    api = TelegramAPI(
+        "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+        session=session,
+        base_url="http://test",
+    )
     router = TelegramCommandRouter(api, ["10"], {"status": lambda _ctx, _args: "ok"})
     assert router.handle_update(update("/status", chat_id="99")) is False
     assert session.calls == []
@@ -122,22 +130,32 @@ def test_unknown_chat_is_ignored_without_response():
 
 def test_router_dispatches_allowlisted_commands_and_help():
     session = FakeSession()
-    api = TelegramAPI("123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh", session=session, base_url="http://test")
-    router = TelegramCommandRouter(api, ["10"], {"status": lambda _ctx, args: "status:" + args})
+    api = TelegramAPI(
+        "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+        session=session,
+        base_url="http://test",
+    )
+    router = TelegramCommandRouter(
+        api, ["10"], {"status": lambda _ctx, args: "status:" + args}
+    )
     assert router.handle_update(update("/status now")) is True
     assert router.handle_update(update("/help")) is True
     assert len(session.calls) == 2
-    assert all("123456:" not in kwargs["json"]["text"] for _url, kwargs in session.calls)
+    assert all(
+        "123456:" not in kwargs["json"]["text"] for _url, kwargs in session.calls
+    )
 
 
 def test_terminal_notifications_are_opt_in_and_deduplicated():
     token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
-    config = config_from_env({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "1",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10",
-        "VIRALCUTTER_TELEGRAM_NOTIFY_TERMINAL": "1",
-    })
+    config = config_from_env(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "1",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "10",
+            "VIRALCUTTER_TELEGRAM_NOTIFY_TERMINAL": "1",
+        }
+    )
     session = FakeSession()
     api = TelegramAPI(token, session=session, base_url="http://test")
     queue = FakeQueue()
@@ -173,15 +191,31 @@ def test_queue_handlers_pause_resume_retry_and_confirm_cancel():
 def test_projects_and_audit_are_local_and_path_safe(tmp_path):
     project = tmp_path / "demo"
     project.mkdir()
-    (project / "polish_report.json").write_text(json.dumps({
-        "summary": {"enhanced": 2, "partial": 1, "fallback": 0, "failed": 0},
-    }), encoding="utf-8")
-    (project / "tracking_report.json").write_text(json.dumps({
-        "backend": "insightface", "active_speaker_applied": True,
-    }), encoding="utf-8")
-    (project / "publish_batch_report.json").write_text(json.dumps({
-        "summary": {"uploaded": 2, "scheduled": 1, "failed": 0, "blocked": 0},
-    }), encoding="utf-8")
+    (project / "polish_report.json").write_text(
+        json.dumps(
+            {
+                "summary": {"enhanced": 2, "partial": 1, "fallback": 0, "failed": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project / "tracking_report.json").write_text(
+        json.dumps(
+            {
+                "backend": "insightface",
+                "active_speaker_applied": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project / "publish_batch_report.json").write_text(
+        json.dumps(
+            {
+                "summary": {"uploaded": 2, "scheduled": 1, "failed": 0, "blocked": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
     handlers = build_queue_handlers(FakeQueue(), project_root=str(tmp_path))
     context = type("Context", (), {"chat_id": "10"})()
     assert "demo" in handlers["projects"](context, "")
@@ -225,7 +259,11 @@ def test_service_is_disabled_without_explicit_configuration(monkeypatch):
 
 
 def test_telegram_surface_excludes_pipeline_and_upload_commands():
-    api = TelegramAPI("123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh", session=FakeSession(), base_url="http://test")
+    api = TelegramAPI(
+        "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+        session=FakeSession(),
+        base_url="http://test",
+    )
     router = TelegramCommandRouter(api, ["10"], {})
     help_text = router._help()
     assert "/process" not in help_text

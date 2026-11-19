@@ -25,6 +25,7 @@ def _turns():
 # speaker_at
 # ---------------------------------------------------------------------------
 
+
 def test_speaker_at_inside_turn():
     link = VoiceFaceLink(_turns())
     assert link.speaker_at(0.0) == "SPEAKER_00"
@@ -64,8 +65,7 @@ def test_empty_turns():
 
 
 def test_constructor_clamps():
-    link = VoiceFaceLink(_turns(), seconds_per_frame=0, min_confidence=-1,
-                         margin=-2)
+    link = VoiceFaceLink(_turns(), seconds_per_frame=0, min_confidence=-1, margin=-2)
     assert link.seconds_per_frame == 1.0 / 30.0
     assert link.min_confidence == 0.0
     assert link.margin == 0.0
@@ -74,6 +74,7 @@ def test_constructor_clamps():
 # ---------------------------------------------------------------------------
 # update / association
 # ---------------------------------------------------------------------------
+
 
 def test_update_counts_only_frames_inside_a_turn():
     link = VoiceFaceLink(_turns())
@@ -113,6 +114,7 @@ def test_update_attributes_to_current_speaker_only():
 # best_speaker_for
 # ---------------------------------------------------------------------------
 
+
 def test_best_speaker_for_highest_ratio():
     link = VoiceFaceLink(_turns())
     link.update(1.0, {"t1": True})
@@ -137,6 +139,7 @@ def test_best_speaker_for_no_frames_yet():
 # ---------------------------------------------------------------------------
 # current_speaker_face
 # ---------------------------------------------------------------------------
+
 
 def _trained_link():
     """t1 is SPEAKER_00's mouth (always open), t2 is SPEAKER_01's."""

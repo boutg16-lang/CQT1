@@ -9,6 +9,7 @@ Pure logic extracted from the WebUI so it stays unit-testable:
 
 No gradio imports in this module.
 """
+
 import asyncio
 import datetime
 import json
@@ -55,18 +56,28 @@ def _usable_polished_clips(project_path, clips):
         # Legacy projects have no report; keep the old read-only behavior.
         return clips
     entries = report.get("clips") or []
-    by_output = {os.path.abspath(str(item.get("output"))): item for item in entries
-                  if isinstance(item, dict) and item.get("output")}
-    by_name = {str(item.get("video")): item for item in entries if isinstance(item, dict)}
+    by_output = {
+        os.path.abspath(str(item.get("output"))): item
+        for item in entries
+        if isinstance(item, dict) and item.get("output")
+    }
+    by_name = {
+        str(item.get("video")): item for item in entries if isinstance(item, dict)
+    }
     usable = []
     for path in clips:
-        item = by_output.get(os.path.abspath(path)) or by_name.get(os.path.basename(path))
+        item = by_output.get(os.path.abspath(path)) or by_name.get(
+            os.path.basename(path)
+        )
         if not item:
             return []
         status = item.get("quality_status")
-        if (not item.get("media_validated") or item.get("fallback_used")
-                or item.get("failed_stages")
-                or status not in {"enhanced", "partial"}):
+        if (
+            not item.get("media_validated")
+            or item.get("fallback_used")
+            or item.get("failed_stages")
+            or status not in {"enhanced", "partial"}
+        ):
             return []
         usable.append(path)
     return usable
@@ -101,13 +112,16 @@ def list_clips(project_path, source="auto", selected_file=None):
 
 def list_clips_by_source(project_path):
     """Return all source buckets for UI diagnostics without changing precedence."""
-    return {name: _mp4_files(os.path.join(project_path, name))
-            for name in ("final_polished", "final", "cuts")}
+    return {
+        name: _mp4_files(os.path.join(project_path, name))
+        for name in ("final_polished", "final", "cuts")
+    }
 
 
 def clip_index(video_path):
     """Leading digits of the filename → segment index (for gate checks)."""
     import re
+
     m = re.match(r"(\d+)", os.path.basename(video_path))
     return int(m.group(1)) if m else None
 
@@ -164,8 +178,14 @@ def clip_metadata(project_path, video_path):
     idx = clip_index(video_path)
     segments = segments_for_project(project_path)
     if idx is None or idx >= len(segments):
-        return {"title": "", "caption": "", "hashtags": [], "topic": "",
-                "angle": "", "hook_type": ""}
+        return {
+            "title": "",
+            "caption": "",
+            "hashtags": [],
+            "topic": "",
+            "angle": "",
+            "hook_type": "",
+        }
     seg = segments[idx]
     title = seg.get("recommended_title") or seg.get("title") or ""
     caption = seg.get("caption") or ""
@@ -178,18 +198,27 @@ def clip_metadata(project_path, video_path):
         if cleaned and cleaned not in normalized:
             normalized.append(cleaned)
     # YouTube snippet tags are capped at 500 chars total — never flood them.
-    return {"title": title, "caption": caption, "hashtags": normalized[:15],
-            "topic": str(seg.get("topic") or ""),
-            "angle": str(seg.get("angle") or ""),
-            "hook_type": str(seg.get("hook_type") or ""),
-            # v7.41 review gating surfaced to the publish UI.
-            "requires_review": bool(seg.get("requires_review")
-                                    or seg.get("title_review_required")),
-            "publish_blocked_reason": str(seg.get("publish_blocked_reason") or ""),
-            "title_validation_status": str(
-                (seg.get("title_validation")
-                 or (seg.get("title_data") or {}).get("title_validation")
-                 or {}).get("status") or "")}
+    return {
+        "title": title,
+        "caption": caption,
+        "hashtags": normalized[:15],
+        "topic": str(seg.get("topic") or ""),
+        "angle": str(seg.get("angle") or ""),
+        "hook_type": str(seg.get("hook_type") or ""),
+        # v7.41 review gating surfaced to the publish UI.
+        "requires_review": bool(
+            seg.get("requires_review") or seg.get("title_review_required")
+        ),
+        "publish_blocked_reason": str(seg.get("publish_blocked_reason") or ""),
+        "title_validation_status": str(
+            (
+                seg.get("title_validation")
+                or (seg.get("title_data") or {}).get("title_validation")
+                or {}
+            ).get("status")
+            or ""
+        ),
+    }
 
 
 def clip_suggestion(project_path, video_path):
@@ -201,6 +230,7 @@ def clip_suggestion(project_path, video_path):
 # ---------------------------------------------------------------------------
 # Per-clip translate
 # ---------------------------------------------------------------------------
+
 
 def translate_clip(project_path, video_path, target_lang):
     """Translate one clip's subtitles using the built-in Google adapter.
@@ -216,25 +246,39 @@ def translate_clip(project_path, video_path, target_lang):
     if not src:
         return False, "No subtitle file for this clip."
     lang = target_lang.strip().lower().split("-")[0]
-    dst = os.path.join(project_path, "subs",
-                       "{}_translated_{}.json".format(
-                           os.path.splitext(os.path.basename(src))[0], lang))
+    dst = os.path.join(
+        project_path,
+        "subs",
+        "{}_translated_{}.json".format(
+            os.path.splitext(os.path.basename(src))[0], lang
+        ),
+    )
     try:
         from scripts.translate_json import translate_json_file
     except Exception as e:
-        return False, ("Translation unavailable — install deps first: "
-                       "install the translation prerequisites ({})".format(e))
+        return False, (
+            "Translation unavailable — install deps first: "
+            "install the translation prerequisites ({})".format(e)
+        )
     try:
         data = asyncio.run(translate_json_file(src, dst, lang))
         count = len(data.get("segments", []))
         return True, "Copied: {} (translation for {})".format(
-            os.path.basename(dst), lang) + " — {} segments".format(count)
+            os.path.basename(dst), lang
+        ) + " — {} segments".format(count)
     except Exception as e:
         return False, "Translation failed: {}".format(str(e)[:300])
 
 
-def dub_clip(project_path, video_path, provider="file", voice="", mode="replace",
-             allow_network=False, work_dir=None):
+def dub_clip(
+    project_path,
+    video_path,
+    provider="file",
+    voice="",
+    mode="replace",
+    allow_network=False,
+    work_dir=None,
+):
     """Dub one clip with a TTS provider (v7.50).
 
     Returns ``(ok, message)`` like :func:`translate_clip`. The subtitle file
@@ -249,7 +293,10 @@ def dub_clip(project_path, video_path, provider="file", voice="", mode="replace"
 
     subs = _translated_or_original_subs(project_path, video_path)
     if not subs:
-        return False, "No subtitle file for this clip — run transcription (or translate) first."
+        return (
+            False,
+            "No subtitle file for this clip — run transcription (or translate) first.",
+        )
 
     try:
         from scripts import dubbing, tts_providers
@@ -259,10 +306,13 @@ def dub_clip(project_path, video_path, provider="file", voice="", mode="replace"
     info = tts_providers.provider_info(provider)
     if info is None:
         return False, "Unknown TTS provider {!r} (available: {})".format(
-            provider, ", ".join(tts_providers.provider_names()))
+            provider, ", ".join(tts_providers.provider_names())
+        )
     if info["network"] and not allow_network:
-        return False, ("المزوّد {} يرسل النص إلى خدمة خارجية. "
-                       "فعّل خيار «السماح بالشبكة» صراحةً للمتابعة.").format(provider)
+        return False, (
+            "المزوّد {} يرسل النص إلى خدمة خارجية. "
+            "فعّل خيار «السماح بالشبكة» صراحةً للمتابعة."
+        ).format(provider)
     if provider == "file" and not str(voice or "").strip():
         return False, "Provide a folder of pre-recorded audio files (voice)."
 
@@ -272,20 +322,35 @@ def dub_clip(project_path, video_path, provider="file", voice="", mode="replace"
     out_path = os.path.join(out_dir, "{}{}{}".format(stem, dubbing.CLIP_SUFFIX, ext))
 
     try:
-        result = dubbing.dub_clip(video_path, subs, out_path,
-                                  provider=provider, voice=voice or None, mode=mode,
-                                  work_dir=work_dir, allow_network=allow_network)
+        result = dubbing.dub_clip(
+            video_path,
+            subs,
+            out_path,
+            provider=provider,
+            voice=voice or None,
+            mode=mode,
+            work_dir=work_dir,
+            allow_network=allow_network,
+        )
     except Exception as exc:
         return False, "Dubbing failed: {}".format(str(exc)[:300])
 
     if not result.get("ok"):
         return False, "تعذّرت الدبلجة: {}".format(result.get("error") or "unknown error")
 
-    return True, ("تم إنشاء المقطع المدبلج: {} (#{} سطر مُدبلج{}{}). "
-                  "تنبيه: صوت مُصنَّع — فعّل الإفصاح عن المحتوى المُعدّل عند النشر.").format(
-        result.get("output"), result.get("segments_dubbed"),
-        "، {} فشل".format(result.get("segments_failed")) if result.get("segments_failed") else "",
-        "، " + "; ".join(result.get("warnings") or []) if result.get("warnings") else "")
+    return True, (
+        "تم إنشاء المقطع المدبلج: {} (#{} سطر مُدبلج{}{}). "
+        "تنبيه: صوت مُصنَّع — فعّل الإفصاح عن المحتوى المُعدّل عند النشر."
+    ).format(
+        result.get("output"),
+        result.get("segments_dubbed"),
+        "، {} فشل".format(result.get("segments_failed"))
+        if result.get("segments_failed")
+        else "",
+        "، " + "; ".join(result.get("warnings") or [])
+        if result.get("warnings")
+        else "",
+    )
 
 
 def _translated_or_original_subs(project_path, video_path):
@@ -295,8 +360,12 @@ def _translated_or_original_subs(project_path, video_path):
     prefix = stem.split("_")[0]
     if os.path.isdir(subs_dir):
         translated = sorted(
-            os.path.join(subs_dir, name) for name in os.listdir(subs_dir)
-            if name.startswith(prefix) and "_translated_" in name and name.endswith(".json"))
+            os.path.join(subs_dir, name)
+            for name in os.listdir(subs_dir)
+            if name.startswith(prefix)
+            and "_translated_" in name
+            and name.endswith(".json")
+        )
         if translated:
             return translated[-1]
     return find_subs_for_clip(project_path, video_path)
@@ -319,6 +388,7 @@ def clip_subtitle_preview(project_path, video_path):
 # ---------------------------------------------------------------------------
 # Music check
 # ---------------------------------------------------------------------------
+
 
 def run_music_check(project_path, local_db_path=""):
     """Run the Chromaprint check on the project. Returns a readable report."""
@@ -343,18 +413,32 @@ def run_music_check(project_path, local_db_path=""):
         return "Music check failed: {}".format(e)
 
     s = report["summary"]
-    lines = ["Music check: {} clips checked, {} matched.".format(
-        s.get("checked", 0), s.get("matched", 0))]
+    lines = [
+        "Music check: {} clips checked, {} matched.".format(
+            s.get("checked", 0), s.get("matched", 0)
+        )
+    ]
     if s.get("no_fpcalc"):
-        lines.append("⚠️ {} clips: Chromaprint not installed (see docs).".format(
-            s["no_fpcalc"]))
+        lines.append(
+            "⚠️ {} clips: Chromaprint not installed (see docs).".format(s["no_fpcalc"])
+        )
     for clip in report.get("clips", []):
         verdict = clip.get("verdict", "?")
-        mark = {"clean": "✅", "acoustid_match": "🎵⚠️", "local_match": "🎵⚠️",
-                "no_fpcalc": "⚠️", "error": "❌"}.get(verdict, "?")
-        lines.append("  {} #{} {} — {}".format(
-            mark, clip.get("index", "?"),
-            os.path.basename(clip.get("video", "")), verdict))
+        mark = {
+            "clean": "✅",
+            "acoustid_match": "🎵⚠️",
+            "local_match": "🎵⚠️",
+            "no_fpcalc": "⚠️",
+            "error": "❌",
+        }.get(verdict, "?")
+        lines.append(
+            "  {} #{} {} — {}".format(
+                mark,
+                clip.get("index", "?"),
+                os.path.basename(clip.get("video", "")),
+                verdict,
+            )
+        )
         if clip.get("suggestion"):
             lines.append("      ↳ {}".format(clip["suggestion"]))
     return "\n".join(lines)
@@ -388,6 +472,7 @@ def seo_title_score(title):
         return None
     try:
         from scripts import seo_titles
+
         result = seo_titles.score_title(title)
     except Exception:
         return None
@@ -409,7 +494,10 @@ def next_best_publish_at(platform="youtube"):
     """
     try:
         from scripts import seo_titles
-        slots = seo_titles.suggest_next_slots(str(platform or "youtube").lower(), count=1)
+
+        slots = seo_titles.suggest_next_slots(
+            str(platform or "youtube").lower(), count=1
+        )
     except Exception:
         return None
     return slots[0] if slots else None
@@ -437,9 +525,10 @@ def format_channel_lessons(project_path):
             "📊 لا يوجد ملف تحليلات بعد في هذا المشروع.\n"
             "لتفعيل التعلّم من نتائج قناتك:\n"
             "1) فعّل YouTube Analytics API (نفس إعداد الـ OAuth للرفع).\n"
-            "2) شغّل: python -m scripts.performance_loop --project \"{}\"\n"
+            '2) شغّل: python -m scripts.performance_loop --project "{}"\n'
             "3) بعدها سيظهر هنا: أي صيغة عناوين/مواضيع تجلب مشاهدات، "
-            "وأفضل ساعات النشر المقاسة على قناتك.".format(project_path))
+            "وأفضل ساعات النشر المقاسة على قناتك.".format(project_path)
+        )
     lines = ["📊 **دروس قناتك (من أداء فيديوهاتك المنشورة):**"]
     with_metrics = int(insights.get("with_metrics") or 0)
     lines.append("— الفيديوهات المقاسة: {}".format(with_metrics))
@@ -448,9 +537,11 @@ def format_channel_lessons(project_path):
     if overall is not None:
         lines.append("— معدل مشاهداتك: {:.0f}".format(float(overall)))
         categories = content.get("categories") or {}
-        field_names = {"hook_type": "صيغة الخطاف (hook_type)",
-                       "angle": "الزاوية التحريرية (angle)",
-                       "topic": "الموضوع (topic)"}
+        field_names = {
+            "hook_type": "صيغة الخطاف (hook_type)",
+            "angle": "الزاوية التحريرية (angle)",
+            "topic": "الموضوع (topic)",
+        }
         for field, label in field_names.items():
             rows = categories.get(field) or []
             if not rows:
@@ -458,22 +549,35 @@ def format_channel_lessons(project_path):
             top = sorted(rows, key=lambda row: -abs(row.get("delta_pct") or 0))
             best = top[0] if top else None
             if best and (best.get("delta_pct") or 0) > 0:
-                lines.append("• أفضل {}: «{}» — {}% عن معدلك (من {} فيديو)".format(
-                    label, best.get("value"), best.get("delta_pct"),
-                    best.get("samples")))
+                lines.append(
+                    "• أفضل {}: «{}» — {}% عن معدلك (من {} فيديو)".format(
+                        label,
+                        best.get("value"),
+                        best.get("delta_pct"),
+                        best.get("samples"),
+                    )
+                )
         styles = content.get("title_styles") or []
         if styles:
             styles = sorted(styles, key=lambda row: -abs(row.get("delta_pct") or 0))
             winner = styles[0]
-            lines.append("• {}: {} مشاهدة معها مقابل {} بدونها ({}% — {} ضد {} فيديو)".format(
-                _STYLE_AR_NAMES.get(winner.get("style"), winner.get("style")),
-                winner.get("avg_views_yes"), winner.get("avg_views_no"),
-                winner.get("delta_pct"), winner.get("samples_yes"),
-                winner.get("samples_no")))
+            lines.append(
+                "• {}: {} مشاهدة معها مقابل {} بدونها ({}% — {} ضد {} فيديو)".format(
+                    _STYLE_AR_NAMES.get(winner.get("style"), winner.get("style")),
+                    winner.get("avg_views_yes"),
+                    winner.get("avg_views_no"),
+                    winner.get("delta_pct"),
+                    winner.get("samples_yes"),
+                    winner.get("samples_no"),
+                )
+            )
     best_hours = insights.get("best_hours")
     if best_hours:
-        lines.append("— أفضل ساعات النشر المقاسة (بتوقيتك المحلي): {}".format(
-            ", ".join(str(h) for h in best_hours)))
+        lines.append(
+            "— أفضل ساعات النشر المقاسة (بتوقيتك المحلي): {}".format(
+                ", ".join(str(h) for h in best_hours)
+            )
+        )
     return "\n".join(lines)
 
 
@@ -527,6 +631,7 @@ def _resolve_privacy(privacy_status):
     """Prefer a shared resolver from scripts.upload_gate when one exists."""
     try:
         from scripts import upload_gate as ug
+
         resolver = getattr(ug, "effective_privacy", None)
         if callable(resolver):
             resolved = resolver(privacy_status)
@@ -541,6 +646,7 @@ def _audio_qc_upload_allowed(project_path, video_path):
     """Real uploads require a current, passing per-file Audio QC result."""
     try:
         from scripts import audio_qc
+
         report = audio_qc.ensure_file_report(project_path, video_path)
         return audio_qc.gate_allows(report)
     except Exception as exc:
@@ -556,14 +662,21 @@ def _polish_upload_allowed(project_path, video_path):
     if not report:
         return True, ""
     for item in report.get("clips", []) or []:
-        if (os.path.abspath(str(item.get("output") or "")) == os.path.abspath(video_path)
-                or item.get("video") == os.path.basename(video_path)):
-            safe = (item.get("media_validated") and not item.get("fallback_used")
-                    and not item.get("failed_stages")
-                    and item.get("quality_status") in {"enhanced", "partial"})
+        if os.path.abspath(str(item.get("output") or "")) == os.path.abspath(
+            video_path
+        ) or item.get("video") == os.path.basename(video_path):
+            safe = (
+                item.get("media_validated")
+                and not item.get("fallback_used")
+                and not item.get("failed_stages")
+                and item.get("quality_status") in {"enhanced", "partial"}
+            )
             if safe:
                 return True, ""
-            return False, "final_polished output is fallback/failed/invalid according to polish_report.json"
+            return (
+                False,
+                "final_polished output is fallback/failed/invalid according to polish_report.json",
+            )
     return False, "final_polished output has no matching entry in polish_report.json"
 
 
@@ -573,13 +686,19 @@ def _thumbnail_paths_for(project_path, video_path):
     index = clip_index(video_path)
     directory = os.path.join(project_path, "thumbnails")
     candidates = []
-    for name in ("{}.png".format(stem), "{}_thumbnail.png".format(stem),
-                 "{}.jpg".format(stem), "{}_thumbnail.jpg".format(stem)):
+    for name in (
+        "{}.png".format(stem),
+        "{}_thumbnail.png".format(stem),
+        "{}.jpg".format(stem),
+        "{}_thumbnail.jpg".format(stem),
+    ):
         candidates.append(os.path.join(directory, name))
     if index is not None:
-        for name in ("{:03d}_thumbnail.png".format(index),
-                     "{:03d}_thumbnail.jpg".format(index),
-                     "{:03d}.png".format(index)):
+        for name in (
+            "{:03d}_thumbnail.png".format(index),
+            "{:03d}_thumbnail.jpg".format(index),
+            "{:03d}.png".format(index),
+        ):
             candidates.append(os.path.join(directory, name))
     seen = []
     for candidate in candidates:
@@ -598,14 +717,21 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     existing = _thumbnail_paths_for(project_path, video_path)
     if existing:
         return existing[0]
-    if os.getenv("VIRALCUTTER_UPLOAD_THUMBNAIL", "1").strip().lower() in {"0", "false", "no", "off"}:
+    if os.getenv("VIRALCUTTER_UPLOAD_THUMBNAIL", "1").strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
         return None
     stem = os.path.splitext(os.path.basename(video_path or ""))[0]
     output = os.path.join(project_path, "thumbnails", "{}.png".format(stem))
     try:
         from scripts import thumbnail_generator
+
         result = thumbnail_generator.generate_thumbnail(
-            video_path, title=str(title or "")[:80], out=output, at_seconds=0.0)
+            video_path, title=str(title or "")[:80], out=output, at_seconds=0.0
+        )
         if result.get("ok") and os.path.isfile(output):
             return output
     except Exception:
@@ -613,11 +739,24 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     return None
 
 
-def _upload_worker(project_path, platform, video_path, title, caption,
-                   hashtags, dry_run, music_gate, client_secrets_path,
-                   privacy_status, publish_at, out_queue, oauth_full_access=False,
-                   require_existing_auth=False, public_confirm=False,
-                   variant_policy="off"):
+def _upload_worker(
+    project_path,
+    platform,
+    video_path,
+    title,
+    caption,
+    hashtags,
+    dry_run,
+    music_gate,
+    client_secrets_path,
+    privacy_status,
+    publish_at,
+    out_queue,
+    oauth_full_access=False,
+    require_existing_auth=False,
+    public_confirm=False,
+    variant_policy="off",
+):
     final_result = None
 
     def emit(msg):
@@ -633,39 +772,83 @@ def _upload_worker(project_path, platform, video_path, title, caption,
         polish_ok, polish_detail = _polish_upload_allowed(project_path, video_path)
         if not polish_ok and not dry_run:
             emit("⛔ تم منع رفع final_polished غير الموثوق: {}".format(polish_detail))
-            finish(_publish_result("blocked", video_path, title, publish_at,
-                                   error=polish_detail, reason="polish_report"))
+            finish(
+                _publish_result(
+                    "blocked",
+                    video_path,
+                    title,
+                    publish_at,
+                    error=polish_detail,
+                    reason="polish_report",
+                )
+            )
             return
         if platform == "youtube" and not dry_run:
             from scripts import content_guard
+
             channel_state = content_guard.channel_status(project_path, "youtube")
             if channel_state.get("locked"):
-                emit("⛔ تم إيقاف الرفع قبل OAuth: قاطع دائرة القناة مقفول بسبب حادثة سياسة مسجلة.")
-                finish(_publish_result("blocked", video_path, title, publish_at,
-                                       error="channel circuit breaker locked", reason="channel_circuit_breaker"))
+                emit(
+                    "⛔ تم إيقاف الرفع قبل OAuth: قاطع دائرة القناة مقفول بسبب حادثة سياسة مسجلة."
+                )
+                finish(
+                    _publish_result(
+                        "blocked",
+                        video_path,
+                        title,
+                        publish_at,
+                        error="channel circuit breaker locked",
+                        reason="channel_circuit_breaker",
+                    )
+                )
                 return
-        if platform == "youtube" and resolved_privacy == "public" and not dry_run and not public_confirm:
+        if (
+            platform == "youtube"
+            and resolved_privacy == "public"
+            and not dry_run
+            and not public_confirm
+        ):
             emit("❌ تم إيقاف الرفع العام: فعّل تأكيد النشر العام أولاً.")
-            finish(_publish_result("blocked", video_path, title, publish_at,
-                                   error="public confirmation required", reason="public_confirmation"))
+            finish(
+                _publish_result(
+                    "blocked",
+                    video_path,
+                    title,
+                    publish_at,
+                    error="public confirmation required",
+                    reason="public_confirmation",
+                )
+            )
             return
         if not dry_run:
             audio_ok, audio_detail = _audio_qc_upload_allowed(project_path, video_path)
             if not audio_ok:
                 emit("⛔ تم منع الرفع بسبب Audio QC: {}".format(audio_detail))
-                finish(_publish_result("blocked", video_path, title, publish_at,
-                                       error=audio_detail, reason="audio_qc"))
+                finish(
+                    _publish_result(
+                        "blocked",
+                        video_path,
+                        title,
+                        publish_at,
+                        error=audio_detail,
+                        reason="audio_qc",
+                    )
+                )
                 return
         from scripts import upload_gate as ug
         from webui import publish_history
+
         if platform == "youtube" and client_secrets_path:
             from webui.youtube_credentials import (
                 replace_client_secrets,
                 store_client_secrets,
             )
+
             stored = store_client_secrets(client_secrets_path)
             if stored.get("changed"):
-                stored = replace_client_secrets(client_secrets_path, invalidate_token=True)
+                stored = replace_client_secrets(
+                    client_secrets_path, invalidate_token=True
+                )
             client_secrets_path = stored["path"]
             emit("[oauth] client secrets validated and stored securely")
         emit("[gate] running safety checks for #{} ...".format(clip_index(video_path)))
@@ -691,12 +874,21 @@ def _upload_worker(project_path, platform, video_path, title, caption,
         prior = None
         if not dry_run:
             prior = publish_history.find_success(
-                project_path, platform=platform, video_path=video_path)
+                project_path, platform=platform, video_path=video_path
+            )
         if prior:
             prior_id = prior.get("video_id") or prior.get("url") or "سجل سابق"
             emit("⚠️ تم تخطي الرفع: هذا الملف رُفع سابقاً بنجاح ({})".format(prior_id))
-            finish(_publish_result("skipped_duplicate", video_path, title, publish_at,
-                                   prior_id=prior_id, reason="publish_history"))
+            finish(
+                _publish_result(
+                    "skipped_duplicate",
+                    video_path,
+                    title,
+                    publish_at,
+                    prior_id=prior_id,
+                    reason="publish_history",
+                )
+            )
             return
 
         # SEO advisory (YouTube only, never blocking): surface the offline
@@ -715,39 +907,65 @@ def _upload_worker(project_path, platform, video_path, title, caption,
         if str(variant_policy or "off").strip().lower() != "off":
             try:
                 from scripts import platform_variant
+
                 if dry_run:
                     decision = platform_variant.plan_variant(
-                        project_path, video_path, platform,
-                        policy=str(variant_policy or "off"))
+                        project_path,
+                        video_path,
+                        platform,
+                        policy=str(variant_policy or "off"),
+                    )
                 else:
                     decision = platform_variant.maybe_variant(
-                        project_path, video_path, platform,
-                        policy=str(variant_policy or "off"))
+                        project_path,
+                        video_path,
+                        platform,
+                        policy=str(variant_policy or "off"),
+                    )
                 if decision and decision.get("action") == "review":
                     variant_line = "[variant] {}".format(
-                        decision.get("reason", "original editorial contribution is required"))
+                        decision.get(
+                            "reason", "original editorial contribution is required"
+                        )
+                    )
                     emit(variant_line)
-                    finish(_publish_result(
-                        "blocked", video_path, title, publish_at,
-                        error=decision.get("reason", "original contribution required"),
-                        reason="original_contribution_required"))
+                    finish(
+                        _publish_result(
+                            "blocked",
+                            video_path,
+                            title,
+                            publish_at,
+                            error=decision.get(
+                                "reason", "original contribution required"
+                            ),
+                            reason="original_contribution_required",
+                        )
+                    )
                     return
                 if decision and decision.get("action") == "variate":
                     if dry_run:
-                        variant_line = ("[variant] سيُرفع هذا المقطع كنسخة مختلفة على {} "
-                                        "(seed {}) بدل البايتات نفسها لتجنب تكرار المحتوى."
-                                        ).format(platform, decision.get("seed"))
+                        variant_line = (
+                            "[variant] سيُرفع هذا المقطع كنسخة مختلفة على {} "
+                            "(seed {}) بدل البايتات نفسها لتجنب تكرار المحتوى."
+                        ).format(platform, decision.get("seed"))
                     else:
                         upload_video = decision["path"]
-                        variant_line = ("[variant] نسخة مختلفة لمنصة {} جاهزة: {} "
-                                        "(تحويلات: {})".format(
-                                            platform, os.path.basename(upload_video),
-                                            ", ".join(decision.get("transforms") or []) or "بدون"))
+                        variant_line = (
+                            "[variant] نسخة مختلفة لمنصة {} جاهزة: {} "
+                            "(تحويلات: {})".format(
+                                platform,
+                                os.path.basename(upload_video),
+                                ", ".join(decision.get("transforms") or []) or "بدون",
+                            )
+                        )
                 elif decision and decision.get("reason"):
                     variant_line = "[variant] {}".format(decision.get("reason"))
             except Exception as error:
-                variant_line = "[variant] تعذّر التباين المتقاطع للمنصات ({}); سيُرفع الأصل.".format(
-                    str(error)[:200])
+                variant_line = (
+                    "[variant] تعذّر التباين المتقاطع للمنصات ({}); سيُرفع الأصل.".format(
+                        str(error)[:200]
+                    )
+                )
             if variant_line:
                 emit(variant_line)
 
@@ -764,26 +982,41 @@ def _upload_worker(project_path, platform, video_path, title, caption,
         uploader.validate_video = True
         uploader.require_preflight_reports = not dry_run
         uploader.require_quality_gate = not dry_run
-        result = uploader.upload(upload_video, title, caption, hashtags,
-                                 index=clip_index(upload_video), **upload_kwargs)
+        result = uploader.upload(
+            upload_video,
+            title,
+            caption,
+            hashtags,
+            index=clip_index(upload_video),
+            **upload_kwargs,
+        )
 
         # Attach a project thumbnail to the fresh YouTube video (best-effort,
         # never blocking): thumbnails drive CTR, and the generator existed
         # standalone since v7.23 without ever reaching the upload.
         thumb_attached = False
-        if (platform == "youtube" and not dry_run
-                and (result or {}).get("video_id") is not None):
+        if (
+            platform == "youtube"
+            and not dry_run
+            and (result or {}).get("video_id") is not None
+        ):
             thumb_path = _thumbnail_for_clip(project_path, upload_video, title)
             attach = getattr(uploader, "attach_thumbnail", None)
             if thumb_path and callable(attach):
                 try:
                     attach(str(result.get("video_id")), thumb_path)
                     thumb_attached = True
-                    emit("[thumbnail] ✅ صورة مصغرة مرفوعة مع الفيديو: {}".format(
-                        os.path.basename(thumb_path)))
+                    emit(
+                        "[thumbnail] ✅ صورة مصغرة مرفوعة مع الفيديو: {}".format(
+                            os.path.basename(thumb_path)
+                        )
+                    )
                 except Exception as exc:
-                    emit("[thumbnail] ⚠️ تعذّر رفع الصورة المصغرة (لا يمنع النشر): {}".format(
-                        str(exc)[:200]))
+                    emit(
+                        "[thumbnail] ⚠️ تعذّر رفع الصورة المصغرة (لا يمنع النشر): {}".format(
+                            str(exc)[:200]
+                        )
+                    )
 
         meta = clip_metadata(project_path, video_path)
         record_extra = {
@@ -796,20 +1029,28 @@ def _upload_worker(project_path, platform, video_path, title, caption,
             record_extra["thumbnail"] = os.path.basename(thumb_path)
         if upload_video != video_path:
             record_extra["variant_of"] = os.path.basename(video_path)
-        publish_history.record(project_path, platform=platform, video_path=upload_video,
-                               title=title, result=result,
-                               privacy_status=resolved_privacy, publish_at=publish_at,
-                               extra=record_extra)
+        publish_history.record(
+            project_path,
+            platform=platform,
+            video_path=upload_video,
+            title=title,
+            result=result,
+            privacy_status=resolved_privacy,
+            publish_at=publish_at,
+            extra=record_extra,
+        )
         # Close the loop automatically: the next Learn/Insights refresh will
         # re-query YouTube even if the TTL has not expired.
         try:
             from scripts import performance_loop
+
             if str(result.get("status") or "").lower() in {"uploaded", "scheduled"}:
                 performance_loop.mark_refresh_due(project_path)
         except Exception:
             pass
         try:
             from webui import project_store
+
             project_store.update_manifest(
                 project_path,
                 publish_status=result.get("status", "uploaded"),
@@ -820,18 +1061,27 @@ def _upload_worker(project_path, platform, video_path, title, caption,
                     "url": result.get("url"),
                     "privacy_status": resolved_privacy,
                     "publish_at": publish_at,
-                    "variant_of": os.path.basename(video_path) if upload_video != video_path else None,
+                    "variant_of": os.path.basename(video_path)
+                    if upload_video != video_path
+                    else None,
                 },
             )
         except Exception:
             pass
-        status = str((result or {}).get("status") or ("scheduled" if publish_at else "uploaded"))
+        status = str(
+            (result or {}).get("status") or ("scheduled" if publish_at else "uploaded")
+        )
         if status == "dry-run":
             status = "dry_run"
         base_publish_at = (result or {}).get("publish_at") or publish_at
-        extras = {key: value for key, value in (result or {}).items()
-                  if key not in {"status", "video", "video_path", "title", "publish_at"}}
-        normalized = _publish_result(status, upload_video, title, base_publish_at, **extras)
+        extras = {
+            key: value
+            for key, value in (result or {}).items()
+            if key not in {"status", "video", "video_path", "title", "publish_at"}
+        }
+        normalized = _publish_result(
+            status, upload_video, title, base_publish_at, **extras
+        )
         emit("✅ {}".format(json.dumps(normalized, ensure_ascii=False)))
         finish(normalized)
     except Exception as e:
@@ -849,20 +1099,39 @@ def _upload_worker(project_path, platform, video_path, title, caption,
             }
             emit("❌ تم منع الرفع بواسطة بوابة الأمان قبل الاتصال بالمنصة.")
             for reason in getattr(e, "reasons", []):
-                label = source_labels.get(reason.get("source"), reason.get("source", "فحص"))
+                label = source_labels.get(
+                    reason.get("source"), reason.get("source", "فحص")
+                )
                 emit("  • {}: {}".format(label, reason.get("detail", "راجع التقرير")))
-            finish(_publish_result("blocked", video_path, title, publish_at,
-                                   error=str(e)[:1000], reason="safety_gate",
-                                   reasons=getattr(e, "reasons", [])))
+            finish(
+                _publish_result(
+                    "blocked",
+                    video_path,
+                    title,
+                    publish_at,
+                    error=str(e)[:1000],
+                    reason="safety_gate",
+                    reasons=getattr(e, "reasons", []),
+                )
+            )
         try:
             from webui import publish_history
-            publish_history.record(project_path, platform=platform, video_path=video_path,
-                                   title=title, error=e,
-                                   privacy_status=resolved_privacy, publish_at=publish_at)
+
+            publish_history.record(
+                project_path,
+                platform=platform,
+                video_path=video_path,
+                title=title,
+                error=e,
+                privacy_status=resolved_privacy,
+                publish_at=publish_at,
+            )
             try:
                 from webui import project_store
+
                 project_store.update_manifest(
-                    project_path, publish_status="failed",
+                    project_path,
+                    publish_status="failed",
                     last_publish_error=str(e)[:1000],
                 )
             except Exception:
@@ -870,34 +1139,71 @@ def _upload_worker(project_path, platform, video_path, title, caption,
         except Exception:
             pass
         if final_result is None:
-            finish(_publish_result("failed", video_path, title, publish_at,
-                                   error=str(e)[:1000]))
+            finish(
+                _publish_result(
+                    "failed", video_path, title, publish_at, error=str(e)[:1000]
+                )
+            )
         emit("❌ {}".format(e))
     finally:
         if final_result is None:
-            finish(_publish_result("failed", video_path, title, publish_at,
-                                   error="upload worker ended without a result"))
+            finish(
+                _publish_result(
+                    "failed",
+                    video_path,
+                    title,
+                    publish_at,
+                    error="upload worker ended without a result",
+                )
+            )
         out_queue.put({"type": "done"})
 
 
-def stream_upload(project_path, platform, video_path, title, caption,
-                  hashtags, dry_run, music_gate, client_secrets_path=None,
-                  privacy_status="private", publish_at=None, oauth_full_access=False,
-                  require_existing_auth=False, public_confirm=False,
-                  variant_policy="off"):
+def stream_upload(
+    project_path,
+    platform,
+    video_path,
+    title,
+    caption,
+    hashtags,
+    dry_run,
+    music_gate,
+    client_secrets_path=None,
+    privacy_status="private",
+    publish_at=None,
+    oauth_full_access=False,
+    require_existing_auth=False,
+    public_confirm=False,
+    variant_policy="off",
+):
     """Yield log lines and return one structured result to a batch caller."""
     out_queue = queue.Queue()
     if not video_path or not os.path.exists(video_path):
-        result = _publish_result("failed", video_path, title, publish_at,
-                                 error="Clip not found")
+        result = _publish_result(
+            "failed", video_path, title, publish_at, error="Clip not found"
+        )
         yield "Clip not found."
         return result
     thread = threading.Thread(
         target=_upload_worker,
-        args=(project_path, platform, video_path, title, caption,
-              hashtags, dry_run, music_gate, client_secrets_path, privacy_status,
-              publish_at, out_queue, oauth_full_access, require_existing_auth,
-              public_confirm, variant_policy),
+        args=(
+            project_path,
+            platform,
+            video_path,
+            title,
+            caption,
+            hashtags,
+            dry_run,
+            music_gate,
+            client_secrets_path,
+            privacy_status,
+            publish_at,
+            out_queue,
+            oauth_full_access,
+            require_existing_auth,
+            public_confirm,
+            variant_policy,
+        ),
         daemon=True,
     )
     thread.start()
@@ -920,8 +1226,13 @@ def stream_upload(project_path, platform, video_path, title, caption,
         message = event.get("message") if isinstance(event, dict) else str(event)
         lines.append(str(message))
         yield "\n".join(lines)
-    result = result or _publish_result("failed", video_path, title, publish_at,
-                                       error="upload worker returned no structured result")
+    result = result or _publish_result(
+        "failed",
+        video_path,
+        title,
+        publish_at,
+        error="upload worker returned no structured result",
+    )
     lines.append("Upload finished. [{}]".format(result.get("status", "failed")))
     yield "\n".join(lines)
     return result
@@ -943,31 +1254,53 @@ def _write_batch_report(project_path, report):
 
 
 def _batch_summary(items):
-    counts = dict.fromkeys(("uploaded", "scheduled", "dry_run", "skipped_duplicate", "blocked", "failed"), 0)
+    counts = dict.fromkeys(
+        ("uploaded", "scheduled", "dry_run", "skipped_duplicate", "blocked", "failed"),
+        0,
+    )
     for item in items:
         status = str(item.get("status") or "failed")
         counts[status] = counts.get(status, 0) + 1
-    return {"total": len(items), "counts": counts,
-            "successful": counts["uploaded"] + counts["scheduled"],
-            "failed": counts["failed"], "blocked": counts["blocked"],
-            "skipped_duplicate": counts["skipped_duplicate"]}
+    return {
+        "total": len(items),
+        "counts": counts,
+        "successful": counts["uploaded"] + counts["scheduled"],
+        "failed": counts["failed"],
+        "blocked": counts["blocked"],
+        "skipped_duplicate": counts["skipped_duplicate"],
+    }
 
 
-def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate,
-                        client_secrets_path=None, privacy_status="private",
-                        publish_at=None, oauth_full_access=False,
-                        require_existing_auth=False, public_confirm=False,
-                        schedule_interval_minutes=60, retry_failed_only=False,
-                        variant_policy="off"):
+def stream_upload_batch(
+    project_path,
+    platform,
+    video_paths,
+    dry_run,
+    music_gate,
+    client_secrets_path=None,
+    privacy_status="private",
+    publish_at=None,
+    oauth_full_access=False,
+    require_existing_auth=False,
+    public_confirm=False,
+    schedule_interval_minutes=60,
+    retry_failed_only=False,
+    variant_policy="off",
+):
     """Upload every selected clip and persist exact per-clip outcomes."""
-    all_paths = [os.path.abspath(os.fspath(path)) for path in (video_paths or [])
-                 if path and os.path.isfile(path) and str(path).lower().endswith(".mp4")]
+    all_paths = [
+        os.path.abspath(os.fspath(path))
+        for path in (video_paths or [])
+        if path and os.path.isfile(path) and str(path).lower().endswith(".mp4")
+    ]
     previous = _load_json(os.path.join(project_path, "publish_batch_report.json")) or {}
     if retry_failed_only:
         failed_paths = {
             os.path.abspath(str(item.get("video_path")))
             for item in previous.get("items", []) or []
-            if isinstance(item, dict) and item.get("status") == "failed" and item.get("video_path")
+            if isinstance(item, dict)
+            and item.get("status") == "failed"
+            and item.get("video_path")
         }
         paths = [path for path in all_paths if path in failed_paths]
     else:
@@ -979,7 +1312,9 @@ def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate
             yield "❌ لم يتم العثور على ملفات MP4 صالحة لمصدر الرفع."
         return
     try:
-        interval_raw = 60 if schedule_interval_minutes is None else schedule_interval_minutes
+        interval_raw = (
+            60 if schedule_interval_minutes is None else schedule_interval_minutes
+        )
         interval = float(interval_raw)
         if not math.isfinite(interval) or interval < 1 or interval > 10080:
             raise ValueError("invalid interval")
@@ -990,7 +1325,8 @@ def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate
     if publish_at:
         try:
             schedule_start = datetime.datetime.fromisoformat(
-                str(publish_at).strip().replace("Z", "+00:00"))
+                str(publish_at).strip().replace("Z", "+00:00")
+            )
             if schedule_start.tzinfo is None:
                 raise ValueError("missing timezone")
         except (TypeError, ValueError):
@@ -1011,7 +1347,10 @@ def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate
     yield "[upload] تجهيز {} مقطعاً من المصدر المحدد...".format(len(paths))
     if schedule_start and len(paths) > 1:
         yield "[schedule] جدولة تلقائية: البداية {} — الفاصل {} دقيقة — {} مقاطع.".format(
-            schedule_start.isoformat(), int(interval) if interval.is_integer() else interval, len(paths))
+            schedule_start.isoformat(),
+            int(interval) if interval.is_integer() else interval,
+            len(paths),
+        )
     for number, path in enumerate(paths, 1):
         meta = clip_metadata(project_path, path)
         title, caption, tags = meta["title"], meta["caption"], meta["hashtags"]
@@ -1020,23 +1359,39 @@ def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate
             # only the *title text* is fitted to the platform cap so a long
             # clip name never ships as a mid-word-split publish title.
             from scripts.title_text import fit_publish_title
+
             stem = os.path.splitext(os.path.basename(path))[0]
             title = fit_publish_title(stem, _title_limit_for_platform(platform))
         yield "\n[upload] ({}/{}) {}".format(number, len(paths), os.path.basename(path))
         if tags:
             yield "[upload] هاشتاغات المقطع: {}".format(
-                " ".join("#" + tag for tag in tags))
+                " ".join("#" + tag for tag in tags)
+            )
         item_publish_at = None
         if schedule_start:
-            item_publish_at = (schedule_start + datetime.timedelta(
-                minutes=interval * (number - 1))).isoformat()
+            item_publish_at = (
+                schedule_start + datetime.timedelta(minutes=interval * (number - 1))
+            ).isoformat()
         result = yield from stream_upload(
-            project_path, platform, path, title, caption, tags, dry_run, music_gate,
-            client_secrets_path, privacy_status, item_publish_at, oauth_full_access,
-            require_existing_auth, public_confirm, variant_policy,
+            project_path,
+            platform,
+            path,
+            title,
+            caption,
+            tags,
+            dry_run,
+            music_gate,
+            client_secrets_path,
+            privacy_status,
+            item_publish_at,
+            oauth_full_access,
+            require_existing_auth,
+            public_confirm,
+            variant_policy,
         )
-        result = result or _publish_result("failed", path, title, item_publish_at,
-                                           error="missing structured result")
+        result = result or _publish_result(
+            "failed", path, title, item_publish_at, error="missing structured result"
+        )
         replaced = False
         for index, previous_item in enumerate(report["items"]):
             if previous_item.get("video_path") == result.get("video_path"):
@@ -1047,14 +1402,22 @@ def stream_upload_batch(project_path, platform, video_paths, dry_run, music_gate
             report["items"].append(result)
         report["summary"] = _batch_summary(report["items"])
         _write_batch_report(project_path, report)
-        yield "[upload] نتيجة {}: {}".format(os.path.basename(path), result.get("status", "failed"))
+        yield "[upload] نتيجة {}: {}".format(
+            os.path.basename(path), result.get("status", "failed")
+        )
     summary = report["summary"]
     if summary["failed"] or summary["blocked"]:
         yield "⚠️ اكتملت الدفعة مع مشاكل: uploaded={} scheduled={} dry_run={} skipped_duplicate={} blocked={} failed={}. أعد المحاولة للفاشل فقط بعد إصلاح السبب.".format(
-            summary["counts"].get("uploaded", 0), summary["counts"].get("scheduled", 0),
-            summary["counts"].get("dry_run", 0), summary["counts"].get("skipped_duplicate", 0),
-            summary["blocked"], summary["failed"])
+            summary["counts"].get("uploaded", 0),
+            summary["counts"].get("scheduled", 0),
+            summary["counts"].get("dry_run", 0),
+            summary["counts"].get("skipped_duplicate", 0),
+            summary["blocked"],
+            summary["failed"],
+        )
     elif summary["counts"].get("dry_run", 0) == summary["total"]:
         yield "✅ اكتملت المحاكاة لكل الملفات (Dry Run) — لم يُرفع أي فيديو فعلياً."
     else:
-        yield "✅ اكتمل رفع/جدولة كل الملفات المحددة: {} عنصر ناجح.".format(summary["successful"])
+        yield "✅ اكتمل رفع/جدولة كل الملفات المحددة: {} عنصر ناجح.".format(
+            summary["successful"]
+        )

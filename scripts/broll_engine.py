@@ -26,10 +26,48 @@ DEFAULT_TIMEOUT = 20
 MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024
 
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-    "how", "in", "is", "it", "of", "on", "or", "that", "the", "this",
-    "to", "was", "we", "with", "you", "your", "عن", "على", "الى", "إلى",
-    "في", "ما", "من", "هو", "هي", "هذا", "هذه", "ذلك", "تلك", "مع", "و", "يا",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "how",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "we",
+    "with",
+    "you",
+    "your",
+    "عن",
+    "على",
+    "الى",
+    "إلى",
+    "في",
+    "ما",
+    "من",
+    "هو",
+    "هي",
+    "هذا",
+    "هذه",
+    "ذلك",
+    "تلك",
+    "مع",
+    "و",
+    "يا",
 }
 
 
@@ -57,7 +95,9 @@ def _query_from_segment(segment: dict[str, Any], language: str = "en") -> str:
     return "abstract background" if language.startswith("en") else "خلفية توضيحية"
 
 
-def build_broll_plan(segments: list[dict[str, Any]], language: str = "en") -> list[dict[str, Any]]:
+def build_broll_plan(
+    segments: list[dict[str, Any]], language: str = "en"
+) -> list[dict[str, Any]]:
     """Create a deterministic B-roll plan from timed transcript segments."""
     plan = []
     for index, segment in enumerate(segments or []):
@@ -69,15 +109,17 @@ def build_broll_plan(segments: list[dict[str, Any]], language: str = "en") -> li
         if end - start < 0.5:
             continue
         query = _query_from_segment(segment, language=language)
-        plan.append({
-            "index": index,
-            "start": start,
-            "end": end,
-            "query": query,
-            "keywords": extract_keywords(segment.get("text", "")),
-            "status": "needs_asset",
-            "asset": None,
-        })
+        plan.append(
+            {
+                "index": index,
+                "start": start,
+                "end": end,
+                "query": query,
+                "keywords": extract_keywords(segment.get("text", "")),
+                "status": "needs_asset",
+                "asset": None,
+            }
+        )
     return plan
 
 
@@ -93,9 +135,15 @@ def _response_json(response: Any) -> dict[str, Any]:
     return data
 
 
-def search_pexels_videos(query: str, api_key: str, *, orientation: str = "portrait",
-                         per_page: int = 5, page: int = 1,
-                         timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+def search_pexels_videos(
+    query: str,
+    api_key: str,
+    *,
+    orientation: str = "portrait",
+    per_page: int = 5,
+    page: int = 1,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> dict[str, Any]:
     """Search Pexels videos without exposing the API key in logs or output."""
     if not api_key:
         return {"ok": False, "error": "missing_api_key", "items": []}
@@ -124,19 +172,23 @@ def search_pexels_videos(query: str, api_key: str, *, orientation: str = "portra
         files = [item for item in files if item.get("link")]
         if not files:
             continue
-        selected = min(files, key=lambda item: abs(float(item.get("width", 1080)) - 1080))
+        selected = min(
+            files, key=lambda item: abs(float(item.get("width", 1080)) - 1080)
+        )
         user = video.get("user", {}) or {}
-        items.append({
-            "id": video.get("id"),
-            "url": video.get("url"),
-            "duration": video.get("duration"),
-            "width": selected.get("width"),
-            "height": selected.get("height"),
-            "download_url": selected.get("link"),
-            "photographer": user.get("name"),
-            "photographer_url": user.get("url"),
-            "provider": "pexels",
-        })
+        items.append(
+            {
+                "id": video.get("id"),
+                "url": video.get("url"),
+                "duration": video.get("duration"),
+                "width": selected.get("width"),
+                "height": selected.get("height"),
+                "download_url": selected.get("link"),
+                "photographer": user.get("name"),
+                "photographer_url": user.get("url"),
+                "provider": "pexels",
+            }
+        )
     return {
         "ok": True,
         "items": items,
@@ -150,8 +202,13 @@ def search_pexels_videos(query: str, api_key: str, *, orientation: str = "portra
     }
 
 
-def download_asset(url: str, output_path: str, *, timeout: int = DEFAULT_TIMEOUT,
-                   max_bytes: int = MAX_DOWNLOAD_BYTES) -> dict[str, Any]:
+def download_asset(
+    url: str,
+    output_path: str,
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    max_bytes: int = MAX_DOWNLOAD_BYTES,
+) -> dict[str, Any]:
     """Download one HTTPS/HTTP asset with a size cap and atomic replacement."""
     parsed = urlparse(str(url or ""))
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -186,24 +243,60 @@ def download_asset(url: str, output_path: str, *, timeout: int = DEFAULT_TIMEOUT
         return {"ok": False, "error": str(exc)}
 
 
-def overlay_broll(video_path: str, broll_path: str, output_path: str, *, start: float = 0.0,
-                  end: Optional[float] = None, opacity: float = 0.28,
-                  ffmpeg: str = "ffmpeg", dry_run: bool = False) -> dict[str, Any]:
+def overlay_broll(
+    video_path: str,
+    broll_path: str,
+    output_path: str,
+    *,
+    start: float = 0.0,
+    end: Optional[float] = None,
+    opacity: float = 0.28,
+    ffmpeg: str = "ffmpeg",
+    dry_run: bool = False,
+) -> dict[str, Any]:
     """Overlay B-roll with a low-opacity portrait crop during a time window."""
     if not os.path.exists(video_path) or not os.path.exists(broll_path):
         return {"ok": False, "error": "video_or_broll_missing"}
     opacity = max(0.05, min(float(opacity), 0.85))
-    enable = f"between(t,{max(0.0, float(start))},{float(end)})" if end is not None else f"gte(t,{max(0.0, float(start))})"
+    enable = (
+        f"between(t,{max(0.0, float(start))},{float(end)})"
+        if end is not None
+        else f"gte(t,{max(0.0, float(start))})"
+    )
     filter_complex = (
         f"[1:v]scale=1080:1920:force_original_aspect_ratio=increase,"
         f"crop=1080:1920,format=rgba,colorchannelmixer=aa={opacity}[broll];"
         f"[0:v][broll]overlay=0:0:enable='{enable}':eof_action=pass[v]"
     )
     temp = output_path + ".broll_tmp.mp4"
-    cmd = [ffmpeg, "-y", "-i", video_path, "-stream_loop", "-1", "-i", broll_path,
-           "-filter_complex", filter_complex, "-map", "[v]", "-map", "0:a?",
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-           "-c:a", "copy", "-shortest", "-movflags", "+faststart", temp]
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        video_path,
+        "-stream_loop",
+        "-1",
+        "-i",
+        broll_path,
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[v]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-c:a",
+        "copy",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        temp,
+    ]
     if dry_run:
         return {"ok": True, "dry_run": True, "cmd": cmd, "output": output_path}
     if shutil.which(ffmpeg) is None:

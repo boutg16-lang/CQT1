@@ -67,7 +67,11 @@ def _read_publish_history(path: str) -> Dict[str, Any]:
     for entry in entries:
         status = str(entry.get("status", "unknown"))
         statuses[status] = statuses.get(status, 0) + 1
-    return {"total": len(entries), "statuses": statuses, "last": entries[-1] if entries else None}
+    return {
+        "total": len(entries),
+        "statuses": statuses,
+        "last": entries[-1] if entries else None,
+    }
 
 
 def _safety_summary(data: Optional[dict]) -> Dict[str, Any]:
@@ -88,7 +92,9 @@ def _safety_summary(data: Optional[dict]) -> Dict[str, Any]:
     return {
         "total": len(segments),
         "counts": counts,
-        "legacy_blocked": len(data.get("blocked", [])) if isinstance(data.get("blocked"), list) else 0,
+        "legacy_blocked": len(data.get("blocked", []))
+        if isinstance(data.get("blocked"), list)
+        else 0,
     }
 
 
@@ -98,15 +104,19 @@ def _media_summary(project_folder: str) -> Dict[str, Any]:
     if os.path.isdir(final_dir):
         for name in sorted(os.listdir(final_dir)):
             path = os.path.join(final_dir, name)
-            if os.path.isfile(path) and name.lower().endswith((".mp4", ".mov", ".mkv", ".webm")):
+            if os.path.isfile(path) and name.lower().endswith(
+                (".mp4", ".mov", ".mkv", ".webm")
+            ):
                 validation = validate_media_file(path)
-                files.append({
-                    "name": name,
-                    "bytes": os.path.getsize(path),
-                    "ok": bool(validation.get("ok")),
-                    "duration": validation.get("duration"),
-                    "errors": validation.get("errors", []),
-                })
+                files.append(
+                    {
+                        "name": name,
+                        "bytes": os.path.getsize(path),
+                        "ok": bool(validation.get("ok")),
+                        "duration": validation.get("duration"),
+                        "errors": validation.get("errors", []),
+                    }
+                )
     return {
         "directory": final_dir,
         "count": len(files),
@@ -133,7 +143,11 @@ def _polish_summary(data: Optional[dict]) -> Dict[str, Any]:
 def _audio_qc_summary(data: Optional[dict]) -> Dict[str, Any]:
     summary = data.get("summary") if isinstance(data, dict) else {}
     summary = summary if isinstance(summary, dict) else {}
-    status = str((data or {}).get("status", "unknown")) if isinstance(data, dict) else "unknown"
+    status = (
+        str((data or {}).get("status", "unknown"))
+        if isinstance(data, dict)
+        else "unknown"
+    )
     return {
         "present": bool(data),
         "status": status,
@@ -181,39 +195,67 @@ def build_report(project_folder: str) -> Dict[str, Any]:
     }
     checkpoint = load_checkpoint(project_folder)
     stages = checkpoint.get("stages", {})
-    safety = _safety_summary(_load_json(os.path.join(project_folder, "safety_report.json")))
+    safety = _safety_summary(
+        _load_json(os.path.join(project_folder, "safety_report.json"))
+    )
     scorecard = _load_json(os.path.join(project_folder, "risk_scorecard.json")) or {}
-    risk_summary = scorecard.get("summary") if isinstance(scorecard.get("summary"), dict) else {}
-    content_guard_report = _load_json(os.path.join(project_folder, "content_guard_report.json")) or {}
+    risk_summary = (
+        scorecard.get("summary") if isinstance(scorecard.get("summary"), dict) else {}
+    )
+    content_guard_report = (
+        _load_json(os.path.join(project_folder, "content_guard_report.json")) or {}
+    )
     try:
         channel = content_guard.channel_status(project_folder, "youtube")
     except Exception:
         channel = {"locked": False, "incidents": [], "count": 0}
-    publish = _read_publish_history(os.path.join(project_folder, "publish_history.jsonl"))
+    publish = _read_publish_history(
+        os.path.join(project_folder, "publish_history.jsonl")
+    )
     polish_data = _load_json(os.path.join(project_folder, "polish_report.json"))
     polish = _polish_summary(polish_data)
     audio_qc_data = _load_json(os.path.join(project_folder, "audio_qc_report.json"))
     audio_qc = _audio_qc_summary(audio_qc_data)
     batch_publish = _batch_publish_summary(
-        _load_json(os.path.join(project_folder, "publish_batch_report.json")))
+        _load_json(os.path.join(project_folder, "publish_batch_report.json"))
+    )
     tracking = _tracking_summary(
-        _load_json(os.path.join(project_folder, "tracking_report.json")))
+        _load_json(os.path.join(project_folder, "tracking_report.json"))
+    )
     media = _media_summary(project_folder)
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
-    source_path = source.get("path") or source.get("local_path") or source.get("original_path")
+    source_path = (
+        source.get("path") or source.get("local_path") or source.get("original_path")
+    )
     source_info = {
         "type": source.get("type", "unknown"),
-        "path": os.path.abspath(os.path.expanduser(source_path)) if isinstance(source_path, str) and source_path else None,
-        "exists": bool(source_path and os.path.isfile(os.path.abspath(os.path.expanduser(source_path)))) if isinstance(source_path, str) else False,
+        "path": os.path.abspath(os.path.expanduser(source_path))
+        if isinstance(source_path, str) and source_path
+        else None,
+        "exists": bool(
+            source_path
+            and os.path.isfile(os.path.abspath(os.path.expanduser(source_path)))
+        )
+        if isinstance(source_path, str)
+        else False,
         "managed": source.get("managed", True),
     }
 
     artifacts = [
         _file_entry(os.path.join(project_folder, name))
         for name in (
-            "input.mp4", "viral_segments.txt", "safety_report.json",
-            "risk_scorecard.json", "content_guard_report.json", "publish_blocklist.json", "checkpoint.json",
-            "polish_report.json", "audio_qc_report.json", "publish_batch_report.json", "tracking_report.json", "cuts_manifest.json",
+            "input.mp4",
+            "viral_segments.txt",
+            "safety_report.json",
+            "risk_scorecard.json",
+            "content_guard_report.json",
+            "publish_blocklist.json",
+            "checkpoint.json",
+            "polish_report.json",
+            "audio_qc_report.json",
+            "publish_batch_report.json",
+            "tracking_report.json",
+            "cuts_manifest.json",
         )
     ]
     errors = []
@@ -226,17 +268,39 @@ def build_report(project_folder: str) -> Dict[str, Any]:
     if int(risk_summary.get("blocked_for_publish", 0) or 0) > 0:
         errors.append("risk scorecard contains clips blocked for publishing")
     if int(content_guard_report.get("blocked", 0) or 0) > 0:
-        errors.append("content guard removed previously published or rate-limited candidates")
+        errors.append(
+            "content guard removed previously published or rate-limited candidates"
+        )
     if channel.get("locked"):
-        errors.append("automatic YouTube publishing is locked after a recorded policy incident")
-    if polish.get("present") and (polish["fallback"] or polish["failed"] or polish["degraded"]):
-        errors.append("professional polish has fallback/degraded clips; review polish_report.json before real publishing")
+        errors.append(
+            "automatic YouTube publishing is locked after a recorded policy incident"
+        )
+    if polish.get("present") and (
+        polish["fallback"] or polish["failed"] or polish["degraded"]
+    ):
+        errors.append(
+            "professional polish has fallback/degraded clips; review polish_report.json before real publishing"
+        )
     if audio_qc.get("present") and audio_qc.get("status") != "pass":
-        errors.append("Audio QC requires review before publishing (status: {})".format(audio_qc.get("status")))
-    if batch_publish.get("present") and (batch_publish["failed"] or batch_publish["blocked"]):
-        errors.append("the last publish batch has failed or blocked clips; retry only those after review")
-    if tracking.get("present") and tracking.get("requested_active_speaker") and not tracking.get("active_speaker_applied"):
-        errors.append("active speaker was requested but the selected backend only provided face tracking")
+        errors.append(
+            "Audio QC requires review before publishing (status: {})".format(
+                audio_qc.get("status")
+            )
+        )
+    if batch_publish.get("present") and (
+        batch_publish["failed"] or batch_publish["blocked"]
+    ):
+        errors.append(
+            "the last publish batch has failed or blocked clips; retry only those after review"
+        )
+    if (
+        tracking.get("present")
+        and tracking.get("requested_active_speaker")
+        and not tracking.get("active_speaker_applied")
+    ):
+        errors.append(
+            "active speaker was requested but the selected backend only provided face tracking"
+        )
 
     pending = [stage for stage in STAGES if stages.get(stage) is not True]
     checkpoint_runtime = {
@@ -245,9 +309,15 @@ def build_report(project_folder: str) -> Dict[str, Any]:
         "history": checkpoint.get("history", [])[-20:],
     }
     if checkpoint_runtime["active_stage"]:
-        errors.append("pipeline is currently active at stage {}".format(checkpoint_runtime["active_stage"]))
+        errors.append(
+            "pipeline is currently active at stage {}".format(
+                checkpoint_runtime["active_stage"]
+            )
+        )
     if checkpoint_runtime["last_error"]:
-        errors.append("pipeline has a recorded failure; resume or retry the failed stage")
+        errors.append(
+            "pipeline has a recorded failure; resume or retry the failed stage"
+        )
     ready = not errors and media["count"] > 0 and not pending
     return {
         "schema": 1,
@@ -258,10 +328,18 @@ def build_report(project_folder: str) -> Dict[str, Any]:
             "status": manifest.get("status", "unknown"),
         },
         "readiness": {"ready_for_publish": ready, "errors": errors},
-        "stages": {"completed": [stage for stage in STAGES if stages.get(stage) is True], "pending": pending},
+        "stages": {
+            "completed": [stage for stage in STAGES if stages.get(stage) is True],
+            "pending": pending,
+        },
         "checkpoint": checkpoint_runtime,
         "safety": safety,
-        "risk": {"summary": risk_summary, "blocked": len(scorecard.get("blocked", [])) if isinstance(scorecard.get("blocked"), list) else 0},
+        "risk": {
+            "summary": risk_summary,
+            "blocked": len(scorecard.get("blocked", []))
+            if isinstance(scorecard.get("blocked"), list)
+            else 0,
+        },
         "content_guard": {
             "blocked": int(content_guard_report.get("blocked", 0) or 0),
             "kept": int(content_guard_report.get("kept", 0) or 0),
@@ -298,10 +376,11 @@ def _audio_qc_rows(audio_qc: Dict[str, Any]) -> str:
         ("محجوب", audio_qc.get("block")),
     ]
     rows = "".join(
-        "<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v))
-        for k, v in items
+        "<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v)) for k, v in items
     )
-    return "<div class='card'><h2>فحص جودة الصوت (Audio QC)</h2><table>{}</table></div>".format(rows)
+    return "<div class='card'><h2>فحص جودة الصوت (Audio QC)</h2><table>{}</table></div>".format(
+        rows
+    )
 
 
 def _tracking_rows(tracking: Dict[str, Any]) -> str:
@@ -317,8 +396,12 @@ def _tracking_rows(tracking: Dict[str, Any]) -> str:
     ]
     rows = "".join(
         "<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v))
-        for k, v in items if v is not None)
-    return "<div class='card'><h2>التتبع (Tracking)</h2><table>{}</table></div>".format(rows)
+        for k, v in items
+        if v is not None
+    )
+    return "<div class='card'><h2>التتبع (Tracking)</h2><table>{}</table></div>".format(
+        rows
+    )
 
 
 def _originality_rows(report: Dict[str, Any]) -> str:
@@ -330,8 +413,12 @@ def _originality_rows(report: Dict[str, Any]) -> str:
         ("حالة القناة (قاطع الدائرة)", "مقفول" if channel.get("locked") else "مفتوح"),
         ("حوادث مسجلة", channel.get("count")),
     ]
-    table = "".join("<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v)) for k, v in rows)
-    return "<div class='card'><h2>حماية المحتوى المكرر (Originality)</h2><table>{}</table></div>".format(table)
+    table = "".join(
+        "<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v)) for k, v in rows
+    )
+    return "<div class='card'><h2>حماية المحتوى المكرر (Originality)</h2><table>{}</table></div>".format(
+        table
+    )
 
 
 def _publishing_rows(report: Dict[str, Any]) -> str:
@@ -348,8 +435,14 @@ def _publishing_rows(report: Dict[str, Any]) -> str:
     ]
     rows = "".join(
         "<tr><td>{}</td><td>{}</td></tr>".format(_cell(k), _cell(v))
-        for k, v in items if v is not None)
-    return "<div class='card'><h2>النشر (Publishing)</h2><table>{}</table></div>".format(rows)
+        for k, v in items
+        if v is not None
+    )
+    return (
+        "<div class='card'><h2>النشر (Publishing)</h2><table>{}</table></div>".format(
+            rows
+        )
+    )
 
 
 def render_html(report: Dict[str, Any]) -> str:
@@ -361,10 +454,14 @@ def render_html(report: Dict[str, Any]) -> str:
     tracking = report.get("tracking", {}) or {}
     audio_qc = report.get("audio_qc", {}) or {}
     status = "جاهز للنشر" if readiness.get("ready_for_publish") else "يتطلب مراجعة"
-    error_rows = "".join("<li>{}</li>".format(_cell(error)) for error in readiness.get("errors", []))
+    error_rows = "".join(
+        "<li>{}</li>".format(_cell(error)) for error in readiness.get("errors", [])
+    )
     media_rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
-            _cell(item.get("name")), _cell(item.get("duration")), _cell(item.get("ok")),
+            _cell(item.get("name")),
+            _cell(item.get("duration")),
+            _cell(item.get("ok")),
             _cell("; ".join(item.get("errors", []))),
         )
         for item in media.get("files", [])
@@ -384,11 +481,15 @@ def render_html(report: Dict[str, Any]) -> str:
 {publishing_html}
 </body></html>""".format(
         cls="ok" if readiness.get("ready_for_publish") else "bad",
-        status=_cell(status), project=_cell(project.get("path")),
-        safety_total=_cell(safety.get("total", 0)), blocked=_cell((safety.get("counts") or {}).get("blocked", 0)),
+        status=_cell(status),
+        project=_cell(project.get("path")),
+        safety_total=_cell(safety.get("total", 0)),
+        blocked=_cell((safety.get("counts") or {}).get("blocked", 0)),
         review=_cell((safety.get("counts") or {}).get("manual_review", 0)),
-        risk_blocked=_cell(risk.get("blocked", 0)), media_count=_cell(media.get("count", 0)),
-        media_valid=_cell(media.get("valid", 0)), media_invalid=_cell(media.get("invalid", 0)),
+        risk_blocked=_cell(risk.get("blocked", 0)),
+        media_count=_cell(media.get("count", 0)),
+        media_valid=_cell(media.get("valid", 0)),
+        media_invalid=_cell(media.get("invalid", 0)),
         media_rows=media_rows or "<tr><td colspan='4'>لا توجد ملفات نهائية</td></tr>",
         errors=error_rows or "<li class='ok'>لا توجد مشكلات مسجلة</li>",
         audio_qc_html=_audio_qc_rows(audio_qc),
@@ -400,19 +501,27 @@ def render_html(report: Dict[str, Any]) -> str:
 
 def write_report(project_folder: str, html_report: bool = False) -> Dict[str, Any]:
     report = build_report(project_folder)
-    with open(os.path.join(project_folder, REPORT_NAME), "w", encoding="utf-8") as handle:
+    with open(
+        os.path.join(project_folder, REPORT_NAME), "w", encoding="utf-8"
+    ) as handle:
         json.dump(report, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
     if html_report:
-        with open(os.path.join(project_folder, HTML_REPORT_NAME), "w", encoding="utf-8") as handle:
+        with open(
+            os.path.join(project_folder, HTML_REPORT_NAME), "w", encoding="utf-8"
+        ) as handle:
             handle.write(render_html(report))
     return report
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Create a local OUSSAMA Cutter project readiness report.")
+    parser = argparse.ArgumentParser(
+        description="Create a local OUSSAMA Cutter project readiness report."
+    )
     parser.add_argument("--project", required=True, help="Project folder")
-    parser.add_argument("--html", action="store_true", help="Also write project_report.html")
+    parser.add_argument(
+        "--html", action="store_true", help="Also write project_report.html"
+    )
     parser.add_argument("--json", action="store_true", help="Print the JSON report")
     args = parser.parse_args(argv)
     report = write_report(args.project, html_report=args.html)
@@ -421,7 +530,9 @@ def main(argv=None) -> int:
     else:
         print("Project report → {}".format(os.path.join(args.project, REPORT_NAME)))
         if args.html:
-            print("HTML report → {}".format(os.path.join(args.project, HTML_REPORT_NAME)))
+            print(
+                "HTML report → {}".format(os.path.join(args.project, HTML_REPORT_NAME))
+            )
         print("Ready for publish: {}".format(report["readiness"]["ready_for_publish"]))
     return 0
 

@@ -25,10 +25,16 @@ def test_second_sync_is_skipped_when_unchanged(tmp_path):
     # not rebuild the FTS index when the term set is unchanged.
     terms = policy_lexicon.load_terms(str(project), sync=True)
     assert terms
-    fts_rows = policy_lexicon._connect(str(project)).execute(
-        "SELECT COUNT(*) AS count FROM policy_terms_fts_v2").fetchone()["count"]
-    active_rows = policy_lexicon._connect(str(project)).execute(
-        "SELECT COUNT(*) AS count FROM policy_terms WHERE active=1").fetchone()["count"]
+    fts_rows = (
+        policy_lexicon._connect(str(project))
+        .execute("SELECT COUNT(*) AS count FROM policy_terms_fts_v2")
+        .fetchone()["count"]
+    )
+    active_rows = (
+        policy_lexicon._connect(str(project))
+        .execute("SELECT COUNT(*) AS count FROM policy_terms WHERE active=1")
+        .fetchone()["count"]
+    )
     assert fts_rows == active_rows > 0
 
 
@@ -42,10 +48,20 @@ def test_force_sync_rebuilds(tmp_path):
 
 def test_doctor_reports_conflicting_duplicates():
     terms = [
-        {"term": "badword", "lang": "ar", "severity": "high",
-         "category": "hate_slur", "source": "builtin"},
-        {"term": "badword", "lang": "ar", "severity": "low",
-         "category": "hate_slur", "source": "builtin"},
+        {
+            "term": "badword",
+            "lang": "ar",
+            "severity": "high",
+            "category": "hate_slur",
+            "source": "builtin",
+        },
+        {
+            "term": "badword",
+            "lang": "ar",
+            "severity": "low",
+            "category": "hate_slur",
+            "source": "builtin",
+        },
     ]
     report = policy_lexicon.run_doctor(terms=terms)
     assert report["ok"] is False
@@ -55,10 +71,20 @@ def test_doctor_reports_conflicting_duplicates():
 
 def test_doctor_accepts_clean_terms():
     terms = [
-        {"term": "goodword", "lang": "ar", "severity": "high",
-         "category": "hate_slur", "source": "builtin"},
-        {"term": "another", "lang": "en", "severity": "medium",
-         "category": "violence_threat", "source": "builtin"},
+        {
+            "term": "goodword",
+            "lang": "ar",
+            "severity": "high",
+            "category": "hate_slur",
+            "source": "builtin",
+        },
+        {
+            "term": "another",
+            "lang": "en",
+            "severity": "medium",
+            "category": "violence_threat",
+            "source": "builtin",
+        },
     ]
     report = policy_lexicon.run_doctor(terms=terms)
     assert report["ok"] is True

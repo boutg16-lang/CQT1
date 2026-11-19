@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Child progress bars use CR; the log reader must not hide them."""
+
 import io
 import os
 import sys
@@ -20,8 +21,10 @@ class ChunkyStream:
 def test_cr_and_lf_are_both_line_endings():
     data = "Downloading 10%\rDownloading 55%\rDownloading 100%\nDone\n"
     assert list(iter_process_lines(io.StringIO(data))) == [
-        "Downloading 10%", "Downloading 55%",
-        "Downloading 100%", "Done",
+        "Downloading 10%",
+        "Downloading 55%",
+        "Downloading 100%",
+        "Done",
     ]
 
 
@@ -44,9 +47,16 @@ def test_lines_are_streamed_before_the_child_exits():
     import time
 
     process = subprocess.Popen(
-        [sys.executable, "-u", "-c",
-         "import time; print('first', flush=True); time.sleep(1.2); print('second', flush=True)"],
-        stdout=subprocess.PIPE, text=True, bufsize=1)
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            "import time; print('first', flush=True); time.sleep(1.2); print('second', flush=True)",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
     started = time.time()
     first_delay = None
     for line in iter_process_lines(process.stdout):

@@ -92,8 +92,9 @@ def inspect(root: str) -> Dict[str, Any]:
             "target": target,
             "target_exists": current is not None,
             "source_exists": wanted is not None,
-            "already_current": bool(current is not None and wanted is not None
-                                    and current == wanted),
+            "already_current": bool(
+                current is not None and wanted is not None and current == wanted
+            ),
             "needs_write": bool(wanted is not None and current != wanted),
         }
     spec_file = os.path.join(root, SPEC_PATH)
@@ -108,7 +109,8 @@ def inspect(root: str) -> Dict[str, Any]:
     state["applied"] = bool(
         not build_exe["needs_write"]
         and build_exe["target_exists"]
-        and not state["spec"]["has_shim"])
+        and not state["spec"]["has_shim"]
+    )
     return state
 
 
@@ -128,10 +130,13 @@ def validate(root: str) -> List[str]:
     if "EXE_NAME" not in build_exe:
         problems.append("build-exe.yml has no EXE_NAME — the fix was not applied")
     if "checksums.txt" not in build_exe:
-        problems.append("build-exe.yml does not publish checksums.txt (auto_updater "
-                        "would refuse the release)")
+        problems.append(
+            "build-exe.yml does not publish checksums.txt (auto_updater "
+            "would refuse the release)"
+        )
     try:
         import yaml  # optional dependency (PyYAML ships with gradio)
+
         for text in (build_exe, ci):
             yaml.safe_load(text)
     except ImportError:
@@ -144,10 +149,15 @@ def validate(root: str) -> List[str]:
     match = re.search(r"^\s*EXE_NAME:\s*(\S+)\s*$", build_exe, flags=re.MULTILINE)
     workflow_name = match.group(1) if match else None
     if spec_name and workflow_name and workflow_name != "{}.exe".format(spec_name):
-        problems.append("EXE_NAME={} does not match the spec name {}".format(
-            workflow_name, spec_name))
+        problems.append(
+            "EXE_NAME={} does not match the spec name {}".format(
+                workflow_name, spec_name
+            )
+        )
     if SPEC_SHIM_MARKER in spec_text:
-        problems.append("the temporary CI shim is still present in {}".format(SPEC_PATH))
+        problems.append(
+            "the temporary CI shim is still present in {}".format(SPEC_PATH)
+        )
     return problems
 
 
@@ -169,15 +179,14 @@ def apply_changes(root: str) -> Dict[str, Any]:
     if os.path.isfile(spec_file):
         spec_text = _read(spec_file)
         if SPEC_SHIM_MARKER in spec_text:
-            trimmed = spec_text[:spec_text.index(SPEC_SHIM_MARKER)].rstrip() + "\n"
+            trimmed = spec_text[: spec_text.index(SPEC_SHIM_MARKER)].rstrip() + "\n"
             _write_lf(spec_file, trimmed)
             shim_removed = True
     return {"written": written, "shim_removed": shim_removed}
 
 
 def _git(root: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", root, *args],
-                          capture_output=True, text=True)
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
 
 
 def _sha256(path: str) -> str:
@@ -190,12 +199,15 @@ def _sha256(path: str) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Apply the CI workflow fix (#25/#26) — run by the repo owner")
+        description="Apply the CI workflow fix (#25/#26) — run by the repo owner"
+    )
     parser.add_argument("--root", default=None, help="repository root")
-    parser.add_argument("--apply", action="store_true",
-                        help="write the files (default is a dry run)")
-    parser.add_argument("--push", action="store_true",
-                        help="git add/commit/push after applying")
+    parser.add_argument(
+        "--apply", action="store_true", help="write the files (default is a dry run)"
+    )
+    parser.add_argument(
+        "--push", action="store_true", help="git add/commit/push after applying"
+    )
     parser.add_argument("--message", default=DEFAULT_MESSAGE)
     args = parser.parse_args(argv)
 
@@ -205,8 +217,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if state["applied"] and not args.apply:
         print("✓ الإصلاح مُطبَّق بالفعل — لا شيء لفعله.")
-        print("  spec name = {}, shim = {}".format(
-            state["spec"]["exe_name"], "موجود" if state["spec"]["has_shim"] else "مُزال"))
+        print(
+            "  spec name = {}, shim = {}".format(
+                state["spec"]["exe_name"],
+                "موجود" if state["spec"]["has_shim"] else "مُزال",
+            )
+        )
         return 0
 
     for name, info in state["files"].items():
@@ -216,11 +232,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             label = "سيُكتب"
         else:
             label = "مطابق"
-        print("  {}: {}{}".format(
-            name, label,
-            "" if (info["target_exists"] or not info["source_exists"]) else " (غير موجود بعد)"))
-    print("  حذف الـ shim من spec: {}".format(
-        "نعم" if state["spec"]["has_shim"] else "لا حاجة"))
+        print(
+            "  {}: {}{}".format(
+                name,
+                label,
+                ""
+                if (info["target_exists"] or not info["source_exists"])
+                else " (غير موجود بعد)",
+            )
+        )
+    print(
+        "  حذف الـ shim من spec: {}".format(
+            "نعم" if state["spec"]["has_shim"] else "لا حاجة"
+        )
+    )
 
     if not args.apply:
         print("\n(تجربة جافة — لم يُكتب شيء. أضف --apply للتنفيذ.)")
@@ -236,14 +261,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for problem in problems:
             print("  - {}".format(problem), file=sys.stderr)
         return 1
-    print("\n✓ كُتب {} ملفاً{}".format(
-        len(result["written"]), "، وأُزيل الـ shim" if result["shim_removed"] else ""))
+    print(
+        "\n✓ كُتب {} ملفاً{}".format(
+            len(result["written"]), "، وأُزيل الـ shim" if result["shim_removed"] else ""
+        )
+    )
     for path in result["written"]:
         print("  {}  sha256={}".format(os.path.relpath(path, root), _sha256(path)[:16]))
 
     if not args.push:
-        print("\nالخطوة التالية: git add .github packaging && git commit && git push"
-              "\nأو شغّل نفس الأمر مع --push.")
+        print(
+            "\nالخطوة التالية: git add .github packaging && git commit && git push"
+            "\nأو شغّل نفس الأمر مع --push."
+        )
         return 0
 
     print("\ngit add/commit/push …")
@@ -259,7 +289,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if push.returncode != 0:
         print((push.stdout + push.stderr).strip(), file=sys.stderr)
         return 2
-    print("✓ مدفوع. أول وسم جديد سيُنتج Release باسم OUSSAMA-Cutter.exe مع checksums.txt")
+    print(
+        "✓ مدفوع. أول وسم جديد سيُنتج Release باسم OUSSAMA-Cutter.exe مع checksums.txt"
+    )
     return 0
 
 

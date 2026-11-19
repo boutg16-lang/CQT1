@@ -57,7 +57,8 @@ def feed_path(base_dir=None):
 
 def _fetch_text(url):
     req = urllib.request.Request(
-        url, headers={"User-Agent": USER_AGENT, "Accept-Language": "en"})
+        url, headers={"User-Agent": USER_AGENT, "Accept-Language": "en"}
+    )
     with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
         return resp.read(MAX_PAGE_BYTES).decode("utf-8", errors="replace")
 
@@ -79,7 +80,9 @@ def _extract_markers(html):
     """Pull short quoted 'do not' markers the page uses (best effort)."""
     text = _normalize_html(html)
     markers = []
-    for match in re.finditer(r"(?:don'?t|do not|not allowed|policy)[^.]{0,160}?\.", text):
+    for match in re.finditer(
+        r"(?:don'?t|do not|not allowed|policy)[^.]{0,160}?\.", text
+    ):
         snippet = match.group(0).strip()
         if 20 <= len(snippet) <= 180:
             markers.append(snippet[:180])
@@ -133,8 +136,13 @@ def check_policy_pages(base_dir=None, force=False):
             markers[key] = _extract_markers(html)
 
     if not fresh_hashes:
-        return {"status": "offline", "checked_at": now, "changes": [],
-                "markers": {}, "feed_written": False}
+        return {
+            "status": "offline",
+            "checked_at": now,
+            "changes": [],
+            "markers": {},
+            "feed_written": False,
+        }
 
     feed = {
         "checked_at": now,
@@ -163,6 +171,7 @@ def check_policy_pages(base_dir=None, force=False):
 def watch(base_dir=None, interval_hours=24, max_cycles=None):
     """Continuous loop mirroring ``safety_updater.watch``."""
     import time as _time
+
     interval = max(1.0, float(interval_hours)) * 3600
     cycle = 0
     while max_cycles is None or cycle < max_cycles:
@@ -170,8 +179,11 @@ def watch(base_dir=None, interval_hours=24, max_cycles=None):
         result = check_policy_pages(base_dir=base_dir, force=True)
         print("[policy-watch] cycle {}: {}".format(cycle, result["status"]))
         if result["status"] == "changed":
-            print("[policy-watch] CHANGED policies: {}".format(
-                ", ".join(result["changes"])))
+            print(
+                "[policy-watch] CHANGED policies: {}".format(
+                    ", ".join(result["changes"])
+                )
+            )
         if max_cycles is not None and cycle >= max_cycles:
             break
         _time.sleep(interval)
@@ -180,12 +192,23 @@ def watch(base_dir=None, interval_hours=24, max_cycles=None):
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="Watch YouTube's official policy pages for changes.")
-    parser.add_argument("--watch", type=float, default=None, metavar="HOURS",
-                        help="continuous mode: re-check every N hours")
-    parser.add_argument("--cycles", type=int, default=None,
-                        help="with --watch: stop after N cycles (default: forever)")
+        description="Watch YouTube's official policy pages for changes."
+    )
+    parser.add_argument(
+        "--watch",
+        type=float,
+        default=None,
+        metavar="HOURS",
+        help="continuous mode: re-check every N hours",
+    )
+    parser.add_argument(
+        "--cycles",
+        type=int,
+        default=None,
+        help="with --watch: stop after N cycles (default: forever)",
+    )
     args = parser.parse_args()
 
     if args.watch is not None:
@@ -194,8 +217,11 @@ def main():
         return
 
     result = check_policy_pages()
-    print("[policy-watch] status={} changes={}".format(
-        result["status"], ", ".join(result["changes"]) or "none"))
+    print(
+        "[policy-watch] status={} changes={}".format(
+            result["status"], ", ".join(result["changes"]) or "none"
+        )
+    )
 
 
 if __name__ == "__main__":

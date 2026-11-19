@@ -119,7 +119,6 @@ BLOCKLIST = [
     ("متخلف عقليا", "ar", "high", "hate_slur"),
     ("منغولي", "ar", "high", "hate_slur"),
     ("معاق ذهنيا", "ar", "high", "hate_slur"),
-
     # Calls to violence (التحريض على العنف)
     ("اذبحهم", "ar", "high", "violence_threat"),
     ("اذبحوهم", "ar", "high", "violence_threat"),
@@ -138,7 +137,6 @@ BLOCKLIST = [
     ("سأقتلك", "ar", "high", "violence_threat"),
     ("راح نقتلك", "ar", "high", "violence_threat"),
     ("ندبحك", "ar", "high", "violence_threat"),
-
     # ------------------------------------------------------------------ EN
     ("nigger", "en", "high", "hate_slur"),
     ("nigga", "en", "high", "hate_slur"),
@@ -172,7 +170,6 @@ BLOCKLIST = [
     ("motherfucker", "en", "high", "profanity"),
     ("son of a bitch", "en", "high", "profanity"),
     ("go to hell", "en", "low", "profanity"),
-
     # ------------------------------------------------------------------ PT
     ("macaco", "pt", "high", "hate_slur"),
     ("crioulo", "pt", "high", "hate_slur"),
@@ -188,7 +185,6 @@ BLOCKLIST = [
     ("matar todos", "pt", "high", "violence_threat"),
     ("morte aos", "pt", "high", "violence_threat"),
     ("vou te matar", "pt", "high", "violence_threat"),
-
     # ------------------------------------------------------------------ FR
     ("nègre", "fr", "high", "hate_slur"),
     ("bougnoule", "fr", "high", "hate_slur"),
@@ -200,7 +196,6 @@ BLOCKLIST = [
     ("tuez-les", "fr", "high", "violence_threat"),
     ("mort aux", "fr", "high", "violence_threat"),
     ("je vais te tuer", "fr", "high", "violence_threat"),
-
     # ------------------------------------------------------------------ ES
     ("maricón", "es", "high", "hate_slur"),
     ("puta", "es", "high", "profanity"),
@@ -209,7 +204,6 @@ BLOCKLIST = [
     ("mátalos", "es", "high", "violence_threat"),
     ("muerte a los", "es", "high", "violence_threat"),
     ("te voy a matar", "es", "high", "violence_threat"),
-
     # ------------------------------------------------------------------ TR
     ("orospu", "tr", "high", "profanity"),
     ("piç", "tr", "high", "profanity"),
@@ -488,17 +482,79 @@ SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3}
 # Keep them visible in reports as low-severity context signals, but never let
 # a bare nationality, religion, ethnicity, or demographic label block a clip.
 CONTEXT_ONLY_TERMS = {
-    "افريقي", "افارقه", "اسيوي", "امازيغي", "امازيغ", "اماراتي", "ايراني",
-    "اقباط", "اعرابي", "بدو", "خليجي", "درزي", "سعودي", "سوداني", "سوري",
-    "صهيوني", "صهاينه", "صومالي", "صيني", "عربي", "عرب", "قبطي", "قطري",
-    "كويتي", "لاجئ", "لاجئين", "مسيحي", "مسيحيين", "مسلم", "مسلمين",
-    "ملحد", "ملحدين", "مهاجر", "مهاجرين", "مثليين", "مثليات", "يهودي",
-    "يهود", "نصراني", "نصارى", "شيعي", "شيعة", "سني", "سنة", "نساء",
-    "رجال", "معاقين", "ذوي اعاقه", "غجر", "حيوان", "حيوانات", "قرد", "قردة",
-    "قرود", "خنزير", "خنازير", "حشرات", "صراصير", "جرذان", "كلب", "كلاب",
-    "black people", "white people",
-    "jews", "muslims", "christians", "immigrants", "refugees", "foreigners",
-    "women", "men", "gay people", "disabled people",
+    "افريقي",
+    "افارقه",
+    "اسيوي",
+    "امازيغي",
+    "امازيغ",
+    "اماراتي",
+    "ايراني",
+    "اقباط",
+    "اعرابي",
+    "بدو",
+    "خليجي",
+    "درزي",
+    "سعودي",
+    "سوداني",
+    "سوري",
+    "صهيوني",
+    "صهاينه",
+    "صومالي",
+    "صيني",
+    "عربي",
+    "عرب",
+    "قبطي",
+    "قطري",
+    "كويتي",
+    "لاجئ",
+    "لاجئين",
+    "مسيحي",
+    "مسيحيين",
+    "مسلم",
+    "مسلمين",
+    "ملحد",
+    "ملحدين",
+    "مهاجر",
+    "مهاجرين",
+    "مثليين",
+    "مثليات",
+    "يهودي",
+    "يهود",
+    "نصراني",
+    "نصارى",
+    "شيعي",
+    "شيعة",
+    "سني",
+    "سنة",
+    "نساء",
+    "رجال",
+    "معاقين",
+    "ذوي اعاقه",
+    "غجر",
+    "حيوان",
+    "حيوانات",
+    "قرد",
+    "قردة",
+    "قرود",
+    "خنزير",
+    "خنازير",
+    "حشرات",
+    "صراصير",
+    "جرذان",
+    "كلب",
+    "كلاب",
+    "black people",
+    "white people",
+    "jews",
+    "muslims",
+    "christians",
+    "immigrants",
+    "refugees",
+    "foreigners",
+    "women",
+    "men",
+    "gay people",
+    "disabled people",
     # v7.42 (pack v6): group labels that were blocking on bare mention even
     # though the design above says they must not. Each has heavy legitimate
     # use, so they now block only inside harmful context:
@@ -511,45 +567,78 @@ CONTEXT_ONLY_TERMS = {
     #   علوج — historical term, legitimate in history content
     #   عبرية — the Hebrew language name
     #   مبادل/منغولي — group labels
-    "عبد", "اسود", "فلاح", "فلاحين", "هندي", "فرس", "عربان", "وافد",
-    "كافر", "مرتد", "زنديق", "مجوسي", "وثني", "قوم لوط", "لواط",
-    "داعش", "داعشي", "حوثي", "سلفي", "اخونجي", "البنا", "علوج",
-    "عبرية", "مبادل", "منغولي",
+    "عبد",
+    "اسود",
+    "فلاح",
+    "فلاحين",
+    "هندي",
+    "فرس",
+    "عربان",
+    "وافد",
+    "كافر",
+    "مرتد",
+    "زنديق",
+    "مجوسي",
+    "وثني",
+    "قوم لوط",
+    "لواط",
+    "داعش",
+    "داعشي",
+    "حوثي",
+    "سلفي",
+    "اخونجي",
+    "البنا",
+    "علوج",
+    "عبرية",
+    "مبادل",
+    "منغولي",
 }
 
 # ---------------------------------------------------------------------------
 # Normalization
 # ---------------------------------------------------------------------------
 
-_AR_DIACRITICS = re.compile(
-    "[ً-ْٰـۖ-ۜ۟-۪ۨ-ۭ]"
+_AR_DIACRITICS = re.compile("[ً-ْٰـۖ-ۜ۟-۪ۨ-ۭ]")
+
+_AR_MAP = str.maketrans(
+    {
+        "أ": "ا",
+        "إ": "ا",
+        "آ": "ا",
+        "ٱ": "ا",
+        "ى": "ي",
+        "ئ": "ي",
+        "ؤ": "و",
+        "ة": "ه",
+    }
 )
 
-_AR_MAP = str.maketrans({
-    "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
-    "ى": "ي", "ئ": "ي", "ؤ": "و",
-    "ة": "ه",
-})
-
-_LEET_MAP = str.maketrans({
-    "@": "a", "4": "a",
-    "8": "b",
-    "(": "c", "<": "c",
-    "3": "ع",  # Arabizi
-    "€": "e",
-    "6": "g",
-    "#": "h",
-    "1": "i", "!": "i", "|": "i",
-    "0": "o",
-    "9": "q",
-    "$": "s", "5": "s",
-    "7": "ح",  # Arabizi
-    "2": "ا",  # Arabizi hamza
-    "+": "t",
-    "µ": "u",
-    "×": "x",
-    "¥": "y",
-})
+_LEET_MAP = str.maketrans(
+    {
+        "@": "a",
+        "4": "a",
+        "8": "b",
+        "(": "c",
+        "<": "c",
+        "3": "ع",  # Arabizi
+        "€": "e",
+        "6": "g",
+        "#": "h",
+        "1": "i",
+        "!": "i",
+        "|": "i",
+        "0": "o",
+        "9": "q",
+        "$": "s",
+        "5": "s",
+        "7": "ح",  # Arabizi
+        "2": "ا",  # Arabizi hamza
+        "+": "t",
+        "µ": "u",
+        "×": "x",
+        "¥": "y",
+    }
+)
 
 
 def _fold_repeats(text):
@@ -562,8 +651,8 @@ def normalize_text(text):
     if not text:
         return ""
     t = unicodedata.normalize("NFKC", str(text))
-    t = _AR_DIACRITICS.sub("", t)          # Arabic diacritics + tatweel
-    t = t.translate(_AR_MAP)               # Alef/Ya/Taa-marbuta folding
+    t = _AR_DIACRITICS.sub("", t)  # Arabic diacritics + tatweel
+    t = t.translate(_AR_MAP)  # Alef/Ya/Taa-marbuta folding
     t = t.lower()
     # Latin accent folding
     t = unicodedata.normalize("NFKD", t)
@@ -586,10 +675,14 @@ def _build_index(extra_terms=None):
     if extra_terms:
         for e in extra_terms:
             if isinstance(e, dict):
-                entries.append((
-                    e.get("term", ""), e.get("lang", "custom"),
-                    e.get("severity", "high"), e.get("category", "custom"),
-                ))
+                entries.append(
+                    (
+                        e.get("term", ""),
+                        e.get("lang", "custom"),
+                        e.get("severity", "high"),
+                        e.get("category", "custom"),
+                    )
+                )
             elif isinstance(e, str):
                 entries.append((e, "custom", "high", "custom"))
     context_only_norms = {normalize_text(term) for term in CONTEXT_ONLY_TERMS}
@@ -597,21 +690,25 @@ def _build_index(extra_terms=None):
         norm = normalize_text(phrase)
         if not norm:
             continue
-        index.append({
-            "term": phrase,
-            "norm": norm,
-            "tokens": norm.split(" "),
-            "lang": lang,
-            "severity": severity,
-            "category": category,
-            "context_only": norm in context_only_norms,
-        })
+        index.append(
+            {
+                "term": phrase,
+                "norm": norm,
+                "tokens": norm.split(" "),
+                "lang": lang,
+                "severity": severity,
+                "category": category,
+                "context_only": norm in context_only_norms,
+            }
+        )
     unique = {}
     severity_rank = {"low": 1, "medium": 2, "high": 3}
     for entry in index:
         key = (entry["norm"], entry["lang"], entry["category"])
         previous = unique.get(key)
-        if previous is None or severity_rank.get(entry["severity"], 3) > severity_rank.get(previous["severity"], 3):
+        if previous is None or severity_rank.get(
+            entry["severity"], 3
+        ) > severity_rank.get(previous["severity"], 3):
             unique[key] = entry
     index = list(unique.values())
     index.sort(key=lambda e: len(e["tokens"]), reverse=True)
@@ -622,9 +719,11 @@ def _build_index(extra_terms=None):
 # Matching
 # ---------------------------------------------------------------------------
 
+
 def _context_is_harmful(text):
     try:
         from scripts.semantic_safety import analyze_text
+
         semantic = analyze_text(text)
         if semantic.get("action") in {"block", "review"}:
             return True
@@ -632,10 +731,24 @@ def _context_is_harmful(text):
             return False
         normalized = normalize_text(text)
         dehumanizing_terms = {
-            normalize_text(term) for term in
-            ("قرد", "قردة", "قرود", "خنزير", "خنازير", "حشرات", "صراصير", "جرذان", "كلب", "كلاب")
+            normalize_text(term)
+            for term in (
+                "قرد",
+                "قردة",
+                "قرود",
+                "خنزير",
+                "خنازير",
+                "حشرات",
+                "صراصير",
+                "جرذان",
+                "كلب",
+                "كلاب",
+            )
         }
-        return sum(1 for term in dehumanizing_terms if f" {term} " in f" {normalized} ") >= 2
+        return (
+            sum(1 for term in dehumanizing_terms if f" {term} " in f" {normalized} ")
+            >= 2
+        )
     except Exception:
         return True
 
@@ -659,8 +772,7 @@ def find_matches(text, index=None, min_severity="low", allow_terms=None):
     # Emit prefix-stripped variants so blocklist terms still match. Only و/ف
     # are stripped — the prepositions ب/ك/ل are kept (too ambiguous, e.g.
     # "بكلب" must not become "كلب" in benign speech).
-    variant_tokens = [tok[1:] for tok in tokens
-                      if len(tok) > 3 and tok[0] in "وف"]
+    variant_tokens = [tok[1:] for tok in tokens if len(tok) > 3 and tok[0] in "وف"]
     if variant_tokens:
         joined += " " + " ".join(variant_tokens) + " "
     matches = []
@@ -679,22 +791,29 @@ def find_matches(text, index=None, min_severity="low", allow_terms=None):
             # approximate position (token index) for reporting
             pos = joined.find(phrase)
             approx_word = joined[:pos].count(" ")
-            matches.append({
-                "term": entry["term"],
-                "lang": entry["lang"],
-                "severity": effective_severity,
-                "category": entry["category"] if context_is_harmful else (
-                    "context_only_identity" if entry.get("context_only") else entry["category"]
-                ),
-                "context_only": bool(entry.get("context_only")),
-                "word_index": max(0, approx_word - 1),
-            })
+            matches.append(
+                {
+                    "term": entry["term"],
+                    "lang": entry["lang"],
+                    "severity": effective_severity,
+                    "category": entry["category"]
+                    if context_is_harmful
+                    else (
+                        "context_only_identity"
+                        if entry.get("context_only")
+                        else entry["category"]
+                    ),
+                    "context_only": bool(entry.get("context_only")),
+                    "word_index": max(0, approx_word - 1),
+                }
+            )
     return matches
 
 
 # ---------------------------------------------------------------------------
 # Transcript helpers
 # ---------------------------------------------------------------------------
+
 
 def load_transcript(project_folder):
     """Parse input.tsv / input.srt from the project folder.
@@ -703,44 +822,49 @@ def load_transcript(project_folder):
     this module side-effect free — importing create_viral_segments re-wraps
     sys.stdout at import time, which breaks pytest capture and notebooks.
     """
-    input_tsv = os.path.join(project_folder, 'input.tsv')
-    input_srt = os.path.join(project_folder, 'input.srt')
+    input_tsv = os.path.join(project_folder, "input.tsv")
+    input_srt = os.path.join(project_folder, "input.srt")
 
     transcript_segments = []
 
     if os.path.exists(input_tsv):
         try:
-            with open(input_tsv, 'r', encoding='utf-8') as f:
+            with open(input_tsv, "r", encoding="utf-8") as f:
                 lines = f.readlines()[1:]
             for line in lines:
-                parts = line.strip().split('\t')
+                parts = line.strip().split("\t")
                 if len(parts) >= 3:
-                    transcript_segments.append({
-                        'start': float(parts[0]) / 1000.0,
-                        'end': float(parts[1]) / 1000.0,
-                        'text': parts[2],
-                    })
+                    transcript_segments.append(
+                        {
+                            "start": float(parts[0]) / 1000.0,
+                            "end": float(parts[1]) / 1000.0,
+                            "text": parts[2],
+                        }
+                    )
         except Exception as e:
             print(f"[safety] Error parsing TSV: {e}")
 
     if not transcript_segments and os.path.exists(input_srt):
         try:
-            with open(input_srt, 'r', encoding='utf-8') as f:
+            with open(input_srt, "r", encoding="utf-8") as f:
                 srt_content = f.read()
             pattern = re.compile(
-                r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*)',
-                re.DOTALL)
+                r"(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*)",
+                re.DOTALL,
+            )
 
             def srt_time_to_seconds(t_str):
-                h, m, s = t_str.replace(',', '.').split(':')
+                h, m, s = t_str.replace(",", ".").split(":")
                 return int(h) * 3600 + int(m) * 60 + float(s)
 
             for match in pattern.findall(srt_content):
-                transcript_segments.append({
-                    'start': srt_time_to_seconds(match[1]),
-                    'end': srt_time_to_seconds(match[2]),
-                    'text': match[3].replace('\n', ' '),
-                })
+                transcript_segments.append(
+                    {
+                        "start": srt_time_to_seconds(match[1]),
+                        "end": srt_time_to_seconds(match[2]),
+                        "text": match[3].replace("\n", " "),
+                    }
+                )
         except Exception as e:
             print(f"[safety] Error parsing SRT: {e}")
 
@@ -764,14 +888,16 @@ def segment_text(segment, transcript_segments):
     text = " ".join(parts).strip()
     # Fallback: some AI segments carry their own text
     if not text:
-        text = " ".join([
-            str(segment.get("text", "")),
-            str(segment.get("start_text", "")),
-            str(segment.get("end_text", "")),
-            str(segment.get("title", "")),
-            str(segment.get("caption", "")),
-            str(segment.get("reasoning", "")),
-        ]).strip()
+        text = " ".join(
+            [
+                str(segment.get("text", "")),
+                str(segment.get("start_text", "")),
+                str(segment.get("end_text", "")),
+                str(segment.get("title", "")),
+                str(segment.get("caption", "")),
+                str(segment.get("reasoning", "")),
+            ]
+        ).strip()
     return text
 
 
@@ -796,6 +922,7 @@ def _approx_match_times(segment, transcript_segments, matches):
 # Custom terms
 # ---------------------------------------------------------------------------
 
+
 def load_remote_terms(base_dir=None):
     """Read the auto-updated blocklist cache (downloaded from GitHub).
 
@@ -817,7 +944,9 @@ def load_remote_terms(base_dir=None):
         return []
 
 
-def load_custom_terms(project_folder=None, extra_path=None, sync=True, include_policy=True):
+def load_custom_terms(
+    project_folder=None, extra_path=None, sync=True, include_policy=True
+):
     """Load user-provided terms from safety_terms.json and policy lexicon.
 
     ``sync=False`` keeps local scans offline while using the cached policy DB.
@@ -854,11 +983,18 @@ def load_custom_terms(project_folder=None, extra_path=None, sync=True, include_p
     if include_policy:
         try:
             from scripts import policy_lexicon
-            result["extra_terms"].extend(policy_lexicon.load_terms(project_folder, sync=sync))
+
+            result["extra_terms"].extend(
+                policy_lexicon.load_terms(project_folder, sync=sync)
+            )
         except Exception as exc:
             # Do not silently drop supplementary block terms: a broken lexicon must
             # be visible so the operator can fix it.
-            print("[safety] policy lexicon unavailable, extra terms skipped: {}".format(exc))
+            print(
+                "[safety] policy lexicon unavailable, extra terms skipped: {}".format(
+                    exc
+                )
+            )
     return result
 
 
@@ -866,9 +1002,15 @@ def load_custom_terms(project_folder=None, extra_path=None, sync=True, include_p
 # Main API
 # ---------------------------------------------------------------------------
 
-def analyze_segments(segments, transcript_segments=None, project_folder=None,
-                     mode="block", min_severity="medium",
-                     extra_terms_path=None):
+
+def analyze_segments(
+    segments,
+    transcript_segments=None,
+    project_folder=None,
+    mode="block",
+    min_severity="medium",
+    extra_terms_path=None,
+):
     """
     Analyze a list of viral segments.
 
@@ -905,19 +1047,29 @@ def analyze_segments(segments, transcript_segments=None, project_folder=None,
     for segment_index, seg in enumerate(segments):
         text = segment_text(seg, transcript_segments)
         semantic = semantic_safety.analyze_text(text)
-        matches = find_matches(text, index=index, min_severity="low",
-                               allow_terms=allow_terms)
-        blocking = [m for m in matches
-                    if SEVERITY_ORDER.get(m["severity"], 3) >= block_threshold
-                    and not (m.get("context_only") and m.get("severity") == "low" and semantic.get("action") == "allow")]
+        matches = find_matches(
+            text, index=index, min_severity="low", allow_terms=allow_terms
+        )
+        blocking = [
+            m
+            for m in matches
+            if SEVERITY_ORDER.get(m["severity"], 3) >= block_threshold
+            and not (
+                m.get("context_only")
+                and m.get("severity") == "low"
+                and semantic.get("action") == "allow"
+            )
+        ]
         if semantic.get("action") == "block":
-            blocking.append({
-                "term": "semantic policy pattern",
-                "lang": "multi",
-                "severity": "high",
-                "category": semantic.get("category") or "semantic_policy",
-                "word_index": 0,
-            })
+            blocking.append(
+                {
+                    "term": "semantic policy pattern",
+                    "lang": "multi",
+                    "severity": "high",
+                    "category": semantic.get("category") or "semantic_policy",
+                    "word_index": 0,
+                }
+            )
 
         entry = {
             "index": segment_index,
@@ -935,7 +1087,9 @@ def analyze_segments(segments, transcript_segments=None, project_folder=None,
 
         semantic_block = semantic.get("action") == "block"
         if blocking and (mode == "block" or semantic_block):
-            entry["status"] = "semantic_blocked" if semantic_block and mode == "censor" else "blocked"
+            entry["status"] = (
+                "semantic_blocked" if semantic_block and mode == "censor" else "blocked"
+            )
             blocked_count += 1
         elif blocking and mode in ("flag", "censor"):
             entry["status"] = "flagged" if mode == "flag" else "censor"
@@ -954,12 +1108,14 @@ def analyze_segments(segments, transcript_segments=None, project_folder=None,
             if semantic.get("action") == "review":
                 seg = dict(seg)
                 safety = dict(seg.get("safety", {}))
-                safety.update({
-                    "manual_review": True,
-                    "semantic_category": semantic.get("category"),
-                    "semantic_reason": semantic.get("explanation", ""),
-                    "semantic_confidence": semantic.get("confidence", 0.0),
-                })
+                safety.update(
+                    {
+                        "manual_review": True,
+                        "semantic_category": semantic.get("category"),
+                        "semantic_reason": semantic.get("explanation", ""),
+                        "semantic_confidence": semantic.get("confidence", 0.0),
+                    }
+                )
                 seg["safety"] = safety
             kept.append(seg)
 
@@ -980,9 +1136,14 @@ def analyze_segments(segments, transcript_segments=None, project_folder=None,
     return kept, report
 
 
-def apply_safety_filter(viral_segments, project_folder, mode="block",
-                        min_severity="medium", extra_terms_path=None,
-                        i18n=lambda k: k):
+def apply_safety_filter(
+    viral_segments,
+    project_folder,
+    mode="block",
+    min_severity="medium",
+    extra_terms_path=None,
+    i18n=lambda k: k,
+):
     """
     High-level helper used by main_improved.py:
       * filters the ``segments`` list inside the viral_segments dict
@@ -1015,23 +1176,50 @@ def apply_safety_filter(viral_segments, project_folder, mode="block",
         print(f"[safety] Could not save report: {e}")
 
     if mode == "block" and report["blocked"]:
-        print(i18n("[safety] {} segment(s) BLOCKED for policy-violating content (hate speech / violence).").format(report["blocked"]))
+        print(
+            i18n(
+                "[safety] {} segment(s) BLOCKED for policy-violating content (hate speech / violence)."
+            ).format(report["blocked"])
+        )
         for entry in report["segments"]:
             if entry["status"] == "blocked":
                 terms = ", ".join(sorted({m["term"] for m in entry["matches"]}))
-                print(i18n("[safety]   ✗ '{}' ({}): {}").format(
-                    entry["title"], entry["status"], terms))
+                print(
+                    i18n("[safety]   ✗ '{}' ({}): {}").format(
+                        entry["title"], entry["status"], terms
+                    )
+                )
     elif mode == "flag" and report["flagged"]:
-        print(i18n("[safety] {} segment(s) flagged for review (kept).").format(report["flagged"]))
+        print(
+            i18n("[safety] {} segment(s) flagged for review (kept).").format(
+                report["flagged"]
+            )
+        )
     elif mode == "censor":
         if report["blocked"]:
-            print(i18n("[safety] {} segment(s) were removed because contextual policy risk cannot be safely censored.").format(report["blocked"]))
+            print(
+                i18n(
+                    "[safety] {} segment(s) were removed because contextual policy risk cannot be safely censored."
+                ).format(report["blocked"])
+            )
         if report["censored"]:
-            print(i18n("[safety] {} segment(s) contain policy-violating words — they will be BLEEPED (muted) after cutting.").format(report["censored"]))
+            print(
+                i18n(
+                    "[safety] {} segment(s) contain policy-violating words — they will be BLEEPED (muted) after cutting."
+                ).format(report["censored"])
+            )
         if not report["blocked"] and not report["censored"]:
-            print(i18n("[safety] All {} segments passed the policy check ✔").format(report["total_segments"]))
+            print(
+                i18n("[safety] All {} segments passed the policy check ✔").format(
+                    report["total_segments"]
+                )
+            )
     else:
-        print(i18n("[safety] All {} segments passed the policy check ✔").format(report["total_segments"]))
+        print(
+            i18n("[safety] All {} segments passed the policy check ✔").format(
+                report["total_segments"]
+            )
+        )
 
     result = dict(viral_segments)
     result["segments"] = kept
@@ -1042,17 +1230,28 @@ def apply_safety_filter(viral_segments, project_folder, mode="block",
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Filter viral segments that may violate YouTube hate-speech policy.")
-    parser.add_argument("--project", required=True, help="Project folder containing viral_segments.txt")
+        description="Filter viral segments that may violate YouTube hate-speech policy."
+    )
+    parser.add_argument(
+        "--project", required=True, help="Project folder containing viral_segments.txt"
+    )
     parser.add_argument("--mode", choices=["block", "flag", "off"], default="block")
-    parser.add_argument("--min-severity", choices=["low", "medium", "high"], default="medium")
-    parser.add_argument("--extra-terms", help="Path to safety_terms.json with extra terms")
-    parser.add_argument("--in-place", action="store_true",
-                        help="Rewrite viral_segments.txt with the filtered list")
+    parser.add_argument(
+        "--min-severity", choices=["low", "medium", "high"], default="medium"
+    )
+    parser.add_argument(
+        "--extra-terms", help="Path to safety_terms.json with extra terms"
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="Rewrite viral_segments.txt with the filtered list",
+    )
     args = parser.parse_args()
 
     segments_path = os.path.join(args.project, "viral_segments.txt")

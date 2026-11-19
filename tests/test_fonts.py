@@ -16,11 +16,16 @@ from scripts import burn_subtitles
 
 
 def test_fonts_directory_ships_montserrat():
-    fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+    fonts_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"
+    )
     assert os.path.isdir(fonts_dir)
     names = set(os.listdir(fonts_dir))
-    for expected in ("Montserrat-Regular.ttf", "Montserrat-Bold.ttf",
-                     "Montserrat-ExtraBold.ttf"):
+    for expected in (
+        "Montserrat-Regular.ttf",
+        "Montserrat-Bold.ttf",
+        "Montserrat-ExtraBold.ttf",
+    ):
         assert expected in names, expected
     assert "OFL.txt" in names  # license must ship with the fonts
 

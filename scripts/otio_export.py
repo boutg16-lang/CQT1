@@ -1,4 +1,5 @@
 """OpenTimelineIO export for ViralCutter segment manifests."""
+
 from __future__ import annotations
 
 import argparse
@@ -43,7 +44,13 @@ def load_segments(path: str) -> List[Dict[str, Any]]:
     return result
 
 
-def build_timeline(segments: Iterable[Dict[str, Any]], media_path: str, *, name: str = "ViralCutter Timeline", rate: float = 30.0):
+def build_timeline(
+    segments: Iterable[Dict[str, Any]],
+    media_path: str,
+    *,
+    name: str = "ViralCutter Timeline",
+    rate: float = 30.0,
+):
     otio = _require_otio()
     rate = float(rate) if float(rate) > 0 else 30.0
     timeline = otio.schema.Timeline(name=name)
@@ -53,19 +60,27 @@ def build_timeline(segments: Iterable[Dict[str, Any]], media_path: str, *, name:
         duration = _number(segment["end_time"]) - start
         clip = otio.schema.Clip(
             name=str(segment.get("title") or "Clip {}".format(index)),
-            media_reference=otio.schema.ExternalReference(target_url=os.path.abspath(media_path)),
+            media_reference=otio.schema.ExternalReference(
+                target_url=os.path.abspath(media_path)
+            ),
             source_range=otio.opentime.TimeRange(
                 start_time=otio.opentime.RationalTime(start * rate, rate),
                 duration=otio.opentime.RationalTime(duration * rate, rate),
             ),
         )
-        clip.metadata["viralcutter"] = {"segment_index": index, "start_time": start, "end_time": start + duration}
+        clip.metadata["viralcutter"] = {
+            "segment_index": index,
+            "start_time": start,
+            "end_time": start + duration,
+        }
         track.append(clip)
     timeline.tracks.append(track)
     return timeline
 
 
-def export_timeline(segment_manifest: str, output_path: str, media_path: str, *, rate: float = 30.0) -> str:
+def export_timeline(
+    segment_manifest: str, output_path: str, media_path: str, *, rate: float = 30.0
+) -> str:
     otio = _require_otio()
     timeline = build_timeline(load_segments(segment_manifest), media_path, rate=rate)
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -74,7 +89,9 @@ def export_timeline(segment_manifest: str, output_path: str, media_path: str, *,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Export a ViralCutter manifest as OpenTimelineIO")
+    parser = argparse.ArgumentParser(
+        description="Export a ViralCutter manifest as OpenTimelineIO"
+    )
     parser.add_argument("--segments", required=True)
     parser.add_argument("--media", required=True)
     parser.add_argument("--output", required=True)

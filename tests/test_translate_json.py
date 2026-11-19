@@ -21,6 +21,7 @@ from scripts import translate_json as tj  # noqa: E402
 # GoogleTranslator
 # ---------------------------------------------------------------------------
 
+
 class _FakeResponse:
     def __init__(self, payload=None, status_error=None):
         self._payload = payload
@@ -39,6 +40,7 @@ def _fake_get(payload, status_error=None, capture=None):
         if capture is not None:
             capture.update(url=url, params=params, headers=headers, timeout=timeout)
         return _FakeResponse(payload, status_error)
+
     return _get
 
 
@@ -55,24 +57,46 @@ class TestGoogleTranslator:
         assert tj.GoogleTranslator(source="fr", target="ar", timeout=5).target == "ar"
 
     def test_translate_joins_parts(self, monkeypatch):
-        monkeypatch.setattr(tj.requests, "get", _fake_get(
-            [[["Hola", "Hello", None, None], ["mundo", "world", None, None]], None, "en"]))
+        monkeypatch.setattr(
+            tj.requests,
+            "get",
+            _fake_get(
+                [
+                    [["Hola", "Hello", None, None], ["mundo", "world", None, None]],
+                    None,
+                    "en",
+                ]
+            ),
+        )
         assert tj.GoogleTranslator(target="es").translate("Hello world") == "Holamundo"
 
     def test_translate_sends_expected_params(self, monkeypatch):
         capture = {}
-        monkeypatch.setattr(tj.requests, "get", _fake_get(
-            [[["x", "y", None, None]], None, "en"], capture=capture))
+        monkeypatch.setattr(
+            tj.requests,
+            "get",
+            _fake_get([[["x", "y", None, None]], None, "en"], capture=capture),
+        )
         tj.GoogleTranslator(source="fr", target="ar", timeout=7).translate("bonjour")
         assert capture["url"] == tj.GoogleTranslator.endpoint
         assert capture["params"] == {
-            "client": "gtx", "sl": "fr", "tl": "ar", "dt": "t", "q": "bonjour"}
+            "client": "gtx",
+            "sl": "fr",
+            "tl": "ar",
+            "dt": "t",
+            "q": "bonjour",
+        }
         assert capture["headers"]["User-Agent"].startswith("OUSSAMA-Cutter/")
         assert capture["timeout"] == 7
 
     def test_translate_skips_empty_parts(self, monkeypatch):
-        monkeypatch.setattr(tj.requests, "get", _fake_get(
-            [[["", "x", None, None], None, ["A", "y", None, None]], None, "en"]))
+        monkeypatch.setattr(
+            tj.requests,
+            "get",
+            _fake_get(
+                [[["", "x", None, None], None, ["A", "y", None, None]], None, "en"]
+            ),
+        )
         assert tj.GoogleTranslator().translate("xy") == "A"
 
     def test_translate_invalid_payload_raises(self, monkeypatch):
@@ -89,14 +113,18 @@ class TestGoogleTranslator:
             tj.GoogleTranslator().translate("hello")
 
     def test_translate_empty_text_raises(self, monkeypatch):
-        monkeypatch.setattr(tj.requests, "get", _fake_get(
-            [[["   ", "x", None, None]], None, "en"]))
+        monkeypatch.setattr(
+            tj.requests, "get", _fake_get([[["   ", "x", None, None]], None, "en"])
+        )
         with pytest.raises(ValueError, match="empty text"):
             tj.GoogleTranslator().translate("hello")
 
     def test_translate_http_error_propagates(self, monkeypatch):
-        monkeypatch.setattr(tj.requests, "get", _fake_get(
-            None, status_error=RuntimeError("403 Forbidden")))
+        monkeypatch.setattr(
+            tj.requests,
+            "get",
+            _fake_get(None, status_error=RuntimeError("403 Forbidden")),
+        )
         with pytest.raises(RuntimeError, match="403 Forbidden"):
             tj.GoogleTranslator().translate("hello")
 
@@ -105,17 +133,28 @@ class TestGoogleTranslator:
 # RTL helpers and substitutions
 # ---------------------------------------------------------------------------
 
+
 class TestRtlHelpers:
-    @pytest.mark.parametrize("lang,expected", [
-        ("ar", True), ("ar-EG", True), ("AR", True), ("he", True),
-        ("fa", True), ("ur", True), ("en", False), ("fr", False),
-        ("", False), (None, False),
-    ])
+    @pytest.mark.parametrize(
+        "lang,expected",
+        [
+            ("ar", True),
+            ("ar-EG", True),
+            ("AR", True),
+            ("he", True),
+            ("fa", True),
+            ("ur", True),
+            ("en", False),
+            ("fr", False),
+            ("", False),
+            (None, False),
+        ],
+    )
     def test_is_rtl_language(self, lang, expected):
         assert tj.is_rtl_language(lang) is expected
 
     def test_apply_rtl_text(self):
-        assert tj.apply_rtl_text("abc") == "\u202Babc\u202C"
+        assert tj.apply_rtl_text("abc") == "\u202babc\u202c"
         assert tj.apply_rtl_text("") == ""
         assert tj.apply_rtl_text(None) is None
 
@@ -133,6 +172,7 @@ class TestRtlHelpers:
 # translate_chunk (async, retries)
 # ---------------------------------------------------------------------------
 
+
 class _TranslatorStub:
     def __init__(self, results, *args, **kwargs):
         self._results = list(results)
@@ -148,10 +188,15 @@ class _TranslatorStub:
 
 class TestTranslateChunk:
     def test_success_first_try(self, monkeypatch):
-        monkeypatch.setattr(tj, "GoogleTranslator",
-                            lambda *a, **k: _TranslatorStub(["TRANSLATED"]))
-        assert asyncio.run(tj.translate_chunk(0, "hello", "es",
-                                             max_attempts=3, retry_delay=0)) == "TRANSLATED"
+        monkeypatch.setattr(
+            tj, "GoogleTranslator", lambda *a, **k: _TranslatorStub(["TRANSLATED"])
+        )
+        assert (
+            asyncio.run(
+                tj.translate_chunk(0, "hello", "es", max_attempts=3, retry_delay=0)
+            )
+            == "TRANSLATED"
+        )
 
     def test_retry_then_success(self, monkeypatch):
         calls = {"n": 0}
@@ -167,8 +212,9 @@ class TestTranslateChunk:
                 return "OK3"
 
         monkeypatch.setattr(tj, "GoogleTranslator", _Flaky)
-        result = asyncio.run(tj.translate_chunk(1, "hello", "es",
-                                               max_attempts=3, retry_delay=0))
+        result = asyncio.run(
+            tj.translate_chunk(1, "hello", "es", max_attempts=3, retry_delay=0)
+        )
         assert result == "OK3"
         assert calls["n"] == 3
 
@@ -181,8 +227,12 @@ class TestTranslateChunk:
                 raise RuntimeError("nope")
 
         monkeypatch.setattr(tj, "GoogleTranslator", _Bad)
-        assert asyncio.run(tj.translate_chunk(2, "orig text", "es",
-                                             max_attempts=2, retry_delay=0)) == "orig text"
+        assert (
+            asyncio.run(
+                tj.translate_chunk(2, "orig text", "es", max_attempts=2, retry_delay=0)
+            )
+            == "orig text"
+        )
 
     @pytest.mark.parametrize("bad_result", [None, " ◌ ", "   ", ""])
     def test_empty_translation_returns_original(self, monkeypatch, bad_result):
@@ -194,8 +244,12 @@ class TestTranslateChunk:
                 return bad_result
 
         monkeypatch.setattr(tj, "GoogleTranslator", _Empty)
-        assert asyncio.run(tj.translate_chunk(3, "orig", "es",
-                                             max_attempts=1, retry_delay=0)) == "orig"
+        assert (
+            asyncio.run(
+                tj.translate_chunk(3, "orig", "es", max_attempts=1, retry_delay=0)
+            )
+            == "orig"
+        )
 
     def test_max_attempts_zero_means_one(self, monkeypatch):
         calls = {"n": 0}
@@ -209,8 +263,12 @@ class TestTranslateChunk:
                 raise RuntimeError("nope")
 
         monkeypatch.setattr(tj, "GoogleTranslator", _Bad)
-        assert asyncio.run(tj.translate_chunk(4, "orig", "es",
-                                             max_attempts=0, retry_delay=0)) == "orig"
+        assert (
+            asyncio.run(
+                tj.translate_chunk(4, "orig", "es", max_attempts=0, retry_delay=0)
+            )
+            == "orig"
+        )
         assert calls["n"] == 1
 
 
@@ -218,13 +276,16 @@ class TestTranslateChunk:
 # join_sentences / unjoin_sentences
 # ---------------------------------------------------------------------------
 
+
 class TestJoinSentences:
     def test_empty(self):
         assert tj.join_sentences([], 100) == []
 
     def test_sentence_ending_flushes(self):
         assert tj.join_sentences(["Hello world.", "Second one."], 100) == [
-            "Hello world. ◌ ", "Second one. ◌ "]
+            "Hello world. ◌ ",
+            "Second one. ◌ ",
+        ]
 
     def test_no_ending_accumulates(self):
         assert tj.join_sentences(["hello", "world"], 100) == ["hello ◌ world ◌ "]
@@ -251,14 +312,14 @@ class TestUnjoinSentences:
         assert tj.unjoin_sentences("a ◌ b", "A ◌ B", tj.separator) == ["A", "B"]
 
     def test_mismatched_counts_reallocates_by_words(self):
-        result = tj.unjoin_sentences("one two three ◌ four five",
-                                     "uno dos tres cuatro cinco", tj.separator)
+        result = tj.unjoin_sentences(
+            "one two three ◌ four five", "uno dos tres cuatro cinco", tj.separator
+        )
         assert result == ["uno dos tres", "cuatro cinco"]
 
     def test_leftover_words_appended_to_last(self):
         # proportion 4/2 = 2.0: "one" takes 2 words, "two" takes the rest.
-        result = tj.unjoin_sentences("one ◌ two",
-                                     "uno dos tres cuatro", tj.separator)
+        result = tj.unjoin_sentences("one ◌ two", "uno dos tres cuatro", tj.separator)
         assert result == ["uno dos", "tres cuatro"]
 
     def test_zero_word_counts_falls_back(self):
@@ -270,17 +331,22 @@ class TestUnjoinSentences:
 # adjust_segments
 # ---------------------------------------------------------------------------
 
+
 class TestAdjustSegments:
     def test_word_timing_even_split(self):
         segments = [{"text": "hello world", "start": 0.0, "end": 4.0}]
         out = tj.adjust_segments([dict(s) for s in segments])
         words = out[0]["words"]
         assert [(w["word"], w["start"], w["end"], w["score"]) for w in words] == [
-            ("hello", 0.0, 2.0, 1.0), ("world", 2.0, 4.0, 1.0)]
+            ("hello", 0.0, 2.0, 1.0),
+            ("world", 2.0, 4.0, 1.0),
+        ]
 
     def test_next_segment_caps_last_word_end(self):
-        segments = [{"text": "one two", "start": 0.0, "end": 10.0},
-                    {"text": "next", "start": 8.0, "end": 10.0}]
+        segments = [
+            {"text": "one two", "start": 0.0, "end": 10.0},
+            {"text": "next", "start": 8.0, "end": 10.0},
+        ]
         out = tj.adjust_segments([dict(s) for s in segments])
         # last word of segment 0 starts at 5.0; its end is capped at
         # min(next_start=8.0, start+2=7.0) = 7.0 (was 10.0).
@@ -292,8 +358,10 @@ class TestAdjustSegments:
     def test_last_word_end_never_moves_before_its_start(self):
         # next segment starts at 3.0, before the last word even starts (5.0):
         # max(start, extended_end) keeps the end at the word start.
-        segments = [{"text": "one two", "start": 0.0, "end": 10.0},
-                    {"text": "next", "start": 3.0, "end": 5.0}]
+        segments = [
+            {"text": "one two", "start": 0.0, "end": 10.0},
+            {"text": "next", "start": 3.0, "end": 5.0},
+        ]
         out = tj.adjust_segments([dict(s) for s in segments])
         assert out[0]["words"][-1]["end"] == 5.0
         assert out[0]["end"] == 5.0
@@ -318,6 +386,7 @@ class TestAdjustSegments:
 # translate_json_file / translate_project_subs / main
 # ---------------------------------------------------------------------------
 
+
 def _write_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
@@ -334,33 +403,47 @@ class TestTranslateJsonFile:
             return chunk.upper()
 
         monkeypatch.setattr(tj, "translate_chunk", fake_chunk)
-        src = {"segments": [
-            {"text": "hello world", "start": 0.0, "end": 2.0,
-             "words": [{"word": "hello", "start": 0.0, "end": 1.0},
-                       {"word": "world", "start": 1.0, "end": 2.0}]},
-            {"text": "second line", "start": 2.0, "end": 4.0, "words": []},
-        ]}
+        src = {
+            "segments": [
+                {
+                    "text": "hello world",
+                    "start": 0.0,
+                    "end": 2.0,
+                    "words": [
+                        {"word": "hello", "start": 0.0, "end": 1.0},
+                        {"word": "world", "start": 1.0, "end": 2.0},
+                    ],
+                },
+                {"text": "second line", "start": 2.0, "end": 4.0, "words": []},
+            ]
+        }
         inp = tmp_path / "in.json"
         out = tmp_path / "sub" / "out.json"
         _write_json(inp, src)
         data = asyncio.run(tj.translate_json_file(inp, out, "es"))
         assert [s["text"] for s in data["segments"]] == ["HELLO WORLD", "SECOND LINE"]
         assert [w["word"] for s in data["segments"] for w in s["words"]] == [
-            "HELLO", "WORLD", "SECOND", "LINE"]
+            "HELLO",
+            "WORLD",
+            "SECOND",
+            "LINE",
+        ]
         assert out.exists()
         assert _read_json(out)["segments"][0]["text"] == "HELLO WORLD"
 
     def test_non_list_segments_raises(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(tj, "translate_chunk",
-                            lambda *a, **k: asyncio.sleep(0, result="x"))
+        monkeypatch.setattr(
+            tj, "translate_chunk", lambda *a, **k: asyncio.sleep(0, result="x")
+        )
         inp = tmp_path / "in.json"
         _write_json(inp, {"segments": "nope"})
         with pytest.raises(ValueError, match="segments list"):
             asyncio.run(tj.translate_json_file(inp, tmp_path / "out.json", "es"))
 
     def test_empty_segments_ok(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(tj, "translate_chunk",
-                            lambda *a, **k: asyncio.sleep(0, result="x"))
+        monkeypatch.setattr(
+            tj, "translate_chunk", lambda *a, **k: asyncio.sleep(0, result="x")
+        )
         inp = tmp_path / "in.json"
         _write_json(inp, {"segments": []})
         data = asyncio.run(tj.translate_json_file(inp, tmp_path / "out.json", "es"))
@@ -416,10 +499,14 @@ class TestTranslateProjectSubs:
         monkeypatch.setattr(tj, "translate_json_file", fake_tjf)
         subs = tmp_path / "subs"
         subs.mkdir()
-        _write_json(subs / "clip_processed.json",
-                    {"segments": [{"text": "new", "start": 0.0, "end": 1.0, "words": []}]})
-        _write_json(subs / "clip_processed_original.json",
-                    {"segments": [{"text": "old", "start": 0.0, "end": 1.0, "words": []}]})
+        _write_json(
+            subs / "clip_processed.json",
+            {"segments": [{"text": "new", "start": 0.0, "end": 1.0, "words": []}]},
+        )
+        _write_json(
+            subs / "clip_processed_original.json",
+            {"segments": [{"text": "old", "start": 0.0, "end": 1.0, "words": []}]},
+        )
         asyncio.run(tj.translate_project_subs(str(tmp_path), "es"))
         assert seen["src"] == "clip_processed_original.json"
 
@@ -436,8 +523,10 @@ class TestMain:
         monkeypatch.chdir(tmp_path)
         folder = tmp_path / "JSON"
         folder.mkdir()
-        _write_json(folder / "a.json",
-                    {"segments": [{"text": "hello", "start": 0.0, "end": 1.0, "words": []}]})
+        _write_json(
+            folder / "a.json",
+            {"segments": [{"text": "hello", "start": 0.0, "end": 1.0, "words": []}]},
+        )
         asyncio.run(tj.main())
         assert (folder / "a_en.json").exists()
         assert _read_json(folder / "a_en.json")["segments"][0]["text"] == "TRANSLATED"

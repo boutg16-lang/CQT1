@@ -42,6 +42,7 @@ from scripts.subtitle_language import (
 # Arabic-Indic / Persian timestamp parsing (_parse_segment_time)
 # ---------------------------------------------------------------------------
 
+
 def test_parse_arabic_indic_seconds_only():
     assert _parse_segment_time("٩٠") == 90.0
 
@@ -107,6 +108,7 @@ def test_parse_genuinely_malformed_falls_back_to_default():
 # Unanchorable candidates are dropped (process_segments)
 # ---------------------------------------------------------------------------
 
+
 def test_process_segments_drops_unanchorable_candidates():
     transcript = [
         {"start": 0.0, "end": 5.0, "text": "hello there"},
@@ -150,6 +152,7 @@ def test_process_segments_keeps_candidate_anchored_by_numeric_end_only():
 # Repeated end-phrase: end_text must land on a LATER occurrence
 # ---------------------------------------------------------------------------
 
+
 def test_repeated_catchphrase_ends_on_second_occurrence():
     # Catchphrase "machi sahla" spoken at 0-5s and repeated at 20-25s.
     transcript = [
@@ -159,8 +162,14 @@ def test_repeated_catchphrase_ends_on_second_occurrence():
         {"start": 20.0, "end": 25.0, "text": "machi sahla"},
         {"start": 26.0, "end": 30.0, "text": "ending outro"},
     ]
-    raw = [{"title": "Repeat", "start_text": "machi sahla",
-            "end_text": "machi sahla", "score": 90}]
+    raw = [
+        {
+            "title": "Repeat",
+            "start_text": "machi sahla",
+            "end_text": "machi sahla",
+            "score": 90,
+        }
+    ]
     result = process_segments(raw, transcript, 5, 30)
     seg = result["segments"][0]
     # Must end near the SECOND occurrence (~25s), not collapse at 5s.
@@ -177,8 +186,14 @@ def test_repeated_catchphrase_with_single_occurrence_uses_min_extension():
         {"start": 6.0, "end": 10.0, "text": "middle content"},
         {"start": 11.0, "end": 15.0, "text": "wrapping up"},
     ]
-    raw = [{"title": "Solo", "start_text": "machi sahla",
-            "end_text": "machi sahla", "score": 90}]
+    raw = [
+        {
+            "title": "Solo",
+            "start_text": "machi sahla",
+            "end_text": "machi sahla",
+            "score": 90,
+        }
+    ]
     result = process_segments(raw, transcript, 5, 30)
     seg = result["segments"][0]
     assert seg["start_time"] == 0.0
@@ -190,14 +205,22 @@ def test_repeated_catchphrase_with_single_occurrence_uses_min_extension():
 # Transcript shorter than min_duration -> flags on the output segment
 # ---------------------------------------------------------------------------
 
+
 def test_transcript_limited_under_min_sets_flags_and_full_window():
     # Whole transcript spans only 20s while min_duration is 30s.
     transcript = [
         {"start": 0.0, "end": 10.0, "text": "opening words here"},
         {"start": 15.0, "end": 20.0, "text": "later detail"},
     ]
-    raw = [{"title": "End hook", "start_time_ref": "15s",
-            "start_text": "later detail", "end_text": "", "score": 90}]
+    raw = [
+        {
+            "title": "End hook",
+            "start_time_ref": "15s",
+            "start_text": "later detail",
+            "end_text": "",
+            "score": 90,
+        }
+    ]
     result = process_segments(raw, transcript, 30, 90)
     seg = result["segments"][0]
     assert seg["under_min"] is True
@@ -214,8 +237,15 @@ def test_normal_min_extension_does_not_set_flags():
         {"start": 12.0, "end": 20.0, "text": "middle"},
         {"start": 22.0, "end": 40.0, "text": "long enough tail"},
     ]
-    raw = [{"title": "ok", "start_time_ref": "22s",
-            "start_text": "long enough tail", "end_text": "", "score": 90}]
+    raw = [
+        {
+            "title": "ok",
+            "start_time_ref": "22s",
+            "start_text": "long enough tail",
+            "end_text": "",
+            "score": 90,
+        }
+    ]
     result = process_segments(raw, transcript, 8, 90)
     seg = result["segments"][0]
     assert "under_min" not in seg
@@ -225,6 +255,7 @@ def test_normal_min_extension_does_not_set_flags():
 # ---------------------------------------------------------------------------
 # finalize_top_segments export ordering
 # ---------------------------------------------------------------------------
+
 
 def test_finalize_respects_candidate_rank_order():
     segments = [
@@ -255,7 +286,10 @@ def test_finalize_legacy_tie_breaks_by_score_then_stability():
     ]
     out = finalize_top_segments(segments, 10)
     assert [s["title"] for s in out] == [
-        "same-sel-higher-score", "same-sel-lower-score", "lower-sel"]
+        "same-sel-higher-score",
+        "same-sel-lower-score",
+        "lower-sel",
+    ]
 
 
 def test_finalize_stability_preserves_original_index_on_full_ties():
@@ -293,6 +327,7 @@ def test_finalize_zero_or_negative_count_returns_empty():
 # ---------------------------------------------------------------------------
 # Source-video staleness helpers
 # ---------------------------------------------------------------------------
+
 
 class _FakeStat(object):
     def __init__(self, size, mtime_ns):
@@ -350,6 +385,7 @@ def test_segments_source_fingerprint_tolerates_missing():
 # subtitle_language script detection
 # ---------------------------------------------------------------------------
 
+
 def test_detect_text_script_pure_arabic_returns_ar():
     assert detect_text_script("مرحبا بكم في هذه الحلقة") == "ar"
     assert detect_text_script("كيفاش داير مع مصطفى بونيف") == "ar"
@@ -385,7 +421,9 @@ def test_choose_alignment_language_arabic_returns_ar():
 
 def test_choose_alignment_language_latin_returns_forced_default():
     assert choose_alignment_language("hello world") == "en"
-    assert choose_alignment_language("bonjour tout le monde", forced_default="fr") == "fr"
+    assert (
+        choose_alignment_language("bonjour tout le monde", forced_default="fr") == "fr"
+    )
 
 
 def test_choose_alignment_language_empty_text_returns_default():
@@ -398,6 +436,7 @@ def test_choose_alignment_language_empty_text_returns_default():
 # the English wav2vec2 aligner
 # ---------------------------------------------------------------------------
 
+
 def _whisperx_stub(calls):
     """Minimal whisperx stand-in recording align-model language requests."""
     stub = types.ModuleType("whisperx")
@@ -409,8 +448,9 @@ def _whisperx_stub(calls):
         calls.append(dict(kwargs))
         return object(), {"language": kwargs.get("language_code")}
 
-    def align(segments, _model_a, _metadata, _audio, _device,
-              return_char_alignments=False):
+    def align(
+        segments, _model_a, _metadata, _audio, _device, return_char_alignments=False
+    ):
         return {"segments": segments, "language": "x"}
 
     utils = types.ModuleType("whisperx.utils")
@@ -419,9 +459,11 @@ def _whisperx_stub(calls):
         def writer(result, input_file, options):
             # Dummy artifacts so the existence checks in transcribe() pass.
             base = os.path.splitext(os.path.basename(input_file))[0]
-            with open(os.path.join(folder, "{}.{}".format(base, fmt)), "w",
-                      encoding="utf-8") as fh:
+            with open(
+                os.path.join(folder, "{}.{}".format(base, fmt)), "w", encoding="utf-8"
+            ) as fh:
                 fh.write("dummy")
+
         return writer
 
     utils.get_writer = get_writer
@@ -440,6 +482,7 @@ def _torch_stub():
         @staticmethod
         def is_available():
             return False
+
     stub.cuda = _Cuda
     stub.load = lambda *a, **k: None
     return stub
@@ -462,13 +505,16 @@ def _run_external_subtitle_transcribe(tmp_path, monkeypatch, srt_text):
     input_file = str(tmp_path / "input.mp4")
     with open(input_file, "wb") as fh:
         fh.write(b"fake mp4 bytes")
-    tv.transcribe(input_file, model_name="large-v3",
-                  project_folder=str(project), device="cpu")
+    tv.transcribe(
+        input_file, model_name="large-v3", project_folder=str(project), device="cpu"
+    )
     assert calls, "whisperx.load_align_model must have been called"
     return calls
 
 
-def test_transcribe_video_uses_arabic_aligner_for_arabic_subtitles(tmp_path, monkeypatch):
+def test_transcribe_video_uses_arabic_aligner_for_arabic_subtitles(
+    tmp_path, monkeypatch
+):
     arabic_srt = (
         "1\n00:00:00,000 --> 00:00:03,120\n"
         "مرحبا بكم في هذه الحلقة\n\n"
@@ -479,7 +525,9 @@ def test_transcribe_video_uses_arabic_aligner_for_arabic_subtitles(tmp_path, mon
     assert calls[0]["language_code"] == "ar"
 
 
-def test_transcribe_video_keeps_english_aligner_for_english_subtitles(tmp_path, monkeypatch):
+def test_transcribe_video_keeps_english_aligner_for_english_subtitles(
+    tmp_path, monkeypatch
+):
     english_srt = (
         "1\n00:00:00,000 --> 00:00:03,120\n"
         "Welcome to the show\n\n"
@@ -494,16 +542,19 @@ def test_transcribe_video_keeps_english_aligner_for_english_subtitles(tmp_path, 
 # cut_segments: scene-snap bounded drift
 # ---------------------------------------------------------------------------
 
+
 def test_accept_scene_snap_accepts_within_bounds():
     from scripts.cut_segments import _accept_scene_snap
+
     assert _accept_scene_snap(10.0, 10.0) is True
-    assert _accept_scene_snap(10.0, 15.0) is True   # 1.5x boundary
-    assert _accept_scene_snap(10.0, 5.0) is True    # 0.5x boundary
+    assert _accept_scene_snap(10.0, 15.0) is True  # 1.5x boundary
+    assert _accept_scene_snap(10.0, 5.0) is True  # 0.5x boundary
     assert _accept_scene_snap(10.0, 12.3) is True
 
 
 def test_accept_scene_snap_rejects_overgrowth_and_overshrink():
     from scripts.cut_segments import _accept_scene_snap
+
     assert _accept_scene_snap(10.0, 15.01) is False
     assert _accept_scene_snap(10.0, 4.99) is False
     assert _accept_scene_snap(10.0, 40.0) is False
@@ -512,16 +563,18 @@ def test_accept_scene_snap_rejects_overgrowth_and_overshrink():
 
 def test_accept_scene_snap_floor_for_tiny_windows():
     from scripts.cut_segments import _accept_scene_snap
+
     # 1.0s floor: max(1.0, 0.5*orig) .. max(1.0, 1.5*orig)
-    assert _accept_scene_snap(0.5, 1.0) is True    # both bounds clamp to 1.0
+    assert _accept_scene_snap(0.5, 1.0) is True  # both bounds clamp to 1.0
     assert _accept_scene_snap(0.5, 0.75) is False  # below the 1.0 floor
-    assert _accept_scene_snap(0.5, 1.2) is False   # above the 1.0 ceiling
-    assert _accept_scene_snap(2.0, 1.0) is True    # 0.5x of 2s == floor 1.0
+    assert _accept_scene_snap(0.5, 1.2) is False  # above the 1.0 ceiling
+    assert _accept_scene_snap(2.0, 1.0) is True  # 0.5x of 2s == floor 1.0
     assert _accept_scene_snap(2.0, 0.9) is False
 
 
 def test_accept_scene_snap_rejects_invalid_input():
     from scripts.cut_segments import _accept_scene_snap
+
     assert _accept_scene_snap("abc", 10.0) is False
     assert _accept_scene_snap(10.0, None) is False
     assert _accept_scene_snap(-1.0, 5.0) is False
@@ -531,25 +584,35 @@ def test_scene_snap_block_reverts_overgrown_window(tmp_path, monkeypatch):
     """A snap that more than doubles the clip must be reverted."""
     from scripts import cut_segments, scene_detect
 
-    monkeypatch.setattr(scene_detect, "find_scene_cuts",
-                        lambda path: [(0.0, 60.0)])
+    monkeypatch.setattr(scene_detect, "find_scene_cuts", lambda path: [(0.0, 60.0)])
     # Fake snap that drags the end 40s later: 10s window -> 50s window.
-    monkeypatch.setattr(scene_detect, "snap_to_scene",
-                        lambda s0, s1, scenes: (s0, s1 + 40.0))
+    monkeypatch.setattr(
+        scene_detect, "snap_to_scene", lambda s0, s1, scenes: (s0, s1 + 40.0)
+    )
 
     source = tmp_path / "input.mp4"
     source.write_bytes(b"source")
     response = {"segments": [{"title": "clip", "start_time": 10, "end_time": 20}]}
     captured = []
-    monkeypatch.setattr(cut_segments, "_detect_best_encoder",
-                        lambda: ("copy", "fast", []))
     monkeypatch.setattr(
-        cut_segments, "_process_segment",
-        lambda index, segment, *a, **k: (captured.append(segment),
-                                         {"ok": True, "index": index})[1])
+        cut_segments, "_detect_best_encoder", lambda: ("copy", "fast", [])
+    )
+    monkeypatch.setattr(
+        cut_segments,
+        "_process_segment",
+        lambda index, segment, *a, **k: (
+            captured.append(segment),
+            {"ok": True, "index": index},
+        )[1],
+    )
 
-    cut_segments.cut(response, project_folder=str(tmp_path), workers=1,
-                     source_video=str(source), scene_snap=True)
+    cut_segments.cut(
+        response,
+        project_folder=str(tmp_path),
+        workers=1,
+        source_video=str(source),
+        scene_snap=True,
+    )
     seg = captured[0]
     assert (seg["start_time"], seg["end_time"]) == (10.0, 20.0)
     assert not seg.get("scene_snapped")
@@ -559,24 +622,34 @@ def test_scene_snap_block_applies_bounded_snap(tmp_path, monkeypatch):
     """A snap that stays inside [0.5x, 1.5x] is accepted and marked."""
     from scripts import cut_segments, scene_detect
 
-    monkeypatch.setattr(scene_detect, "find_scene_cuts",
-                        lambda path: [(0.0, 60.0)])
-    monkeypatch.setattr(scene_detect, "snap_to_scene",
-                        lambda s0, s1, scenes: (s0 + 1.0, s1 + 2.0))
+    monkeypatch.setattr(scene_detect, "find_scene_cuts", lambda path: [(0.0, 60.0)])
+    monkeypatch.setattr(
+        scene_detect, "snap_to_scene", lambda s0, s1, scenes: (s0 + 1.0, s1 + 2.0)
+    )
 
     source = tmp_path / "input.mp4"
     source.write_bytes(b"source")
     response = {"segments": [{"title": "clip", "start_time": 10, "end_time": 20}]}
     captured = []
-    monkeypatch.setattr(cut_segments, "_detect_best_encoder",
-                        lambda: ("copy", "fast", []))
     monkeypatch.setattr(
-        cut_segments, "_process_segment",
-        lambda index, segment, *a, **k: (captured.append(segment),
-                                         {"ok": True, "index": index})[1])
+        cut_segments, "_detect_best_encoder", lambda: ("copy", "fast", [])
+    )
+    monkeypatch.setattr(
+        cut_segments,
+        "_process_segment",
+        lambda index, segment, *a, **k: (
+            captured.append(segment),
+            {"ok": True, "index": index},
+        )[1],
+    )
 
-    cut_segments.cut(response, project_folder=str(tmp_path), workers=1,
-                     source_video=str(source), scene_snap=True)
+    cut_segments.cut(
+        response,
+        project_folder=str(tmp_path),
+        workers=1,
+        source_video=str(source),
+        scene_snap=True,
+    )
     seg = captured[0]
     # 10s -> 11s window: inside bounds, snap applied.
     assert (seg["start_time"], seg["end_time"]) == (11.0, 22.0)

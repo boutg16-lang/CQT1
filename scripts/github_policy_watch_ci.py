@@ -32,8 +32,7 @@ def main():
     try:
         result = check_policy_pages()
     except Exception as exc:  # pragma: no cover - defensive
-        result = {"status": "error", "changes": [],
-                  "markers": {}, "error": str(exc)}
+        result = {"status": "error", "changes": [], "markers": {}, "error": str(exc)}
 
     status = result.get("status", "error")
     changes = result.get("changes", [])
@@ -45,8 +44,11 @@ def main():
     _github_output("changes", json.dumps(changes, ensure_ascii=False))
     _github_output("markers", json.dumps(markers, ensure_ascii=False))
 
-    print("[policy-watch-ci] status={} changed={} changes={}".format(
-        status, changed, ", ".join(changes) or "none"))
+    print(
+        "[policy-watch-ci] status={} changed={} changes={}".format(
+            status, changed, ", ".join(changes) or "none"
+        )
+    )
     return 0 if status != "error" else 1
 
 

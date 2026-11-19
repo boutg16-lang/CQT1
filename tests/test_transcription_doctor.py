@@ -5,6 +5,7 @@
 executable probe, the targeted repairs, the success cache, and the rule that
 error messages must use the versions actually installed.
 """
+
 import os
 import sys
 from types import SimpleNamespace
@@ -63,14 +64,16 @@ def test_probe_vad_loads_the_bundled_model(monkeypatch):
 def test_probe_vad_reports_the_real_failure():
     def broken(name):
         raise ModuleNotFoundError("No module named 'asteroid_filterbanks'")
+
     result = td.probe_vad(import_module=broken)
     assert result["ok"] is False
     assert "asteroid_filterbanks" in result["error"]
 
 
 def test_ensure_skips_when_whisperx_is_absent(monkeypatch):
-    monkeypatch.setattr(td, "diagnose", lambda base_dir=None: _report(
-        whisperx=False, fallback=True))
+    monkeypatch.setattr(
+        td, "diagnose", lambda base_dir=None: _report(whisperx=False, fallback=True)
+    )
     result = td.ensure_ready()
     assert result["ok"] is True
     assert result["skipped"] is True
@@ -96,10 +99,15 @@ def test_ensure_caches_a_successful_probe(tmp_path, monkeypatch):
 def test_ensure_repairs_the_missing_pyannote_dependencies(tmp_path, monkeypatch):
     monkeypatch.setattr(td, "_ready_cache_path", lambda: str(tmp_path / "ready.json"))
     monkeypatch.setattr(td, "diagnose", lambda base_dir=None: _report())
-    probes = iter([
-        {"ok": False, "error": "ModuleNotFoundError: No module named 'asteroid_filterbanks'"},
-        {"ok": True, "error": ""},
-    ])
+    probes = iter(
+        [
+            {
+                "ok": False,
+                "error": "ModuleNotFoundError: No module named 'asteroid_filterbanks'",
+            },
+            {"ok": True, "error": ""},
+        ]
+    )
     monkeypatch.setattr(td, "probe_vad", lambda **kwargs: next(probes))
     commands = []
 
@@ -118,15 +126,22 @@ def test_ensure_repairs_the_missing_pyannote_dependencies(tmp_path, monkeypatch)
 def test_ensure_reinstalls_the_tokenizers_native_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(td, "_ready_cache_path", lambda: str(tmp_path / "ready.json"))
     monkeypatch.setattr(td, "diagnose", lambda base_dir=None: _report())
-    probes = iter([
-        {"ok": False, "error": "Exception: tokenizers native extension failed"},
-        {"ok": True, "error": ""},
-    ])
+    probes = iter(
+        [
+            {"ok": False, "error": "Exception: tokenizers native extension failed"},
+            {"ok": True, "error": ""},
+        ]
+    )
     monkeypatch.setattr(td, "probe_vad", lambda **kwargs: next(probes))
     commands = []
-    monkeypatch.setattr(td, "_run_install",
-                        lambda command, timeout=1800: commands.append(command) or {
-                            "ok": True, "command": command, "error": "", "output": ""})
+    monkeypatch.setattr(
+        td,
+        "_run_install",
+        lambda command, timeout=1800: (
+            commands.append(command)
+            or {"ok": True, "command": command, "error": "", "output": ""}
+        ),
+    )
     result = td.ensure_ready()
     assert result["ok"] is True
     joined = " ".join(commands[0])
@@ -137,10 +152,14 @@ def test_ensure_reinstalls_the_tokenizers_native_extension(tmp_path, monkeypatch
 def test_ensure_reports_failure_without_raising(tmp_path, monkeypatch):
     monkeypatch.setattr(td, "_ready_cache_path", lambda: str(tmp_path / "ready.json"))
     monkeypatch.setattr(td, "diagnose", lambda base_dir=None: _report())
-    monkeypatch.setattr(td, "probe_vad",
-                        lambda **kwargs: {"ok": False, "error": "boom"})
-    monkeypatch.setattr(td, "repair", lambda mode, base_dir=None: {
-        "ok": False, "error": "repair failed"})
+    monkeypatch.setattr(
+        td, "probe_vad", lambda **kwargs: {"ok": False, "error": "boom"}
+    )
+    monkeypatch.setattr(
+        td,
+        "repair",
+        lambda mode, base_dir=None: {"ok": False, "error": "repair failed"},
+    )
     result = td.ensure_ready()
     assert result["ok"] is False
     assert result["vad"]["error"] == "boom"

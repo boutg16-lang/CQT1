@@ -20,10 +20,21 @@ def _fake_analyze(metrics_by_name):
         name = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
         metrics = metrics_by_name.get(name)
         if metrics is None:
-            return {"ok": False, "status": "block", "duration": 0.0,
-                    "metrics": {}, "issues": [{"code": "loudness_failed"}]}
-        return {"ok": True, "status": "pass", "duration": metrics.pop("duration", 30.0),
-                "metrics": metrics, "issues": []}
+            return {
+                "ok": False,
+                "status": "block",
+                "duration": 0.0,
+                "metrics": {},
+                "issues": [{"code": "loudness_failed"}],
+            }
+        return {
+            "ok": True,
+            "status": "pass",
+            "duration": metrics.pop("duration", 30.0),
+            "metrics": metrics,
+            "issues": [],
+        }
+
     return fake
 
 
@@ -64,8 +75,10 @@ def test_measure_corpus_honours_limit_and_missing_dir(tmp_path, monkeypatch):
     assert calibrate_mod.measure_corpus(str(tmp_path / "nope"))["total_candidates"] == 0
     for name in ("a.mp4", "b.mp4", "c.mp4"):
         (tmp_path / name).write_bytes(b"x")
-    metrics = {name: {"input_i": -16.0, "input_tp": -2.0, "silence": {"ratio": 0.0}}
-               for name in ("a.mp4", "b.mp4", "c.mp4")}
+    metrics = {
+        name: {"input_i": -16.0, "input_tp": -2.0, "silence": {"ratio": 0.0}}
+        for name in ("a.mp4", "b.mp4", "c.mp4")
+    }
     monkeypatch.setattr(audio_qc, "analyze_file", _fake_analyze(metrics))
     result = calibrate_mod.measure_corpus(str(tmp_path), limit=2)
     assert result["total_candidates"] == 2
@@ -114,8 +127,19 @@ def test_recommend_thresholds_handles_missing_silence():
 
 def test_calibrate_fails_below_min_files(tmp_path, monkeypatch):
     (tmp_path / "only.mp4").write_bytes(b"x")
-    monkeypatch.setattr(audio_qc, "analyze_file", _fake_analyze(
-        {"only.mp4": {"input_i": -16.0, "input_tp": -2.0, "silence": {"ratio": 0.1}}}))
+    monkeypatch.setattr(
+        audio_qc,
+        "analyze_file",
+        _fake_analyze(
+            {
+                "only.mp4": {
+                    "input_i": -16.0,
+                    "input_tp": -2.0,
+                    "silence": {"ratio": 0.1},
+                }
+            }
+        ),
+    )
     report = calibrate_mod.calibrate(str(tmp_path), min_files=5)
     assert report["ok"] is False
     assert report["recommended"] is None
@@ -128,13 +152,18 @@ def test_calibrate_report_round_trips_through_json(tmp_path, monkeypatch):
     for index in range(6):
         name = "clip%d.mp4" % index
         (tmp_path / name).write_bytes(b"x")
-        metrics[name] = {"input_i": -15.0 - index * 0.5, "input_tp": -2.0,
-                         "silence": {"ratio": 0.1}}
+        metrics[name] = {
+            "input_i": -15.0 - index * 0.5,
+            "input_tp": -2.0,
+            "silence": {"ratio": 0.1},
+        }
     monkeypatch.setattr(audio_qc, "analyze_file", _fake_analyze(metrics))
 
     report = calibrate_mod.calibrate(str(tmp_path))
     assert report["ok"] is True
-    target = calibrate_mod.write_report(str(tmp_path / "out" / "thresholds.json"), report)
+    target = calibrate_mod.write_report(
+        str(tmp_path / "out" / "thresholds.json"), report
+    )
     with open(target, "r", encoding="utf-8") as handle:
         loaded = json.load(handle)
     assert loaded["recommended"] == report["recommended"]
@@ -143,8 +172,13 @@ def test_calibrate_report_round_trips_through_json(tmp_path, monkeypatch):
 
 def test_main_exit_codes(tmp_path, monkeypatch, capsys):
     (tmp_path / "a.mp4").write_bytes(b"x")
-    monkeypatch.setattr(audio_qc, "analyze_file", _fake_analyze(
-        {"a.mp4": {"input_i": -16.0, "input_tp": -2.0, "silence": {"ratio": 0.1}}}))
+    monkeypatch.setattr(
+        audio_qc,
+        "analyze_file",
+        _fake_analyze(
+            {"a.mp4": {"input_i": -16.0, "input_tp": -2.0, "silence": {"ratio": 0.1}}}
+        ),
+    )
     assert calibrate_mod.main(["--corpus", str(tmp_path), "--min-files", "1"]) == 0
     assert calibrate_mod.main(["--corpus", str(tmp_path), "--min-files", "9"]) == 2
     assert (tmp_path / calibrate_mod.DEFAULT_OUTPUT_NAME).exists()
@@ -168,8 +202,10 @@ def test_load_thresholds_rejects_broken_files(tmp_path):
     failed.write_text(json.dumps({"ok": False, "recommended": None}), encoding="utf-8")
     assert audio_qc.load_thresholds(str(failed)) is None
     insane = tmp_path / "insane.json"
-    insane.write_text(json.dumps(
-        {"ok": True, "recommended": {"target_i": -99.0, "target_tp": 5.0}}), encoding="utf-8")
+    insane.write_text(
+        json.dumps({"ok": True, "recommended": {"target_i": -99.0, "target_tp": 5.0}}),
+        encoding="utf-8",
+    )
     assert audio_qc.load_thresholds(str(insane)) is None
 
 
@@ -182,22 +218,43 @@ def test_audio_qc_main_wires_thresholds_file(tmp_path, monkeypatch):
 
     monkeypatch.setattr(audio_qc, "analyze_project", fake_analyze_project)
     thresholds = tmp_path / "thresholds.json"
-    thresholds.write_text(json.dumps(
-        {"ok": True, "recommended": {"target_i": -18.0, "target_tp": -3.0}}), encoding="utf-8")
+    thresholds.write_text(
+        json.dumps({"ok": True, "recommended": {"target_i": -18.0, "target_tp": -3.0}}),
+        encoding="utf-8",
+    )
 
-    assert audio_qc.main(["--project", str(tmp_path),
-                          "--thresholds-file", str(thresholds)]) == 0
+    assert (
+        audio_qc.main(
+            ["--project", str(tmp_path), "--thresholds-file", str(thresholds)]
+        )
+        == 0
+    )
     assert captured["target_i"] == -18.0
     assert captured["target_tp"] == -3.0
 
     # explicit flags still win over the file
-    assert audio_qc.main(["--project", str(tmp_path), "--target-i", "-14.0",
-                          "--thresholds-file", str(thresholds)]) == 0
+    assert (
+        audio_qc.main(
+            [
+                "--project",
+                str(tmp_path),
+                "--target-i",
+                "-14.0",
+                "--thresholds-file",
+                str(thresholds),
+            ]
+        )
+        == 0
+    )
     assert captured["target_i"] == -14.0
     assert captured["target_tp"] == -3.0
 
     # a broken file falls back to defaults without crashing
     thresholds.write_text("{broken", encoding="utf-8")
-    assert audio_qc.main(["--project", str(tmp_path),
-                          "--thresholds-file", str(thresholds)]) == 0
+    assert (
+        audio_qc.main(
+            ["--project", str(tmp_path), "--thresholds-file", str(thresholds)]
+        )
+        == 0
+    )
     assert captured["target_i"] == audio_qc.DEFAULT_TARGET_I

@@ -36,6 +36,7 @@ LEGACY_CONFIG = "api_config.json"
 
 try:
     from cryptography.fernet import Fernet
+
     HAS_CRYPTOGRAPHY = True
 except ImportError:
     HAS_CRYPTOGRAPHY = False
@@ -56,8 +57,8 @@ def legacy_config_path(base_dir=None):
 def _derive_key(passphrase, salt):
     """32-byte key from passphrase + salt (scrypt)."""
     return hashlib.scrypt(
-        passphrase.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
-
+        passphrase.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32
+    )
 
 
 def _encrypt_blob(plain: bytes, passphrase: str) -> str:
@@ -69,8 +70,9 @@ def _encrypt_blob(plain: bytes, passphrase: str) -> str:
     salt = os.urandom(16)
     key = base64.urlsafe_b64encode(_derive_key(passphrase, salt))
     token = Fernet(key).encrypt(plain)
-    return json.dumps({"v": 2, "salt": base64.b64encode(salt).decode(),
-                       "token": token.decode()})
+    return json.dumps(
+        {"v": 2, "salt": base64.b64encode(salt).decode(), "token": token.decode()}
+    )
 
 
 def _decrypt_blob(payload: str, passphrase: str) -> bytes:
@@ -78,7 +80,9 @@ def _decrypt_blob(payload: str, passphrase: str) -> bytes:
     salt = base64.b64decode(data["salt"])
     if data.get("v") == 2:
         if not HAS_CRYPTOGRAPHY:
-            raise RuntimeError("this config needs 'cryptography' (pip install cryptography)")
+            raise RuntimeError(
+                "this config needs 'cryptography' (pip install cryptography)"
+            )
         key = base64.urlsafe_b64encode(_derive_key(passphrase, salt))
         return Fernet(key).decrypt(data["token"].encode())
     raise RuntimeError("insecure legacy credential format is not supported")
@@ -103,12 +107,18 @@ def set_keys(api_keys, passphrase=None, base_dir=None):
     if not passphrase:
         passphrase = os.getenv("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
     if not passphrase:
-        raise ValueError("a passphrase is required (or set VIRALCUTTER_CONFIG_PASSPHRASE)")
+        raise ValueError(
+            "a passphrase is required (or set VIRALCUTTER_CONFIG_PASSPHRASE)"
+        )
     if not HAS_CRYPTOGRAPHY:
         raise RuntimeError("cryptography is required for secure credential storage")
     keys = _clean_keys(api_keys)
     path = secure_config_path(base_dir)
-    data = {"gemini": {"api_keys": [_encrypt_blob(key.encode("utf-8"), passphrase) for key in keys]}}
+    data = {
+        "gemini": {
+            "api_keys": [_encrypt_blob(key.encode("utf-8"), passphrase) for key in keys]
+        }
+    }
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
     try:
@@ -120,13 +130,17 @@ def set_keys(api_keys, passphrase=None, base_dir=None):
         try:
             os.chmod(path, 0o600)
         except OSError as exc:
-            logger.warning("Could not restrict secure config permissions (%s).", type(exc).__name__)
+            logger.warning(
+                "Could not restrict secure config permissions (%s).", type(exc).__name__
+            )
     finally:
         if os.path.exists(tmp):
             try:
                 os.remove(tmp)
             except OSError as exc:
-                logger.warning("Could not remove temporary secure config (%s).", type(exc).__name__)
+                logger.warning(
+                    "Could not remove temporary secure config (%s).", type(exc).__name__
+                )
     return path
 
 
@@ -143,7 +157,9 @@ def get_keys(passphrase=None, base_dir=None):
     if not passphrase:
         passphrase = os.getenv("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
     if not passphrase:
-        logger.warning("Encrypted Gemini credentials are unavailable; set VIRALCUTTER_CONFIG_PASSPHRASE.")
+        logger.warning(
+            "Encrypted Gemini credentials are unavailable; set VIRALCUTTER_CONFIG_PASSPHRASE."
+        )
         return []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -152,7 +168,10 @@ def get_keys(passphrase=None, base_dir=None):
         encrypted = gemini.get("api_keys")
         if encrypted is None and gemini.get("api_key"):
             encrypted = [gemini["api_key"]]
-        return _clean_keys(_decrypt_blob(item, passphrase).decode("utf-8") for item in (encrypted or []))
+        return _clean_keys(
+            _decrypt_blob(item, passphrase).decode("utf-8")
+            for item in (encrypted or [])
+        )
     except Exception as exc:
         logger.warning("Could not decrypt Gemini credentials (%s).", type(exc).__name__)
         return []
@@ -173,10 +192,16 @@ def _legacy_keys(base_dir=None):
             data = json.load(f)
         gemini = data.get("gemini") or {}
         values = gemini.get("api_keys") or [gemini.get("api_key", "")]
-        return [key for key in _clean_keys(values) if key not in ("SUA_KEY_AQUI", "YOUR_KEY_HERE")]
+        return [
+            key
+            for key in _clean_keys(values)
+            if key not in ("SUA_KEY_AQUI", "YOUR_KEY_HERE")
+        ]
     except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as exc:
-        logger.warning("Could not load legacy Gemini configuration (%s); trying the next source.",
-                       type(exc).__name__)
+        logger.warning(
+            "Could not load legacy Gemini configuration (%s); trying the next source.",
+            type(exc).__name__,
+        )
         return []
 
 
@@ -188,8 +213,10 @@ def _env_keys():
             if isinstance(parsed, list):
                 return _clean_keys(parsed)
         except (TypeError, ValueError) as exc:
-            logger.debug("Gemini key list is not JSON (%s); trying delimited parsing.",
-                         type(exc).__name__)
+            logger.debug(
+                "Gemini key list is not JSON (%s); trying delimited parsing.",
+                type(exc).__name__,
+            )
         return _clean_keys(re.split(r"[,;\n]+", raw))
     for env in ("VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"):
         val = os.getenv(env, "").strip()
@@ -210,13 +237,16 @@ def resolve_api_keys(base_dir=None, warn=True):
     if os.path.isfile(secure_path):
         if warn:
             logger.warning(
-                "Encrypted Gemini credentials could not be resolved; refusing plaintext fallback.")
+                "Encrypted Gemini credentials could not be resolved; refusing plaintext fallback."
+            )
         return []
     keys = _legacy_keys(base_dir)
     if keys and warn:
-        print("[secure-config] WARNING: reading Gemini key(s) from plaintext "
-              "api_config.json. Set VIRALCUTTER_CONFIG_PASSPHRASE and save again "
-              "to move them to the encrypted store.")
+        print(
+            "[secure-config] WARNING: reading Gemini key(s) from plaintext "
+            "api_config.json. Set VIRALCUTTER_CONFIG_PASSPHRASE and save again "
+            "to move them to the encrypted store."
+        )
     return keys
 
 
@@ -232,8 +262,7 @@ def load_api_config(base_dir=None):
     path = legacy_config_path(base_dir)
     config = {
         "selected_api": "auto",
-        "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL,
-                   "chunk_size": 20000},
+        "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL, "chunk_size": 20000},
         "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
         "openai": {
             "base_url": "http://localhost:11434/v1",
@@ -258,12 +287,18 @@ def load_api_config(base_dir=None):
                     if isinstance(loaded.get("openai"), dict):
                         config["openai"].update(loaded["openai"])
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
-            logger.warning("Could not read api_config.json (%s); using defaults.", type(exc).__name__)
+            logger.warning(
+                "Could not read api_config.json (%s); using defaults.",
+                type(exc).__name__,
+            )
     requested_model = config["gemini"].get("model")
     config["gemini"]["model"] = resolve_gemini_model(requested_model)
     if requested_model and config["gemini"]["model"] != str(requested_model).strip():
-        print("[WARN] Unsupported Gemini model {!r}; using {}. Update api_config.json."
-              .format(requested_model, config["gemini"]["model"]))
+        print(
+            "[WARN] Unsupported Gemini model {!r}; using {}. Update api_config.json.".format(
+                requested_model, config["gemini"]["model"]
+            )
+        )
     keys = resolve_api_keys(base_dir)
     config["gemini"]["api_keys"] = keys
     config["gemini"]["api_key"] = keys[0] if keys else ""
@@ -285,25 +320,40 @@ def main(argv=None):
     import sys
 
     parser = argparse.ArgumentParser(description="ViralCutter secure API config.")
-    parser.add_argument("--set", nargs="?", const="__prompt__", metavar="KEY",
-                        help="store a Gemini key; omit KEY to enter it securely")
-    parser.add_argument("--get", action="store_true", help="show the resolved key masked")
-    parser.add_argument("--show-key", action="store_true",
-                        help="explicitly print the full resolved key")
+    parser.add_argument(
+        "--set",
+        nargs="?",
+        const="__prompt__",
+        metavar="KEY",
+        help="store a Gemini key; omit KEY to enter it securely",
+    )
+    parser.add_argument(
+        "--get", action="store_true", help="show the resolved key masked"
+    )
+    parser.add_argument(
+        "--show-key", action="store_true", help="explicitly print the full resolved key"
+    )
     parser.add_argument("--no-warn", action="store_true")
     args, unknown = parser.parse_known_args(argv)
     if unknown:
-        print("Unknown options are not accepted; use VIRALCUTTER_CONFIG_PASSPHRASE in the environment.",
-              file=sys.stderr)
+        print(
+            "Unknown options are not accepted; use VIRALCUTTER_CONFIG_PASSPHRASE in the environment.",
+            file=sys.stderr,
+        )
         return 2
     if args.set is not None and args.set != "__prompt__":
-        print("Do not pass API keys as command-line arguments. Use --set without a value.",
-              file=sys.stderr)
+        print(
+            "Do not pass API keys as command-line arguments. Use --set without a value.",
+            file=sys.stderr,
+        )
         return 2
     if args.set is not None:
         passphrase = os.getenv("VIRALCUTTER_CONFIG_PASSPHRASE", "").strip()
         if not passphrase:
-            print("Set VIRALCUTTER_CONFIG_PASSPHRASE before storing a key.", file=sys.stderr)
+            print(
+                "Set VIRALCUTTER_CONFIG_PASSPHRASE before storing a key.",
+                file=sys.stderr,
+            )
             return 2
         key = getpass.getpass("Gemini API key: ").strip()
         if not key:
@@ -312,8 +362,10 @@ def main(argv=None):
         try:
             set_key(key, passphrase=passphrase)
         except Exception as exc:
-            print("Encrypted key storage failed ({}).".format(type(exc).__name__),
-                  file=sys.stderr)
+            print(
+                "Encrypted key storage failed ({}).".format(type(exc).__name__),
+                file=sys.stderr,
+            )
             return 1
         print("Gemini key stored in the encrypted configuration.")
         return 0

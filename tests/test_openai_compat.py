@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for the OpenAI-compatible backend and the optional semantic layer."""
+
 import json
 import os
 import sys
@@ -33,13 +34,18 @@ def test_chat_sends_the_configured_model_and_returns_text(monkeypatch):
 
     def fake_post(url, json=None, headers=None, timeout=None):
         calls.append((url, json, headers))
-        return FakeResponse(200, _chat_payload("{\"segments\": []}"))
+        return FakeResponse(200, _chat_payload('{"segments": []}'))
 
     monkeypatch.setattr(openai_compat.requests, "post", fake_post)
-    config = {"openai": {"base_url": "http://box:1234/v1", "api_key": "sk-test",
-                         "model": "qwen2.5:7b"}}
+    config = {
+        "openai": {
+            "base_url": "http://box:1234/v1",
+            "api_key": "sk-test",
+            "model": "qwen2.5:7b",
+        }
+    }
     result = openai_compat.chat("hello", config=config)
-    assert result == "{\"segments\": []}"
+    assert result == '{"segments": []}'
     url, payload, headers = calls[0]
     assert url == "http://box:1234/v1/chat/completions"
     assert payload["model"] == "qwen2.5:7b"
@@ -77,10 +83,15 @@ def test_embeddings_are_batched_and_ordered_by_index(monkeypatch):
 
     def fake_post(url, json=None, headers=None, timeout=None):
         seen.append(json["input"])
-        return FakeResponse(200, {"data": [
-            {"index": 1, "embedding": [0.0, 1.0]},
-            {"index": 0, "embedding": [1.0, 0.0]},
-        ]})
+        return FakeResponse(
+            200,
+            {
+                "data": [
+                    {"index": 1, "embedding": [0.0, 1.0]},
+                    {"index": 0, "embedding": [1.0, 0.0]},
+                ]
+            },
+        )
 
     monkeypatch.setattr(openai_compat.requests, "post", fake_post)
     vectors = openai_compat.embed(["first", "second"], batch_size=8)
@@ -98,7 +109,8 @@ def test_env_overrides_config(monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_OPENAI_BASE_URL", "http://127.0.0.1:9999/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "env-key")
     settings = openai_compat.resolve_settings(
-        {"openai": {"base_url": "http://other/v1", "api_key": "file-key"}})
+        {"openai": {"base_url": "http://other/v1", "api_key": "file-key"}}
+    )
     assert settings["base_url"] == "http://127.0.0.1:9999/v1"
     assert settings["api_key"] == "env-key"
 
@@ -148,8 +160,12 @@ def test_settings_store_round_trips_openai_backend(tmp_path):
     from webui import settings_store
 
     ok, error = settings_store.save_ui_settings(
-        ai_backend="openai", ai_model="qwen2.5:7b", chunk_size=9000,
-        api_keys=[], base_dir=str(tmp_path))
+        ai_backend="openai",
+        ai_model="qwen2.5:7b",
+        chunk_size=9000,
+        api_keys=[],
+        base_dir=str(tmp_path),
+    )
     assert ok, error
     loaded = settings_store.load_ui_settings(base_dir=str(tmp_path))
     assert loaded["ai_backend"] == "openai"
@@ -162,18 +178,25 @@ def test_create_uses_the_openai_backend(tmp_path, monkeypatch):
     (tmp_path / "input.srt").write_text(
         "1\n00:00:00,000 --> 00:00:06,000\nمرحبا بكم في حلقة جديدة عن النجاح\n\n"
         "2\n00:00:06,000 --> 00:00:12,000\nالنجاح يحتاج صبرا والتزاما يوميا\n\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     captured = {}
 
     def fake_chat(prompt, model=None, config=None):
         captured["model"] = model
         captured["prompt"] = prompt
-        return json.dumps({"segments": [{
-            "title": "الصبر",
-            "start_time": 6,
-            "end_time": 12,
-            "score": 80,
-        }]})
+        return json.dumps(
+            {
+                "segments": [
+                    {
+                        "title": "الصبر",
+                        "start_time": 6,
+                        "end_time": 12,
+                        "score": 80,
+                    }
+                ]
+            }
+        )
 
     def fake_process(raw, *args, **kwargs):
         captured["raw"] = raw
@@ -183,8 +206,16 @@ def test_create_uses_the_openai_backend(tmp_path, monkeypatch):
     monkeypatch.setattr(openai_compat, "chat", fake_chat)
     monkeypatch.setattr(cvs, "process_segments", fake_process)
 
-    result = cvs.create(1, True, "", 5, 30, ai_mode="openai",
-                        project_folder=str(tmp_path), model_name_arg="qwen2.5:7b")
+    result = cvs.create(
+        1,
+        True,
+        "",
+        5,
+        30,
+        ai_mode="openai",
+        project_folder=str(tmp_path),
+        model_name_arg="qwen2.5:7b",
+    )
     assert result == {"segments": []}
     assert captured["model"] == "qwen2.5:7b"
     assert captured["raw"][0]["title"] == "الصبر"
@@ -204,7 +235,8 @@ def test_auto_backend_never_persists_a_provider_key_as_gemini(tmp_path):
     from webui import settings_store
 
     ok, error = settings_store.save_ui_settings(
-        ai_backend="auto", api_keys=["sk-or-secret-value"], base_dir=str(tmp_path))
+        ai_backend="auto", api_keys=["sk-or-secret-value"], base_dir=str(tmp_path)
+    )
     assert ok, error
     text = (tmp_path / "api_config.json").read_text(encoding="utf-8")
     assert "sk-or-secret-value" not in text

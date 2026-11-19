@@ -12,11 +12,31 @@ from webui import segments_review
 
 SAMPLE = {
     "segments": [
-        {"title": "Hook A", "start_time": 10.0, "end_time": 40.0, "reasoning": "strong hook", "score": 95,
-         "caption": "لن تصدق ما حدث!", "hashtags": ["viral", "story"]},
-        {"title": "Story B", "start_time": 65.5, "end_time": 120.0, "reasoning": "emotional", "score": 80,
-         "caption": "قصة حقيقية ملهمة", "hashtags": "motivation,daily"},
-        {"title": "Tip C", "start_time": 200.0, "end_time": 230.0, "reasoning": "actionable", "score": 70},
+        {
+            "title": "Hook A",
+            "start_time": 10.0,
+            "end_time": 40.0,
+            "reasoning": "strong hook",
+            "score": 95,
+            "caption": "لن تصدق ما حدث!",
+            "hashtags": ["viral", "story"],
+        },
+        {
+            "title": "Story B",
+            "start_time": 65.5,
+            "end_time": 120.0,
+            "reasoning": "emotional",
+            "score": 80,
+            "caption": "قصة حقيقية ملهمة",
+            "hashtags": "motivation,daily",
+        },
+        {
+            "title": "Tip C",
+            "start_time": 200.0,
+            "end_time": 230.0,
+            "reasoning": "actionable",
+            "score": 70,
+        },
     ]
 }
 
@@ -54,8 +74,8 @@ def test_rows_from_segments():
     assert rows[0][2] == 95
     assert rows[0][3] == "00:10"
     assert rows[1][3] == "01:06"  # 65.5s rounds to 66
-    assert rows[0][5] == 30.0      # 40 - 10
-    assert rows[1][5] == 54.5      # 120 - 65.5
+    assert rows[0][5] == 30.0  # 40 - 10
+    assert rows[1][5] == 54.5  # 120 - 65.5
 
 
 def test_apply_selection_filters_and_backs_up(project):

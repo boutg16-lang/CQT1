@@ -13,6 +13,7 @@ from scripts import safety_filter as sf
 # Normalization
 # ---------------------------------------------------------------------------
 
+
 class TestNormalize:
     def test_arabic_diacritics_and_tatweel(self):
         assert sf.normalize_text("حَـــرَامّّ") == "حرام"
@@ -41,6 +42,7 @@ class TestNormalize:
 # ---------------------------------------------------------------------------
 # Matching
 # ---------------------------------------------------------------------------
+
 
 class TestMatching:
     def test_arabic_hate_dehumanization(self):
@@ -92,10 +94,14 @@ class TestMatching:
         assert matches
         assert all(m["severity"] == "low" for m in matches)
         assert all(m["category"] == "context_only_identity" for m in matches)
-        assert sf.find_matches("هذا فيديو عن سعودي يعيش في دبي", min_severity="medium") == []
+        assert (
+            sf.find_matches("هذا فيديو عن سعودي يعيش في دبي", min_severity="medium")
+            == []
+        )
 
     def test_identity_plus_hate_is_detected(self):
         from scripts.semantic_safety import analyze_text
+
         verdict = analyze_text("السعوديين حشرات يجب طردهم")
         assert verdict["action"] == "block"
         assert verdict["category"] == "hate_or_dehumanization"
@@ -116,7 +122,12 @@ class TestMatching:
     def test_common_names_do_not_block(self):
         # عبد الله / عبد الرحمن are among the commonest Arabic names — a bare
         # "عبد" token must never block a clip (pack v6 regression guard).
-        assert sf.find_matches("مقابلة مع عبد الله و عبد الرحمن عن التجارة", min_severity="medium") == []
+        assert (
+            sf.find_matches(
+                "مقابلة مع عبد الله و عبد الرحمن عن التجارة", min_severity="medium"
+            )
+            == []
+        )
 
     def test_color_word_does_not_block(self):
         # اسود = the colour black; only hateful context may escalate it.
@@ -124,7 +135,10 @@ class TestMatching:
 
     def test_news_org_mentions_do_not_block(self):
         # داعش/حوثي/سلفي are news vocabulary — context-only, never bare blocks.
-        assert sf.find_matches("تقرير إخباري عن داعش في سوريا", min_severity="medium") == []
+        assert (
+            sf.find_matches("تقرير إخباري عن داعش في سوريا", min_severity="medium")
+            == []
+        )
         assert sf.find_matches("مقابلة عن الفكر السلفي", min_severity="medium") == []
 
     def test_farmer_word_does_not_block(self):
@@ -194,11 +208,16 @@ class TestAnalyzeSegments:
 
     def test_extra_terms_blocking(self, tmp_path):
         extra = tmp_path / "terms.json"
-        extra.write_text(json.dumps(
-            {"extra_terms": [{"term": "طبخة", "severity": "high"}]},
-            ensure_ascii=False), encoding="utf-8")
+        extra.write_text(
+            json.dumps(
+                {"extra_terms": [{"term": "طبخة", "severity": "high"}]},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         kept, report = sf.analyze_segments(
-            _segments(), TRANSCRIPT, mode="block", extra_terms_path=str(extra))
+            _segments(), TRANSCRIPT, mode="block", extra_terms_path=str(extra)
+        )
         titles = [s["title"] for s in kept]
         assert "طبخة لذيذة" not in titles  # custom term blocked it
         assert "مقطع خطير" not in titles
@@ -208,17 +227,19 @@ class TestAnalyzeSegments:
 # High-level helper (project folder integration)
 # ---------------------------------------------------------------------------
 
+
 class TestApplySafetyFilter:
     def _make_project(self, tmp_path):
         project = tmp_path / "proj"
         project.mkdir()
         viral = {"segments": _segments()}
         (project / "viral_segments.txt").write_text(
-            json.dumps(viral, ensure_ascii=False), encoding="utf-8")
+            json.dumps(viral, ensure_ascii=False), encoding="utf-8"
+        )
         # TSV transcript (ms timestamps)
         lines = ["start\tend\ttext"]
         for seg in TRANSCRIPT:
-            lines.append(f"{seg['start']*1000}\t{seg['end']*1000}\t{seg['text']}")
+            lines.append(f"{seg['start'] * 1000}\t{seg['end'] * 1000}\t{seg['text']}")
         (project / "input.tsv").write_text("\n".join(lines), encoding="utf-8")
         return str(project), viral
 
@@ -241,6 +262,7 @@ class TestApplySafetyFilter:
         project, _ = self._make_project(tmp_path)
         assert sf.apply_safety_filter({"foo": 1}, project, mode="block") == {"foo": 1}
 
+
 def test_custom_terms_can_use_cached_policy_without_sync(monkeypatch, tmp_path):
     from scripts import policy_lexicon
 
@@ -248,7 +270,9 @@ def test_custom_terms_can_use_cached_policy_without_sync(monkeypatch, tmp_path):
     monkeypatch.setattr(
         policy_lexicon,
         "load_terms",
-        lambda project_folder=None, sync=True: calls.append((project_folder, sync)) or [],
+        lambda project_folder=None, sync=True: (
+            calls.append((project_folder, sync)) or []
+        ),
     )
 
     result = sf.load_custom_terms(project_folder=str(tmp_path), sync=False)

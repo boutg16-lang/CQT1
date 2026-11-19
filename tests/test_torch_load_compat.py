@@ -24,7 +24,9 @@ def _install_torch_load_wrapper(monkeypatch, original_load):
         {"map_location": "cpu", "weights_only": None},
     ],
 )
-def test_safe_load_defaults_missing_or_none_weights_only_to_true(monkeypatch, load_kwargs):
+def test_safe_load_defaults_missing_or_none_weights_only_to_true(
+    monkeypatch, load_kwargs
+):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
     calls = []
 
@@ -35,9 +37,7 @@ def test_safe_load_defaults_missing_or_none_weights_only_to_true(monkeypatch, lo
     safe_load = _install_torch_load_wrapper(monkeypatch, original_load)
 
     assert safe_load("model.ckpt", **load_kwargs) == "loaded"
-    assert calls == [
-        (("model.ckpt",), {"map_location": "cpu", "weights_only": True})
-    ]
+    assert calls == [(("model.ckpt",), {"map_location": "cpu", "weights_only": True})]
 
 
 @pytest.mark.parametrize("weights_only", [True, False])
@@ -123,7 +123,6 @@ def test_safe_load_auto_allows_missing_globals_then_loads(monkeypatch):
     assert fake_torch_version.TorchVersion in registered
 
 
-
 def test_safe_load_does_not_retry_unsafely_without_opt_in(monkeypatch):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
     calls = []
@@ -145,7 +144,9 @@ def test_typing_any_is_registered_as_safe_global(monkeypatch):
     serialization = SimpleNamespace(
         add_safe_globals=lambda values: registered.extend(values)
     )
-    fake_torch = SimpleNamespace(load=lambda *args, **kwargs: "loaded", serialization=serialization)
+    fake_torch = SimpleNamespace(
+        load=lambda *args, **kwargs: "loaded", serialization=serialization
+    )
     monkeypatch.setattr(transcribe_video, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
     monkeypatch.setitem(sys.modules, "torchaudio", ModuleType("torchaudio"))
@@ -216,15 +217,30 @@ def test_builtins_containers_are_registered_as_safe_globals(monkeypatch):
     serialization = SimpleNamespace(
         add_safe_globals=lambda values: registered.extend(values)
     )
-    fake_torch = SimpleNamespace(load=lambda *args, **kwargs: "loaded", serialization=serialization)
+    fake_torch = SimpleNamespace(
+        load=lambda *args, **kwargs: "loaded", serialization=serialization
+    )
     monkeypatch.setattr(transcribe_video, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "omegaconf", ModuleType("omegaconf"))
     monkeypatch.setitem(sys.modules, "torchaudio", ModuleType("torchaudio"))
 
     transcribe_video.apply_safe_globals_hack()
 
-    for cls in (list, dict, set, tuple, frozenset, range,
-                int, float, bool, str, bytes, complex, type(None)):
+    for cls in (
+        list,
+        dict,
+        set,
+        tuple,
+        frozenset,
+        range,
+        int,
+        float,
+        bool,
+        str,
+        bytes,
+        complex,
+        type(None),
+    ):
         assert cls in registered
     import collections
 
@@ -258,7 +274,9 @@ def _install_fake_vad_module(monkeypatch, tmp_path, checkpoint_bytes):
 
 def test_verified_vad_checkpoint_gets_narrow_unsafe_retry(monkeypatch, tmp_path):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
-    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"trusted test checkpoint")
+    checkpoint = _install_fake_vad_module(
+        monkeypatch, tmp_path, b"trusted test checkpoint"
+    )
     calls = []
 
     class NamedStream:
@@ -302,7 +320,9 @@ def test_vad_hash_mismatch_never_uses_unsafe_load(monkeypatch, tmp_path):
 
 def test_vad_checkpoint_read_failure_never_uses_unsafe_load(monkeypatch, tmp_path):
     monkeypatch.setenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", "1")
-    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"trusted test checkpoint")
+    checkpoint = _install_fake_vad_module(
+        monkeypatch, tmp_path, b"trusted test checkpoint"
+    )
     calls = []
     original_open = builtins.open
 
@@ -354,7 +374,9 @@ def test_non_vad_checkpoint_does_not_get_vad_exception(monkeypatch, tmp_path):
 
 def test_verified_vad_checkpoint_supports_direct_path(monkeypatch, tmp_path):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
-    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"direct path checkpoint")
+    checkpoint = _install_fake_vad_module(
+        monkeypatch, tmp_path, b"direct path checkpoint"
+    )
     calls = []
 
     def original_load(*args, **kwargs):
@@ -387,7 +409,9 @@ def test_verified_vad_checkpoint_rechecks_hash_on_repeated_loads(monkeypatch, tm
 
 def test_invalid_expected_vad_hash_never_uses_unsafe_load(monkeypatch, tmp_path):
     monkeypatch.delenv("VIRALCUTTER_ALLOW_UNSAFE_LOAD", raising=False)
-    checkpoint = _install_fake_vad_module(monkeypatch, tmp_path, b"invalid digest checkpoint")
+    checkpoint = _install_fake_vad_module(
+        monkeypatch, tmp_path, b"invalid digest checkpoint"
+    )
     fake_vad = sys.modules["whisperx.vad"]
     fake_vad.VAD_SEGMENTATION_URL = (
         "https://example.invalid/model_weights/not-a-valid-hash/pytorch_model.bin"

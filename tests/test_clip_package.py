@@ -5,10 +5,30 @@ from scripts.clip_package import plan_package
 
 def test_package_limits_repeated_topics_and_keeps_best_scores():
     items = [
-        {"title": "A", "topic": "politics", "selection_score": 91, "text": "قرار جديد يغير الوضع"},
-        {"title": "B", "topic": "politics", "selection_score": 88, "text": "اجتماع مهم وقرار جديد"},
-        {"title": "C", "topic": "sports", "selection_score": 82, "text": "هدف رائع في المباراة"},
-        {"title": "D", "topic": "politics", "selection_score": 80, "text": "تصريح حول ملف آخر تماما"},
+        {
+            "title": "A",
+            "topic": "politics",
+            "selection_score": 91,
+            "text": "قرار جديد يغير الوضع",
+        },
+        {
+            "title": "B",
+            "topic": "politics",
+            "selection_score": 88,
+            "text": "اجتماع مهم وقرار جديد",
+        },
+        {
+            "title": "C",
+            "topic": "sports",
+            "selection_score": 82,
+            "text": "هدف رائع في المباراة",
+        },
+        {
+            "title": "D",
+            "topic": "politics",
+            "selection_score": 80,
+            "text": "تصريح حول ملف آخر تماما",
+        },
     ]
     result = plan_package(items, limit=5, max_per_topic=2)
     assert [x["title"] for x in result["selected"]] == ["A", "B", "C"]
@@ -19,10 +39,22 @@ def test_package_limits_repeated_topics_and_keeps_best_scores():
 
 def test_package_rejects_overlapping_same_source_clips():
     items = [
-        {"title": "first", "source_id": "video1", "start": 10, "end": 30,
-         "selection_score": 90, "text": "شرح تفاصيل المشروع الجديد"},
-        {"title": "second", "source_id": "video1", "start": 25, "end": 45,
-         "selection_score": 80, "text": "حديث مختلف تماما عن الاقتصاد"},
+        {
+            "title": "first",
+            "source_id": "video1",
+            "start": 10,
+            "end": 30,
+            "selection_score": 90,
+            "text": "شرح تفاصيل المشروع الجديد",
+        },
+        {
+            "title": "second",
+            "source_id": "video1",
+            "start": 25,
+            "end": 45,
+            "selection_score": 80,
+            "text": "حديث مختلف تماما عن الاقتصاد",
+        },
     ]
     result = plan_package(items, limit=5)
     assert len(result["selected"]) == 1
@@ -31,10 +63,16 @@ def test_package_rejects_overlapping_same_source_clips():
 
 def test_package_rejects_near_duplicate_transcripts():
     items = [
-        {"title": "first", "selection_score": 90,
-         "text": "الحكومة تعلن اليوم عن قرار جديد يتعلق بالاقتصاد الوطني"},
-        {"title": "second", "selection_score": 80,
-         "text": "الحكومة تعلن اليوم عن قرار جديد يتعلق بالاقتصاد الوطني"},
+        {
+            "title": "first",
+            "selection_score": 90,
+            "text": "الحكومة تعلن اليوم عن قرار جديد يتعلق بالاقتصاد الوطني",
+        },
+        {
+            "title": "second",
+            "selection_score": 80,
+            "text": "الحكومة تعلن اليوم عن قرار جديد يتعلق بالاقتصاد الوطني",
+        },
     ]
     result = plan_package(items, limit=5, min_similarity=0.7)
     assert len(result["selected"]) == 1
@@ -52,10 +90,20 @@ def test_package_validates_options():
 
 def test_overlapping_timestamps_without_source_identity_do_not_collide():
     items = [
-        {"title": "first", "start": 10, "end": 30, "selection_score": 90,
-         "text": "شرح تفاصيل المشروع الجديد"},
-        {"title": "second", "start": 10, "end": 30, "selection_score": 80,
-         "text": "حديث مختلف تماما عن الاقتصاد"},
+        {
+            "title": "first",
+            "start": 10,
+            "end": 30,
+            "selection_score": 90,
+            "text": "شرح تفاصيل المشروع الجديد",
+        },
+        {
+            "title": "second",
+            "start": 10,
+            "end": 30,
+            "selection_score": 80,
+            "text": "حديث مختلف تماما عن الاقتصاد",
+        },
     ]
     result = plan_package(items, limit=2, min_similarity=1.0)
     assert len(result["selected"]) == 2

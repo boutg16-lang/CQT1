@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Models live on the project drive, not the Windows C: user cache."""
+
 import os
 import sys
 from pathlib import Path
@@ -9,8 +10,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts import model_paths
 
 CACHE_ENVS = (
-    "VIRALCUTTER_MODELS_DIR", "HF_HOME", "HUGGINGFACE_HUB_CACHE",
-    "HF_HUB_CACHE", "TRANSFORMERS_CACHE", "HF_DATASETS_CACHE", "TORCH_HOME",
+    "VIRALCUTTER_MODELS_DIR",
+    "HF_HOME",
+    "HUGGINGFACE_HUB_CACHE",
+    "HF_HUB_CACHE",
+    "TRANSFORMERS_CACHE",
+    "HF_DATASETS_CACHE",
+    "TORCH_HOME",
 )
 
 
@@ -26,8 +32,7 @@ def test_configure_points_every_cache_at_the_project(tmp_path, monkeypatch):
     assert paths["hf_hub_cache"] == str(tmp_path / "huggingface" / "hub")
     assert paths["torch_home"] == str(tmp_path / "torch")
     assert os.environ["HF_HOME"] == str(tmp_path / "huggingface")
-    assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(
-        tmp_path / "huggingface" / "hub")
+    assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(tmp_path / "huggingface" / "hub")
     assert os.environ["TORCH_HOME"] == str(tmp_path / "torch")
     assert Path(paths["hf_hub_cache"]).is_dir()
 
@@ -46,8 +51,9 @@ def test_huggingface_default_path_is_moved(tmp_path, monkeypatch):
     monkeypatch.setenv("HF_HOME", str(default))
     model_paths.configure_model_cache(root=tmp_path / "models")
     assert os.environ["HF_HOME"] != str(default)
-    assert os.environ["HF_HOME"].endswith(".models/huggingface") or \
-        os.environ["HF_HOME"] == str(tmp_path / "models" / "huggingface")
+    assert os.environ["HF_HOME"].endswith(".models/huggingface") or os.environ[
+        "HF_HOME"
+    ] == str(tmp_path / "models" / "huggingface")
 
 
 def test_models_dir_env_override(tmp_path, monkeypatch):
@@ -75,7 +81,8 @@ def test_migrate_cache_copies_without_removing_source(tmp_path):
     assert result["ok"] is True and result["copied"] is True
     assert result["moved"] is False
     assert (destination / "hub" / "models--x" / "blob").read_text(
-        encoding="utf-8") == "weights"
+        encoding="utf-8"
+    ) == "weights"
     assert source.is_dir()
 
 

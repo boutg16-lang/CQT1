@@ -41,7 +41,9 @@ class TestEmitProgressProtocol:
 class TestLoadJsonFile:
     def test_missing_returns_default(self, tmp_path):
         assert pu.load_json_file(str(tmp_path / "nope.json")) == {}
-        assert pu.load_json_file(str(tmp_path / "nope.json"), default=None) is None or True
+        assert (
+            pu.load_json_file(str(tmp_path / "nope.json"), default=None) is None or True
+        )
 
     def test_invalid_json_returns_default(self, tmp_path):
         bad = tmp_path / "bad.json"
@@ -73,7 +75,8 @@ class TestTempSubtitleConfig:
     def test_anchored_to_repo_root(self):
         expected = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(pu.__file__))),
-            "temp_subtitle_config.json")
+            "temp_subtitle_config.json",
+        )
         assert pu.TEMP_SUBTITLE_CONFIG == expected
 
     def test_cleanup_removes_existing(self, tmp_path, monkeypatch):

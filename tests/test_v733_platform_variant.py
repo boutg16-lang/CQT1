@@ -43,10 +43,20 @@ def test_normalize_platform_and_variant_set():
 def test_prior_other_platform_publishes_finds_youtube_sibling(tmp_path):
     clip = _clip(tmp_path)
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x", "timestamp": "2026-01-01T00:00:00Z"},
-        {"platform": "tiktok", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x", "timestamp": "2026-01-02T00:00:00Z"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+            "timestamp": "2026-01-01T00:00:00Z",
+        },
+        {
+            "platform": "tiktok",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+            "timestamp": "2026-01-02T00:00:00Z",
+        },
     ]
     siblings = pv.prior_other_platform_publishes(str(tmp_path), clip, "tiktok", events)
     assert len(siblings) == 1
@@ -63,10 +73,16 @@ def test_policy_off_never_varies(tmp_path):
 def test_cross_platform_republish_requires_original_contribution(tmp_path):
     clip = _clip(tmp_path)
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        },
     ]
-    decision = pv.plan_variant(str(tmp_path), clip, "tiktok", policy="auto", events=events)
+    decision = pv.plan_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=events
+    )
     assert decision["action"] == "review"
     assert decision["requires_original_contribution"] is True
     assert "أضف تعليقاً أصلياً" in decision["reason"]
@@ -80,10 +96,16 @@ def test_auto_varies_only_when_other_platform_published(tmp_path):
     assert none_decision["action"] == "none"
 
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        },
     ]
-    decision = pv.plan_variant(str(tmp_path), clip, "tiktok", policy="auto", events=events)
+    decision = pv.plan_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=events
+    )
     assert decision["action"] == "variate"
     assert decision["seed"] is not None
     assert isinstance(decision["seed"], int)
@@ -94,8 +116,12 @@ def test_seed_changes_per_attempt_and_platform(tmp_path):
     _with_contribution(tmp_path)
     clip = _clip(tmp_path)
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        },
     ]
     first = pv.plan_variant(str(tmp_path), clip, "tiktok", policy="auto", events=events)
     second = pv.plan_variant(str(tmp_path), clip, "reels", policy="auto", events=events)
@@ -103,11 +129,16 @@ def test_seed_changes_per_attempt_and_platform(tmp_path):
     assert first["seed"] != second["seed"]
     # A second attempt at the same platform gets a fresh seed (attempt 2).
     again_events = events + [
-        {"platform": "tiktok", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:y"},
+        {
+            "platform": "tiktok",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:y",
+        },
     ]
-    third = pv.plan_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                            events=again_events)
+    third = pv.plan_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=again_events
+    )
     assert third["attempt"] == 2
     assert third["seed"] != first["seed"]
 
@@ -116,8 +147,12 @@ def test_maybe_variant_renders_file(tmp_path, monkeypatch):
     _with_contribution(tmp_path)
     clip = _clip(tmp_path)
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        },
     ]
     captured = {}
 
@@ -129,9 +164,11 @@ def test_maybe_variant_renders_file(tmp_path, monkeypatch):
         return {"ok": True, "transforms": ["mirror", "color"], "seed": seed}
 
     import scripts.originality as originality
+
     monkeypatch.setattr(originality, "transform_with_seed", fake_transform)
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=events)
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=events
+    )
     assert decision["action"] == "variate"
     assert captured["input"] == clip
     assert decision["path"] != clip
@@ -143,8 +180,12 @@ def test_maybe_variant_falls_back_to_original_on_failure(tmp_path, monkeypatch):
     _with_contribution(tmp_path)
     clip = _clip(tmp_path)
     events = [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        },
     ]
 
     import scripts.originality as originality
@@ -153,8 +194,9 @@ def test_maybe_variant_falls_back_to_original_on_failure(tmp_path, monkeypatch):
         raise RuntimeError("ffmpeg missing")
 
     monkeypatch.setattr(originality, "transform_with_seed", failing_transform)
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=events)
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=events
+    )
     assert decision["action"] == "none"
     assert decision["path"] == clip
     assert "original" in decision["reason"]
@@ -165,10 +207,17 @@ def test_history_file_driven_detection(tmp_path):
     project.mkdir()
     _with_contribution(project)
     clip = _clip(project)
-    _history(str(project), [
-        {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4",
-         "file_fingerprint": "sha256:x"},
-    ])
+    _history(
+        str(project),
+        [
+            {
+                "platform": "youtube",
+                "status": "uploaded",
+                "video": "000_clip.mp4",
+                "file_fingerprint": "sha256:x",
+            },
+        ],
+    )
     decision = pv.plan_variant(str(project), clip, "tiktok", policy="auto")
     assert decision["action"] == "variate"
 
@@ -178,9 +227,15 @@ def test_variant_history_counts_variant_of_for_next_attempt(tmp_path):
     clip = _clip(tmp_path)
     events = [
         {"platform": "youtube", "status": "uploaded", "video": "000_clip.mp4"},
-        {"platform": "tiktok", "status": "uploaded", "video": "000_clip__tiktok_7.mp4",
-         "variant_of": "000_clip.mp4"},
+        {
+            "platform": "tiktok",
+            "status": "uploaded",
+            "video": "000_clip__tiktok_7.mp4",
+            "variant_of": "000_clip.mp4",
+        },
     ]
-    decision = pv.plan_variant(str(tmp_path), clip, "tiktok", policy="auto", events=events)
+    decision = pv.plan_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=events
+    )
     assert decision["action"] == "variate"
     assert decision["attempt"] == 2

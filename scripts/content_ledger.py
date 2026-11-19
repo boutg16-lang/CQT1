@@ -1,4 +1,5 @@
 """Local SQLite evidence ledger for provenance, safety, and originality checks."""
+
 from __future__ import annotations
 
 import hashlib
@@ -23,7 +24,9 @@ def _registry_path(project_folder: str, registry_path: str | None = None) -> str
     return os.path.join(project, REGISTRY_FILENAME)
 
 
-def _connect(project_folder: str, registry_path: str | None = None) -> sqlite3.Connection:
+def _connect(
+    project_folder: str, registry_path: str | None = None
+) -> sqlite3.Connection:
     path = _registry_path(project_folder, registry_path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     connection = sqlite3.connect(path, timeout=10)
@@ -75,13 +78,18 @@ def _connect(project_folder: str, registry_path: str | None = None) -> sqlite3.C
 
 def _now() -> str:
     from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def record_clip_audit(project_folder: str, clip_index: int | None,
-                      report: dict[str, Any], video_path: str | None = None,
-                      platform: str = "youtube",
-                      registry_path: str | None = None) -> bool:
+def record_clip_audit(
+    project_folder: str,
+    clip_index: int | None,
+    report: dict[str, Any],
+    video_path: str | None = None,
+    platform: str = "youtube",
+    registry_path: str | None = None,
+) -> bool:
     from scripts import content_guard
 
     project_folder = os.path.abspath(os.fspath(project_folder))
@@ -92,8 +100,18 @@ def record_clip_audit(project_folder: str, clip_index: int | None,
     visual = content_guard._visual_fingerprint_for(video_path) if video_path else None
     verdict = str(report.get("overall", "unknown"))
     overall_score = report.get("overall_score")
-    raw_key = "|".join(str(value or "") for value in (
-        project_folder, clip_index, platform, fingerprint, source, start, end))
+    raw_key = "|".join(
+        str(value or "")
+        for value in (
+            project_folder,
+            clip_index,
+            platform,
+            fingerprint,
+            source,
+            start,
+            end,
+        )
+    )
     audit_key = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
     connection = _connect(project_folder, registry_path)
     try:
@@ -103,9 +121,21 @@ def record_clip_audit(project_folder: str, clip_index: int | None,
              source_start, source_end, fingerprint, visual_fingerprint, verdict,
              overall_score, created_at, report_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (audit_key, project_folder, clip_index, platform, source, start, end,
-             fingerprint, (visual or {}).get("hashes"), verdict, overall_score,
-             _now(), json.dumps(report, ensure_ascii=False)),
+            (
+                audit_key,
+                project_folder,
+                clip_index,
+                platform,
+                source,
+                start,
+                end,
+                fingerprint,
+                (visual or {}).get("hashes"),
+                verdict,
+                overall_score,
+                _now(),
+                json.dumps(report, ensure_ascii=False),
+            ),
         )
         connection.commit()
         return True
@@ -113,8 +143,9 @@ def record_clip_audit(project_folder: str, clip_index: int | None,
         connection.close()
 
 
-def record_safety_report(project_folder: str, report: dict[str, Any],
-                         registry_path: str | None = None) -> int:
+def record_safety_report(
+    project_folder: str, report: dict[str, Any], registry_path: str | None = None
+) -> int:
     project_folder = os.path.abspath(os.fspath(project_folder))
     platform = str(report.get("platform", "youtube") or "youtube").strip().lower()
     inserted = 0
@@ -130,16 +161,27 @@ def record_safety_report(project_folder: str, report: dict[str, Any],
                 code = str(reason.get("code", "unknown"))
                 detail = str(reason.get("detail", ""))[:2000]
                 severity = str(reason.get("severity", "high") or "high").strip().lower()
-                raw_key = "|".join(str(value or "") for value in (
-                    project_folder, index, platform, code, detail))
+                raw_key = "|".join(
+                    str(value or "")
+                    for value in (project_folder, index, platform, code, detail)
+                )
                 finding_key = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
                 connection.execute(
                     """INSERT OR REPLACE INTO safety_findings
                     (finding_key, project_path, clip_index, platform, severity,
                      code, detail, created_at, report_json)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (finding_key, project_folder, index, platform, severity, code,
-                     detail, _now(), json.dumps(item, ensure_ascii=False)),
+                    (
+                        finding_key,
+                        project_folder,
+                        index,
+                        platform,
+                        severity,
+                        code,
+                        detail,
+                        _now(),
+                        json.dumps(item, ensure_ascii=False),
+                    ),
                 )
                 inserted += 1
         connection.commit()
@@ -148,9 +190,14 @@ def record_safety_report(project_folder: str, report: dict[str, Any],
         connection.close()
 
 
-def find_visual_matches(project_folder: str, video_path: str | None,
-                       platform: str = "youtube", threshold: float = 0.80,
-                       registry_path: str | None = None, limit: int = 10) -> list[dict[str, Any]]:
+def find_visual_matches(
+    project_folder: str,
+    video_path: str | None,
+    platform: str = "youtube",
+    threshold: float = 0.80,
+    registry_path: str | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
     """Find near-duplicate rendered clips from other projects in the ledger."""
     if not video_path or not os.path.isfile(video_path):
         return []
@@ -182,8 +229,11 @@ def find_visual_matches(project_folder: str, video_path: str | None,
                 item = dict(row)
                 item["similarity"] = similarity
                 matches.append(item)
-        matches.sort(key=lambda item: (item["similarity"], item.get("created_at", "")), reverse=True)
-        return matches[:max(1, int(limit))]
+        matches.sort(
+            key=lambda item: (item["similarity"], item.get("created_at", "")),
+            reverse=True,
+        )
+        return matches[: max(1, int(limit))]
     finally:
         connection.close()
 
@@ -193,7 +243,9 @@ def ledger_summary(project_folder: str, registry_path: str | None = None):
     try:
         result = {"database": _registry_path(project_folder, registry_path)}
         for table in ("clip_audits", "safety_findings"):
-            row = connection.execute("SELECT COUNT(*) AS count FROM " + table).fetchone()
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM " + table
+            ).fetchone()
             result[table] = int(row["count"] if row else 0)
         return result
     finally:
@@ -202,6 +254,7 @@ def ledger_summary(project_folder: str, registry_path: str | None = None):
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
+
     parser = argparse.ArgumentParser(description="Local OUSSAMA provenance ledger")
     parser.add_argument("--project", required=True)
     parser.add_argument("--summary", action="store_true")

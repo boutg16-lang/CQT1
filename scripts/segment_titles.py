@@ -48,8 +48,8 @@ else:
         0x0624: 0x0648,  # ؤ hamza on waw   -> و
         0x0626: 0x064A,  # ئ hamza on yaa   -> ي
         0x0629: 0x0647,  # ة ta marbuta     -> ه
-        0x0640: None,    # tatweel (stretch mark) — deleted
-        0x0670: None,    # superscript alef — deleted
+        0x0640: None,  # tatweel (stretch mark) — deleted
+        0x0670: None,  # superscript alef — deleted
     }
     _ARABIC_ORTHOGRAPHY_TABLE.update(dict.fromkeys(range(1611, 1632)))
 
@@ -83,7 +83,9 @@ def _normalized_match_text(value):
     maqsura is not folded). English/Latin output is byte-identical to the
     legacy pipeline: the normalization table only touches Arabic code points.
     """
-    return re.sub(r"[^\w\s]", "", _normalize_arabic_orthography(str(value or "").lower())).strip()
+    return re.sub(
+        r"[^\w\s]", "", _normalize_arabic_orthography(str(value or "").lower())
+    ).strip()
 
 
 def _window_text_from_transcript(transcript_segments, start_time, end_time, words=None):
@@ -158,22 +160,32 @@ def _title_content_relevance(title, segment, window_text=None):
         return 0.0
     if window_text:
         window_words = set(_normalized_match_text(str(window_text)).split())
-        llm_words = set(_normalized_match_text(" ".join([
-            segment.get("start_text", ""),
-            segment.get("end_text", ""),
-            segment.get("caption", ""),
-        ])).split())
+        llm_words = set(
+            _normalized_match_text(
+                " ".join(
+                    [
+                        segment.get("start_text", ""),
+                        segment.get("end_text", ""),
+                        segment.get("caption", ""),
+                    ]
+                )
+            ).split()
+        )
         if not window_words and not llm_words:
             return 0.0
         llm_only_words = llm_words - window_words
         matched_window = len(title_tokens & window_words)
         matched_llm_only = len(title_tokens & llm_only_words)
         return min(1.0, (matched_window + 0.5 * matched_llm_only) / len(title_tokens))
-    content = _normalized_match_text(" ".join([
-        segment.get("start_text", ""),
-        segment.get("end_text", ""),
-        segment.get("caption", ""),
-    ]))
+    content = _normalized_match_text(
+        " ".join(
+            [
+                segment.get("start_text", ""),
+                segment.get("end_text", ""),
+                segment.get("caption", ""),
+            ]
+        )
+    )
     if not content:
         return 0.0
     content_tokens = set(content.split())

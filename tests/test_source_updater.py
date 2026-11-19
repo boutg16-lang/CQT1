@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """The source updater fast-forwards safely; it never merges or resets."""
+
 import os
 import sys
 from types import SimpleNamespace
@@ -41,10 +42,17 @@ def test_up_to_date(tmp_path, monkeypatch):
 
 
 def test_behind_reports_dependency_changes(tmp_path, monkeypatch):
-    fake = FakeGit([
-        "true", "", "old111", "new222", "0 2", "",
-        "requirements.txt\nREADME.md\nscripts/x.py\n",
-    ])
+    fake = FakeGit(
+        [
+            "true",
+            "",
+            "old111",
+            "new222",
+            "0 2",
+            "",
+            "requirements.txt\nREADME.md\nscripts/x.py\n",
+        ]
+    )
     monkeypatch.setattr(source_updater, "_git", fake)
     result = source_updater.check(tmp_path)
     assert result["update_available"] is True
@@ -54,8 +62,9 @@ def test_behind_reports_dependency_changes(tmp_path, monkeypatch):
 
 
 def test_apply_refuses_a_dirty_worktree(tmp_path, monkeypatch):
-    fake = FakeGit(["true", "", "abc", "def", "0 1", " M scripts/x.py\n",
-                    "scripts/x.py\n"])
+    fake = FakeGit(
+        ["true", "", "abc", "def", "0 1", " M scripts/x.py\n", "scripts/x.py\n"]
+    )
     monkeypatch.setattr(source_updater, "_git", fake)
     result = source_updater.apply(tmp_path)
     assert result["applied"] is False
@@ -64,12 +73,19 @@ def test_apply_refuses_a_dirty_worktree(tmp_path, monkeypatch):
 
 
 def test_apply_fast_forwards(tmp_path, monkeypatch):
-    fake = FakeGit([
-        "true", "", "old111", "new222", "0 1", "",
-        "scripts/x.py\n",
-        "",            # git pull
-        "new222",      # rev-parse after pull
-    ])
+    fake = FakeGit(
+        [
+            "true",
+            "",
+            "old111",
+            "new222",
+            "0 1",
+            "",
+            "scripts/x.py\n",
+            "",  # git pull
+            "new222",  # rev-parse after pull
+        ]
+    )
     monkeypatch.setattr(source_updater, "_git", fake)
     result = source_updater.apply(tmp_path)
     assert result["applied"] is True

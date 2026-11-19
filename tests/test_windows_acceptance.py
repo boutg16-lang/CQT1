@@ -6,6 +6,7 @@ audio QC, jump-cut detection, thumbnail) whenever ffmpeg is available — the
 same checks the harness performs on the user's RTX 3060 machine. GPU-dependent
 paths are exercised through stubbed torch / faster-whisper modules.
 """
+
 import json
 import shutil
 import sys
@@ -18,6 +19,7 @@ from scripts import windows_acceptance as wa
 # ---------------------------------------------------------------------------
 # Report assembly and exit codes
 # ---------------------------------------------------------------------------
+
 
 def test_build_report_verdicts():
     ok = wa._check("a", wa.OK, "fine", critical=True)
@@ -48,10 +50,12 @@ def test_python_check_matches_supported_project_range(monkeypatch):
 
 
 def test_render_console_lists_every_check():
-    report = wa.build_report([
-        wa._check("خطوة", wa.OK, "تفاصيل", elapsed=1.25),
-        wa._check("أخرى", wa.FAIL, "خطأ", critical=True),
-    ])
+    report = wa.build_report(
+        [
+            wa._check("خطوة", wa.OK, "تفاصيل", elapsed=1.25),
+            wa._check("أخرى", wa.FAIL, "خطأ", critical=True),
+        ]
+    )
     text = wa.render_console(report)
     assert "خطوة" in text and "أخرى" in text
     assert "الحكم: fail" in text
@@ -68,8 +72,10 @@ def test_atomic_json_write(tmp_path):
 # GPU probing with a stubbed torch
 # ---------------------------------------------------------------------------
 
-def _install_fake_torch(monkeypatch, *, available, name="NVIDIA GeForce RTX 3060",
-                        vram=12 * (1024 ** 3)):
+
+def _install_fake_torch(
+    monkeypatch, *, available, name="NVIDIA GeForce RTX 3060", vram=12 * (1024**3)
+):
     torch = types.ModuleType("torch")
     torch.__version__ = "2.5.1+cu121"
 
@@ -127,6 +133,7 @@ def test_gpu_probe_warns_without_torch(monkeypatch):
 # Transcription test with a stubbed faster-whisper
 # ---------------------------------------------------------------------------
 
+
 def test_gpu_transcription_uses_cuda_when_available(monkeypatch, tmp_path):
     _install_fake_torch(monkeypatch, available=True)
 
@@ -178,6 +185,7 @@ def test_gpu_transcription_fails_when_model_load_raises(monkeypatch, tmp_path):
 # CLI behaviour
 # ---------------------------------------------------------------------------
 
+
 def _stub_main_runtime(monkeypatch):
     monkeypatch.setattr(
         wa,
@@ -210,6 +218,7 @@ def test_main_missing_clip_is_a_critical_fail(monkeypatch, tmp_path, capsys):
 # Real pipeline (the same checks run on the RTX 3060 machine)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg required")
 def test_core_pipeline_real_ffmpeg(tmp_path):
     checks = wa.run_core_pipeline(str(tmp_path))
@@ -228,13 +237,16 @@ def test_core_pipeline_real_ffmpeg(tmp_path):
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg required")
 def test_generated_clip_carries_the_planted_silence(tmp_path):
-    made = wa.generate_test_clip(str(tmp_path / "clip.mp4"), duration=12,
-                                 silence_start=4.0, silence_end=7.0)
+    made = wa.generate_test_clip(
+        str(tmp_path / "clip.mp4"), duration=12, silence_start=4.0, silence_end=7.0
+    )
     assert made["ok"]
 
     from scripts import jump_cuts
-    silences = jump_cuts.detect_silences(str(tmp_path / "clip.mp4"),
-                                         threshold_db=-35.0, min_duration=1.0)
+
+    silences = jump_cuts.detect_silences(
+        str(tmp_path / "clip.mp4"), threshold_db=-35.0, min_duration=1.0
+    )
     assert silences, "the planted silence gap was not detected"
     start, end, dur = silences[0]
     assert abs(start - 4.0) < 0.6

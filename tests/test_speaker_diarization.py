@@ -5,6 +5,7 @@ Layer 1 (detect_speech_turns) is pure Python and fully testable.
 Layer 2 (pyannote diarization) is only exercised through its graceful
 fallbacks — no model, no token, no network.
 """
+
 import json
 
 from scripts import speaker_diarization
@@ -12,6 +13,7 @@ from scripts import speaker_diarization
 # ---------------------------------------------------------------------------
 # detect_speech_turns
 # ---------------------------------------------------------------------------
+
 
 def test_turns_empty_input():
     assert speaker_diarization.detect_speech_turns([], fps=10) == []
@@ -31,8 +33,9 @@ def test_turns_all_silent_returns_empty():
 def test_turns_single_speech_run():
     # 20 frames at 10 fps, all above threshold -> one 2.0s turn
     turns = speaker_diarization.detect_speech_turns([0.9] * 20, fps=10)
-    assert turns == [{"start": 0.0, "end": 2.0,
-                      "speaker": speaker_diarization.SINGLE_SPEAKER}]
+    assert turns == [
+        {"start": 0.0, "end": 2.0, "speaker": speaker_diarization.SINGLE_SPEAKER}
+    ]
 
 
 def test_turns_short_burst_dropped_as_noise():
@@ -52,8 +55,11 @@ def test_turns_short_gap_merges_runs():
     energies = [0.9] * 10 + [0.0] * 3 + [0.9] * 10
     turns = speaker_diarization.detect_speech_turns(energies, fps=10)
     assert len(turns) == 1
-    assert turns[0] == {"start": 0.0, "end": 2.3,
-                        "speaker": speaker_diarization.SINGLE_SPEAKER}
+    assert turns[0] == {
+        "start": 0.0,
+        "end": 2.3,
+        "speaker": speaker_diarization.SINGLE_SPEAKER,
+    }
 
 
 def test_turns_long_gap_splits_runs():
@@ -61,10 +67,16 @@ def test_turns_long_gap_splits_runs():
     energies = [0.9] * 10 + [0.0] * 5 + [0.9] * 10
     turns = speaker_diarization.detect_speech_turns(energies, fps=10)
     assert len(turns) == 2
-    assert turns[0] == {"start": 0.0, "end": 1.0,
-                        "speaker": speaker_diarization.SINGLE_SPEAKER}
-    assert turns[1] == {"start": 1.5, "end": 2.5,
-                        "speaker": speaker_diarization.SINGLE_SPEAKER}
+    assert turns[0] == {
+        "start": 0.0,
+        "end": 1.0,
+        "speaker": speaker_diarization.SINGLE_SPEAKER,
+    }
+    assert turns[1] == {
+        "start": 1.5,
+        "end": 2.5,
+        "speaker": speaker_diarization.SINGLE_SPEAKER,
+    }
 
 
 def test_turns_gap_exactly_at_boundary_merges():
@@ -78,8 +90,9 @@ def test_turns_gap_exactly_at_boundary_merges():
 def test_turns_trailing_speech_is_flushed():
     energies = [0.0] * 5 + [0.9] * 12
     turns = speaker_diarization.detect_speech_turns(energies, fps=10)
-    assert turns == [{"start": 0.5, "end": 1.7,
-                      "speaker": speaker_diarization.SINGLE_SPEAKER}]
+    assert turns == [
+        {"start": 0.5, "end": 1.7, "speaker": speaker_diarization.SINGLE_SPEAKER}
+    ]
 
 
 def test_turns_threshold_boundary():
@@ -93,15 +106,17 @@ def test_turns_threshold_boundary():
 def test_turns_custom_threshold_and_min_turn():
     energies = [0.5] * 4 + [0.0] * 10 + [0.5] * 4
     turns = speaker_diarization.detect_speech_turns(
-        energies, fps=10, threshold=0.4, min_turn_seconds=0.3)
+        energies, fps=10, threshold=0.4, min_turn_seconds=0.3
+    )
     assert len(turns) == 2
 
 
 def test_turns_none_values_treated_as_silence():
     energies = [None, 0.0, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, None, 0.0]
     turns = speaker_diarization.detect_speech_turns(energies, fps=10)
-    assert turns == [{"start": 0.2, "end": 1.0,
-                      "speaker": speaker_diarization.SINGLE_SPEAKER}]
+    assert turns == [
+        {"start": 0.2, "end": 1.0, "speaker": speaker_diarization.SINGLE_SPEAKER}
+    ]
 
 
 def test_turns_timestamps_rounded_to_milliseconds():
@@ -123,6 +138,7 @@ def test_turns_short_tail_after_long_gap_dropped():
 # diarize_audio — graceful fallbacks only
 # ---------------------------------------------------------------------------
 
+
 def test_diarize_no_token_returns_none(tmp_path):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(b"fake")
@@ -130,8 +146,9 @@ def test_diarize_no_token_returns_none(tmp_path):
 
 
 def test_diarize_missing_file_returns_none():
-    assert speaker_diarization.diarize_audio("/no/such/audio.wav",
-                                             token="hf_fake") is None
+    assert (
+        speaker_diarization.diarize_audio("/no/such/audio.wav", token="hf_fake") is None
+    )
 
 
 def test_diarize_empty_path_returns_none():
@@ -153,28 +170,36 @@ def test_diarize_blank_token_returns_none(tmp_path):
 # turns_for_clip
 # ---------------------------------------------------------------------------
 
+
 def test_turns_for_clip_prefers_energy_when_diarization_disabled():
     turns = speaker_diarization.turns_for_clip(
-        None, [0.9] * 20, fps=10, prefer_diarization=False)
-    assert turns == [{"start": 0.0, "end": 2.0,
-                      "speaker": speaker_diarization.SINGLE_SPEAKER}]
+        None, [0.9] * 20, fps=10, prefer_diarization=False
+    )
+    assert turns == [
+        {"start": 0.0, "end": 2.0, "speaker": speaker_diarization.SINGLE_SPEAKER}
+    ]
 
 
 def test_turns_for_clip_falls_back_when_diarization_unavailable():
     # no token -> diarize_audio returns None -> energy fallback
     turns = speaker_diarization.turns_for_clip(
-        "/no/such/audio.wav", [0.9] * 20, fps=10, prefer_diarization=True)
+        "/no/such/audio.wav", [0.9] * 20, fps=10, prefer_diarization=True
+    )
     assert len(turns) == 1
     assert turns[0]["speaker"] == speaker_diarization.SINGLE_SPEAKER
 
 
 def test_turns_for_clip_uses_diarization_when_available(monkeypatch):
-    expected = [{"start": 0.5, "end": 1.5, "speaker": "SPEAKER_01"},
-                {"start": 2.0, "end": 3.0, "speaker": "SPEAKER_00"}]
-    monkeypatch.setattr(speaker_diarization, "diarize_audio",
-                        lambda path, token=None: expected)
+    expected = [
+        {"start": 0.5, "end": 1.5, "speaker": "SPEAKER_01"},
+        {"start": 2.0, "end": 3.0, "speaker": "SPEAKER_00"},
+    ]
+    monkeypatch.setattr(
+        speaker_diarization, "diarize_audio", lambda path, token=None: expected
+    )
     turns = speaker_diarization.turns_for_clip(
-        "clip.wav", [0.9] * 20, fps=10, prefer_diarization=True)
+        "clip.wav", [0.9] * 20, fps=10, prefer_diarization=True
+    )
     assert turns == expected
 
 
@@ -187,6 +212,7 @@ def test_turns_for_clip_empty_when_no_speech_anywhere():
 # load_segments_file
 # ---------------------------------------------------------------------------
 
+
 def test_load_segments_missing_file_returns_none(tmp_path):
     assert speaker_diarization.load_segments_file(str(tmp_path)) is None
 
@@ -194,13 +220,15 @@ def test_load_segments_missing_file_returns_none(tmp_path):
 def test_load_segments_valid_file(tmp_path):
     payload = {"segments": [{"start": 1.0, "end": 2.0, "speaker": "SPEAKER_0"}]}
     (tmp_path / "speaker_segments.json").write_text(
-        json.dumps(payload), encoding="utf-8")
+        json.dumps(payload), encoding="utf-8"
+    )
     assert speaker_diarization.load_segments_file(str(tmp_path)) == payload["segments"]
 
 
 def test_load_segments_empty_list_returns_none(tmp_path):
     (tmp_path / "speaker_segments.json").write_text(
-        json.dumps({"segments": []}), encoding="utf-8")
+        json.dumps({"segments": []}), encoding="utf-8"
+    )
     assert speaker_diarization.load_segments_file(str(tmp_path)) is None
 
 
@@ -211,11 +239,13 @@ def test_load_segments_malformed_json_returns_none(tmp_path):
 
 def test_load_segments_non_dict_returns_none(tmp_path):
     (tmp_path / "speaker_segments.json").write_text(
-        json.dumps([{"start": 1.0}]), encoding="utf-8")
+        json.dumps([{"start": 1.0}]), encoding="utf-8"
+    )
     assert speaker_diarization.load_segments_file(str(tmp_path)) is None
 
 
 def test_load_segments_segments_not_a_list_returns_none(tmp_path):
     (tmp_path / "speaker_segments.json").write_text(
-        json.dumps({"segments": "not-a-list"}), encoding="utf-8")
+        json.dumps({"segments": "not-a-list"}), encoding="utf-8"
+    )
     assert speaker_diarization.load_segments_file(str(tmp_path)) is None

@@ -30,11 +30,16 @@ def test_clamp_time(value, expected):
 SAMPLE_DATA = {
     "segments": [
         {"start": 0.0, "end": 10.0, "text": "intro"},
-        {"start": 10.0, "end": 20.0, "text": "middle", "words": [
-            {"start": 12.0, "end": 13.0, "word": "a"},
-            {"start": 14.5, "end": 15.5, "word": "b"},
-            {"start": 18.0, "end": 19.0, "word": "c"},
-        ]},
+        {
+            "start": 10.0,
+            "end": 20.0,
+            "text": "middle",
+            "words": [
+                {"start": 12.0, "end": 13.0, "word": "a"},
+                {"start": 14.5, "end": 15.5, "word": "b"},
+                {"start": 18.0, "end": 19.0, "word": "c"},
+            ],
+        },
         {"start": 50.0, "end": 60.0, "text": "later"},
     ]
 }
@@ -50,7 +55,7 @@ def test_process_segments_keeps_overlapping_and_retimes():
 
     seg1 = result["segments"][1]
     assert seg1["start"] == 5.0  # 10 - 5
-    assert seg1["end"] == 10.0   # 15 - 5
+    assert seg1["end"] == 10.0  # 15 - 5
     # Only words inside [5, 15] survive, re-timed
     assert [w["word"] for w in seg1["words"]] == ["a", "b"]
     assert seg1["words"][0]["start"] == 7.0

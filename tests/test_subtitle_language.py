@@ -16,6 +16,7 @@ from scripts import subtitle_language as sl  # noqa: E402
 # detect_text_script
 # ---------------------------------------------------------------------------
 
+
 def test_detect_arabic_dominant():
     assert sl.detect_text_script("مرحبا بالعالم الجميل") == "ar"
 
@@ -71,6 +72,7 @@ def test_detect_mixed_one_line_each_way():
 # ---------------------------------------------------------------------------
 # choose_alignment_language
 # ---------------------------------------------------------------------------
+
 
 def test_choose_arabic_subtitles():
     assert sl.choose_alignment_language("مرحبا بالعالم، كيف حالك؟") == "ar"

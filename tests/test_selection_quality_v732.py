@@ -42,21 +42,23 @@ from scripts.create_viral_segments import (
 # 1. Arabic orthography normalization
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "variant,plain",
     [
-        ("الأمور", "الامور"),   # أ (hamza above) vs ا
+        ("الأمور", "الامور"),  # أ (hamza above) vs ا
         ("أمل", "امل"),
-        ("إيمان", "ايمان"),     # إ (hamza below)
-        ("آخر", "اخر"),         # آ (madda)
+        ("إيمان", "ايمان"),  # إ (hamza below)
+        ("آخر", "اخر"),  # آ (madda)
         ("\u0671لله", "الله"),  # ٱ (wasla, U+0671)
     ],
 )
 def test_arabic_hamza_carriers_normalize_to_alef(variant, plain):
     assert _normalized_match_text(variant) == _normalized_match_text(plain)
-    assert _text_similarity(
-        _normalized_match_text(variant),
-        _normalized_match_text(plain)) >= 0.999
+    assert (
+        _text_similarity(_normalized_match_text(variant), _normalized_match_text(plain))
+        >= 0.999
+    )
 
 
 def test_arabic_hamza_seats_and_ta_marbuta_normalize():
@@ -74,12 +76,15 @@ def test_arabic_tatweel_and_diacritics_variants_match():
     # filter; tashkeel marks (fatha/damma/kasra/sukun U+064B..U+065F) and the
     # superscript alef U+0670 are optional decorations. All must be removed.
     plain = "مشروعي مستقبلي"
-    decorated = "مُشْرُوعِيـْ مُسْتَقْبَلِي"   # fatha/damma/kasra/sukun + tatweel
+    decorated = "مُشْرُوعِيـْ مُسْتَقْبَلِي"  # fatha/damma/kasra/sukun + tatweel
     assert decorated != plain
     assert _normalized_match_text(decorated) == _normalized_match_text(plain)
-    assert _text_similarity(
-        _normalized_match_text(decorated),
-        _normalized_match_text(plain)) == 1.0
+    assert (
+        _text_similarity(
+            _normalized_match_text(decorated), _normalized_match_text(plain)
+        )
+        == 1.0
+    )
     # Superscript alef U+0670.
     assert _normalized_match_text("ه\u0670ذا") == _normalized_match_text("هذا")
 
@@ -88,9 +93,10 @@ def test_arabic_alif_maqsura_stays_distinct_from_yaa():
     # Alif maqsura ى must NOT fold into ي: على (on) vs علي (name) are
     # different words and a matching fix must not merge them.
     assert _normalized_match_text("على") != _normalized_match_text("علي")
-    assert _text_similarity(
-        _normalized_match_text("على"),
-        _normalized_match_text("علي")) < 1.0
+    assert (
+        _text_similarity(_normalized_match_text("على"), _normalized_match_text("علي"))
+        < 1.0
+    )
     assert _normalized_match_text("مشى") != _normalized_match_text("مشي")
     assert _normalized_match_text("علي") == "علي"  # ي itself is untouched
 
@@ -100,7 +106,9 @@ def test_normalized_match_text_keeps_english_byte_identical():
     # match the legacy lowercase + strip behaviour exactly (digits are \w and
     # are kept; non-word punctuation is dropped without inserting spaces).
     assert _normalized_match_text("Hello, World!") == "hello world"
-    assert _normalized_match_text("Hello, World!") == _normalized_match_text("Hello, World!  ")
+    assert _normalized_match_text("Hello, World!") == _normalized_match_text(
+        "Hello, World!  "
+    )
     assert _normalized_match_text("Don't stop! 12.5% done") == "dont stop 125 done"
 
 
@@ -115,9 +123,14 @@ def test_normalize_arabic_orthography_is_pure_and_safe():
 # 2. Near-duplicate tightening
 # ---------------------------------------------------------------------------
 
+
 def _win(start_time, end_time, title="clip", score=50):
-    return {"title": title, "start_time": start_time, "end_time": end_time,
-            "score": score}
+    return {
+        "title": title,
+        "start_time": start_time,
+        "end_time": end_time,
+        "score": score,
+    }
 
 
 def test_near_duplicates_60_percent_overlap_is_duplicate():
@@ -151,8 +164,12 @@ def test_near_duplicates_15s_windows_shifted_10s_stay_distinct():
 def test_near_duplicates_tolerates_disjoint_and_malformed():
     assert _windows_are_near_duplicates(_win(0, 10), _win(20, 30)) is False
     assert _windows_are_near_duplicates({"title": "no times"}, _win(0, 10)) is False
-    assert _windows_are_near_duplicates(
-        {"start_time": "abc", "end_time": "xyz"}, _win(0, 10)) is False
+    assert (
+        _windows_are_near_duplicates(
+            {"start_time": "abc", "end_time": "xyz"}, _win(0, 10)
+        )
+        is False
+    )
 
 
 def test_deduplicate_segments_drops_60_percent_overlap_keeps_disjoint():
@@ -192,6 +209,7 @@ def test_deduplicate_segments_keeps_33_percent_overlap_when_shifted():
 # 3. Dict-shaped "segments" recovery
 # ---------------------------------------------------------------------------
 
+
 def test_extract_segments_recovers_dict_shaped_segments():
     payload = (
         "Sure! Here are the viral moments:\n"
@@ -227,7 +245,9 @@ def test_extract_segments_dict_with_non_dict_values_falls_through():
 
 
 def test_extract_segments_garbage_returns_empty():
-    assert _extract_segments_json("this is not json segments at all") == {"segments": []}
+    assert _extract_segments_json("this is not json segments at all") == {
+        "segments": []
+    }
     assert _extract_segments_json("") == {"segments": []}
 
 
@@ -245,6 +265,7 @@ def test_clean_json_response_recovers_dict_shaped_segments():
 # 4. Window-content title relevance
 # ---------------------------------------------------------------------------
 
+
 def _three_line_transcript():
     return [
         {"start": 0.0, "end": 5.0, "text": "First line."},
@@ -257,7 +278,8 @@ def test_window_text_from_transcript_joins_overlapping_lines():
     transcript = _three_line_transcript()
     # [4, 11) overlaps all three lines (10 < 11 and 15 > 4 for the third).
     assert _window_text_from_transcript(transcript, 4.0, 11.0) == (
-        "first line second line third line")
+        "first line second line third line"
+    )
 
 
 def test_window_text_from_transcript_respects_half_open_bounds():
@@ -308,8 +330,9 @@ def test_title_content_relevance_prefers_real_window_words():
 
     # With the actual window text, "patience" (really spoken) outranks
     # "shortcut" (only in the hallucinated caption).
-    assert _title_content_relevance("patience", segment, window) >= \
-        _title_content_relevance("shortcut", segment, window)
+    assert _title_content_relevance(
+        "patience", segment, window
+    ) >= _title_content_relevance("shortcut", segment, window)
     assert _title_content_relevance("shortcut", segment, window) == 0.5
     assert _title_content_relevance("patience", segment, window) == 1.0
 
@@ -336,8 +359,9 @@ def test_title_content_relevance_window_is_capped_at_one():
 def test_title_content_relevance_legacy_path_unchanged_without_window():
     segment = _hallucinated_segment()
     # Explicit None behaves exactly like omitting the argument (legacy).
-    assert _title_content_relevance("shortcut", segment, None) == \
-        _title_content_relevance("shortcut", segment)
+    assert _title_content_relevance(
+        "shortcut", segment, None
+    ) == _title_content_relevance("shortcut", segment)
     assert _title_content_relevance("shortcut", segment, None) == 1.0
     # Empty window_text also falls back to the legacy LLM-text formula.
     assert _title_content_relevance("shortcut", segment, "") == 1.0
@@ -362,8 +386,14 @@ def test_process_segments_replaces_unsupported_recommended_title():
     # An explicit title that the clip transcript does not support must NOT be
     # shipped verbatim: the validator's chosen primary becomes the title, and
     # the original is kept for audit.
-    raw = [dict(_hallucinated_segment(), start_time=2, end_time=12,
-                recommended_title="editorial pick")]
+    raw = [
+        dict(
+            _hallucinated_segment(),
+            start_time=2,
+            end_time=12,
+            recommended_title="editorial pick",
+        )
+    ]
     result = process_segments(raw, _HALLUCINATION_TRANSCRIPT, 5, 30)
     seg = result["segments"][0]
     assert seg["recommended_title"] == "patience"
@@ -371,12 +401,22 @@ def test_process_segments_replaces_unsupported_recommended_title():
 
 
 def test_process_segments_keeps_supported_recommended_title_verbatim():
-    raw = [dict(_hallucinated_segment(), start_time=2, end_time=12,
-                recommended_title="patience")]
+    raw = [
+        dict(
+            _hallucinated_segment(),
+            start_time=2,
+            end_time=12,
+            recommended_title="patience",
+        )
+    ]
     result = process_segments(raw, _HALLUCINATION_TRANSCRIPT, 5, 30)
     assert result["segments"][0]["recommended_title"] == "patience"
+
+
 def test_clean_json_response_logs_malformed_payload_without_echoing_it(caplog):
-    payload = 'private transcript fragment: no valid segments'
+    payload = "private transcript fragment: no valid segments"
     assert clean_json_response(payload) == {"segments": []}
-    assert any("Unable to parse a segment list" in record.message for record in caplog.records)
+    assert any(
+        "Unable to parse a segment list" in record.message for record in caplog.records
+    )
     assert all(payload not in record.message for record in caplog.records)

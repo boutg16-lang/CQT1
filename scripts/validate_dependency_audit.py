@@ -164,7 +164,9 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"Dependency audit accepted; temporary exceptions expire {EXPIRES.isoformat()}.")
+    print(
+        f"Dependency audit accepted; temporary exceptions expire {EXPIRES.isoformat()}."
+    )
     return 0
 
 

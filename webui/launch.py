@@ -45,9 +45,12 @@ def _resolve_webui_host():
     host = os.environ.get("VIRALCUTTER_HOST", "").strip() or "127.0.0.1"
     loopback = host in ("127.0.0.1", "::1", "localhost")
     if not loopback:
-        print("[webui] WARNING: binding to {} — the WebUI is reachable from the "
-              "network. Set VIRALCUTTER_HOST=127.0.0.1 to bind loopback only."
-              .format(host))
+        print(
+            "[webui] WARNING: binding to {} — the WebUI is reachable from the "
+            "network. Set VIRALCUTTER_HOST=127.0.0.1 to bind loopback only.".format(
+                host
+            )
+        )
     return host
 
 
@@ -130,7 +133,11 @@ def _install_basic_auth(fastapi_app, auth):
             client_ip = (scope.get("client") or ("unknown", 0))[0] or "unknown"
             now = time.monotonic()
             with _auth_failures_lock:
-                window = [t for t in _auth_failures.get(client_ip, []) if now - t < AUTH_FAILURE_WINDOW]
+                window = [
+                    t
+                    for t in _auth_failures.get(client_ip, [])
+                    if now - t < AUTH_FAILURE_WINDOW
+                ]
                 if len(window) >= MAX_AUTH_FAILURES:
                     _auth_failures[client_ip] = window
                     throttled = True
@@ -152,8 +159,9 @@ def _install_basic_auth(fastapi_app, auth):
                     decoded = _b64.b64decode(auth_header[6:]).decode("utf-8", "replace")
                     u, _, pw = decoded.partition(":")
                     # Constant-time comparison on both fields.
-                    ok = (hmac.compare_digest(u.encode("utf-8"), _auth_user_bytes)
-                          and hmac.compare_digest(pw.encode("utf-8"), _auth_pass_bytes))
+                    ok = hmac.compare_digest(
+                        u.encode("utf-8"), _auth_user_bytes
+                    ) and hmac.compare_digest(pw.encode("utf-8"), _auth_pass_bytes)
                 except Exception:
                     ok = False
             if not ok:

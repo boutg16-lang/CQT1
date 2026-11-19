@@ -6,6 +6,7 @@ an unusual combination of gaps, punctuation, numbers and model timestamps
 still yields a usable segment list. These tests generate 150 cases from a
 FIXED seed, so a failure is reproducible and CI stays deterministic.
 """
+
 import math
 import os
 import random
@@ -17,9 +18,28 @@ from scripts import create_viral_segments as cvs
 from scripts import segment_validator, title_factual
 
 WORDS = [
-    "النجاح", "الصبر", "المهارة", "الخطة", "النتيجة", "التجربة", "العمل",
-    "الوقت", "الفكرة", "الطريق", "البداية", "النهاية", "السر", "الخطأ",
-    "هذا", "لكن", "ثم", "بصح", "واش", "علاش", "كيفاش", "بزاف",
+    "النجاح",
+    "الصبر",
+    "المهارة",
+    "الخطة",
+    "النتيجة",
+    "التجربة",
+    "العمل",
+    "الوقت",
+    "الفكرة",
+    "الطريق",
+    "البداية",
+    "النهاية",
+    "السر",
+    "الخطأ",
+    "هذا",
+    "لكن",
+    "ثم",
+    "بصح",
+    "واش",
+    "علاش",
+    "كيفاش",
+    "بزاف",
 ]
 NUMBERS = ["3", "٥", "20", "3500", "٣٬٥٠٠", "مليون", "عشرون ألف"]
 
@@ -41,11 +61,13 @@ def _transcript(rng, count):
     for _index in range(count):
         duration = rng.uniform(1.5, 9.0)
         gap = rng.choice([0.0, 0.05, 0.1, 0.3, 0.6, 1.2, 2.0])
-        lines.append({
-            "start": round(time_value, 2),
-            "end": round(time_value + duration, 2),
-            "text": _sentence(rng),
-        })
+        lines.append(
+            {
+                "start": round(time_value, 2),
+                "end": round(time_value + duration, 2),
+                "text": _sentence(rng),
+            }
+        )
         time_value += duration + gap
     return lines
 
@@ -69,7 +91,8 @@ def _raw(rng, transcript):
         }
         if rng.random() < 0.3:
             entry["recommended_title"] = " ".join(
-                rng.choice(WORDS) for _ in range(rng.randint(2, 5)))
+                rng.choice(WORDS) for _ in range(rng.randint(2, 5))
+            )
         raw.append(entry)
     return raw
 
@@ -94,8 +117,13 @@ def test_random_transcripts_produce_valid_non_overlapping_segments():
         min_duration = rng.choice([3, 5, 8])
         max_duration = min_duration + rng.choice([10, 20, 40])
         result = cvs.process_segments(
-            raw, transcript, min_duration, max_duration,
-            output_count=len(raw), media_duration=media_duration)
+            raw,
+            transcript,
+            min_duration,
+            max_duration,
+            output_count=len(raw),
+            media_duration=media_duration,
+        )
         segments = result.get("segments", [])
         for segment in segments:
             start = float(segment["start_time"])
@@ -106,13 +134,17 @@ def test_random_transcripts_produce_valid_non_overlapping_segments():
             assert end - start <= max_duration + 0.01
             assert str(segment.get("recommended_title") or "").strip()
             report = segment.get("final_validation") or {}
-            fatal = [item for item in report.get("errors", [])
-                     if item.get("code") in cvs.FATAL_VALIDATION_CODES]
+            fatal = [
+                item
+                for item in report.get("errors", [])
+                if item.get("code") in cvs.FATAL_VALIDATION_CODES
+            ]
             assert not fatal, "case {}: fatal returned {}".format(case, fatal)
         for left_index in range(len(segments)):
             for right_index in range(left_index + 1, len(segments)):
-                assert _overlap_ratio(segments[left_index], segments[right_index]) <= 0.61, \
-                    "case {} returned overlapping clips".format(case)
+                assert (
+                    _overlap_ratio(segments[left_index], segments[right_index]) <= 0.61
+                ), "case {} returned overlapping clips".format(case)
 
 
 def test_random_selection_is_deterministic():
@@ -123,9 +155,12 @@ def test_random_selection_is_deterministic():
         first = cvs.process_segments(raw, transcript, 5, 30)
         second = cvs.process_segments(raw, transcript, 5, 30)
         snapshot = lambda result: [  # noqa: E731
-            (segment.get("title"), round(float(segment["start_time"]), 3),
-             round(float(segment["end_time"]), 3),
-             segment.get("recommended_title"))
+            (
+                segment.get("title"),
+                round(float(segment["start_time"]), 3),
+                round(float(segment["end_time"]), 3),
+                segment.get("recommended_title"),
+            )
             for segment in result.get("segments", [])
         ]
         assert snapshot(first) == snapshot(second)
@@ -133,12 +168,33 @@ def test_random_selection_is_deterministic():
 
 def test_validator_never_raises_on_random_malformed_segments():
     rng = random.Random(991_17)
-    values = [None, "", "abc", 0, -1, 1.5, float("nan"), float("inf"),
-              [], {}, "01:30", "1:2:3", True, False]
+    values = [
+        None,
+        "",
+        "abc",
+        0,
+        -1,
+        1.5,
+        float("nan"),
+        float("inf"),
+        [],
+        {},
+        "01:30",
+        "1:2:3",
+        True,
+        False,
+    ]
     for _case in range(300):
         segment = {}
-        for key in ("start_time", "end_time", "duration", "transcript_text",
-                    "title", "quality_flags", "window_analysis"):
+        for key in (
+            "start_time",
+            "end_time",
+            "duration",
+            "transcript_text",
+            "title",
+            "quality_flags",
+            "window_analysis",
+        ):
             if rng.random() < 0.8:
                 segment[key] = rng.choice(values)
         report = segment_validator.validate_final_segment(segment)

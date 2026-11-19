@@ -18,9 +18,20 @@ FFMPEG = shutil.which("ffmpeg")
 
 def _make_video(path, seconds=3):
     cmd = [
-        FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "testsrc=size=320x240:duration={}".format(seconds),
-        "-pix_fmt", "yuv420p", "-c:v", "libx264", str(path),
+        FFMPEG,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=320x240:duration={}".format(seconds),
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        "libx264",
+        str(path),
     ]
     subprocess.run(cmd, check=True, capture_output=True)
 
@@ -56,8 +67,11 @@ class TestClassifierFallback:
         assert report["graphic"] is False
 
     def test_make_classifier_returns_none_when_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(vc, "default_model_path",
-                            lambda base_dir=None: str(tmp_path / "absent.onnx"))
+        monkeypatch.setattr(
+            vc,
+            "default_model_path",
+            lambda base_dir=None: str(tmp_path / "absent.onnx"),
+        )
         assert vc.make_classifier() is None
 
 
@@ -71,10 +85,12 @@ class FakeSession:
     def get_inputs(self):
         class Inp:
             name = "input"
+
         return [Inp()]
 
     def run(self, *_args, **_kwargs):
         import numpy as np
+
         idx = min(self.calls, len(self._probs) - 1)
         self.calls += 1
         p = self._probs[idx]
@@ -90,11 +106,14 @@ class TestClassifierInference:
         model.write_bytes(b"fake")
 
         import numpy as np
+
         monkeypatch.setattr("numpy.exp", np.exp)  # noqa: F401 (softmax path uses np.exp)
 
-        fake = FakeSession(probs_by_frame=[
-            [0.01, 0.85, 0.03, 0.08, 0.03],  # hentai 0.85 → graphic
-        ])
+        fake = FakeSession(
+            probs_by_frame=[
+                [0.01, 0.85, 0.03, 0.08, 0.03],  # hentai 0.85 → graphic
+            ]
+        )
 
         clf = vc.NudeNetClassifier(str(model))
         # inject the fake session (simulates onnxruntime being available)
@@ -112,9 +131,11 @@ class TestClassifierInference:
         _make_video(video)
         model = tmp_path / "fake2.onnx"
         model.write_bytes(b"fake")
-        fake = FakeSession(probs_by_frame=[
-            [0.02, 0.01, 0.92, 0.03, 0.02],  # neutral 0.92
-        ])
+        fake = FakeSession(
+            probs_by_frame=[
+                [0.02, 0.01, 0.92, 0.03, 0.02],  # neutral 0.92
+            ]
+        )
         clf = vc.NudeNetClassifier(str(model))
         clf._session = fake
         report = clf.analyze_video(str(video), num_frames=2, work_dir=str(tmp_path))
@@ -125,8 +146,10 @@ class TestClassifierInference:
         model = tmp_path / "custom.onnx"
         model.write_bytes(b"x")
         meta = tmp_path / "custom.onnx.json"
-        meta.write_text(json.dumps({"input_size": 224, "classes": ["a", "b"],
-                                    "graphic": ["b"]}), encoding="utf-8")
+        meta.write_text(
+            json.dumps({"input_size": 224, "classes": ["a", "b"], "graphic": ["b"]}),
+            encoding="utf-8",
+        )
         clf = vc.NudeNetClassifier(str(model))
         assert clf.input_size == 224
         assert clf.classes == ["a", "b"]
@@ -137,8 +160,10 @@ class TestDownload:
     def test_download_skips_existing(self, tmp_path, monkeypatch):
         model = tmp_path / "model.onnx"
         model.write_bytes(b"present")
+
         def fake_urlopen(*a, **k):
             raise AssertionError("should not download when file exists")
+
         monkeypatch.setattr(vc.urllib.request, "urlopen", fake_urlopen)
         assert vc.download_model(str(model)) == str(model)
 
@@ -146,8 +171,15 @@ class TestDownload:
 class TestScorecardIntegration:
     def test_score_segment_accepts_classifier(self, tmp_path):
         from scripts import risk_scorecard as rs
+
         segment = {"index": 0, "title": "T", "start_time": 0, "end_time": 5}
-        entry = rs.score_segment(segment, 0, str(tmp_path), words=[],
-                                 source_video=None, visual_classifier=None)
+        entry = rs.score_segment(
+            segment,
+            0,
+            str(tmp_path),
+            words=[],
+            source_video=None,
+            visual_classifier=None,
+        )
         assert entry["axes"]["visual"]["score"] == 0
         assert entry["axes"]["visual"]["model"] is None

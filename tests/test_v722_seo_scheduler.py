@@ -16,8 +16,9 @@ class TestScoreTitle:
         assert seo_titles.score_title("")["score"] == 0.0
 
     def test_good_title_scores_high(self):
-        r = seo_titles.score_title("كيف تكسب المال من الإنترنت في 5 خطوات؟",
-                                   ["كسب المال"])
+        r = seo_titles.score_title(
+            "كيف تكسب المال من الإنترنت في 5 خطوات؟", ["كسب المال"]
+        )
         assert r["score"] > 40
 
     def test_all_caps_penalized(self):
@@ -58,6 +59,7 @@ class TestFetchSuggestions:
     def test_offline_returns_empty(self, monkeypatch):
         def boom(*a, **k):
             raise OSError("no network")
+
         monkeypatch.setattr(seo_titles.urllib.request, "urlopen", boom)
         assert seo_titles.fetch_suggestions("كسب المال") == []
 
@@ -65,12 +67,16 @@ class TestFetchSuggestions:
         class FakeResp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 return False
+
             def read(self, *a):
                 return b'["a", ["first suggestion", "second suggestion"], []]'
-        monkeypatch.setattr(seo_titles.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+
+        monkeypatch.setattr(
+            seo_titles.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         out = seo_titles.fetch_suggestions("money", language="en")
         assert out == ["first suggestion", "second suggestion"]
 
@@ -78,14 +84,20 @@ class TestFetchSuggestions:
         class FakeResp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 return False
+
             def read(self, *a):
-                return (b'window.google.ac.h(["make money",'
-                        b'[["make money online",0,[512]],'
-                        b'["make money with ai",0,[512]]]])')
-        monkeypatch.setattr(seo_titles.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+                return (
+                    b'window.google.ac.h(["make money",'
+                    b'[["make money online",0,[512]],'
+                    b'["make money with ai",0,[512]]]])'
+                )
+
+        monkeypatch.setattr(
+            seo_titles.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         out = seo_titles.fetch_suggestions("make money", language="en")
         assert out == ["make money online", "make money with ai"]
 
@@ -93,12 +105,16 @@ class TestFetchSuggestions:
         class FakeResp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 return False
+
             def read(self, *a):
                 return b'["q", ["[\'make money online\', 0, [512]]", "[\'make money from home\', 0, [512]]"], []]'
-        monkeypatch.setattr(seo_titles.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+
+        monkeypatch.setattr(
+            seo_titles.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         out = seo_titles.fetch_suggestions("make money", language="en")
         assert out == ["make money online", "make money from home"]
 
@@ -106,12 +122,16 @@ class TestFetchSuggestions:
         class FakeResp:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 return False
+
             def read(self, *a):
                 return b'["a", ["x", "x", "y"], []]'
-        monkeypatch.setattr(seo_titles.urllib.request, "urlopen",
-                            lambda *a, **k: FakeResp())
+
+        monkeypatch.setattr(
+            seo_titles.urllib.request, "urlopen", lambda *a, **k: FakeResp()
+        )
         assert seo_titles.fetch_suggestions("x") == ["x", "y"]
 
 
@@ -143,10 +163,14 @@ class TestBuildPlan:
         now = datetime.now(timezone.utc)
         days_until_monday = (7 - now.weekday()) % 7 or 7
         next_monday = (now + timedelta(days=days_until_monday)).replace(
-            hour=8, minute=0, second=0, microsecond=0)
+            hour=8, minute=0, second=0, microsecond=0
+        )
         plan = publish_scheduler.build_plan(
-            self._clips(tmp_path), platform="youtube", days=7,
-            start_at=next_monday.isoformat())
+            self._clips(tmp_path),
+            platform="youtube",
+            days=7,
+            start_at=next_monday.isoformat(),
+        )
         assert plan["ok"] is True
         assert plan["count"] == 3
         times = [datetime.fromisoformat(x["publish_at"]) for x in plan["plan"]]
@@ -157,9 +181,11 @@ class TestBuildPlan:
 
     def test_user_hours_override(self, tmp_path):
         plan = publish_scheduler.build_plan(
-            self._clips(tmp_path), platform="youtube", user_hours=[9], days=7)
-        assert all(datetime.fromisoformat(x["publish_at"]).hour == 9
-                   for x in plan["plan"])
+            self._clips(tmp_path), platform="youtube", user_hours=[9], days=7
+        )
+        assert all(
+            datetime.fromisoformat(x["publish_at"]).hour == 9 for x in plan["plan"]
+        )
 
     def test_no_files(self, tmp_path):
         plan = publish_scheduler.build_plan([], platform="youtube")
@@ -176,23 +202,26 @@ class TestBuildPlan:
 class TestRunDaemon:
     def test_dry_run_no_upload(self, tmp_path, monkeypatch):
         (tmp_path / "c.mp4").write_bytes(b"x")
-        plan = publish_scheduler.build_plan(
-            [str(tmp_path / "c.mp4")], days=2)
+        plan = publish_scheduler.build_plan([str(tmp_path / "c.mp4")], days=2)
         import types
+
         fake_webui = types.ModuleType("webui")
         fake_webui.publish_panel = types.SimpleNamespace(
-            stream_upload_batch=lambda *a, **k: ["dry-run ok"])
+            stream_upload_batch=lambda *a, **k: ["dry-run ok"]
+        )
         monkeypatch.setitem(sys.modules, "webui", fake_webui)
-        monkeypatch.setitem(sys.modules, "webui.publish_panel",
-                            fake_webui.publish_panel)
+        monkeypatch.setitem(
+            sys.modules, "webui.publish_panel", fake_webui.publish_panel
+        )
         summary = publish_scheduler.run_daemon(plan, dry_run=True)
         assert summary["ok"] is True
         assert summary["dry_run"] is True
         assert summary["results"][0]["status"] == "dry_run"
 
     def test_invalid_plan(self):
-        summary = publish_scheduler.run_daemon({"ok": False, "error": "x"},
-                                               dry_run=True)
+        summary = publish_scheduler.run_daemon(
+            {"ok": False, "error": "x"}, dry_run=True
+        )
         assert summary["ok"] is False
 
 
@@ -203,8 +232,8 @@ class TestGroundedArabicTitles:
             "ثم شرح كيف يمكن تنظيم الوقت لتحقيق نتائج أفضل."
         )
         titles = seo_titles.generate_titles(
-            "موضوع عام", count=5, transcript_text=transcript,
-            content_language="ar")
+            "موضوع عام", count=5, transcript_text=transcript, content_language="ar"
+        )
         assert titles
         assert all(item["title"] in transcript for item in titles)
         assert all(item["grounded"] is True for item in titles)
@@ -213,14 +242,18 @@ class TestGroundedArabicTitles:
 
     def test_empty_transcript_does_not_fall_back_to_templates(self):
         assert seo_titles.generate_titles("موضوع عام", transcript_text="") == []
-        assert seo_titles.generate_titles("موضوع عام", count=0,
-                                          transcript_text="نص موجود في المقطع") == []
+        assert (
+            seo_titles.generate_titles(
+                "موضوع عام", count=0, transcript_text="نص موجود في المقطع"
+            )
+            == []
+        )
 
     def test_requested_title_count_is_bounded(self):
         transcript = " ".join(
             f"شرح المتحدث النقطة رقم {index} بالتفصيل." for index in range(1, 31)
         )
         titles = seo_titles.generate_titles(
-            "موضوع عام", count=100, transcript_text=transcript,
-            content_language="ar")
+            "موضوع عام", count=100, transcript_text=transcript, content_language="ar"
+        )
         assert len(titles) <= 20

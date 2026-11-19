@@ -12,6 +12,7 @@ actually brought views on THIS channel). Those become bounded per-segment
 style bonuses, so the next selection round prefers the formulas the
 channel's own data proved winning instead of generic editorial taste.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,12 @@ logger = logging.getLogger(__name__)
 
 INSIGHTS_NAME = "performance_insights.json"
 DEFAULT_WEIGHTS = {
-    "virality": 0.10, "hook": 0.20, "completeness": 0.20,
-    "clarity": 0.15, "novelty": 0.15, "title": 0.20,
+    "virality": 0.10,
+    "hook": 0.20,
+    "completeness": 0.20,
+    "clarity": 0.15,
+    "novelty": 0.15,
+    "title": 0.20,
 }
 LEGACY_NEUTRAL_SCORE = 50.0
 MAX_VIRALITY_WEIGHT = 0.10
@@ -39,9 +44,27 @@ FULL_CONFIDENCE_SAMPLES = 5
 STYLE_MIN_DELTA_PCT = 15.0
 STYLE_MAX_BONUS = 3.0
 
-_HOOK_WORDS = ("كيف", "كيفاش", "علاش", "شنو", "لماذا", "طريقة", "أفضل",
-               "سر", "خطأ", "جديد", "شحال", "how", "why", "best", "secret",
-               "mistake", "trick", "tips", "top")
+_HOOK_WORDS = (
+    "كيف",
+    "كيفاش",
+    "علاش",
+    "شنو",
+    "لماذا",
+    "طريقة",
+    "أفضل",
+    "سر",
+    "خطأ",
+    "جديد",
+    "شحال",
+    "how",
+    "why",
+    "best",
+    "secret",
+    "mistake",
+    "trick",
+    "tips",
+    "top",
+)
 
 
 def title_style_flags(title) -> dict[str, bool]:
@@ -60,8 +83,9 @@ def _style_bonus(delta_pct) -> float:
     """Bounded bonus from a measured delta vs the channel average."""
     if delta_pct is None or abs(float(delta_pct)) < STYLE_MIN_DELTA_PCT:
         return 0.0
-    return round(max(-STYLE_MAX_BONUS, min(STYLE_MAX_BONUS,
-                                           float(delta_pct) / 25.0)), 2)
+    return round(
+        max(-STYLE_MAX_BONUS, min(STYLE_MAX_BONUS, float(delta_pct) / 25.0)), 2
+    )
 
 
 def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
@@ -82,8 +106,9 @@ def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
             if int(row.get("samples") or 0) < 2:
                 continue
             value = str(row.get("value") or "")
-            bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0))
-                          * confidence, 2)
+            bonus = round(
+                _style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2
+            )
             if value and bonus:
                 by_value[value] = bonus
         if by_value:
@@ -92,8 +117,7 @@ def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
         marker = str(row.get("style") or "")
         if marker not in {"title_question", "title_number", "title_hook_word"}:
             continue
-        bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0))
-                      * confidence, 2)
+        bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2)
         if bonus:
             style[marker] = bonus
     return style
@@ -126,8 +150,10 @@ def _load(project_folder: str) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
     except (OSError, UnicodeError, ValueError, TypeError) as exc:
-        logger.warning("Could not read performance insights (%s); using default weights.",
-                       type(exc).__name__)
+        logger.warning(
+            "Could not read performance insights (%s); using default weights.",
+            type(exc).__name__,
+        )
         return {}
 
 
@@ -204,18 +230,30 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
         # insights written before 8.6 carry no key: preserve their behaviour.
         if significant is False:
             result["suppressed"].append(
-                {"feature": feature, "component": component, "r": value,
-                 "signal": signal, "reason": "ci_includes_zero"})
+                {
+                    "feature": feature,
+                    "component": component,
+                    "r": value,
+                    "signal": signal,
+                    "reason": "ci_includes_zero",
+                }
+            )
             continue
-        shift = max(-MAX_SHIFT, min(MAX_SHIFT,
-                                    0.15 * float(value) * confidence))
+        shift = max(-MAX_SHIFT, min(MAX_SHIFT, 0.15 * float(value) * confidence))
         if abs(shift) < 0.01:
             continue
         weights[component] = weights.get(component, 0.0) + shift
         total_shift += shift
         result["shifted"].append(
-            {"feature": feature, "component": component, "r": value,
-             "signal": signal, "significant": True, "shift": round(shift, 3)})
+            {
+                "feature": feature,
+                "component": component,
+                "r": value,
+                "signal": signal,
+                "significant": True,
+                "shift": round(shift, 3),
+            }
+        )
 
     # Keep the total weight mass at 1.0 so the score scale is unchanged.
     title_quality = correlations.get("title_quality_score") or {}
@@ -223,21 +261,35 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
     if title_r is not None and abs(float(title_r)) >= 0.2:
         if title_quality.get("vs_views_significant") is False:
             result["suppressed"].append(
-                {"feature": "title_quality_score", "component": "title",
-                 "r": title_r, "signal": "views", "reason": "ci_includes_zero"})
+                {
+                    "feature": "title_quality_score",
+                    "component": "title",
+                    "r": title_r,
+                    "signal": "views",
+                    "reason": "ci_includes_zero",
+                }
+            )
         else:
-            result["title_boost"] = round(max(-0.15, min(0.15,
-                                                      0.2 * float(title_r) * confidence)), 3)
+            result["title_boost"] = round(
+                max(-0.15, min(0.15, 0.2 * float(title_r) * confidence)), 3
+            )
     duration = correlations.get("duration") or {}
     duration_r = duration.get("vs_views")
     if duration_r is not None and abs(float(duration_r)) >= 0.2:
         if duration.get("vs_views_significant") is False:
             result["suppressed"].append(
-                {"feature": "duration", "component": "duration",
-                 "r": duration_r, "signal": "views", "reason": "ci_includes_zero"})
+                {
+                    "feature": "duration",
+                    "component": "duration",
+                    "r": duration_r,
+                    "signal": "views",
+                    "reason": "ci_includes_zero",
+                }
+            )
         else:
-            result["duration_bonus"] = round(max(-0.15, min(0.15,
-                                                         0.2 * float(duration_r) * confidence)), 3)
+            result["duration_bonus"] = round(
+                max(-0.15, min(0.15, 0.2 * float(duration_r) * confidence)), 3
+            )
 
     drift = sum(weights.values()) - 1.0
     if abs(drift) > 1e-9:
@@ -250,8 +302,10 @@ def load_weights(project_folder: str | None) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="Show the selection weights learned from performance insights")
+        description="Show the selection weights learned from performance insights"
+    )
     parser.add_argument("--project", required=True)
     args = parser.parse_args(argv)
     print(json.dumps(load_weights(args.project), ensure_ascii=False, indent=2))

@@ -16,33 +16,43 @@ from scripts import transcribe_video as tv
 
 # --- error classification ------------------------------------------------------
 
-@pytest.mark.parametrize("exc", [
-    MemoryError(),
-    RuntimeError("bad allocation"),
-    RuntimeError("CUDA out of memory"),
-    RuntimeError("mkl_malloc failed"),
-    RuntimeError("Unable to allocate 123 MiB"),
-    RuntimeError("cudnn error: something broke"),
-])
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        MemoryError(),
+        RuntimeError("bad allocation"),
+        RuntimeError("CUDA out of memory"),
+        RuntimeError("mkl_malloc failed"),
+        RuntimeError("Unable to allocate 123 MiB"),
+        RuntimeError("cudnn error: something broke"),
+    ],
+)
 def test_is_memory_error_true(exc):
     assert tv._is_memory_error(exc) is True
 
 
-@pytest.mark.parametrize("exc", [
-    ValueError("random failure"),
-    RuntimeError("file not found"),
-    RuntimeError("cudnn64_8.dll missing"),
-])
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ValueError("random failure"),
+        RuntimeError("file not found"),
+        RuntimeError("cudnn64_8.dll missing"),
+    ],
+)
 def test_is_memory_error_false(exc):
     assert tv._is_memory_error(exc) is False
 
 
-@pytest.mark.parametrize("text", [
-    "cudnn64_8.dll not found",
-    "cudnn_ops_infer64_9.dll load failed",
-    "CUDA driver version is insufficient",
-    "dll load failed",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "cudnn64_8.dll not found",
+        "cudnn_ops_infer64_9.dll load failed",
+        "CUDA driver version is insufficient",
+        "dll load failed",
+    ],
+)
 def test_is_cuda_runtime_error_true(text):
     assert tv._is_cuda_runtime_error(RuntimeError(text)) is True
 
@@ -52,27 +62,34 @@ def test_is_cuda_runtime_error_false(text):
     assert tv._is_cuda_runtime_error(RuntimeError(text)) is False
 
 
-@pytest.mark.parametrize("exc", [
-    RuntimeError("tokenizers failed to load"),
-    ImportError("No module named 'transformers'"),
-    RuntimeError("pyannote pipeline crashed"),
-    RuntimeError("huggingface_hub timeout"),
-])
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("tokenizers failed to load"),
+        ImportError("No module named 'transformers'"),
+        RuntimeError("pyannote pipeline crashed"),
+        RuntimeError("huggingface_hub timeout"),
+    ],
+)
 def test_is_transcription_stack_error_true(exc):
     assert tv._is_transcription_stack_error(exc) is True
 
 
 def test_is_transcription_stack_error_false():
     assert tv._is_transcription_stack_error(RuntimeError("plain error")) is False
-    assert tv._is_transcription_stack_error(
-        RuntimeError("faster-whisper failed")) is False
+    assert (
+        tv._is_transcription_stack_error(RuntimeError("faster-whisper failed")) is False
+    )
 
 
-@pytest.mark.parametrize("exc", [
-    ImportError("No module named 'pyannote'"),
-    ModuleNotFoundError("asteroid_filterbanks"),
-    RuntimeError("cannot import name 'x' from 'pyannote'"),
-])
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ImportError("No module named 'pyannote'"),
+        ModuleNotFoundError("asteroid_filterbanks"),
+        RuntimeError("cannot import name 'x' from 'pyannote'"),
+    ],
+)
 def test_is_vad_dependency_error_true(exc):
     assert tv._is_vad_dependency_error(exc) is True
 
@@ -83,6 +100,7 @@ def test_is_vad_dependency_error_false():
 
 
 # --- transcription cache ---------------------------------------------------------
+
 
 def _artifacts(tmp_path, content=b"data"):
     input_file = tmp_path / "input.mp4"
@@ -99,14 +117,17 @@ def test_cache_round_trip_and_match(tmp_path):
     input_file, srt, tsv, jsn = _artifacts(tmp_path)
     cache_path = tv._transcription_cache_path(tmp_path)
     assert cache_path == os.path.join(tmp_path, "transcription_cache.json")
-    tv._save_transcription_cache(cache_path, input_file, "large-v3",
-                                 srt, tsv, jsn, device="cpu")
+    tv._save_transcription_cache(
+        cache_path, input_file, "large-v3", srt, tsv, jsn, device="cpu"
+    )
     cache = tv._read_transcription_cache(cache_path)
     assert cache["model_name"] == "large-v3"
     assert cache["device"] == "cpu"
     assert cache["input_size"] == input_file.stat().st_size
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cpu") is True
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cpu")
+        is True
+    )
 
 
 def test_cache_read_missing_or_corrupt_returns_none(tmp_path):
@@ -119,38 +140,52 @@ def test_cache_read_missing_or_corrupt_returns_none(tmp_path):
 def test_cache_mismatch_on_model_device_mtime_and_size(tmp_path):
     input_file, srt, tsv, jsn = _artifacts(tmp_path)
     cache_path = tv._transcription_cache_path(tmp_path)
-    tv._save_transcription_cache(cache_path, input_file, "large-v3",
-                                 srt, tsv, jsn, device="cpu")
+    tv._save_transcription_cache(
+        cache_path, input_file, "large-v3", srt, tsv, jsn, device="cpu"
+    )
     cache = tv._read_transcription_cache(cache_path)
-    assert tv._cache_matches(cache, input_file, "medium", srt, tsv, jsn,
-                             device="cpu") is False
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cuda") is False
+    assert (
+        tv._cache_matches(cache, input_file, "medium", srt, tsv, jsn, device="cpu")
+        is False
+    )
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cuda")
+        is False
+    )
     assert tv._cache_matches(None, input_file, "large-v3", srt, tsv, jsn) is False
     # Touch the input (new mtime, same content) -> stale.
     stat = input_file.stat()
     os.utime(input_file, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cpu") is False
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cpu")
+        is False
+    )
     # Grow the input (new size) -> stale.
     input_file.write_bytes(b"video-bytes-longer")
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cpu") is False
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cpu")
+        is False
+    )
 
 
 def test_cache_mismatch_when_artifact_is_empty_or_missing(tmp_path):
     input_file, srt, tsv, jsn = _artifacts(tmp_path)
     cache_path = tv._transcription_cache_path(tmp_path)
-    tv._save_transcription_cache(cache_path, input_file, "large-v3",
-                                 srt, tsv, jsn, device="cpu")
+    tv._save_transcription_cache(
+        cache_path, input_file, "large-v3", srt, tsv, jsn, device="cpu"
+    )
     cache = tv._read_transcription_cache(cache_path)
     srt.write_bytes(b"")
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cpu") is False
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cpu")
+        is False
+    )
     srt.write_bytes(b"data")
     jsn.unlink()
-    assert tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn,
-                             device="cpu") is False
+    assert (
+        tv._cache_matches(cache, input_file, "large-v3", srt, tsv, jsn, device="cpu")
+        is False
+    )
 
 
 def test_transcript_artifacts_ok(tmp_path):
@@ -234,30 +269,44 @@ def test_parse_vtt_missing_file_returns_none(tmp_path):
 
 def test_parse_vtt_last_block_without_trailing_blank_line(tmp_path):
     path = tmp_path / "tail.vtt"
-    path.write_text("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nTail text",
-                    encoding="utf-8")
-    assert tv.parse_vtt(str(path)) == [
-        {"start": 1.0, "end": 2.0, "text": "Tail text"}]
+    path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nTail text", encoding="utf-8"
+    )
+    assert tv.parse_vtt(str(path)) == [{"start": 1.0, "end": 2.0, "text": "Tail text"}]
 
 
 # --- model candidates / backend / placeholder ------------------------------------
 
-@pytest.mark.parametrize("name,expected", [
-    ("large-v3-turbo", ["large-v3-turbo", "large-v3", "medium"]),
-    ("turbo", ["turbo", "large-v3", "medium"]),
-    ("large-v3", ["large-v3"]),
-    ("medium", ["medium", "large-v3"]),
-    ("", ["large-v3"]),
-    (None, ["large-v3"]),
-])
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("large-v3-turbo", ["large-v3-turbo", "large-v3", "medium"]),
+        ("turbo", ["turbo", "large-v3", "medium"]),
+        ("large-v3", ["large-v3"]),
+        ("medium", ["medium", "large-v3"]),
+        ("", ["large-v3"]),
+        (None, ["large-v3"]),
+    ],
+)
 def test_resolve_model_candidates(name, expected):
     assert tv.resolve_model_candidates(name) == expected
 
 
-@pytest.mark.parametrize("value,expected", [
-    (None, False), ("0", False), ("no", False), ("", False),
-    ("1", True), ("true", True), ("TRUE", True), ("yes", True), ("on", True),
-])
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, False),
+        ("0", False),
+        ("no", False),
+        ("", False),
+        ("1", True),
+        ("true", True),
+        ("TRUE", True),
+        ("yes", True),
+        ("on", True),
+    ],
+)
 def test_placeholder_allowed(monkeypatch, value, expected):
     if value is None:
         monkeypatch.delenv("VIRALCUTTER_ALLOW_PLACEHOLDER", raising=False)
@@ -266,11 +315,17 @@ def test_placeholder_allowed(monkeypatch, value, expected):
     assert tv._placeholder_allowed() is expected
 
 
-@pytest.mark.parametrize("value,expected", [
-    (None, "auto"), ("auto", "auto"), ("whisperx", "whisperx"),
-    ("faster-whisper", "faster-whisper"), ("bogus", "auto"),
-    (" WHISPERX ", "whisperx"),
-])
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, "auto"),
+        ("auto", "auto"),
+        ("whisperx", "whisperx"),
+        ("faster-whisper", "faster-whisper"),
+        ("bogus", "auto"),
+        (" WHISPERX ", "whisperx"),
+    ],
+)
 def test_transcription_backend_preference(monkeypatch, value, expected):
     if value is None:
         monkeypatch.delenv("VIRALCUTTER_TRANSCRIPTION_BACKEND", raising=False)

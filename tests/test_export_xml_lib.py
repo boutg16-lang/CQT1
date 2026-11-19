@@ -60,11 +60,16 @@ def _make_video(path, duration=2.0, fps=10, size="160x120"):
     """Create a tiny deterministic test video with ffmpeg."""
     subprocess.run(
         [
-            "ffmpeg", "-y",
-            "-f", "lavfi",
-            "-i", f"testsrc=size={size}:duration={duration}:rate={fps}",
-            "-pix_fmt", "yuv420p",
-            "-c:v", "libx264",
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc=size={size}:duration={duration}:rate={fps}",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
             str(path),
         ],
         check=True,
@@ -96,7 +101,9 @@ def _build_project(
     if with_video:
         _make_video(proj / "cuts" / f"{prefix}clip.mp4")
         if original_scale:
-            _make_video(proj / "cuts" / f"{prefix}clip_original_scale.mp4", size="320x240")
+            _make_video(
+                proj / "cuts" / f"{prefix}clip_original_scale.mp4", size="320x240"
+            )
 
     if with_ass:
         (proj / "subs_ass").mkdir(exist_ok=True)
@@ -216,7 +223,12 @@ class TestJsonToSrt:
 
     def test_counter_is_continuous_across_mixed_blocks(self):
         data = [
-            {"words": [{"start": 0, "end": 1, "word": "a"}, {"start": 1, "end": 2, "word": "b"}]},
+            {
+                "words": [
+                    {"start": 0, "end": 1, "word": "a"},
+                    {"start": 1, "end": 2, "word": "b"},
+                ]
+            },
             {"start": 2, "end": 3, "text": "c"},
         ]
         srt = utils.json_to_srt(data)
@@ -245,7 +257,9 @@ class TestGetVideoDims:
 
 class TestCreatePremiereXmlStructure:
     def test_minimal_xml_is_well_formed_with_key_markers(self):
-        xml_text = xml_generator.create_premiere_xml("MyProj", "/v/video_cut.mp4", [], 300)
+        xml_text = xml_generator.create_premiere_xml(
+            "MyProj", "/v/video_cut.mp4", [], 300
+        )
         root = _parse_xml(xml_text)
 
         assert root.tag == "xmeml"
@@ -295,7 +309,9 @@ class TestCreatePremiereXmlStructure:
             {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0},
             {"path": "captions/caption_1.mov", "start": 2.0, "end": 3.0, "index": 1},
         ]
-        xml_text = xml_generator.create_premiere_xml("P", "/v/v.mp4", overlays, 120, timebase=30)
+        xml_text = xml_generator.create_premiere_xml(
+            "P", "/v/v.mp4", overlays, 120, timebase=30
+        )
         root = _parse_xml(xml_text)
         tracks = root.find("sequence/media/video").findall("track")
 
@@ -317,7 +333,9 @@ class TestCreatePremiereXmlStructure:
             {"path": "captions/caption_0.mov", "start": 1.0, "end": 1.0, "index": 0},
             {"path": "captions/caption_1.mov", "start": 1.0, "end": 2.0, "index": 1},
         ]
-        xml_text = xml_generator.create_premiere_xml("P", "/v/v.mp4", overlays, 60, timebase=30)
+        xml_text = xml_generator.create_premiere_xml(
+            "P", "/v/v.mp4", overlays, 60, timebase=30
+        )
         root = _parse_xml(xml_text)
         tracks = root.find("sequence/media/video").findall("track")
         # Only the valid segment reaches the overlay track.
@@ -331,7 +349,9 @@ class TestCreatePremiereXmlDeterminism:
         # The generator embeds uuid4 ids; with a stable uuid source the output
         # is fully deterministic (two runs -> same bytes).
         monkeypatch.setattr(uuid, "uuid4", lambda: uuid.UUID(int=0))
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         first = xml_generator.create_premiere_xml("P", "/v/v.mp4", overlays, 60)
         second = xml_generator.create_premiere_xml("P", "/v/v.mp4", overlays, 60)
         assert first == second
@@ -347,17 +367,28 @@ class TestCreatePremiereXmlDeterminism:
 
 class TestCreatePremiereXmlFaceData:
     def test_malformed_coordinate_metadata_falls_back_to_media_dimensions(self):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
-        face_data = [{"frame": 0, "src_size": "invalid", "faces": [[100, 100, 200, 300]]}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
+        face_data = [
+            {"frame": 0, "src_size": "invalid", "faces": [[100, 100, 200, 300]]}
+        ]
         xml_text = xml_generator.create_premiere_xml(
-            "P", "/v/v.mp4", overlays, 30, face_data=face_data,
-            source_width=1920, source_height=1080,
+            "P",
+            "/v/v.mp4",
+            overlays,
+            30,
+            face_data=face_data,
+            source_width=1920,
+            source_height=1080,
         )
         _parse_xml(xml_text)
         assert "Basic Motion" in xml_text
 
     def test_no_face_data_still_valid_and_centered(self, capsys):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         xml_text = xml_generator.create_premiere_xml(
             "P", "/v/v.mp4", overlays, 30, face_data=None
         )
@@ -366,34 +397,52 @@ class TestCreatePremiereXmlFaceData:
         # Default center (0.5, 0.5) -> no shift from sequence center.
         assert "<horiz>0.00000</horiz>" in xml_text
         assert "<vert>0.00000</vert>" in xml_text
-        assert "No pre-computed" not in capsys.readouterr().out  # generator stays silent
+        assert (
+            "No pre-computed" not in capsys.readouterr().out
+        )  # generator stays silent
 
     def test_single_face_positions_clip(self):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         face_data = [{"frame": i, "faces": [[100, 100, 200, 300]]} for i in range(30)]
         xml_text = xml_generator.create_premiere_xml(
-            "P", "/v/v.mp4", overlays, 30,
-            face_data=face_data, source_width=1920, source_height=1080,
+            "P",
+            "/v/v.mp4",
+            overlays,
+            30,
+            face_data=face_data,
+            source_width=1920,
+            source_height=1080,
         )
         root = _parse_xml(xml_text)
         # Scale fills the 1920-high sequence from a 1080-high source: 177.78.
         scale = root.find(".//parameter[parameterid='scale']/value")
         assert scale.text == "177.78"
         center = root.find(".//parameter[parameterid='center']/value")
-        assert float(center.find("horiz").text) > 0.0  # face left of center -> clip shifts right
+        assert (
+            float(center.find("horiz").text) > 0.0
+        )  # face left of center -> clip shifts right
         assert float(center.find("vert").text) > 0.0
         # Single face -> no dual-track crop.
         assert "<name>Crop</name>" not in xml_text
 
     def test_dual_faces_create_second_track_and_crops(self):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         face_data = [
             {"frame": i, "faces": [[100, 100, 200, 300], [1500, 100, 1700, 300]]}
             for i in range(30)
         ]
         xml_text = xml_generator.create_premiere_xml(
-            "P", "/v/v.mp4", overlays, 30,
-            face_data=face_data, source_width=1920, source_height=1080,
+            "P",
+            "/v/v.mp4",
+            overlays,
+            30,
+            face_data=face_data,
+            source_width=1920,
+            source_height=1080,
         )
         root = _parse_xml(xml_text)
         tracks = root.find("sequence/media/video").findall("track")
@@ -404,20 +453,29 @@ class TestCreatePremiereXmlFaceData:
         assert "<value>213.33</value>" in xml_text  # 177.78 * 1.2
 
     def test_faces_with_src_size_metadata_set_coordinate_reference(self, capsys):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         face_data = [
             {"frame": i, "src_size": [3840, 2160], "faces": [[200, 200, 400, 600]]}
             for i in range(30)
         ]
         xml_text = xml_generator.create_premiere_xml(
-            "P", "/v/v.mp4", overlays, 30,
-            face_data=face_data, source_width=1920, source_height=1080,
+            "P",
+            "/v/v.mp4",
+            overlays,
+            30,
+            face_data=face_data,
+            source_width=1920,
+            source_height=1080,
         )
         _parse_xml(xml_text)
         assert "Coordinate System Reference: 3840x2160" in capsys.readouterr().out
 
     def test_empty_face_entries_are_skipped(self):
-        overlays = [{"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}]
+        overlays = [
+            {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0}
+        ]
         face_data = [{"frame": i, "faces": []} for i in range(30)]
         xml_text = xml_generator.create_premiere_xml(
             "P", "/v/v.mp4", overlays, 30, face_data=face_data
@@ -474,7 +532,9 @@ class TestFaceDetection:
 
     def test_frames_without_detections_are_omitted(self, tmp_path, monkeypatch):
         monkeypatch.setattr(face_detection, "INSIGHTFACE_AVAILABLE", True)
-        monkeypatch.setattr(face_detection, "FaceAnalysis", _EmptyFaceApp, raising=False)
+        monkeypatch.setattr(
+            face_detection, "FaceAnalysis", _EmptyFaceApp, raising=False
+        )
         vid = _make_video(tmp_path / "noface.mp4", duration=1.0, fps=10)
         assert face_detection.detect_faces_jit(str(vid)) == []
 
@@ -502,7 +562,9 @@ class TestRenderSegmentedOverlays:
             {"start": 1.0, "end": 2.0, "text": "World"},
         ]
 
-        result = rendering.render_segmented_overlays(str(ass), segments, str(vid), str(out_dir))
+        result = rendering.render_segmented_overlays(
+            str(ass), segments, str(vid), str(out_dir)
+        )
 
         assert result == [
             {"path": "captions/caption_0.mov", "start": 0.0, "end": 1.0, "index": 0},
@@ -521,7 +583,9 @@ class TestRenderSegmentedOverlays:
         out_dir.mkdir()
         segments = [{"start": 1.0, "end": 1.0}, {"start": 2.0, "end": 1.0}]
 
-        result = rendering.render_segmented_overlays(str(ass), segments, str(vid), str(out_dir))
+        result = rendering.render_segmented_overlays(
+            str(ass), segments, str(vid), str(out_dir)
+        )
 
         assert result == []
         assert list(out_dir.iterdir()) == []  # canvas removed, nothing rendered
@@ -554,8 +618,13 @@ class TestExportPackGracefulFailures:
         assert list(tmp_path.iterdir()) == []  # nothing created
 
     def test_project_without_segment_video_returns_none(self, tmp_path, capsys):
-        proj = _build_project(tmp_path, with_video=False, with_ass=False,
-                              with_subs_json=False, coords=None)
+        proj = _build_project(
+            tmp_path,
+            with_video=False,
+            with_ass=False,
+            with_subs_json=False,
+            coords=None,
+        )
         result = exporter.export_pack(str(proj), 1, "premiere")
         assert result is None
         assert "Error: No video file found" in capsys.readouterr().out
@@ -565,7 +634,9 @@ class TestExportPackGracefulFailures:
 class TestExportPackEndToEnd:
     def test_minimal_project_produces_zip(self, tmp_path, monkeypatch):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False, coords=None)
+        proj = _build_project(
+            tmp_path, with_ass=False, with_subs_json=False, coords=None
+        )
 
         zip_path = exporter.export_pack(str(proj), 1, "premiere")
 
@@ -613,8 +684,13 @@ class TestExportPackEndToEnd:
 
     def test_original_scale_video_is_preferred(self, tmp_path, monkeypatch, capsys):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False,
-                              coords=None, original_scale=True)
+        proj = _build_project(
+            tmp_path,
+            with_ass=False,
+            with_subs_json=False,
+            coords=None,
+            original_scale=True,
+        )
 
         zip_path = exporter.export_pack(str(proj), 1, "premiere")
 
@@ -626,8 +702,9 @@ class TestExportPackEndToEnd:
 
     def test_corrupt_coords_fall_back_to_jit(self, tmp_path, monkeypatch, capsys):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False,
-                              coords="corrupt")
+        proj = _build_project(
+            tmp_path, with_ass=False, with_subs_json=False, coords="corrupt"
+        )
 
         zip_path = exporter.export_pack(str(proj), 1, "premiere")
 
@@ -639,19 +716,27 @@ class TestExportPackEndToEnd:
 
     def test_wide_face_coords_trigger_4k_sequence(self, tmp_path, monkeypatch, capsys):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False, coords="4k")
+        proj = _build_project(
+            tmp_path, with_ass=False, with_subs_json=False, coords="4k"
+        )
 
         exporter.export_pack(str(proj), 1, "premiere")
 
         assert "Correction: Detecting 4K source" in capsys.readouterr().out
-        xml_text = (proj / "export_TestProj_seg1" / "timeline.xml").read_text(encoding="utf-8")
-        fmt = _parse_xml(xml_text).find("sequence/media/video/format/samplecharacteristics")
-        assert fmt.find("width").text == "2160"   # upgraded to 4K vertical
+        xml_text = (proj / "export_TestProj_seg1" / "timeline.xml").read_text(
+            encoding="utf-8"
+        )
+        fmt = _parse_xml(xml_text).find(
+            "sequence/media/video/format/samplecharacteristics"
+        )
+        assert fmt.find("width").text == "2160"  # upgraded to 4K vertical
         assert fmt.find("height").text == "3840"
 
     def test_rerun_over_existing_staging_dir(self, tmp_path, monkeypatch):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False, coords=None)
+        proj = _build_project(
+            tmp_path, with_ass=False, with_subs_json=False, coords=None
+        )
 
         first = exporter.export_pack(str(proj), 1, "premiere")
         # Leave junk in the staging dir: the rerun must wipe and recreate it.
@@ -665,7 +750,9 @@ class TestExportPackEndToEnd:
 
     def test_unremovable_staging_dir_gets_random_suffix(self, tmp_path, monkeypatch):
         _patch_jit(monkeypatch)
-        proj = _build_project(tmp_path, with_ass=False, with_subs_json=False, coords=None)
+        proj = _build_project(
+            tmp_path, with_ass=False, with_subs_json=False, coords=None
+        )
         stage = proj / "export_TestProj_seg1"
         stage.mkdir()
         sentinel = stage / "keepme.txt"
@@ -680,8 +767,11 @@ class TestExportPackEndToEnd:
 
         # Original staging dir untouched; a suffixed sibling received the export.
         assert sentinel.exists()
-        siblings = [p for p in proj.iterdir()
-                    if p.is_dir() and p.name.startswith("export_TestProj_seg1_")]
+        siblings = [
+            p
+            for p in proj.iterdir()
+            if p.is_dir() and p.name.startswith("export_TestProj_seg1_")
+        ]
         assert len(siblings) == 1
         assert (siblings[0] / "timeline.xml").exists()
         assert zip_path == f"{siblings[0]}.zip"
@@ -696,8 +786,9 @@ class TestXmlEscaping:
 
         from scripts.export_xml_lib.xml_generator import create_premiere_xml
 
-        xml = create_premiere_xml("A & B <Test>", "D:\\vids\\A & B.mp4",
-                                  [], 300, timebase=30)
+        xml = create_premiere_xml(
+            "A & B <Test>", "D:\\vids\\A & B.mp4", [], 300, timebase=30
+        )
         root = ET.fromstring(xml)  # must not raise
         assert root.find(".//sequence/name").text == "A & B <Test>_CutRef"
         assert "A &amp; B.mp4" in xml
@@ -707,8 +798,11 @@ class TestXmlEscaping:
 
         from scripts.export_xml_lib.xml_generator import create_premiere_xml
 
-        xml = create_premiere_xml("p", "video.mp4",
-                                  [{"start": 0, "end": 30, "index": 0,
-                                    "path": "cap & tion.mov"}], 300)
+        xml = create_premiere_xml(
+            "p",
+            "video.mp4",
+            [{"start": 0, "end": 30, "index": 0, "path": "cap & tion.mov"}],
+            300,
+        )
         ET.fromstring(xml)  # must not raise
         assert "cap &amp; tion.mov" in xml

@@ -3,6 +3,7 @@
 Extracted from app.py to keep the interface module focused on UI wiring.
 No gradio/psutil imports here so this module stays import-light and testable.
 """
+
 import os
 import re
 import sys
@@ -38,14 +39,14 @@ def convert_color_to_ass(hex_color, alpha="00"):
     try:
         if not hex_color:
             return f"&H{alpha}FFFFFF&"
-        hex_clean = hex_color.lstrip('#').strip()
+        hex_clean = hex_color.lstrip("#").strip()
         if hex_clean.lower().startswith("rgb"):
             nums = re.findall(r"[\d\.]+", hex_clean)
             if len(nums) >= 3:
                 r, g, b = [max(0, min(255, int(float(n)))) for n in nums[:3]]
                 return f"&H{alpha}{b:02X}{g:02X}{r:02X}&".upper()
         if len(hex_clean) == 3:
-            hex_clean = ''.join(c * 2 for c in hex_clean)
+            hex_clean = "".join(c * 2 for c in hex_clean)
         if len(hex_clean) == 6 and re.fullmatch(r"[0-9a-fA-F]{6}", hex_clean):
             r, g, b = hex_clean[0:2], hex_clean[2:4], hex_clean[4:6]
             return f"&H{alpha}{b}{g}{r}&".upper()
@@ -74,7 +75,31 @@ def normalize_path(path):
     return os.path.normpath(str(path))
 
 
-def build_subtitle_config(font_name, font_size, font_color, highlight_color, outline_color, outline_thickness, shadow_color, shadow_size, is_bold, is_italic, is_uppercase, vertical_pos, alignment, h_size, w_block, gap, mode, under, strike, border_s, remove_punc, caption_animation="none", auto_emoji=False):
+def build_subtitle_config(
+    font_name,
+    font_size,
+    font_color,
+    highlight_color,
+    outline_color,
+    outline_thickness,
+    shadow_color,
+    shadow_size,
+    is_bold,
+    is_italic,
+    is_uppercase,
+    vertical_pos,
+    alignment,
+    h_size,
+    w_block,
+    gap,
+    mode,
+    under,
+    strike,
+    border_s,
+    remove_punc,
+    caption_animation="none",
+    auto_emoji=False,
+):
     return {
         "font": font_name,
         "base_size": safe_int(font_size, 12),
@@ -97,7 +122,9 @@ def build_subtitle_config(font_name, font_size, font_color, highlight_color, out
         "highlight_size": safe_int(h_size, 14),
         "uppercase": 1 if is_uppercase else 0,
         "remove_punctuation": bool(remove_punc),
-        "caption_animation": caption_animation if caption_animation in {"none", "pop", "scale", "pop_scale", "bounce"} else "none",
+        "caption_animation": caption_animation
+        if caption_animation in {"none", "pop", "scale", "pop_scale", "bounce"}
+        else "none",
         "auto_emoji": bool(auto_emoji),
     }
 
@@ -125,7 +152,9 @@ def render_progress_html(state):
             info = {}
         percent = int(info.get("percent", 0) or 0)
         message = info.get("message", "") or ""
-        color = "#22c55e" if percent >= 100 else ("#f97316" if percent > 0 else "#6b7280")
+        color = (
+            "#22c55e" if percent >= 100 else ("#f97316" if percent > 0 else "#6b7280")
+        )
         rows.append(
             '<div style="margin:4px 0;font-size:12px;color:#e5e7eb;">'
             '<span style="display:inline-block;width:90px;color:#9ca3af;">{}</span>'
@@ -133,12 +162,23 @@ def render_progress_html(state):
             'border-radius:4px;vertical-align:middle;overflow:hidden;">'
             '<span style="display:inline-block;width:{}%;height:8px;background:{};border-radius:4px;"></span>'
             '</span> <b style="color:{};">{}</b> <span style="color:#d1d5db;">{}</span></div>'.format(
-                _html_escape(STAGE_LABELS_AR.get(stage, stage)), percent, color, color, "%d%%" % percent, _html_escape(message)))
+                _html_escape(STAGE_LABELS_AR.get(stage, stage)),
+                percent,
+                color,
+                color,
+                "%d%%" % percent,
+                _html_escape(message),
+            )
+        )
     return (
-        '<div style="' + _PANEL_STYLE + '">'
+        '<div style="'
+        + _PANEL_STYLE
+        + '">'
         '<div style="font-size:14px;margin-bottom:8px;color:#f9fafb;">'
-            '<b>📊 الإجمالي {}%</b> — {}</div>{}</div>'.format(
-            overall, _html_escape(current), "".join(rows)))
+        "<b>📊 الإجمالي {}%</b> — {}</div>{}</div>".format(
+            overall, _html_escape(current), "".join(rows)
+        )
+    )
 
 
 def render_tasks_html(state):
@@ -146,20 +186,34 @@ def render_tasks_html(state):
     state = state or {}
     current = state.get("current", "")
     stages = state.get("stages", {}) if isinstance(state.get("stages"), dict) else state
-    lines = [            '<b style="color:#f9fafb;">🧩 المهمة الحالية</b>',
-
-             '<span style="color:#fdba74;">{}</span>'.format(_html_escape(current))]
+    lines = [
+        '<b style="color:#f9fafb;">🧩 المهمة الحالية</b>',
+        '<span style="color:#fdba74;">{}</span>'.format(_html_escape(current)),
+    ]
     for stage in PROGRESS_STAGES:
         info = stages.get(stage) if isinstance(stages, dict) else state.get(stage, {})
         if isinstance(info, dict) and info.get("message"):
-            lines.append('<i style="color:#9ca3af;">{}</i>: <span style="color:#d1d5db;">{}</span>'.format(
-                _html_escape(STAGE_LABELS_AR.get(stage, stage)), _html_escape(str(info["message"]))))
-    return '<div style="' + _PANEL_STYLE + 'font-size:13px;line-height:1.7;">{}</div>'.format("<br>".join(lines[:8]))
+            lines.append(
+                '<i style="color:#9ca3af;">{}</i>: <span style="color:#d1d5db;">{}</span>'.format(
+                    _html_escape(STAGE_LABELS_AR.get(stage, stage)),
+                    _html_escape(str(info["message"])),
+                )
+            )
+    return (
+        '<div style="'
+        + _PANEL_STYLE
+        + 'font-size:13px;line-height:1.7;">{}</div>'.format("<br>".join(lines[:8]))
+    )
 
 
 def _html_escape(text):
-    return (str(text).replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +247,15 @@ def native_crash_hint(code) -> str:
     ).format(label)
 
 
-_HF_VERSION_HINT = i18n("WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app.")
-_HF_GATED_HINT = i18n("Hugging Face blocked the model download (401/gated): accept the model terms on huggingface.co, set HF_TOKEN, or let CQT1 use faster-whisper.")
-_HF_AUTH_HINT = i18n("Hugging Face Hub 1.x removed use_auth_token. CQT1 shims it for pyannote; if this persists, update CQT1 or reinstall huggingface-hub 1.16-2.0.")
+_HF_VERSION_HINT = i18n(
+    "WhisperX dependency conflict: the supported transcription stack requires Hugging Face Hub >=1.16.0,<2.0. Restore the project dependencies, then restart the app."
+)
+_HF_GATED_HINT = i18n(
+    "Hugging Face blocked the model download (401/gated): accept the model terms on huggingface.co, set HF_TOKEN, or let CQT1 use faster-whisper."
+)
+_HF_AUTH_HINT = i18n(
+    "Hugging Face Hub 1.x removed use_auth_token. CQT1 shims it for pyannote; if this persists, update CQT1 or reinstall huggingface-hub 1.16-2.0."
+)
 
 
 KNOWN_ERROR_HINTS = [
@@ -208,48 +268,199 @@ KNOWN_ERROR_HINTS = [
     ("awaiting a review", _HF_GATED_HINT),
     ("access to model", _HF_GATED_HINT),
     ("use_auth_token", _HF_AUTH_HINT),
-    ("checksum does not match", i18n("The bundled WhisperX VAD asset is corrupted. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
-    ("model file not found", i18n("WhisperX VAD asset is missing. Reinstall it: uv pip install --reinstall whisperx==3.3.1")),
-
+    (
+        "checksum does not match",
+        i18n(
+            "The bundled WhisperX VAD asset is corrupted. Reinstall it: uv pip install --reinstall whisperx==3.3.1"
+        ),
+    ),
+    (
+        "model file not found",
+        i18n(
+            "WhisperX VAD asset is missing. Reinstall it: uv pip install --reinstall whisperx==3.3.1"
+        ),
+    ),
     # --- Gemini API errors first: common when keys expire or quota ends (v6.9) ---
-    ("api key not valid", i18n("Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings")),
-    ("api_key_invalid", i18n("Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings")),
-    ("permission_denied", i18n("Gemini API key rejected (PERMISSION_DENIED) — make sure the key is active and the Generative Language API is enabled in your Google Cloud project")),
-    ("resource_exhausted", i18n("Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key")),
-    ("quota exceeded", i18n("Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key")),
-    ("rate limit", i18n("YouTube/Gemini is rate-limiting temporarily — wait a minute and retry")),
+    (
+        "api key not valid",
+        i18n(
+            "Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings"
+        ),
+    ),
+    (
+        "api_key_invalid",
+        i18n(
+            "Invalid Gemini API key — check it or create a new one at aistudio.google.com/apikey, then save it in Settings"
+        ),
+    ),
+    (
+        "permission_denied",
+        i18n(
+            "Gemini API key rejected (PERMISSION_DENIED) — make sure the key is active and the Generative Language API is enabled in your Google Cloud project"
+        ),
+    ),
+    (
+        "resource_exhausted",
+        i18n(
+            "Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key"
+        ),
+    ),
+    (
+        "quota exceeded",
+        i18n(
+            "Free Gemini quota or daily limit exhausted — wait for it to reset, raise the quota, or use another key"
+        ),
+    ),
+    (
+        "rate limit",
+        i18n("YouTube/Gemini is rate-limiting temporarily — wait a minute and retry"),
+    ),
     # --- Memory errors must outrank YouTube/download hints ---
-    ("unable to allocate", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
-    ("out of memory", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
-    ("memoryerror", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
-    ("bad allocation", i18n("Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium).")),
+    (
+        "unable to allocate",
+        i18n(
+            "Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium)."
+        ),
+    ),
+    (
+        "out of memory",
+        i18n(
+            "Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium)."
+        ),
+    ),
+    (
+        "memoryerror",
+        i18n(
+            "Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium)."
+        ),
+    ),
+    (
+        "bad allocation",
+        i18n(
+            "Not enough memory for transcription. CQT1 now splits long audio into windows automatically; close heavy apps or choose a smaller model (small/medium)."
+        ),
+    ),
     # --- YouTube / download errors ---
-    ("private video", i18n("Private video — use browser cookies: from the 🔒 menu or rerun with --cookies-from-browser chrome")),
-    ("sign in", i18n("Video requires YouTube sign-in — use your browser cookies from the 🔒 menu")),
-    ("cookiesfrombrowser", i18n("Could not read browser cookies (Chrome encryption) — try Firefox or an exported cookies.txt file")),
+    (
+        "private video",
+        i18n(
+            "Private video — use browser cookies: from the 🔒 menu or rerun with --cookies-from-browser chrome"
+        ),
+    ),
+    (
+        "sign in",
+        i18n(
+            "Video requires YouTube sign-in — use your browser cookies from the 🔒 menu"
+        ),
+    ),
+    (
+        "cookiesfrombrowser",
+        i18n(
+            "Could not read browser cookies (Chrome encryption) — try Firefox or an exported cookies.txt file"
+        ),
+    ),
     ("confirm your age", i18n("Age-restricted video — use your browser cookies")),
     ("age-restrict", i18n("Age-restricted video — use your browser cookies")),
     ("video unavailable", i18n("Video unavailable (deleted or geo-blocked)")),
-    ("google-generativeai", i18n("Gemini library not installed — run: pip install google-generativeai (or rerun install_dependencies.bat)")),
-    ("google.genai", i18n("Gemini library not installed — run: pip install google-genai (or rerun install_dependencies.bat)")),
-    ("gemini sdk", i18n("Gemini library not installed — run: pip install google-generativeai")),
-    ("generativelanguage", i18n("Gemini API error — likely an invalid key or exhausted quota: try the 🔌 Test Connection button in the AI settings")),
-    ("no viral segments", i18n("The AI returned no clips — likely an invalid Gemini key or exhausted quota: try 🔌 Test Connection in Settings")),
-    ("403", i18n("YouTube blocked the download (403) — update yt-dlp: uv pip install -U yt-dlp, use browser cookies, or retry in a few minutes")),
-    ("forbidden", i18n("YouTube blocked the download (403) — update yt-dlp: uv pip install -U yt-dlp, use browser cookies, or retry in a few minutes")),
-    ("np.nan", i18n("Version conflict: numpy 2.x is incompatible with pyannote/whisperx — run: uv pip install 'numpy<2'")),
-    ("numpy 2.0", i18n("Version conflict: numpy 2.x is incompatible with pyannote/whisperx — run: uv pip install 'numpy<2'")),
-    ("invalid model size", i18n("Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list")),
-    ("expected one of", i18n("Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list")),
-    ("no module named 'whisperx'", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
-    ("whisperx is not installed", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
+    (
+        "google-generativeai",
+        i18n(
+            "Gemini library not installed — run: pip install google-generativeai (or rerun install_dependencies.bat)"
+        ),
+    ),
+    (
+        "google.genai",
+        i18n(
+            "Gemini library not installed — run: pip install google-genai (or rerun install_dependencies.bat)"
+        ),
+    ),
+    (
+        "gemini sdk",
+        i18n("Gemini library not installed — run: pip install google-generativeai"),
+    ),
+    (
+        "generativelanguage",
+        i18n(
+            "Gemini API error — likely an invalid key or exhausted quota: try the 🔌 Test Connection button in the AI settings"
+        ),
+    ),
+    (
+        "no viral segments",
+        i18n(
+            "The AI returned no clips — likely an invalid Gemini key or exhausted quota: try 🔌 Test Connection in Settings"
+        ),
+    ),
+    (
+        "403",
+        i18n(
+            "YouTube blocked the download (403) — update yt-dlp: uv pip install -U yt-dlp, use browser cookies, or retry in a few minutes"
+        ),
+    ),
+    (
+        "forbidden",
+        i18n(
+            "YouTube blocked the download (403) — update yt-dlp: uv pip install -U yt-dlp, use browser cookies, or retry in a few minutes"
+        ),
+    ),
+    (
+        "np.nan",
+        i18n(
+            "Version conflict: numpy 2.x is incompatible with pyannote/whisperx — run: uv pip install 'numpy<2'"
+        ),
+    ),
+    (
+        "numpy 2.0",
+        i18n(
+            "Version conflict: numpy 2.x is incompatible with pyannote/whisperx — run: uv pip install 'numpy<2'"
+        ),
+    ),
+    (
+        "invalid model size",
+        i18n(
+            "Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list"
+        ),
+    ),
+    (
+        "expected one of",
+        i18n(
+            "Whisper model not supported by the installed faster-whisper — update it: uv pip install -U faster-whisper, or pick another model like large-v3 or medium from the list"
+        ),
+    ),
+    (
+        "no module named 'whisperx'",
+        i18n(
+            "Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx"
+        ),
+    ),
+    (
+        "whisperx is not installed",
+        i18n(
+            "Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx"
+        ),
+    ),
     ("3221226505", native_crash_hint(3221226505)),
     ("3221225477", native_crash_hint(3221225477)),
     ("3221225725", native_crash_hint(3221225725)),
-    ("torch", i18n("Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx")),
-    ("out of memory", i18n("Out of memory — close other programs or use a smaller Whisper model")),
-    ("ffmpeg", i18n("FFmpeg not installed or not on PATH — run install_dependencies.bat and choose to download FFmpeg")),
-    ("429", i18n("YouTube is rate-limiting temporarily (429) — wait a minute and retry")),
+    (
+        "torch",
+        i18n(
+            "Transcription component not installed — rerun install_dependencies.bat and choose to install whisperx"
+        ),
+    ),
+    (
+        "out of memory",
+        i18n("Out of memory — close other programs or use a smaller Whisper model"),
+    ),
+    (
+        "ffmpeg",
+        i18n(
+            "FFmpeg not installed or not on PATH — run install_dependencies.bat and choose to download FFmpeg"
+        ),
+    ),
+    (
+        "429",
+        i18n("YouTube is rate-limiting temporarily (429) — wait a minute and retry"),
+    ),
     ("connection", i18n("Internet connection problem or DNS blocking")),
 ]
 
@@ -267,11 +478,13 @@ def summarize_error(text, max_title=160):
     # The root cause is the LAST exception line, not the first traceback line.
     for ln in reversed(lines):
         stripped = ln.strip()
-        if stripped.startswith(("File ", "Traceback", "During handling",
-                                "The above exception")):
+        if stripped.startswith(
+            ("File ", "Traceback", "During handling", "The above exception")
+        ):
             continue
-        if re.match(r"^[A-Za-z_][\w.]*(?:Error|Exception|Warning)\s*:", stripped,
-                    re.IGNORECASE):
+        if re.match(
+            r"^[A-Za-z_][\w.]*(?:Error|Exception|Warning)\s*:", stripped, re.IGNORECASE
+        ):
             title = stripped
             break
     else:
@@ -296,27 +509,54 @@ def summarize_error(text, max_title=160):
                 break
         # A bare huggingface_hub path in a traceback is NOT a version conflict.
         # Only claim one when the message actually talks about requirements.
-        if not hint and "huggingface" in low_text and any(
-                marker in low_text for marker in (
-                    "required", "no matching distribution",
-                    "found 0.", "found 1.", "version")):
+        if (
+            not hint
+            and "huggingface" in low_text
+            and any(
+                marker in low_text
+                for marker in (
+                    "required",
+                    "no matching distribution",
+                    "found 0.",
+                    "found 1.",
+                    "version",
+                )
+            )
+        ):
             hint = _HF_VERSION_HINT
         # Same rule for tokenizers: a file path is not a version conflict.
         if not hint and "tokenizers" in low_text:
-            if any(marker in low_text for marker in (
-                    "0.23.1", "no matching distribution", "required",
-                    "found 0.2")):
+            if any(
+                marker in low_text
+                for marker in (
+                    "0.23.1",
+                    "no matching distribution",
+                    "required",
+                    "found 0.2",
+                )
+            ):
                 hint = i18n(
                     "WhisperX dependency conflict: transformers caps tokenizers "
                     "at 0.23.0 (0.23.0 was never released). Run: "
-                    "uv pip install \"tokenizers==0.22.2\", then restart the app.")
-            elif any(marker in low_text for marker in (
-                    "panicked", "rust", "native", "failed to load",
-                    "importerror", "typeerror", "exception")):
+                    'uv pip install "tokenizers==0.22.2", then restart the app.'
+                )
+            elif any(
+                marker in low_text
+                for marker in (
+                    "panicked",
+                    "rust",
+                    "native",
+                    "failed to load",
+                    "importerror",
+                    "typeerror",
+                    "exception",
+                )
+            ):
                 hint = i18n(
                     "The tokenizers native extension failed. Reinstall it: "
-                    "uv pip install --reinstall \"tokenizers==0.22.2\". "
-                    "If it persists, send the last error line.")
+                    'uv pip install --reinstall "tokenizers==0.22.2". '
+                    "If it persists, send the last error line."
+                )
     return title[:max_title], text[:3000], hint
 
 
@@ -337,24 +577,46 @@ def render_error_html(error_items):
         else:
             title, detail, hint = summarize_error(item)
             code = None
-        badge = '<span style="background:#b00020;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;">' + i18n("Error") + '</span>'
+        badge = (
+            '<span style="background:#b00020;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;">'
+            + i18n("Error")
+            + "</span>"
+        )
         if code:
-            badge = ('<span style="background:#7f1d1d;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;">' + i18n("Exit code {}") + '</span>').format(code)
+            badge = (
+                '<span style="background:#7f1d1d;color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;">'
+                + i18n("Exit code {}")
+                + "</span>"
+            ).format(code)
         hint_html = (
-            '<div style="color:#7a5c00;background:#fff7e0;border:1px solid #f0dc9a;'
-            'border-radius:4px;padding:4px 8px;margin-top:4px;font-size:12px;">💡 {}</div>'
-            .format(_html_escape(hint))) if hint else ""
+            (
+                '<div style="color:#7a5c00;background:#fff7e0;border:1px solid #f0dc9a;'
+                'border-radius:4px;padding:4px 8px;margin-top:4px;font-size:12px;">💡 {}</div>'.format(
+                    _html_escape(hint)
+                )
+            )
+            if hint
+            else ""
+        )
         detail_html = (
-            '<details style="margin-top:4px;"><summary style="cursor:pointer;'
-            'font-size:12px;color:#666;">' + i18n("Technical Details") + '</summary>'
-            '<pre style="white-space:pre-wrap;background:#1e1e1e;color:#eee;'
-            'border-radius:4px;padding:8px;font-size:11px;max-height:200px;'
-            'overflow:auto;">{}</pre></details>'.format(_html_escape(detail))) if detail else ""
+            (
+                '<details style="margin-top:4px;"><summary style="cursor:pointer;'
+                'font-size:12px;color:#666;">'
+                + i18n("Technical Details")
+                + "</summary>"
+                '<pre style="white-space:pre-wrap;background:#1e1e1e;color:#eee;'
+                "border-radius:4px;padding:8px;font-size:11px;max-height:200px;"
+                'overflow:auto;">{}</pre></details>'.format(_html_escape(detail))
+            )
+            if detail
+            else ""
+        )
         cards.append(
             '<div style="border:1px solid #f0c4c4;background:#fff5f5;border-radius:6px;'
             'margin:6px 0;padding:6px 10px;">'
             '<div style="font-size:13px;font-weight:600;color:#b00020;">{} {}</div>'
-            '{}{}</div>'.format(badge, _html_escape(title), hint_html, detail_html))
+            "{}{}</div>".format(badge, _html_escape(title), hint_html, detail_html)
+        )
     return "<div style='font-family:sans-serif;'>" + "".join(cards) + "</div>"
 
 

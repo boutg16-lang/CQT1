@@ -21,6 +21,7 @@ from scripts import music_fingerprint as mf  # noqa: E402
 def _raw_fp(n=200, seed=7):
     """Deterministic fake raw fingerprint."""
     import random
+
     rng = random.Random(seed)
     return [rng.getrandbits(32) for _ in range(n)]
 
@@ -93,8 +94,16 @@ class TestFingerprintFile:
 class TestLocalMatch:
     def test_exact_match(self):
         clip = _raw_fp(100, seed=1)
-        db = {"songs": [{"title": "My Song", "fingerprint": list(clip),
-                         "format": "raw", "duration": 100.0}]}
+        db = {
+            "songs": [
+                {
+                    "title": "My Song",
+                    "fingerprint": list(clip),
+                    "format": "raw",
+                    "duration": 100.0,
+                }
+            ]
+        }
         result = mf.match_local(db, clip, "raw", threshold=0.1)
         assert result["matched"] is True
         assert result["song"] == "My Song"
@@ -104,15 +113,31 @@ class TestLocalMatch:
         # a 40-sub-fingerprint excerpt of a longer song
         song = _raw_fp(400, seed=3)
         clip = song[100:140]
-        db = {"songs": [{"title": "Long Song", "fingerprint": song,
-                         "format": "raw", "duration": 300.0}]}
+        db = {
+            "songs": [
+                {
+                    "title": "Long Song",
+                    "fingerprint": song,
+                    "format": "raw",
+                    "duration": 300.0,
+                }
+            ]
+        }
         result = mf.match_local(db, clip, "raw", threshold=0.1)
         assert result["matched"] is True
         assert result["score"] > 0.5
 
     def test_unrelated_does_not_match(self):
-        db = {"songs": [{"title": "A", "fingerprint": _raw_fp(300, seed=11),
-                         "format": "raw", "duration": 100.0}]}
+        db = {
+            "songs": [
+                {
+                    "title": "A",
+                    "fingerprint": _raw_fp(300, seed=11),
+                    "format": "raw",
+                    "duration": 100.0,
+                }
+            ]
+        }
         result = mf.match_local(db, _raw_fp(100, seed=99), "raw", threshold=0.1)
         assert result["matched"] is False
 
@@ -125,6 +150,7 @@ class TestIdentifyAcoustid:
     def test_raw_fingerprint_is_encoded_and_queried(self, monkeypatch):
         """fpcalc raw ints now reach AcoustID (no pyacoustid needed)."""
         import urllib.request
+
         captured = {}
 
         class FakeResp:
@@ -159,15 +185,19 @@ class TestIdentifyAcoustid:
     def test_lookup_parses_results(self, monkeypatch):
         payload = {
             "status": "ok",
-            "results": [{
-                "score": 0.9,
-                "recordings": [{
-                    "id": "R1",
-                    "title": "Song Title",
-                    "artists": [{"name": "Artist Name"}],
-                    "sources": 3,
-                }],
-            }],
+            "results": [
+                {
+                    "score": 0.9,
+                    "recordings": [
+                        {
+                            "id": "R1",
+                            "title": "Song Title",
+                            "artists": [{"name": "Artist Name"}],
+                            "sources": 3,
+                        }
+                    ],
+                }
+            ],
         }
 
         class FakeResp:
@@ -220,16 +250,28 @@ class TestAnalyzeProject:
     def test_report_matches_local_db(self, tmp_path, monkeypatch):
         project = self._project(tmp_path)
         clip_fp = _raw_fp(100, seed=5)
-        monkeypatch.setattr(mf, "fingerprint_file",
-                            lambda p, timeout=600: {"fingerprint": clip_fp,
-                                                    "duration": 30.0,
-                                                    "engine": "fpcalc",
-                                                    "format": "raw"})
+        monkeypatch.setattr(
+            mf,
+            "fingerprint_file",
+            lambda p, timeout=600: {
+                "fingerprint": clip_fp,
+                "duration": 30.0,
+                "engine": "fpcalc",
+                "format": "raw",
+            },
+        )
         # No real network: AcoustID lookup is a no-op in this test.
         monkeypatch.setattr(mf, "identify_acoustid", lambda *a, **k: [])
-        db = {"songs": [{"title": "Licensed Track",
-                         "fingerprint": list(clip_fp),
-                         "format": "raw", "duration": 30.0}]}
+        db = {
+            "songs": [
+                {
+                    "title": "Licensed Track",
+                    "fingerprint": list(clip_fp),
+                    "format": "raw",
+                    "duration": 30.0,
+                }
+            ]
+        }
         report = mf.analyze_project(project, local_db=db)
         assert report["summary"]["checked"] == 2
         assert report["summary"]["matched"] == 2
@@ -240,11 +282,16 @@ class TestAnalyzeProject:
         project = self._project(tmp_path, n=1)
         monkeypatch.setattr(mf, "_import_acoustid", lambda: None)
         monkeypatch.setattr(mf, "_fpcalc_candidates", lambda: ["/fake/fpcalc"])
-        monkeypatch.setattr(mf, "fingerprint_file",
-                            lambda p, timeout=600: {"fingerprint": [1, 2, 3],
-                                                    "duration": 1.0,
-                                                    "engine": "fpcalc",
-                                                    "format": "raw"})
+        monkeypatch.setattr(
+            mf,
+            "fingerprint_file",
+            lambda p, timeout=600: {
+                "fingerprint": [1, 2, 3],
+                "duration": 1.0,
+                "engine": "fpcalc",
+                "format": "raw",
+            },
+        )
         monkeypatch.setattr(mf, "identify_acoustid", lambda *a, **k: [])
         report = mf.analyze_project(project)
         assert report["backend"] == "fpcalc"
@@ -259,11 +306,12 @@ class TestCompressFingerprint:
 
     def test_negative_ints_mask_to_32bit(self):
         # fpcalc -raw prints signed values; -1 == 0xFFFFFFFF in 32-bit.
-        assert mf.compress_fingerprint([-1]) == mf.compress_fingerprint([2 ** 32 - 1])
+        assert mf.compress_fingerprint([-1]) == mf.compress_fingerprint([2**32 - 1])
 
     def test_roundtrip(self):
         import struct
-        ints = [123456, -7, 2 ** 31, 0]
+
+        ints = [123456, -7, 2**31, 0]
         enc = mf.compress_fingerprint(ints)
         raw = base64.b64decode(enc)
         vals = list(struct.unpack("<{}I".format(len(ints)), raw))
@@ -316,8 +364,12 @@ class TestMusicGate:
             "gate": "warn",
             "clips": [
                 {"index": 0, "video": "x.mp4", "verdict": "clean"},
-                {"index": 1, "video": "y.mp4", "verdict": verdict,
-                 "suggestion": "Audio overlaps local reference 'T' (100%)"},
+                {
+                    "index": 1,
+                    "video": "y.mp4",
+                    "verdict": verdict,
+                    "suggestion": "Audio overlaps local reference 'T' (100%)",
+                },
             ],
         }
         with open(os.path.join(tmp_path, mf.REPORT_NAME), "w", encoding="utf-8") as f:
@@ -348,31 +400,45 @@ class TestMusicGate:
 class TestGateIntegration:
     def test_blocked_by_music_report(self, tmp_path):
         from scripts import upload_gate as ug
+
         report = {
             "gate": "block",
-            "clips": [{"index": 0, "video": "x.mp4",
-                       "verdict": "acoustid_match",
-                       "suggestion": "AcoustID: 'Hit' by Star (90%)"}],
+            "clips": [
+                {
+                    "index": 0,
+                    "video": "x.mp4",
+                    "verdict": "acoustid_match",
+                    "suggestion": "AcoustID: 'Hit' by Star (90%)",
+                }
+            ],
         }
         with open(os.path.join(tmp_path, mf.REPORT_NAME), "w", encoding="utf-8") as f:
             json.dump(report, f)
-        verdict = ug.check_clip(str(tmp_path), 0, "Title", "Caption", [],
-                                music_gate="block")
+        verdict = ug.check_clip(
+            str(tmp_path), 0, "Title", "Caption", [], music_gate="block"
+        )
         assert verdict["allowed"] is False
         assert any(r["source"] == "music_fingerprint" for r in verdict["reasons"])
 
     def test_warn_allows_upload(self, tmp_path):
         from scripts import upload_gate as ug
+
         report = {
             "gate": "warn",
-            "clips": [{"index": 0, "video": "x.mp4",
-                       "verdict": "local_match",
-                       "suggestion": "Audio overlaps 'T' (80%)"}],
+            "clips": [
+                {
+                    "index": 0,
+                    "video": "x.mp4",
+                    "verdict": "local_match",
+                    "suggestion": "Audio overlaps 'T' (80%)",
+                }
+            ],
         }
         with open(os.path.join(tmp_path, mf.REPORT_NAME), "w", encoding="utf-8") as f:
             json.dump(report, f)
-        verdict = ug.check_clip(str(tmp_path), 0, "Title", "Caption", [],
-                                music_gate="warn")
+        verdict = ug.check_clip(
+            str(tmp_path), 0, "Title", "Caption", [], music_gate="warn"
+        )
         # warn → flagged (medium) but still allowed
         assert verdict["allowed"] is True
         assert any(r["severity"] == "medium" for r in verdict["reasons"])

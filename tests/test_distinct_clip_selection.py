@@ -20,13 +20,13 @@ from scripts import create_viral_segments as cvs
 
 
 def _win(start, end, title="clip", score=50):
-    return {"title": title, "start_time": start, "end_time": end,
-            "score": score}
+    return {"title": title, "start_time": start, "end_time": end, "score": score}
 
 
 # ---------------------------------------------------------------------------
 # 1. The temporal floor
 # ---------------------------------------------------------------------------
+
 
 def test_forty_percent_overlap_is_a_duplicate():
     # 0-30 vs 12-42: intersection 18s over a 30s shorter window = 0.60.
@@ -67,6 +67,7 @@ def test_threshold_is_env_overridable(monkeypatch):
 # 2. deduplicate_segments never exports a retitled copy
 # ---------------------------------------------------------------------------
 
+
 def test_deduplicate_drops_shifted_retitled_copy():
     segments = [
         _win(12, 42, title="عنوان أول", score=95),
@@ -99,10 +100,14 @@ def test_deduplicate_keeps_genuinely_distinct_windows():
 # 3. End-to-end: process_segments returns distinct footage only
 # ---------------------------------------------------------------------------
 
+
 def _arabic_transcript():
     return [
-        {"start": float(i * 6), "end": float(i * 6 + 5),
-         "text": f"جملة رقم {i} تتحدث عن نقطة مهمة في هذا الموضوع بالتفصيل"}
+        {
+            "start": float(i * 6),
+            "end": float(i * 6 + 5),
+            "text": f"جملة رقم {i} تتحدث عن نقطة مهمة في هذا الموضوع بالتفصيل",
+        }
         for i in range(12)
     ]
 
@@ -110,7 +115,12 @@ def _arabic_transcript():
 def test_process_segments_drops_same_beat_with_different_title():
     raw = [
         {"title": "عنوان أول", "start_time": 12, "end_time": 42, "score": 95},
-        {"title": "عنوان ثانٍ مختلف تماماً", "start_time": 30, "end_time": 60, "score": 90},
+        {
+            "title": "عنوان ثانٍ مختلف تماماً",
+            "start_time": 30,
+            "end_time": 60,
+            "score": 90,
+        },
     ]
     result = cvs.process_segments(raw, _arabic_transcript(), 15, 60)
     assert len(result["segments"]) == 1
@@ -122,23 +132,30 @@ def test_process_segments_export_is_pairwise_distinct():
     # must satisfy the distinctness invariant pairwise.
     transcript = _arabic_transcript()
     raw = [
-        {"title": f"t{i}", "start_time": start, "end_time": end,
-         "score": 90 - i}
-        for i, (start, end) in enumerate([
-            (0, 30), (12, 42), (30, 60), (6, 36), (48, 78),
-        ])
+        {"title": f"t{i}", "start_time": start, "end_time": end, "score": 90 - i}
+        for i, (start, end) in enumerate(
+            [
+                (0, 30),
+                (12, 42),
+                (30, 60),
+                (6, 36),
+                (48, 78),
+            ]
+        )
     ]
     result = cvs.process_segments(raw, transcript, 15, 60)
     windows = result["segments"]
     for i in range(len(windows)):
         for j in range(i + 1, len(windows)):
             assert not cvs._windows_are_near_duplicates(windows[i], windows[j]), (
-                f"exported duplicate footage: {windows[i]} vs {windows[j]}")
+                f"exported duplicate footage: {windows[i]} vs {windows[j]}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # 4. Overlap ratio + diversity demotion of partially overlapping picks
 # ---------------------------------------------------------------------------
+
 
 def test_window_overlap_ratio_measures_shared_fraction():
     assert cvs._window_overlap_ratio(_win(0, 20), _win(0, 20)) == 1.0
@@ -152,12 +169,27 @@ def test_diversity_ranking_demotes_partially_overlapping_pick():
     # genuinely different moment. B's raw score is higher, but the graded
     # temporal penalty must push C ahead so distinct clips rank first.
     segments = [
-        {"title": "A", "topic": "t1", "start_time": 0, "end_time": 30,
-         "selection_score": 90},
-        {"title": "B", "topic": "t2", "start_time": 20, "end_time": 50,
-         "selection_score": 88},
-        {"title": "C", "topic": "t3", "start_time": 100, "end_time": 130,
-         "selection_score": 80},
+        {
+            "title": "A",
+            "topic": "t1",
+            "start_time": 0,
+            "end_time": 30,
+            "selection_score": 90,
+        },
+        {
+            "title": "B",
+            "topic": "t2",
+            "start_time": 20,
+            "end_time": 50,
+            "selection_score": 88,
+        },
+        {
+            "title": "C",
+            "topic": "t3",
+            "start_time": 100,
+            "end_time": 130,
+            "selection_score": 80,
+        },
     ]
     ranked = cvs._rank_segments_with_diversity(segments, 3)
     assert [item["title"] for item in ranked] == ["A", "C", "B"]

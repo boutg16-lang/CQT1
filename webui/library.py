@@ -60,12 +60,19 @@ def get_existing_projects(force_refresh=False):
     if not os.path.exists(VIRALS_DIR):
         return []
     now = time.time()
-    if not force_refresh and _PROJECTS_CACHE["data"] and now - _PROJECTS_CACHE["stamp"] < _GALLERY_CACHE_TTL:
+    if (
+        not force_refresh
+        and _PROJECTS_CACHE["data"]
+        and now - _PROJECTS_CACHE["stamp"] < _GALLERY_CACHE_TTL
+    ):
         return list(_PROJECTS_CACHE["data"])
     try:
         records = _list_project_records(VIRALS_DIR)
-        projects = [os.path.basename(record.get("path", ""))
-                    for record in records if record.get("path")]
+        projects = [
+            os.path.basename(record.get("path", ""))
+            for record in records
+            if record.get("path")
+        ]
         _PROJECTS_CACHE["stamp"] = now
         _PROJECTS_CACHE["data"] = list(projects)
         return projects
@@ -111,24 +118,35 @@ def _find_segment_video(project_folder_path, seg, index):
 
     idx_str = f"{index:03d}"
     potential_paths = [
-        os.path.join(project_folder_path, "burned_sub", f"final-output{idx_str}_processed_subtitled.mp4"),
+        os.path.join(
+            project_folder_path,
+            "burned_sub",
+            f"final-output{idx_str}_processed_subtitled.mp4",
+        ),
         os.path.join(project_folder_path, "burned_sub", f"output{idx_str}.mp4"),
         os.path.join(project_folder_path, f"final-output{idx_str}_processed.mp4"),
         os.path.join(project_folder_path, f"output{idx_str}_original_scale.mp4"),
         os.path.join(project_folder_path, f"output{idx_str}.mp4"),
-        os.path.join(project_folder_path, "cuts", f"output{idx_str}_original_scale.mp4"),
+        os.path.join(
+            project_folder_path, "cuts", f"output{idx_str}_original_scale.mp4"
+        ),
         os.path.join(project_folder_path, "cuts", f"segment_{idx_str}.mp4"),
         os.path.join(project_folder_path, "cuts", f"{idx_str}.mp4"),
     ]
     if isinstance(seg.get("filename"), str):
         potential_paths.insert(0, os.path.join(project_folder_path, seg["filename"]))
-        potential_paths.insert(0, os.path.join(project_folder_path, "burned_sub", seg["filename"]))
+        potential_paths.insert(
+            0, os.path.join(project_folder_path, "burned_sub", seg["filename"])
+        )
 
     for path in potential_paths:
         if os.path.exists(path):
             return path
 
-    for sd in [os.path.join(project_folder_path, "burned_sub"), os.path.join(project_folder_path, "cuts")]:
+    for sd in [
+        os.path.join(project_folder_path, "burned_sub"),
+        os.path.join(project_folder_path, "cuts"),
+    ]:
         if os.path.exists(sd):
             for filename in sorted(os.listdir(sd)):
                 if filename.endswith(".mp4") and idx_str in filename:
@@ -143,20 +161,24 @@ def generate_project_gallery(project_path_name, is_full_path=False):
     """
     if not project_path_name:
         return f'<div style="padding: 20px; text-align: center;">{i18n("No project selected.")}</div>'
-    
+
     if is_full_path:
         project_folder_path = os.path.abspath(str(project_path_name))
         try:
-            _safe_project_path(VIRALS_DIR, os.path.relpath(project_folder_path, VIRALS_DIR))
+            _safe_project_path(
+                VIRALS_DIR, os.path.relpath(project_folder_path, VIRALS_DIR)
+            )
         except (ValueError, OSError):
             return '<div style="padding: 20px; text-align: center;">{}</div>'.format(
-                html.escape(i18n("Project path not found.")))
+                html.escape(i18n("Project path not found."))
+            )
     else:
         try:
             project_folder_path = _safe_project_path(VIRALS_DIR, project_path_name)
         except ValueError:
             return '<div style="padding: 20px; text-align: center;">{}</div>'.format(
-                html.escape(i18n("Project path not found.")))
+                html.escape(i18n("Project path not found."))
+            )
 
     if not os.path.exists(project_folder_path):
         return f'<div style="padding: 20px; text-align: center;">{html.escape(i18n("Project path not found: {}").format(project_folder_path))}</div>'
@@ -174,21 +196,29 @@ def generate_project_gallery(project_path_name, is_full_path=False):
 
         segments_data = {}
         if os.path.exists(json_path):
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, "r", encoding="utf-8") as f:
                 segments_data = json.load(f)
-        
+
         segments_list = segments_data.get("segments", [])
-        
+
         if not segments_list:
-             found_files = []
-             for subdir in ["burned_sub", "cuts", "."]:
-                 d = os.path.join(project_folder_path, subdir)
-                 if os.path.exists(d):
-                     for f in os.listdir(d):
-                         if f.endswith(".mp4") and "input" not in f.lower():
-                             found_files.append(os.path.join(d, f))
-             found_files = sorted(set(found_files))
-             segments_list = [{"title": os.path.basename(f), "score": "N/A", "description": "No metadata found.", "filepath": f} for f in found_files]
+            found_files = []
+            for subdir in ["burned_sub", "cuts", "."]:
+                d = os.path.join(project_folder_path, subdir)
+                if os.path.exists(d):
+                    for f in os.listdir(d):
+                        if f.endswith(".mp4") and "input" not in f.lower():
+                            found_files.append(os.path.join(d, f))
+            found_files = sorted(set(found_files))
+            segments_list = [
+                {
+                    "title": os.path.basename(f),
+                    "score": "N/A",
+                    "description": "No metadata found.",
+                    "filepath": f,
+                }
+                for f in found_files
+            ]
 
         try:
             manifest = _project_summary(project_folder_path)
@@ -199,20 +229,30 @@ def generate_project_gallery(project_path_name, is_full_path=False):
             last_error = checkpoint.get("last_error") or {}
             error_text = html.escape(str(last_error.get("message") or ""))
             publish = manifest.get("last_publish") or {}
-            publish_text = html.escape(str(publish.get("video_id") or publish.get("status") or ""))
-            details = '<span style="margin-left:12px;color:#94a3b8;">{}</span>'.format(updated_at)
+            publish_text = html.escape(
+                str(publish.get("video_id") or publish.get("status") or "")
+            )
+            details = '<span style="margin-left:12px;color:#94a3b8;">{}</span>'.format(
+                updated_at
+            )
             if active_stage:
-                details += '<span style="margin-left:12px;color:#fbbf24;">استئناف من: {}</span>'.format(active_stage)
+                details += '<span style="margin-left:12px;color:#fbbf24;">استئناف من: {}</span>'.format(
+                    active_stage
+                )
             if error_text:
-                details += '<span style="margin-left:12px;color:#fca5a5;">آخر خطأ: {}</span>'.format(error_text[:180])
+                details += '<span style="margin-left:12px;color:#fca5a5;">آخر خطأ: {}</span>'.format(
+                    error_text[:180]
+                )
             if publish_text:
-                details += '<span style="margin-left:12px;color:#86efac;">آخر نشر: {}</span>'.format(publish_text)
+                details += '<span style="margin-left:12px;color:#86efac;">آخر نشر: {}</span>'.format(
+                    publish_text
+                )
             state_banner = (
                 '<div class="vc-project-status" style="margin:10px 0;padding:10px 14px;'
-                'border:1px solid rgba(255,255,255,.12);border-radius:10px;'
+                "border:1px solid rgba(255,255,255,.12);border-radius:10px;"
                 'background:rgba(255,255,255,.04);">'
-                '<strong>{}</strong>{}'
-                '</div>'
+                "<strong>{}</strong>{}"
+                "</div>"
             ).format(project_status, details)
         except Exception:
             state_banner = ""
@@ -230,19 +270,29 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                 ready = bool(readiness.get("ready_for_publish"))
                 report_url = ""
                 if os.path.exists(report_html_path):
-                    rel_report = os.path.relpath(report_html_path, VIRALS_DIR).replace("\\\\", "/")
+                    rel_report = os.path.relpath(report_html_path, VIRALS_DIR).replace(
+                        "\\\\", "/"
+                    )
                     report_url = "/virals/" + urllib.parse.quote(rel_report, safe="/")
                 report_link = (
-                    '<a href="{}" target="_blank" style="color:#93c5fd;margin-right:12px;">عرض التقرير الكامل</a>'.format(report_url)
-                    if report_url else ""
+                    '<a href="{}" target="_blank" style="color:#93c5fd;margin-right:12px;">عرض التقرير الكامل</a>'.format(
+                        report_url
+                    )
+                    if report_url
+                    else ""
                 )
                 report_banner = (
                     '<div style="margin:10px 0;padding:10px 14px;border:1px solid {};border-radius:10px;'
                     'background:rgba(255,255,255,.04);color:#e5e7eb;">'
-                    '<strong>تقرير الجاهزية: {}</strong> '
+                    "<strong>تقرير الجاهزية: {}</strong> "
                     '<span style="color:#94a3b8;margin-right:12px;">محجوب: {} — مراجعة يدوية: {}</span>{}</div>'
-                ).format("#22c55e" if ready else "#f59e0b", "جاهز للنشر" if ready else "يتطلب مراجعة",
-                         counts.get("blocked", 0), counts.get("manual_review", 0), report_link)
+                ).format(
+                    "#22c55e" if ready else "#f59e0b",
+                    "جاهز للنشر" if ready else "يتطلب مراجعة",
+                    counts.get("blocked", 0),
+                    counts.get("manual_review", 0),
+                    report_link,
+                )
             except Exception:
                 report_banner = ""
         review_banner = ""
@@ -256,18 +306,28 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                 high = int(review_queue.get("high", 0) or 0)
                 review_url = ""
                 if os.path.exists(review_html_path):
-                    rel_review = os.path.relpath(review_html_path, VIRALS_DIR).replace("\\", "/")
+                    rel_review = os.path.relpath(review_html_path, VIRALS_DIR).replace(
+                        "\\", "/"
+                    )
                     review_url = "/virals/" + urllib.parse.quote(rel_review, safe="/")
-                review_link = ('<a href="{}" target="_blank" style="color:#fbbf24;margin-right:12px;">فتح طابور المراجعة</a>'.format(review_url) if review_url else "")
+                review_link = (
+                    '<a href="{}" target="_blank" style="color:#fbbf24;margin-right:12px;">فتح طابور المراجعة</a>'.format(
+                        review_url
+                    )
+                    if review_url
+                    else ""
+                )
                 if total:
-                    review_banner = ('<div style="margin:10px 0;padding:10px 14px;border:1px solid #f59e0b;border-radius:10px;background:rgba(245,158,11,.08);color:#fde68a;">'
-                                     '<strong>مراجعة قبل النشر: {}</strong> <span style="color:#fef3c7;">منها {} عالية الخطورة</span>{}</div>').format(total, high, review_link)
+                    review_banner = (
+                        '<div style="margin:10px 0;padding:10px 14px;border:1px solid #f59e0b;border-radius:10px;background:rgba(245,158,11,.08);color:#fde68a;">'
+                        '<strong>مراجعة قبل النشر: {}</strong> <span style="color:#fef3c7;">منها {} عالية الخطورة</span>{}</div>'
+                    ).format(total, high, review_link)
             except Exception:
                 review_banner = ""
         html_cards = state_banner + report_banner + review_banner
-        
+
         for i, seg in enumerate(segments_list):
-            title = seg.get("title", f"{i18n('Segment')} {i+1}")
+            title = seg.get("title", f"{i18n('Segment')} {i + 1}")
             score = seg.get("score", "N/A")
             video_path = _find_segment_video(project_folder_path, seg, i)
 
@@ -277,7 +337,7 @@ def generate_project_gallery(project_path_name, is_full_path=False):
             if video_path:
                 try:
                     abs_video = os.path.abspath(video_path)
-                    
+
                     if URL_MODE == "gradio":
                         try:
                             cwd = os.getcwd()
@@ -289,7 +349,10 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                             allowed_roots = []
                             try:
                                 from webui.app import _allowed_dirs
-                                allowed_roots = [os.path.abspath(d) for d in _allowed_dirs()]
+
+                                allowed_roots = [
+                                    os.path.abspath(d) for d in _allowed_dirs()
+                                ]
                             except Exception:
                                 pass
                             inside_allowed = any(
@@ -330,12 +393,27 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                             </video>
                             """
                             download_link = f'<a href="{html.escape(video_src)}" download="{html.escape(os.path.basename(video_path))}" style="color: #aaa; display: flex; align-items: center; justify-content: center; padding: 5px; border-radius: 50%; transition: color 0.2s;" title="Download" onmouseover="this.style.color=\'#fff\'" onmouseout="this.style.color=\'#aaa\'"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></a>'
-                            proj_name_api = html.escape(os.path.basename(project_path_name), quote=True)
-                            def make_export_btn(fmt, label, color_hover, svg_path, _proj=proj_name_api, _seg=i):
+                            proj_name_api = html.escape(
+                                os.path.basename(project_path_name), quote=True
+                            )
+
+                            def make_export_btn(
+                                fmt,
+                                label,
+                                color_hover,
+                                svg_path,
+                                _proj=proj_name_api,
+                                _seg=i,
+                            ):
                                 src = f"/export_xml_api?project={_proj}&segment={_seg}&format={fmt}"
                                 return f'<a href="{src}" target="_blank" style="color: #aaa; display: flex; align-items: center; justify-content: center; padding: 5px; border-radius: 50%; transition: color 0.2s;" title="{html.escape(label, quote=True)}" onmouseover="this.style.color=\'{color_hover}\'" onmouseout="this.style.color=\'#aaa\'"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{svg_path}</svg></a>'
 
-                            export_pr = make_export_btn("premiere", "Export Premiere XML (Split Screen – known bug)", "#d064ff", '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15h6"></path><path d="M12 12v6"></path>')
+                            export_pr = make_export_btn(
+                                "premiere",
+                                "Export Premiere XML (Split Screen – known bug)",
+                                "#d064ff",
+                                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15h6"></path><path d="M12 12v6"></path>',
+                            )
                             export_link = f"{export_pr}"
                         else:
                             video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{i18n("External Video")}</div>'
@@ -343,13 +421,17 @@ def generate_project_gallery(project_path_name, is_full_path=False):
                     video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{html.escape(i18n("Error: {}").format(str(e)))}</div>'
             else:
                 video_tag = f'<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #222; color: #666;"><span>⚠️</span><br>{i18n("Not Found")}</div>'
-            
+
             score_color = "#22c55e"
             try:
-                if isinstance(score, int) or (isinstance(score, str) and score.isdigit()):
+                if isinstance(score, int) or (
+                    isinstance(score, str) and score.isdigit()
+                ):
                     val = int(score)
-                    if val < 70: score_color = "#ef4444" 
-                    elif val < 85: score_color = "#eab308"
+                    if val < 70:
+                        score_color = "#ef4444"
+                    elif val < 85:
+                        score_color = "#eab308"
             except Exception:
                 pass
 
@@ -371,16 +453,20 @@ def generate_project_gallery(project_path_name, is_full_path=False):
             </div>
             """
             html_cards += card_html
-        
+
         if not html_cards:
-             return f'<div style="padding: 40px; text-align: center; color: #888; font-size: 1.2em;">{i18n("No viral segments found.")}</div>'
+            return f'<div style="padding: 40px; text-align: center; color: #888; font-size: 1.2em;">{i18n("No viral segments found.")}</div>'
 
         gallery_html = f"""
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 30px; width: 100%; padding: 10px 0;">
             {html_cards}
         </div>
         """
-        _GALLERY_CACHE[project_folder_path] = {"sig": folder_sig, "html": gallery_html, "ts": time.time()}
+        _GALLERY_CACHE[project_folder_path] = {
+            "sig": folder_sig,
+            "html": gallery_html,
+            "ts": time.time(),
+        }
         return gallery_html
 
     except Exception as e:

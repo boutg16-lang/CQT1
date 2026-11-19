@@ -5,6 +5,7 @@ Dependency-free module: stage registration, dependency ordering, retry
 policy, cancellation, atomic state persistence and output validation.
 No network, no models, no media.
 """
+
 import json
 
 import pytest
@@ -25,6 +26,7 @@ def _engine(tmp_path, **kwargs):
 # CancellationToken
 # ---------------------------------------------------------------------------
 
+
 def test_token_starts_uncancelled():
     token = CancellationToken()
     assert token.cancelled is False
@@ -42,6 +44,7 @@ def test_token_cancel_sets_flag_and_raises():
 # ---------------------------------------------------------------------------
 # fingerprint_files
 # ---------------------------------------------------------------------------
+
 
 def test_fingerprint_is_deterministic_and_order_independent(tmp_path):
     a = tmp_path / "a.txt"
@@ -78,6 +81,7 @@ def test_fingerprint_accepts_strings_and_paths(tmp_path):
 # _json_safe
 # ---------------------------------------------------------------------------
 
+
 def test_json_safe_passthrough_for_jsonable_values():
     value = {"a": [1, 2.5, "x", None, True]}
     assert _json_safe(value) is value
@@ -107,6 +111,7 @@ def test_json_safe_handles_nested_custom_object():
 # ---------------------------------------------------------------------------
 # Registration and ordering
 # ---------------------------------------------------------------------------
+
 
 def test_register_duplicate_stage_raises(tmp_path):
     engine = _engine(tmp_path)
@@ -148,6 +153,7 @@ def test_order_unknown_dependency_raises_key_error(tmp_path):
 # State loading
 # ---------------------------------------------------------------------------
 
+
 def test_load_missing_state_file_starts_empty(tmp_path):
     engine = _engine(tmp_path)
     assert engine.state == {"stages": {}, "updated": None}
@@ -167,8 +173,12 @@ def test_load_non_object_json_starts_empty(tmp_path):
 
 def test_load_valid_state_is_kept(tmp_path):
     state_path = tmp_path / "state.json"
-    state_path.write_text(json.dumps({"stages": {"a": {"status": "success", "result": 7}},
-                                      "updated": 123.0}), encoding="utf-8")
+    state_path.write_text(
+        json.dumps(
+            {"stages": {"a": {"status": "success", "result": 7}}, "updated": 123.0}
+        ),
+        encoding="utf-8",
+    )
     engine = _engine(tmp_path)
     assert engine.state["stages"]["a"]["result"] == 7
 
@@ -176,6 +186,7 @@ def test_load_valid_state_is_kept(tmp_path):
 # ---------------------------------------------------------------------------
 # run()
 # ---------------------------------------------------------------------------
+
 
 def test_run_single_stage_and_persists_result(tmp_path):
     engine = _engine(tmp_path)
@@ -232,6 +243,7 @@ def test_run_target_runs_only_needed_stages(tmp_path):
         def action(ctx, res):
             ran.append(name)
             return name
+
         return action
 
     engine = _engine(tmp_path)
@@ -247,8 +259,10 @@ def test_run_failed_dependency_is_retried_not_skipped(tmp_path):
     # A stage marked "failed" in persisted state is re-run (not trusted),
     # so the pipeline recovers instead of failing on the dependency check.
     state_path = tmp_path / "state.json"
-    state_path.write_text(json.dumps(
-        {"stages": {"a": {"status": "failed"}}, "updated": None}), encoding="utf-8")
+    state_path.write_text(
+        json.dumps({"stages": {"a": {"status": "failed"}}, "updated": None}),
+        encoding="utf-8",
+    )
     engine = _engine(tmp_path)
     engine.register("a", lambda ctx, res: 1)
     engine.register("b", lambda ctx, res: 2, deps=["a"])
@@ -285,8 +299,9 @@ def test_run_retries_then_succeeds(tmp_path):
 def test_run_retry_exhausted_raises_and_records_error(tmp_path):
     sleeps = []
     engine = _engine(tmp_path, sleep=sleeps.append)
-    engine.register("a", lambda ctx, res: (_ for _ in ()).throw(RuntimeError("nope")),
-                    retries=1)
+    engine.register(
+        "a", lambda ctx, res: (_ for _ in ()).throw(RuntimeError("nope")), retries=1
+    )
     with pytest.raises(RuntimeError, match="nope"):
         engine.run()
     saved = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
@@ -298,8 +313,9 @@ def test_run_retry_exhausted_raises_and_records_error(tmp_path):
 def test_run_sleep_backoff_capped_at_30(tmp_path):
     sleeps = []
     engine = _engine(tmp_path, sleep=sleeps.append)
-    engine.register("a", lambda ctx, res: (_ for _ in ()).throw(RuntimeError("x")),
-                    retries=6)
+    engine.register(
+        "a", lambda ctx, res: (_ for _ in ()).throw(RuntimeError("x")), retries=6
+    )
     with pytest.raises(RuntimeError):
         engine.run()
     assert sleeps == [1, 2, 4, 8, 16, 30]
@@ -333,6 +349,7 @@ def test_run_cancellation_mid_run_stops_next_stage(tmp_path):
 # ---------------------------------------------------------------------------
 # invalidate_downstream and atomic save
 # ---------------------------------------------------------------------------
+
 
 def test_invalidate_downstream_clears_dependents_only(tmp_path):
     engine = _engine(tmp_path)

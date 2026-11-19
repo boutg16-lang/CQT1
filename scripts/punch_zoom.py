@@ -23,23 +23,51 @@ import shutil
 import subprocess
 
 PUNCH_ZOOM = 1.18
-PUNCH_DURATION = 0.55   # seconds the punch holds
-PUNCH_RAMP = 0.12       # quick ease so it doesn't feel like a jump-cut zoom
+PUNCH_DURATION = 0.55  # seconds the punch holds
+PUNCH_RAMP = 0.12  # quick ease so it doesn't feel like a jump-cut zoom
 HOOK_PUNCH_DURATION = 1.0
-FPS = 30                # zoompan needs a fixed fps
+FPS = 30  # zoompan needs a fixed fps
 
 # Words that usually carry emotional weight (used when no keywords given).
 EMOTIONAL_WORDS = {
-    "wow", "no", "yes", "never", "always", "stop", "look", "watch", "listen",
-    "wait", "crazy", "insane", "unbelievable", "amazing", "shocking", "mind",
-    "secret", "truth", "lie", "money", "free", "win", "lose", "danger",
-    "va", "regarde", "écoute", "incroyable", "incrível", "olha", "espera",
+    "wow",
+    "no",
+    "yes",
+    "never",
+    "always",
+    "stop",
+    "look",
+    "watch",
+    "listen",
+    "wait",
+    "crazy",
+    "insane",
+    "unbelievable",
+    "amazing",
+    "shocking",
+    "mind",
+    "secret",
+    "truth",
+    "lie",
+    "money",
+    "free",
+    "win",
+    "lose",
+    "danger",
+    "va",
+    "regarde",
+    "écoute",
+    "incroyable",
+    "incrível",
+    "olha",
+    "espera",
 }
 
 
 def load_words(subs_json_path):
     """Reuse the same word loader as jump_cuts."""
     from scripts.jump_cuts import load_words as _load
+
     return _load(subs_json_path)
 
 
@@ -51,9 +79,16 @@ def _normalize_keywords(keywords):
     return {str(k).lower() for k in keywords if str(k).strip()}
 
 
-def plan_punches(words, keywords=None, emotional=True, hook=True,
-                 auto_interval=0.0, punch_duration=PUNCH_DURATION,
-                 hook_duration=HOOK_PUNCH_DURATION, duration=None):
+def plan_punches(
+    words,
+    keywords=None,
+    emotional=True,
+    hook=True,
+    auto_interval=0.0,
+    punch_duration=PUNCH_DURATION,
+    hook_duration=HOOK_PUNCH_DURATION,
+    duration=None,
+):
     """Compute punch windows [(start, end), ...].
 
     Order of preference:
@@ -119,18 +154,31 @@ def plan_punches(words, keywords=None, emotional=True, hook=True,
 def _probe_size(video_path):
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height",
-             "-of", "csv=s=x:p=0", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=s=x:p=0",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         parts = res.stdout.strip().split("x")
         return int(parts[0]), int(parts[1])
     except Exception:
         return None
 
 
-def apply_punch_zoom(video_path, out_path, punches, zoom=PUNCH_ZOOM,
-                     punch_duration=PUNCH_DURATION):
+def apply_punch_zoom(
+    video_path, out_path, punches, zoom=PUNCH_ZOOM, punch_duration=PUNCH_DURATION
+):
     """Render punches via zoompan. Returns number of punches applied."""
     punches = [p for p in (punches or []) if p[1] > p[0]]
     if not punches or not os.path.exists(video_path):
@@ -148,37 +196,68 @@ def apply_punch_zoom(video_path, out_path, punches, zoom=PUNCH_ZOOM,
     conditions = []
     for s, e in punches:
         conditions.append(
-            "between(on,{},{})".format(int(round(s * FPS)), int(round(e * FPS))))
-    z_expr = "if(" + ",".join(
-        [conditions[0] + "," + "{:.3f}".format(zoom)] +
-        ["between(on,{},{})".format(int(round(s * FPS)), int(round(e * FPS)))
-         + "," + "{:.3f}".format(zoom) for s, e in punches[1:]] +
-        ["1"]) + ")"
+            "between(on,{},{})".format(int(round(s * FPS)), int(round(e * FPS)))
+        )
+    z_expr = (
+        "if("
+        + ",".join(
+            [conditions[0] + "," + "{:.3f}".format(zoom)]
+            + [
+                "between(on,{},{})".format(int(round(s * FPS)), int(round(e * FPS)))
+                + ","
+                + "{:.3f}".format(zoom)
+                for s, e in punches[1:]
+            ]
+            + ["1"]
+        )
+        + ")"
+    )
     # x/y keep the center of the frame (already face-cropped)
     vf = (
         "fps={fps},zoompan=z='{z}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
         ":d=1:s={w}x{h}".format(fps=FPS, z=z_expr, w=w, h=h)
     )
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", video_path,
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        video_path,
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
         out_path,
     ]
     subprocess.run(cmd, check=True, capture_output=True, timeout=1800)
     return len(punches)
 
 
-def process_file(video_path, subs_json=None, out_path=None, keywords=None,
-                 zoom=PUNCH_ZOOM, auto_interval=0.0, emotional=True,
-                 hook=True, punch_duration=PUNCH_DURATION):
+def process_file(
+    video_path,
+    subs_json=None,
+    out_path=None,
+    keywords=None,
+    zoom=PUNCH_ZOOM,
+    auto_interval=0.0,
+    emotional=True,
+    hook=True,
+    punch_duration=PUNCH_DURATION,
+):
     """Full pipeline for one clip. Returns a report dict (never raises)."""
-    report = {"video": os.path.basename(video_path), "ok": False,
-              "punches": []}
+    report = {"video": os.path.basename(video_path), "ok": False, "punches": []}
     if out_path is None:
         out_path = video_path
     try:
@@ -187,9 +266,15 @@ def process_file(video_path, subs_json=None, out_path=None, keywords=None,
             duration = words[-1]["end"]
         else:
             duration = None
-        punches = plan_punches(words, keywords=keywords, emotional=emotional,
-                               hook=hook, auto_interval=auto_interval,
-                               punch_duration=punch_duration, duration=duration)
+        punches = plan_punches(
+            words,
+            keywords=keywords,
+            emotional=emotional,
+            hook=hook,
+            auto_interval=auto_interval,
+            punch_duration=punch_duration,
+            duration=duration,
+        )
         n = apply_punch_zoom(video_path, out_path, punches, zoom=zoom)
         report.update({"ok": True, "punches": punches, "count": n})
     except Exception as e:
@@ -201,21 +286,35 @@ def process_file(video_path, subs_json=None, out_path=None, keywords=None,
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="ViralCutter punch-in zoom.")
     parser.add_argument("--video", required=True)
     parser.add_argument("--subs", default=None, help="subs JSON with word timings")
     parser.add_argument("--out", default=None)
-    parser.add_argument("--keywords", default=None,
-                        help="comma-separated words that trigger a punch")
+    parser.add_argument(
+        "--keywords", default=None, help="comma-separated words that trigger a punch"
+    )
     parser.add_argument("--zoom", type=float, default=PUNCH_ZOOM)
-    parser.add_argument("--auto-interval", type=float, default=0.0,
-                        help="punch every N seconds when no keyword hits")
-    parser.add_argument("--no-hook", action="store_true", help="disable the opening hook punch")
+    parser.add_argument(
+        "--auto-interval",
+        type=float,
+        default=0.0,
+        help="punch every N seconds when no keyword hits",
+    )
+    parser.add_argument(
+        "--no-hook", action="store_true", help="disable the opening hook punch"
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    report = process_file(args.video, args.subs, args.out,
-                          keywords=args.keywords, zoom=args.zoom,
-                          auto_interval=args.auto_interval, hook=not args.no_hook)
+    report = process_file(
+        args.video,
+        args.subs,
+        args.out,
+        keywords=args.keywords,
+        zoom=args.zoom,
+        auto_interval=args.auto_interval,
+        hook=not args.no_hook,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

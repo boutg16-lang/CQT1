@@ -11,19 +11,30 @@ moment, so by the middle of the clip we can say with confidence
 It is a pure, deterministic, dependency-free module so the whole logic is
 unit-testable with synthetic tracks.
 """
+
 from __future__ import annotations
 
 
 class VoiceFaceLink:
     """Online mouth-activity ↔ speaker-segment association."""
 
-    def __init__(self, turns, seconds_per_frame=1.0 / 30.0,
-                 min_confidence=0.1, margin=0.15):
+    def __init__(
+        self, turns, seconds_per_frame=1.0 / 30.0, min_confidence=0.1, margin=0.15
+    ):
         self.turns = sorted(
-            ({"start": float(t["start"]), "end": float(t["end"]),
-              "speaker": str(t["speaker"])} for t in (turns or [])),
-            key=lambda item: item["start"])
-        self.seconds_per_frame = float(seconds_per_frame) if seconds_per_frame else (1.0 / 30.0)
+            (
+                {
+                    "start": float(t["start"]),
+                    "end": float(t["end"]),
+                    "speaker": str(t["speaker"]),
+                }
+                for t in (turns or [])
+            ),
+            key=lambda item: item["start"],
+        )
+        self.seconds_per_frame = (
+            float(seconds_per_frame) if seconds_per_frame else (1.0 / 30.0)
+        )
         self.min_confidence = max(0.0, float(min_confidence))
         self.margin = max(0.0, float(margin))
         # track -> speaker -> [open_frames, total_frames]

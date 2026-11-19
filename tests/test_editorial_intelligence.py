@@ -12,8 +12,18 @@ def test_dialogue_cues_add_explainable_small_bonus():
 
 def test_pipeline_returns_selected_and_excluded_with_review_notice():
     items = [
-        {"title": "سؤال", "topic": "سياسة", "text": "لماذا تغير القرار؟ الخلاصة واضحة.", "score": 90},
-        {"title": "رياضة", "topic": "رياضة", "text": "هدف رائع في المباراة انتهى اللقاء.", "score": 75},
+        {
+            "title": "سؤال",
+            "topic": "سياسة",
+            "text": "لماذا تغير القرار؟ الخلاصة واضحة.",
+            "score": 90,
+        },
+        {
+            "title": "رياضة",
+            "topic": "رياضة",
+            "text": "هدف رائع في المباراة انتهى اللقاء.",
+            "score": 75,
+        },
     ]
     result = build_editorial_package(items, limit=2)
     assert result["engine"] == "OUSSAMA Editorial Intelligence"
@@ -30,11 +40,16 @@ def test_empty_input_is_valid():
 
 
 def test_editorial_pipeline_attaches_reviewable_moment_window():
-    result = prepare_candidates([{
-        "start": 12, "end": 20,
-        "text": "علاش تغير القرار؟ بصح عندي الدليل. الخلاصة واضحة.",
-        "score": 70,
-    }])[0]
+    result = prepare_candidates(
+        [
+            {
+                "start": 12,
+                "end": 20,
+                "text": "علاش تغير القرار؟ بصح عندي الدليل. الخلاصة واضحة.",
+                "score": 70,
+            }
+        ]
+    )[0]
     window = result["moment_window"]
     assert window["status"] == "suggested"
     assert window["suggested_start"] == 9.5
@@ -43,8 +58,8 @@ def test_editorial_pipeline_attaches_reviewable_moment_window():
 
 
 def test_invalid_timestamps_are_flagged_for_review():
-    result = prepare_candidates([{
-        "start": "not-a-time", "end": 12, "text": "هذا شرح واضح ومفصل للموضوع."
-    }])[0]
+    result = prepare_candidates(
+        [{"start": "not-a-time", "end": 12, "text": "هذا شرح واضح ومفصل للموضوع."}]
+    )[0]
     assert result["moment_window"]["status"] == "invalid_timestamps"
     assert "timing_needs_review_or_missing" in result["editorial_review_flags"]

@@ -5,6 +5,7 @@ channels.list(mine=true) returns transient 500/503 often enough that one
 failure must not abort a local run. After retries, an actual upload still
 fails clearly; a local-only run continues (see webui/app.py).
 """
+
 import os
 import sys
 import types
@@ -58,11 +59,13 @@ def _uploader(tmp_path, monkeypatch):
 
 
 def test_channel_verification_retries_a_transient_500(tmp_path, monkeypatch):
-    service = FakeService([
-        HttpError(500),
-        HttpError(500),
-        {"items": [{"id": "UC123", "snippet": {"title": "قناتي"}}]},
-    ])
+    service = FakeService(
+        [
+            HttpError(500),
+            HttpError(500),
+            {"items": [{"id": "UC123", "snippet": {"title": "قناتي"}}]},
+        ]
+    )
     _install_service(monkeypatch, service)
     sleeps = []
     monkeypatch.setattr(upload_gate.time, "sleep", sleeps.append)
@@ -95,6 +98,6 @@ def test_transient_error_has_a_local_continuation_contract():
     error = upload_gate.YouTubeTransientError("YouTube API is temporarily unavailable")
     assert isinstance(error, RuntimeError)
     assert upload_gate.is_transient_youtube_error(
-        HttpError(500, "Internal error encountered"))
-    assert not upload_gate.is_transient_youtube_error(
-        HttpError(400, "bad request"))
+        HttpError(500, "Internal error encountered")
+    )
+    assert not upload_gate.is_transient_youtube_error(HttpError(400, "bad request"))

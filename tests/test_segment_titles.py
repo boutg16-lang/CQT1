@@ -9,7 +9,6 @@ the new module path and assert the old import path still resolves to the
 same objects.
 """
 
-
 from scripts import create_viral_segments as cvs
 from scripts import segment_titles as st
 from scripts.segment_titles import (
@@ -25,6 +24,7 @@ from scripts.segment_titles import (
 # ---------------------------------------------------------------------------
 # Re-export identity
 # ---------------------------------------------------------------------------
+
 
 def test_reexports_are_the_same_objects():
     for name in (
@@ -42,6 +42,7 @@ def test_reexports_are_the_same_objects():
 # ---------------------------------------------------------------------------
 # _normalized_match_text / _normalize_arabic_orthography
 # ---------------------------------------------------------------------------
+
 
 def test_normalized_match_text_unifies_arabic_variants():
     assert _normalized_match_text("الأمور") == _normalized_match_text("الامور")
@@ -91,6 +92,7 @@ def test_arabic_orthography_table_shape():
 # _window_text_from_transcript
 # ---------------------------------------------------------------------------
 
+
 def _three_line_transcript():
     return [
         {"start": 0.0, "end": 5.0, "text": "First line."},
@@ -103,7 +105,8 @@ def test_window_text_joins_overlapping_lines():
     transcript = _three_line_transcript()
     # [4, 11) overlaps all three lines.
     assert _window_text_from_transcript(transcript, 4.0, 11.0) == (
-        "first line second line third line")
+        "first line second line third line"
+    )
 
 
 def test_window_text_respects_half_open_bounds():
@@ -127,7 +130,8 @@ def test_window_text_prefers_word_level_matches():
         {"start": 9.0, "end": 10.0, "word": "far"},
     ]
     assert _window_text_from_transcript(transcript, 0.0, 5.0, words=words) == (
-        "hello world")
+        "hello world"
+    )
 
 
 def test_window_text_skips_malformed_words_and_falls_back_to_lines():
@@ -139,7 +143,8 @@ def test_window_text_skips_malformed_words_and_falls_back_to_lines():
     ]
     # No usable word overlaps [0, 5), so the line text is used instead.
     assert _window_text_from_transcript(transcript, 0.0, 5.0, words=words) == (
-        "first line")
+        "first line"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -180,16 +185,18 @@ def test_title_relevance_prefers_real_window_words():
 
 def test_title_relevance_llm_only_words_get_half_weight():
     window = _window_text_from_transcript(_HALLUCINATION_TRANSCRIPT, 2.0, 12.0)
-    assert _title_content_relevance(
-        "shortcut pays", _HALLUCINATION_SEGMENT, window) == 0.5
+    assert (
+        _title_content_relevance("shortcut pays", _HALLUCINATION_SEGMENT, window) == 0.5
+    )
 
 
 def test_title_relevance_window_score_is_capped_at_one():
     window = _window_text_from_transcript(_HALLUCINATION_TRANSCRIPT, 2.0, 12.0)
-    assert _title_content_relevance(
-        "patience crash", _HALLUCINATION_SEGMENT, window) == 1.0
-    assert _title_content_relevance(
-        "notspoken", _HALLUCINATION_SEGMENT, window) == 0.0
+    assert (
+        _title_content_relevance("patience crash", _HALLUCINATION_SEGMENT, window)
+        == 1.0
+    )
+    assert _title_content_relevance("notspoken", _HALLUCINATION_SEGMENT, window) == 0.0
 
 
 def test_title_relevance_no_content_is_zero():
@@ -200,6 +207,7 @@ def test_title_relevance_no_content_is_zero():
 # ---------------------------------------------------------------------------
 # _title_quality_score
 # ---------------------------------------------------------------------------
+
 
 def test_title_quality_empty_is_zero():
     assert _title_quality_score("") == 0.0
@@ -246,10 +254,12 @@ def test_title_quality_clamps_at_zero():
 # _choose_recommended_title
 # ---------------------------------------------------------------------------
 
+
 def test_choose_recommended_title_empty_falls_back():
     assert _choose_recommended_title({}) == "Viral Segment"
     assert _choose_recommended_title({"title": "  ", "alt_titles": []}) == (
-        "Viral Segment")
+        "Viral Segment"
+    )
 
 
 def test_choose_recommended_title_deduplicates_case_insensitively():
@@ -263,7 +273,8 @@ def test_choose_recommended_title_picks_strongest():
         "alt_titles": ["كيف تطيح حرب الكوكايين بصناع المحتوى؟"],
     }
     assert _choose_recommended_title(segment) == (
-        "كيف تطيح حرب الكوكايين بصناع المحتوى؟")
+        "كيف تطيح حرب الكوكايين بصناع المحتوى؟"
+    )
 
 
 def test_choose_recommended_title_accepts_string_alt_titles():

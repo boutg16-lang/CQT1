@@ -22,7 +22,11 @@ def paths(value):
     values = value if isinstance(value, (list, tuple)) else [value]
     result = []
     for item in values:
-        path = os.path.abspath(os.path.expanduser(_raw_path(item))) if _raw_path(item) else ""
+        path = (
+            os.path.abspath(os.path.expanduser(_raw_path(item)))
+            if _raw_path(item)
+            else ""
+        )
         if path and os.path.isfile(path):
             result.append(path)
     return result

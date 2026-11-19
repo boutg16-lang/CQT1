@@ -31,11 +31,20 @@ def _project(root, name, segments=None):
     if not source.exists():
         source.write_bytes(b"source")
     (project / "project_manifest.json").write_text(
-        json.dumps({"source": {"type": "local", "path": str(source), "managed": False}}),
-        encoding="utf-8")
+        json.dumps(
+            {"source": {"type": "local", "path": str(source), "managed": False}}
+        ),
+        encoding="utf-8",
+    )
     (project / "viral_segments.txt").write_text(
-        json.dumps({"segments": segments or [{"title": "clip", "start_time": 0, "end_time": 10}]}),
-        encoding="utf-8")
+        json.dumps(
+            {
+                "segments": segments
+                or [{"title": "clip", "start_time": 0, "end_time": 10}]
+            }
+        ),
+        encoding="utf-8",
+    )
     return project
 
 
@@ -43,13 +52,20 @@ def _project(root, name, segments=None):
 # 1. content_guard fails closed when the semantic layer is unavailable
 # ---------------------------------------------------------------------------
 
-def test_content_guard_fails_closed_when_semantic_layer_unavailable(tmp_path, monkeypatch):
+
+def test_content_guard_fails_closed_when_semantic_layer_unavailable(
+    tmp_path, monkeypatch
+):
     project = _project(tmp_path / "VIRALS", "p")
-    monkeypatch.setattr(content_guard, "_load_semantic_tools",
-                        lambda: (None, None, None, "ImportError: boom"))
+    monkeypatch.setattr(
+        content_guard,
+        "_load_semantic_tools",
+        lambda: (None, None, None, "ImportError: boom"),
+    )
 
     kept, report = content_guard.filter_segments(
-        str(project), [{"title": "perfectly clean", "start_time": 0, "end_time": 10}])
+        str(project), [{"title": "perfectly clean", "start_time": 0, "end_time": 10}]
+    )
 
     assert kept == [], "no candidate may be exported when the policy gate is down"
     assert report["blocked"] == 1
@@ -57,8 +73,10 @@ def test_content_guard_fails_closed_when_semantic_layer_unavailable(tmp_path, mo
     assert "semantic_safety_unavailable" in codes
     # The reason is surfaced as high severity so it cannot be ignored downstream.
     reasons = report["blocked_segments"][0]["reasons"]
-    assert any(r["code"] == "semantic_safety_unavailable" and r["severity"] == "high"
-               for r in reasons)
+    assert any(
+        r["code"] == "semantic_safety_unavailable" and r["severity"] == "high"
+        for r in reasons
+    )
 
 
 def test_content_guard_still_allows_when_semantic_layer_loads(tmp_path, monkeypatch):
@@ -69,7 +87,8 @@ def test_content_guard_still_allows_when_semantic_layer_loads(tmp_path, monkeypa
     monkeypatch.setattr(content_guard, "_load_semantic_tools", lambda: real)
 
     kept, report = content_guard.filter_segments(
-        str(project), [{"title": "نصيحة مفيدة", "start_time": 0, "end_time": 10}])
+        str(project), [{"title": "نصيحة مفيدة", "start_time": 0, "end_time": 10}]
+    )
 
     assert len(kept) == 1
     assert report["blocked"] == 0
@@ -78,6 +97,7 @@ def test_content_guard_still_allows_when_semantic_layer_loads(tmp_path, monkeypa
 # ---------------------------------------------------------------------------
 # 2. upload_gate fails closed when the metadata semantic check raises
 # ---------------------------------------------------------------------------
+
 
 def test_upload_gate_metadata_semantic_failure_blocks(tmp_path, monkeypatch):
     from scripts import semantic_safety
@@ -88,7 +108,8 @@ def test_upload_gate_metadata_semantic_failure_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(semantic_safety, "analyze_text", boom)
 
     verdict = upload_gate.check_clip(
-        str(tmp_path), 0, "clean title", "clean caption", ["shorts"])
+        str(tmp_path), 0, "clean title", "clean caption", ["shorts"]
+    )
 
     assert verdict["allowed"] is False
     assert any(r.get("source") == "semantic_safety" for r in verdict["reasons"])
@@ -97,6 +118,7 @@ def test_upload_gate_metadata_semantic_failure_blocks(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # 3. OAuth token files are owner-only
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes only")
 def test_save_token_is_owner_only(tmp_path, monkeypatch):
@@ -108,7 +130,9 @@ def test_save_token_is_owner_only(tmp_path, monkeypatch):
     assert returned == str(token_path)
     mode = stat.S_IMODE(os.stat(returned).st_mode)
     assert mode == 0o600, "token file must not be group/world readable (got %o)" % mode
-    assert json.loads(open(returned, encoding="utf-8").read()) == {"access_token": "secret"}
+    assert json.loads(open(returned, encoding="utf-8").read()) == {
+        "access_token": "secret"
+    }
     # No leftover temp file in the store directory.
     assert sorted(p.name for p in token_path.parent.iterdir()) == ["yt_token.json"]
 
@@ -116,6 +140,7 @@ def test_save_token_is_owner_only(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # 4. .gitignore covers OAuth secrets that could be dropped in the project root
 # ---------------------------------------------------------------------------
+
 
 def test_gitignore_covers_oauth_secret_filenames():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -129,6 +154,7 @@ def test_gitignore_covers_oauth_secret_filenames():
 # 5. Duplicate-prevention gates fail closed when their engine breaks
 # ---------------------------------------------------------------------------
 
+
 def test_content_guard_perceptual_failure_blocks(tmp_path, monkeypatch):
     from scripts import originality
 
@@ -138,8 +164,13 @@ def test_content_guard_perceptual_failure_blocks(tmp_path, monkeypatch):
     video.write_bytes(b"rendered-clip")
     # A prior publish of the same source gives the perceptual gate rows to
     # compare against (records.insert).
-    content_guard.record_publish(str(project), "youtube", str(video), index=0,
-                                 result={"status": "uploaded", "video_id": "x"})
+    content_guard.record_publish(
+        str(project),
+        "youtube",
+        str(video),
+        index=0,
+        result={"status": "uploaded", "video_id": "x"},
+    )
 
     def boom(*_args, **_kwargs):
         raise RuntimeError("fingerprint engine down")
@@ -147,8 +178,13 @@ def test_content_guard_perceptual_failure_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(originality, "assess_against_registry", boom)
 
     verdict = content_guard.assess_clip(
-        str(project), 0, title="t", video_path=str(video), platform="youtube",
-        perceptual=True)
+        str(project),
+        0,
+        title="t",
+        video_path=str(video),
+        platform="youtube",
+        perceptual=True,
+    )
 
     assert verdict["allowed"] is False
     assert any(r["code"] == "perceptual_check_unavailable" for r in verdict["reasons"])
@@ -168,15 +204,19 @@ def test_content_guard_cross_project_failure_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(content_ledger, "find_visual_matches", boom)
 
     verdict = content_guard.assess_clip(
-        str(project), 0, title="t", video_path=str(video), platform="youtube")
+        str(project), 0, title="t", video_path=str(video), platform="youtube"
+    )
 
     assert verdict["allowed"] is False
-    assert any(r["code"] == "cross_project_check_unavailable" for r in verdict["reasons"])
+    assert any(
+        r["code"] == "cross_project_check_unavailable" for r in verdict["reasons"]
+    )
 
 
 # ---------------------------------------------------------------------------
 # 6. Music copyright gate: silent only when it is not a hard gate
 # ---------------------------------------------------------------------------
+
 
 def test_upload_gate_music_block_mode_failure_blocks(tmp_path, monkeypatch):
     from scripts import music_fingerprint
@@ -187,8 +227,8 @@ def test_upload_gate_music_block_mode_failure_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(music_fingerprint, "music_gate_reasons", boom)
 
     verdict = upload_gate.check_clip(
-        str(tmp_path), 0, "clean title", "clean caption", ["shorts"],
-        music_gate="block")
+        str(tmp_path), 0, "clean title", "clean caption", ["shorts"], music_gate="block"
+    )
 
     assert verdict["allowed"] is False
     assert any(r.get("source") == "music_fingerprint" for r in verdict["reasons"])
@@ -203,7 +243,7 @@ def test_upload_gate_music_warn_mode_failure_does_not_add_block(tmp_path, monkey
     monkeypatch.setattr(music_fingerprint, "music_gate_reasons", boom)
 
     verdict = upload_gate.check_clip(
-        str(tmp_path), 0, "clean title", "clean caption", ["shorts"],
-        music_gate="warn")
+        str(tmp_path), 0, "clean title", "clean caption", ["shorts"], music_gate="warn"
+    )
 
     assert not any(r.get("source") == "music_fingerprint" for r in verdict["reasons"])

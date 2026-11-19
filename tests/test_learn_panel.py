@@ -7,7 +7,10 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui"))
+sys.path.insert(
+    0,
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui"),
+)
 
 import learn_panel
 
@@ -16,6 +19,7 @@ import learn_panel
 def isolate_repo_root(tmp_path, monkeypatch):
     """Point strike_feedback's file locations at a temp dir (no repo writes)."""
     import scripts.strike_feedback as sf
+
     monkeypatch.setattr(sf, "APP_ROOT", str(tmp_path))
     yield tmp_path
 
@@ -58,22 +62,33 @@ def test_extract_from_project_no_project():
 
 
 def test_extract_from_project_missing_folder():
-    assert "❌" in learn_panel.extract_from_project("nope_project",
-                                                    virals_dir="/tmp/does_not_exist_xyz")
+    assert "❌" in learn_panel.extract_from_project(
+        "nope_project", virals_dir="/tmp/does_not_exist_xyz"
+    )
 
 
 def test_extract_from_project_with_reports(isolate_repo_root, tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
     with open(project / "safety_report.json", "w", encoding="utf-8") as fh:
-        json.dump({"segments": [
-            {"title": "s", "status": "blocked",
-             "matches": [{"term": "badword", "severity": "high"}]}]}, fh)
+        json.dump(
+            {
+                "segments": [
+                    {
+                        "title": "s",
+                        "status": "blocked",
+                        "matches": [{"term": "badword", "severity": "high"}],
+                    }
+                ]
+            },
+            fh,
+        )
     virals = tmp_path / "VIRALS"
     virals.mkdir()
     (virals / "proj").mkdir()
     (virals / "proj" / "safety_report.json").write_text(
-        (project / "safety_report.json").read_text())
+        (project / "safety_report.json").read_text()
+    )
 
     out = learn_panel.extract_from_project("proj", apply=False, virals_dir=str(virals))
     assert "badword" in out
@@ -89,6 +104,7 @@ def test_run_analytics_not_configured(monkeypatch):
 
     def boom():
         raise RuntimeError("no credentials")
+
     monkeypatch.setattr(analytics_mod, "_build_services", boom)
     out = learn_panel.run_analytics("summary", 28)
     assert "❌" in out and "client_secrets" in out
@@ -99,9 +115,27 @@ def test_local_publish_summary(isolate_repo_root, tmp_path):
     project = virals / "project-a"
     project.mkdir(parents=True)
     history = [
-        {"timestamp": "2099-01-02T12:00:00Z", "platform": "youtube", "status": "uploaded", "privacy_status": "private", "title": "أفضل مقطع"},
-        {"timestamp": "2099-01-02T12:01:00Z", "platform": "youtube", "status": "failed", "privacy_status": "private", "title": "فشل"},
-        {"timestamp": "2099-01-02T12:02:00Z", "platform": "youtube", "status": "dry-run", "privacy_status": "public", "title": "محاكاة"},
+        {
+            "timestamp": "2099-01-02T12:00:00Z",
+            "platform": "youtube",
+            "status": "uploaded",
+            "privacy_status": "private",
+            "title": "أفضل مقطع",
+        },
+        {
+            "timestamp": "2099-01-02T12:01:00Z",
+            "platform": "youtube",
+            "status": "failed",
+            "privacy_status": "private",
+            "title": "فشل",
+        },
+        {
+            "timestamp": "2099-01-02T12:02:00Z",
+            "platform": "youtube",
+            "status": "dry-run",
+            "privacy_status": "public",
+            "title": "محاكاة",
+        },
     ]
     (project / "publish_history.jsonl").write_text(
         "\n".join(json.dumps(item, ensure_ascii=False) for item in history) + "\n",

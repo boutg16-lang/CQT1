@@ -1,4 +1,5 @@
 """Rights and transformation evidence for responsible short-form publishing."""
+
 from __future__ import annotations
 
 import json
@@ -84,7 +85,9 @@ def _clip_files(project_folder: str, index: int | None) -> list[str]:
             continue
         for name in files:
             lower = name.lower()
-            if token in name and lower.endswith((".json", ".mp4", ".mov", ".mkv", ".ass", ".srt", ".vtt")):
+            if token in name and lower.endswith(
+                (".json", ".mp4", ".mov", ".mkv", ".ass", ".srt", ".vtt")
+            ):
                 found.append(os.path.join(root, name))
     return found
 
@@ -95,7 +98,9 @@ def _declared_transformation(project_folder: str, index: int | None) -> dict[str
     if isinstance(transformation, dict):
         per_clip = transformation.get("clips")
         if isinstance(per_clip, dict):
-            transformation = per_clip.get(str(index), per_clip.get(index, transformation))
+            transformation = per_clip.get(
+                str(index), per_clip.get(index, transformation)
+            )
         if isinstance(transformation, dict):
             return transformation
     return {}
@@ -103,20 +108,59 @@ def _declared_transformation(project_folder: str, index: int | None) -> dict[str
 
 def _transformation_evidence(project_folder: str, index: int | None) -> dict[str, Any]:
     declared = _declared_transformation(project_folder, index)
-    files = [os.path.basename(path).lower() for path in _clip_files(project_folder, index)]
+    files = [
+        os.path.basename(path).lower() for path in _clip_files(project_folder, index)
+    ]
     evidence: list[dict[str, Any]] = []
 
     def add(name: str, weight: int, value: Any, source: str) -> None:
         if bool(value):
             evidence.append({"name": name, "weight": weight, "source": source})
 
-    add("commentary", 35, declared.get("commentary") or declared.get("original_analysis"), "manifest")
-    add("voiceover", 35, declared.get("voiceover") or declared.get("voiceover_path"), "manifest")
-    add("broll", 20, declared.get("broll") or any("broll" in name for name in files), "manifest_or_artifact")
-    add("substantive_edit", 15, declared.get("substantive_edit") or declared.get("editorial_edit"), "manifest")
-    add("face_reframe", 8, declared.get("face_reframe") or any("tracking" in name for name in files), "manifest_or_artifact")
-    add("captions", 5, declared.get("captions") or any(name.endswith((".ass", ".srt", ".vtt")) for name in files), "manifest_or_artifact")
-    add("branding", 3, declared.get("branding") or any("polish" in name or "logo" in name for name in files), "manifest_or_artifact")
+    add(
+        "commentary",
+        35,
+        declared.get("commentary") or declared.get("original_analysis"),
+        "manifest",
+    )
+    add(
+        "voiceover",
+        35,
+        declared.get("voiceover") or declared.get("voiceover_path"),
+        "manifest",
+    )
+    add(
+        "broll",
+        20,
+        declared.get("broll") or any("broll" in name for name in files),
+        "manifest_or_artifact",
+    )
+    add(
+        "substantive_edit",
+        15,
+        declared.get("substantive_edit") or declared.get("editorial_edit"),
+        "manifest",
+    )
+    add(
+        "face_reframe",
+        8,
+        declared.get("face_reframe") or any("tracking" in name for name in files),
+        "manifest_or_artifact",
+    )
+    add(
+        "captions",
+        5,
+        declared.get("captions")
+        or any(name.endswith((".ass", ".srt", ".vtt")) for name in files),
+        "manifest_or_artifact",
+    )
+    add(
+        "branding",
+        3,
+        declared.get("branding")
+        or any("polish" in name or "logo" in name for name in files),
+        "manifest_or_artifact",
+    )
     add("intro_outro", 5, declared.get("intro_outro"), "manifest")
 
     score = min(100, sum(item["weight"] for item in evidence))
@@ -129,9 +173,13 @@ def _transformation_evidence(project_folder: str, index: int | None) -> dict[str
     else:
         action = "review"
         status = "insufficient"
-        reasons = ["Captions, cropping, or re-encoding alone are not treated as meaningful transformation."]
+        reasons = [
+            "Captions, cropping, or re-encoding alone are not treated as meaningful transformation."
+        ]
         if not has_major:
-            reasons.append("Document commentary, voiceover, B-roll, or original analysis in the manifest.")
+            reasons.append(
+                "Document commentary, voiceover, B-roll, or original analysis in the manifest."
+            )
     return {
         "status": status,
         "action": action,
@@ -141,7 +189,9 @@ def _transformation_evidence(project_folder: str, index: int | None) -> dict[str
     }
 
 
-def assess_clip(project_folder: str, index: int | None, policy: str = "warn") -> dict[str, Any]:
+def assess_clip(
+    project_folder: str, index: int | None, policy: str = "warn"
+) -> dict[str, Any]:
     policy = str(policy or "warn").lower()
     if policy not in {"warn", "block"}:
         policy = "warn"
@@ -149,7 +199,9 @@ def assess_clip(project_folder: str, index: int | None, policy: str = "warn") ->
     transformation = _transformation_evidence(project_folder, index)
     reasons = list(rights.get("reasons", [])) + list(transformation.get("reasons", []))
     review = rights.get("action") != "allow" or transformation.get("action") != "allow"
-    action = "block" if policy == "block" and review else ("review" if review else "allow")
+    action = (
+        "block" if policy == "block" and review else ("review" if review else "allow")
+    )
     return {
         "policy": policy,
         "action": action,
@@ -193,7 +245,10 @@ def analyze_project(project_folder: str, policy: str = "warn") -> dict[str, Any]
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    parser = argparse.ArgumentParser(description="Audit rights and transformation evidence")
+
+    parser = argparse.ArgumentParser(
+        description="Audit rights and transformation evidence"
+    )
     parser.add_argument("--project", required=True)
     parser.add_argument("--policy", choices=["warn", "block"], default="warn")
     parser.add_argument("--init", action="store_true")
@@ -202,7 +257,18 @@ def main(argv: list[str] | None = None) -> int:
         path = os.path.join(args.project, RIGHTS_FILENAME)
         if not os.path.exists(path):
             with open(path, "w", encoding="utf-8") as handle:
-                json.dump({"basis": "licensed", "license": "", "proof_url": "", "attestation": False, "allow_publish": False}, handle, ensure_ascii=False, indent=2)
+                json.dump(
+                    {
+                        "basis": "licensed",
+                        "license": "",
+                        "proof_url": "",
+                        "attestation": False,
+                        "allow_publish": False,
+                    },
+                    handle,
+                    ensure_ascii=False,
+                    indent=2,
+                )
     report = analyze_project(args.project, policy=args.policy)
     print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
     return 1 if report["summary"]["blocked"] else 0

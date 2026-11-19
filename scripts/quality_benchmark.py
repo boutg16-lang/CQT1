@@ -1,4 +1,5 @@
 """Deterministic media-quality benchmark used locally and in CI."""
+
 from __future__ import annotations
 
 import argparse
@@ -66,14 +67,38 @@ def run_benchmark(output_path: str, *, keep_media: bool = False) -> Dict[str, An
     temp_dir = tempfile.mkdtemp(prefix="viralcutter-quality-")
     media_path = os.path.join(temp_dir, "fixture.mp4")
     try:
-        _run([
-            ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30:duration=6",
-            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=6",
-            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "128k", "-shortest", media_path,
-        ])
-        validation = media_validation.validate_media_file(media_path, require_audio=True, expected_aspect="16:9")
+        _run(
+            [
+                ffmpeg,
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=640x360:rate=30:duration=6",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=48000:duration=6",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-shortest",
+                media_path,
+            ]
+        )
+        validation = media_validation.validate_media_file(
+            media_path, require_audio=True, expected_aspect="16:9"
+        )
         audio = audio_qc.analyze_file(media_path)
         failures = _check_gates(validation, audio)
         report = {
@@ -99,12 +124,16 @@ def run_benchmark(output_path: str, *, keep_media: bool = False) -> Dict[str, An
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the deterministic video/audio quality benchmark")
+    parser = argparse.ArgumentParser(
+        description="Run the deterministic video/audio quality benchmark"
+    )
     parser.add_argument("--output", default="quality_benchmark.json")
     parser.add_argument("--keep-media", action="store_true")
     args = parser.parse_args(argv)
     report = run_benchmark(args.output, keep_media=args.keep_media)
-    print(json.dumps({"output": os.path.abspath(args.output), "passed": report["passed"]}))
+    print(
+        json.dumps({"output": os.path.abspath(args.output), "passed": report["passed"]})
+    )
     return 0 if report["passed"] else 1
 
 

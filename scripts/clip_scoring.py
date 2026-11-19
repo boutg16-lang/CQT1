@@ -64,7 +64,10 @@ DEFAULT_SELECTION_WEIGHTS = {
 # candidate by the pipeline (semantic/temporal repetition, safety flags).
 PENALTY_FACTORS = ("repetition_penalty", "safety_penalty")
 MODEL_INFLUENCED_FACTORS = (
-    "hook_strength", "standalone_context", "narrative_completeness")
+    "hook_strength",
+    "standalone_context",
+    "narrative_completeness",
+)
 MAX_MODEL_INFLUENCED_WEIGHT = 0.35
 
 # Historical factor name → current factor name. v7.40 shipped the completion
@@ -126,11 +129,17 @@ def load_selection_weights(env_var="VIRALCUTTER_SELECTION_WEIGHTS"):
                             raise ValueError("weight must be finite")
                         weights[key] = max(0.0, min(1.0, numeric))
                     except (TypeError, ValueError, OverflowError) as exc:
-                        logger.warning("Ignoring invalid selection weight %s (%s).",
-                                       key, type(exc).__name__)
+                        logger.warning(
+                            "Ignoring invalid selection weight %s (%s).",
+                            key,
+                            type(exc).__name__,
+                        )
         except (ValueError, TypeError) as exc:
-            logger.warning("Invalid %s JSON; using default selection weights (%s).",
-                           env_var, type(exc).__name__)
+            logger.warning(
+                "Invalid %s JSON; using default selection weights (%s).",
+                env_var,
+                type(exc).__name__,
+            )
     return weights
 
 
@@ -151,7 +160,9 @@ def min_final_score(default=0.0):
 
 
 def _normalized_positive_weights(weights=None):
-    supplied = weights if isinstance(weights, dict) and weights else DEFAULT_SELECTION_WEIGHTS
+    supplied = (
+        weights if isinstance(weights, dict) and weights else DEFAULT_SELECTION_WEIGHTS
+    )
     active = {}
     for name, default in DEFAULT_SELECTION_WEIGHTS.items():
         try:
@@ -170,17 +181,29 @@ def _normalized_positive_weights(weights=None):
     if reported_weight <= MAX_MODEL_INFLUENCED_WEIGHT:
         return normalized
 
-    deterministic = [name for name in normalized if name not in MODEL_INFLUENCED_FACTORS]
+    deterministic = [
+        name for name in normalized if name not in MODEL_INFLUENCED_FACTORS
+    ]
     deterministic_weight = sum(normalized[name] for name in deterministic)
     for name in MODEL_INFLUENCED_FACTORS:
-        normalized[name] = normalized[name] / reported_weight * MAX_MODEL_INFLUENCED_WEIGHT
+        normalized[name] = (
+            normalized[name] / reported_weight * MAX_MODEL_INFLUENCED_WEIGHT
+        )
     if deterministic_weight > 0.0:
         for name in deterministic:
-            normalized[name] = normalized[name] / deterministic_weight * (1.0 - MAX_MODEL_INFLUENCED_WEIGHT)
+            normalized[name] = (
+                normalized[name]
+                / deterministic_weight
+                * (1.0 - MAX_MODEL_INFLUENCED_WEIGHT)
+            )
     else:
         fallback_total = sum(DEFAULT_SELECTION_WEIGHTS[name] for name in deterministic)
         for name in deterministic:
-            normalized[name] = DEFAULT_SELECTION_WEIGHTS[name] / fallback_total * (1.0 - MAX_MODEL_INFLUENCED_WEIGHT)
+            normalized[name] = (
+                DEFAULT_SELECTION_WEIGHTS[name]
+                / fallback_total
+                * (1.0 - MAX_MODEL_INFLUENCED_WEIGHT)
+            )
     return normalized
 
 
@@ -226,7 +249,6 @@ def weights_fingerprint(weights=None):
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
-
 # ---------------------------------------------------------------------------
 # Deterministic factor helpers (0-100). Each takes plain data so it can be
 # unit-tested without the pipeline.
@@ -236,7 +258,8 @@ def weights_fingerprint(weights=None):
 _HOOK_WORDS_RE = re.compile(
     r"(?<!\w)(?:كيف|كيفاش|لماذا|علاش|واش|شنو|اشنو|شحال|سر|أسرار|خطأ|أخطاء|حقيقة|تجربتي"
     r"|how|why|secret|mistake|mistakes|truth|never|always|stop|warning)(?!\w)",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 _QUESTION_ENDINGS = ("?", "؟")
 
@@ -266,7 +289,8 @@ _EMOTION_WORDS_RE = re.compile(
     r"(?<!\w)(?:خطر|خوف|صدم|مفاجأ|عجيب|غريب|مذهل|رائع|رهيب|مؤلم|سعيد|حزين|مستحيل|مجنون"
     r"|ضحك|بكاء|غضب|حب|كره"
     r"|shocking|amazing|crazy|insane|unbelievable|fear|love|hate|pain|wow|never)(?!\w)",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def emotional_value_heuristic(text):

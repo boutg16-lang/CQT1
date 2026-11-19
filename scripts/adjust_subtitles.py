@@ -8,13 +8,34 @@ logger = logging.getLogger(__name__)
 RTL_LANGS = {"ar", "he", "fa", "ur"}
 
 EMOJI_MAP = {
-    "wow": "🤯", "amazing": "🔥", "awesome": "🔥", "love": "❤️",
-    "happy": "😊", "laugh": "😂", "funny": "😂", "sad": "😢",
-    "angry": "😡", "danger": "⚠️", "warning": "⚠️", "secret": "🤫",
-    "money": "💰", "win": "🏆", "success": "✅", "stop": "🛑",
-    "مفاجأة": "🤯", "رائع": "🔥", "حب": "❤️", "سعيد": "😊",
-    "ضحك": "😂", "حزين": "😢", "خطر": "⚠️", "تحذير": "⚠️",
-    "سر": "🤫", "مال": "💰", "نجاح": "✅", "توقف": "🛑",
+    "wow": "🤯",
+    "amazing": "🔥",
+    "awesome": "🔥",
+    "love": "❤️",
+    "happy": "😊",
+    "laugh": "😂",
+    "funny": "😂",
+    "sad": "😢",
+    "angry": "😡",
+    "danger": "⚠️",
+    "warning": "⚠️",
+    "secret": "🤫",
+    "money": "💰",
+    "win": "🏆",
+    "success": "✅",
+    "stop": "🛑",
+    "مفاجأة": "🤯",
+    "رائع": "🔥",
+    "حب": "❤️",
+    "سعيد": "😊",
+    "ضحك": "😂",
+    "حزين": "😢",
+    "خطر": "⚠️",
+    "تحذير": "⚠️",
+    "سر": "🤫",
+    "مال": "💰",
+    "نجاح": "✅",
+    "توقف": "🛑",
 }
 
 CAPTION_ANIMATIONS = {"none", "pop", "scale", "pop_scale", "bounce"}
@@ -23,7 +44,8 @@ CAPTION_ANIMATIONS = {"none", "pop", "scale", "pop_scale", "bounce"}
 def emoji_for_word(word):
     """Return a conservative emoji suffix for a supported keyword."""
     cleaned = "".join(
-        char for char in str(word or "").lower()
+        char
+        for char in str(word or "").lower()
         if char.isalnum() or "\u0600" <= char <= "\u06ff"
     )
     return EMOJI_MAP.get(cleaned, "")
@@ -44,6 +66,7 @@ def animation_tag(animation, start, end, base_size, highlight_size):
         return f"{{\\fscx92\\fscy92\\t(0,{first},\\fscx110\\fscy110)\\t({first},{duration},\\fscx100\\fscy100)}}"
     return f"{{\\fscx88\\fscy88\\t(0,{first},\\fscx110\\fscy110)\\t({first},{duration},\\fscx100\\fscy100)}}"
 
+
 def is_rtl_language(lang):
     if not lang:
         return False
@@ -54,6 +77,7 @@ def is_rtl_language(lang):
 def rtl_ass_prefix(lang):
     return "{\\rtl}" if is_rtl_language(lang) else ""
 
+
 def format_time_ass(time_seconds):
     # Work in whole centiseconds to avoid float truncation artifacts
     total_cs = int(round(float(time_seconds) * 100))
@@ -63,13 +87,36 @@ def format_time_ass(time_seconds):
     centiseconds = total_cs % 100
     return f"{hours:01}:{minutes:02}:{seconds:02}.{centiseconds:02}"
 
-def generate_ass_from_file(input_path, output_path, project_folder, 
-                           base_color, base_size, highlight_size, highlight_color, 
-                            words_per_block, gap_limit, mode, vertical_position, alignment, 
-                            font, outline_color, shadow_color, bold, italic, underline, 
-                            strikeout, border_style, outline_thickness, shadow_size, uppercase,
-                            face_modes=None, remove_punctuation=True, caption_animation="none",
-                            auto_emoji=False):
+
+def generate_ass_from_file(
+    input_path,
+    output_path,
+    project_folder,
+    base_color,
+    base_size,
+    highlight_size,
+    highlight_color,
+    words_per_block,
+    gap_limit,
+    mode,
+    vertical_position,
+    alignment,
+    font,
+    outline_color,
+    shadow_color,
+    bold,
+    italic,
+    underline,
+    strikeout,
+    border_style,
+    outline_thickness,
+    shadow_size,
+    uppercase,
+    face_modes=None,
+    remove_punctuation=True,
+    caption_animation="none",
+    auto_emoji=False,
+):
     """
     Generates a single ASS file from a JSON input.
     """
@@ -91,11 +138,15 @@ def generate_ass_from_file(input_path, output_path, project_folder,
 
     if os.path.exists(renamed_timeline_path):
         try:
-             with open(renamed_timeline_path, "r") as tf:
-                 timeline_data = json.load(tf)
+            with open(renamed_timeline_path, "r") as tf:
+                timeline_data = json.load(tf)
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("Could not load renamed subtitle timeline %s: %s", renamed_timeline_path, exc)
-    
+            logger.warning(
+                "Could not load renamed subtitle timeline %s: %s",
+                renamed_timeline_path,
+                exc,
+            )
+
     # Check for Index (outputXXX or XXX_Title)
     match_output = re.search(r"output(\d+)", filename)
     match_index = re.search(r"^(\d{3})_", filename)
@@ -107,20 +158,26 @@ def generate_ass_from_file(input_path, output_path, project_folder,
 
     # Fallback to temp timeline if not already loaded and idx known
     if not timeline_data and idx is not None:
-         csv_timeline = os.path.join(project_folder, "final", f"temp_video_no_audio_{idx}_timeline.json")
-         if os.path.exists(csv_timeline):
-             try:
-                 with open(csv_timeline, "r") as tf:
-                     timeline_data = json.load(tf)
-             except (OSError, json.JSONDecodeError) as exc:
-                 logger.warning("Could not load fallback subtitle timeline %s: %s", csv_timeline, exc)
+        csv_timeline = os.path.join(
+            project_folder, "final", f"temp_video_no_audio_{idx}_timeline.json"
+        )
+        if os.path.exists(csv_timeline):
+            try:
+                with open(csv_timeline, "r") as tf:
+                    timeline_data = json.load(tf)
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning(
+                    "Could not load fallback subtitle timeline %s: %s",
+                    csv_timeline,
+                    exc,
+                )
 
     # 3. Load JSON
     try:
         with open(input_path, "r", encoding="utf-8") as file:
             json_data = json.load(file)
-        
-        segments_count = len(json_data.get('segments', []))
+
+        segments_count = len(json_data.get("segments", []))
         print(f"[DEBUG] Loaded {input_path}: Found {segments_count} segments.")
     except Exception as e:
         print(f"[ERROR] Loading JSON {input_path}: {e}")
@@ -141,16 +198,15 @@ def generate_ass_from_file(input_path, output_path, project_folder,
     [Events]
     Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     """
-    
+
     total_lines_written = 0
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(header_ass)
 
-
         last_end_time = 0.0
 
-        for segment in json_data.get('segments', []):
-            words = segment.get('words', [])
+        for segment in json_data.get("segments", []):
+            words = segment.get("words", [])
             total_words = len(words)
 
             i = 0
@@ -158,41 +214,51 @@ def generate_ass_from_file(input_path, output_path, project_folder,
                 block = []
                 while len(block) < words_per_block and i < total_words:
                     current_word = words[i]
-                    if 'word' in current_word:
+                    if "word" in current_word:
                         if remove_punctuation:
-                                    cleaned_word = re.sub(r'[.,!?;]', '', current_word['word'])
-                                    if auto_emoji:
-                                        cleaned_word += (" " + emoji_for_word(cleaned_word)) if emoji_for_word(cleaned_word) else ""
-                                    block.append({**current_word, 'word': cleaned_word})
+                            cleaned_word = re.sub(r"[.,!?;]", "", current_word["word"])
+                            if auto_emoji:
+                                cleaned_word += (
+                                    (" " + emoji_for_word(cleaned_word))
+                                    if emoji_for_word(cleaned_word)
+                                    else ""
+                                )
+                            block.append({**current_word, "word": cleaned_word})
                         else:
-                                if auto_emoji:
-                                    decorated_word = str(current_word.get('word', ''))
-                                    emoji = emoji_for_word(decorated_word)
-                                    current_word = {**current_word, 'word': decorated_word + ((" " + emoji) if emoji else "")}
-                                block.append(current_word)
+                            if auto_emoji:
+                                decorated_word = str(current_word.get("word", ""))
+                                emoji = emoji_for_word(decorated_word)
+                                current_word = {
+                                    **current_word,
+                                    "word": decorated_word
+                                    + ((" " + emoji) if emoji else ""),
+                                }
+                            block.append(current_word)
 
                         if i + 1 < total_words:
                             next_word = words[i + 1]
-                            if 'start' not in next_word or 'end' not in next_word:
+                            if "start" not in next_word or "end" not in next_word:
                                 if remove_punctuation:
-                                    next_cleaned_word = re.sub(r'[.,!?;]', '', next_word['word'])
-                                    block[-1]['word'] += " " + next_cleaned_word
+                                    next_cleaned_word = re.sub(
+                                        r"[.,!?;]", "", next_word["word"]
+                                    )
+                                    block[-1]["word"] += " " + next_cleaned_word
                                 else:
-                                    block[-1]['word'] += " " + next_word['word']
+                                    block[-1]["word"] += " " + next_word["word"]
                                 i += 1
                     i += 1
 
-
                 # Uppercase transformation
                 if uppercase:
-                     for w_item in block:
-                         if 'word' in w_item:
-                             w_item['word'] = w_item['word'].upper()
+                    for w_item in block:
+                        if "word" in w_item:
+                            w_item["word"] = w_item["word"].upper()
 
-                start_times = [word.get('start', 0) for word in block]
-                end_times = [word.get('end', 0) for word in block]
-                
-                if not start_times: continue
+                start_times = [word.get("start", 0) for word in block]
+                end_times = [word.get("end", 0) for word in block]
+
+                if not start_times:
+                    continue
 
                 for j in range(len(block)):
                     start_sec = start_times[j]
@@ -208,13 +274,13 @@ def generate_ass_from_file(input_path, output_path, project_folder,
 
                     start_time_ass = format_time_ass(start_sec)
                     end_time_ass = format_time_ass(end_sec)
-                    
+
                     last_end_time = end_sec
 
                     line = ""
                     if mode == "highlight":
                         for k, word_data in enumerate(block):
-                            word = word_data['word']
+                            word = word_data["word"]
                             if k == j:
                                 line += f"{{\\fs{highlight_size}\\c{highlight_color}}}{word} "
                             else:
@@ -223,57 +289,101 @@ def generate_ass_from_file(input_path, output_path, project_folder,
 
                         line = line.strip()
 
-                    elif mode == "no_highlight" or mode == "sem_highlight" or mode == "sem_higlight": 
-                        line = " ".join(word_data['word'] for word_data in block).strip()
+                    elif (
+                        mode == "no_highlight"
+                        or mode == "sem_highlight"
+                        or mode == "sem_higlight"
+                    ):
+                        line = " ".join(
+                            word_data["word"] for word_data in block
+                        ).strip()
 
-                    elif mode == "word_by_word" or mode == "palavra_por_palavra": 
-                        line = block[j]['word'].strip()
-                    
+                    elif mode == "word_by_word" or mode == "palavra_por_palavra":
+                        line = block[j]["word"].strip()
+
                     else:
                         # Fallback / No Highlight
-                        line = " ".join(word_data['word'] for word_data in block).strip()
+                        line = " ".join(
+                            word_data["word"] for word_data in block
+                        ).strip()
 
                     if caption_animation != "none":
-                        line = animation_tag(caption_animation, start_sec, end_sec, base_size, highlight_size) + line
+                        line = (
+                            animation_tag(
+                                caption_animation,
+                                start_sec,
+                                end_sec,
+                                base_size,
+                                highlight_size,
+                            )
+                            + line
+                        )
 
                     # Check dynamic timeline for this specific time
                     pos_tag = ""
-                    
+
                     if timeline_data:
                         # Verify if middle of subtitle is in a '2' mode segment
                         mid_time = (start_sec + end_sec) / 2
                         found_mode = "1"
                         for seg in timeline_data:
-                            if seg['start'] <= mid_time <= seg['end']:
-                                found_mode = seg['mode']
+                            if seg["start"] <= mid_time <= seg["end"]:
+                                found_mode = seg["mode"]
                                 break
-                        
+
                         if found_mode == "2":
-                             # Force Center (Relative to PlayRes 360x640)
-                             x_pos = 360 // 2  # 180
-                             y_pos = 640 // 2  # 320
-                             current_line_alignment = 5 # Center
-                             
-                             # Apply Override Tags: {\an5\pos(x,y)}
-                             pos_tag = f"{{\\an{current_line_alignment}\\pos({x_pos},{y_pos})}}"
-                             final_line = f"{pos_tag}{line}"
+                            # Force Center (Relative to PlayRes 360x640)
+                            x_pos = 360 // 2  # 180
+                            y_pos = 640 // 2  # 320
+                            current_line_alignment = 5  # Center
+
+                            # Apply Override Tags: {\an5\pos(x,y)}
+                            pos_tag = f"{{\\an{current_line_alignment}\\pos({x_pos},{y_pos})}}"
+                            final_line = f"{pos_tag}{line}"
                         else:
-                             # Mode 1: Respect User Config (Standard Style)
-                             final_line = line
+                            # Mode 1: Respect User Config (Standard Style)
+                            final_line = line
                     else:
                         final_line = line
 
-                    f.write(f"Dialogue: 0,{start_time_ass},{end_time_ass},Default,,0,0,0,,{final_line}\n")
+                    f.write(
+                        f"Dialogue: 0,{start_time_ass},{end_time_ass},Default,,0,0,0,,{final_line}\n"
+                    )
                     total_lines_written += 1
-    
+
     if total_lines_written == 0:
         print(f"[WARN] No dialogue lines written for {input_path}")
     else:
         print(f"[DEBUG] Wrote {total_lines_written} lines to {output_path}")
 
 
-def adjust(base_color, base_size, highlight_size, highlight_color, words_per_block, gap_limit, mode, vertical_position, alignment, font, outline_color, shadow_color, bold, italic, underline, strikeout, border_style, outline_thickness, shadow_size, uppercase=False, project_folder="tmp", caption_animation="none", auto_emoji=False, **kwargs):
-    
+def adjust(
+    base_color,
+    base_size,
+    highlight_size,
+    highlight_color,
+    words_per_block,
+    gap_limit,
+    mode,
+    vertical_position,
+    alignment,
+    font,
+    outline_color,
+    shadow_color,
+    bold,
+    italic,
+    underline,
+    strikeout,
+    border_style,
+    outline_thickness,
+    shadow_size,
+    uppercase=False,
+    project_folder="tmp",
+    caption_animation="none",
+    auto_emoji=False,
+    **kwargs,
+):
+
     # Input and Output Directories
     input_dir = os.path.join(project_folder, "subs")
     output_dir = os.path.join(project_folder, "subs_ass")
@@ -281,16 +391,16 @@ def adjust(base_color, base_size, highlight_size, highlight_color, words_per_blo
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
-    remove_punctuation = kwargs.get('remove_punctuation', True)
+    remove_punctuation = kwargs.get("remove_punctuation", True)
 
     # Load face modes if available
     face_modes = {}
     modes_file = os.path.join(project_folder, "face_modes.json")
     if os.path.exists(modes_file):
         try:
-             with open(modes_file, "r") as f:
-                 face_modes = json.load(f)
-             print("Loaded face modes for dynamic subtitle positioning.")
+            with open(modes_file, "r") as f:
+                face_modes = json.load(f)
+            print("Loaded face modes for dynamic subtitle positioning.")
         except Exception as e:
             print(f"Could not load face modes: {e}")
 
@@ -298,20 +408,45 @@ def adjust(base_color, base_size, highlight_size, highlight_color, words_per_blo
     # Process all JSON files in input directory
     if not os.path.exists(input_dir):
         print(f"[ERROR] Subtitle folder missing: {input_dir}")
-        raise FileNotFoundError(f"Subtitle folder missing at {input_dir}. Ensure transcription completed successfully.")
+        raise FileNotFoundError(
+            f"Subtitle folder missing at {input_dir}. Ensure transcription completed successfully."
+        )
 
     for filename in os.listdir(input_dir):
         if filename.endswith(".json"):
             input_path = os.path.join(input_dir, filename)
             output_filename = os.path.splitext(filename)[0] + ".ass"
             output_path = os.path.join(output_dir, output_filename)
-            
-            generate_ass_from_file(input_path, output_path, project_folder, 
-                           base_color, base_size, highlight_size, highlight_color, 
-                           words_per_block, gap_limit, mode, vertical_position, alignment, 
-                           font, outline_color, shadow_color, bold, italic, underline, 
-                           strikeout, border_style, outline_thickness, shadow_size, uppercase,
-                           face_modes, remove_punctuation, caption_animation, auto_emoji)
+
+            generate_ass_from_file(
+                input_path,
+                output_path,
+                project_folder,
+                base_color,
+                base_size,
+                highlight_size,
+                highlight_color,
+                words_per_block,
+                gap_limit,
+                mode,
+                vertical_position,
+                alignment,
+                font,
+                outline_color,
+                shadow_color,
+                bold,
+                italic,
+                underline,
+                strikeout,
+                border_style,
+                outline_thickness,
+                shadow_size,
+                uppercase,
+                face_modes,
+                remove_punctuation,
+                caption_animation,
+                auto_emoji,
+            )
 
             print(f"Processed file: {filename} -> {output_filename}")
 

@@ -114,11 +114,17 @@ def main(argv=None):
             return 1
         print("[OK] WebSockets within {} is compatible.".format(COMPATIBILITY_SPEC))
         return 0
-    print("[INFO] Reinstalling WebSockets within {} without changing other packages.".format(COMPATIBILITY_SPEC))
+    print(
+        "[INFO] Reinstalling WebSockets within {} without changing other packages.".format(
+            COMPATIBILITY_SPEC
+        )
+    )
     if repair():
         print("[OK] WebSockets within {} is compatible.".format(COMPATIBILITY_SPEC))
         return 0
-    print("[ERROR] WebSockets repair failed. Close OUSSAMA Cutter and Python processes, then retry.")
+    print(
+        "[ERROR] WebSockets repair failed. Close OUSSAMA Cutter and Python processes, then retry."
+    )
     return 1
 
 

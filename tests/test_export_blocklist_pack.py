@@ -27,13 +27,17 @@ def _run(monkeypatch, *argv):
 
 
 def _expected_terms():
-    return sorted((term, lang, severity, category)
-                  for term, lang, severity, category in safety_filter.BLOCKLIST)
+    return sorted(
+        (term, lang, severity, category)
+        for term, lang, severity, category in safety_filter.BLOCKLIST
+    )
 
 
 def _pack_terms(pack):
-    return sorted((item["term"], item["lang"], item["severity"], item["category"])
-                  for item in pack["terms"])
+    return sorted(
+        (item["term"], item["lang"], item["severity"], item["category"])
+        for item in pack["terms"]
+    )
 
 
 def test_export_writes_matching_pack(tmp_path, monkeypatch):
@@ -52,8 +56,16 @@ def test_export_writes_matching_pack(tmp_path, monkeypatch):
 def test_export_separates_review_date_from_content_update_date(tmp_path, monkeypatch):
     out = tmp_path / "pack.json"
     _run(
-        monkeypatch, "--version", "7", "--updated", "2026-09-27",
-        "--reviewed-at", "2026-10-25", "--out", str(out))
+        monkeypatch,
+        "--version",
+        "7",
+        "--updated",
+        "2026-09-27",
+        "--reviewed-at",
+        "2026-10-25",
+        "--out",
+        str(out),
+    )
 
     pack = json.loads(out.read_text(encoding="utf-8"))
     assert pack["version"] == 7
@@ -63,8 +75,9 @@ def test_export_separates_review_date_from_content_update_date(tmp_path, monkeyp
 
 
 def test_export_requires_version(tmp_path, monkeypatch):
-    monkeypatch.setattr(sys, "argv",
-                        ["export_blocklist_pack", "--out", str(tmp_path / "x.json")])
+    monkeypatch.setattr(
+        sys, "argv", ["export_blocklist_pack", "--out", str(tmp_path / "x.json")]
+    )
     with pytest.raises(SystemExit) as exc:
         export_blocklist_pack.main()
     assert exc.value.code == 2
@@ -92,4 +105,5 @@ def test_committed_pack_is_in_sync_with_builtin_blocklist():
     assert _pack_terms(pack) == _expected_terms(), (
         "safety_blocklist.json drifted from safety_filter.BLOCKLIST — run "
         "`python scripts/export_blocklist_pack.py --version N+1` and commit it, "
-        "otherwise users never receive the new safety terms.")
+        "otherwise users never receive the new safety terms."
+    )

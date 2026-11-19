@@ -6,6 +6,7 @@ attaches /virals + /export_xml_api manually via attach_extra_routes(app).
 This test reproduces that sequence and probes /virals/... with no
 credentials. It reports the observed status so the fix can be evidence-based.
 """
+
 import base64
 import os
 import socket
@@ -66,7 +67,11 @@ def _probe(app, port, path="/virals/secret.txt", creds=None):
     req = urllib.request.Request(url)
     if creds:
         import base64
-        req.add_header("Authorization", "Basic " + base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode())
+
+        req.add_header(
+            "Authorization",
+            "Basic " + base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode(),
+        )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.status, resp.read().decode("utf-8", "replace")
@@ -84,10 +89,14 @@ def _shutdown(app):
 def test_probe_virals_mount_without_credentials(tmp_path):
     app, port = _launch_windows_style(tmp_path, install_middleware=True)
     status, body = _probe(app, port)
-    print(f"\nPROBE RESULT: GET /virals/secret.txt without credentials -> HTTP {status}")
+    print(
+        f"\nPROBE RESULT: GET /virals/secret.txt without credentials -> HTTP {status}"
+    )
     print(f"BODY: {body[:80]!r}")
     _shutdown(app)
-    assert status == 401, f"UNAUTHENTICATED ACCESS CONFIRMED: HTTP {status}, body={body[:60]!r}"
+    assert status == 401, (
+        f"UNAUTHENTICATED ACCESS CONFIRMED: HTTP {status}, body={body[:60]!r}"
+    )
 
 
 def test_probe_virals_mount_with_valid_credentials(tmp_path):
@@ -187,7 +196,9 @@ def test_real_launch_windows_branch_protects_virals(monkeypatch, tmp_path):
     monkeypatch.setenv("VIRALCUTTER_DISABLE_SAFETY_WATCHER", "1")
     monkeypatch.delenv("VIRALCUTTER_HOST", raising=False)
     monkeypatch.setattr("os.name", "nt")
-    monkeypatch.setattr("webbrowser.open", lambda *a, **k: None)    # os.name='nt' also flips pathlib.Path() into WindowsPath on Linux, which
+    monkeypatch.setattr(
+        "webbrowser.open", lambda *a, **k: None
+    )  # os.name='nt' also flips pathlib.Path() into WindowsPath on Linux, which
     # crashes on .resolve(). Force the POSIX flavour for the duration of the
     # launch so the simulation exercises the auth wiring, not the FS flavour.
     import pathlib
@@ -213,7 +224,9 @@ def test_real_launch_windows_branch_protects_virals(monkeypatch, tmp_path):
         port = _port_from_url(captured["local_url"])
 
         status, body = _probe(app, port)
-        assert status == 401, f"UNAUTHENTICATED ACCESS on real Windows branch: HTTP {status}"
+        assert status == 401, (
+            f"UNAUTHENTICATED ACCESS on real Windows branch: HTTP {status}"
+        )
         status, body = _probe(app, port, creds=(AUTH_USER, AUTH_PASS))
         assert status == 200 and "top-secret" in body, (status, body[:60])
     finally:
@@ -248,7 +261,9 @@ def test_real_launch_colab_branch_protects_virals(monkeypatch):
         port = _port_from_url(captured["local_url"])
 
         status, body = _probe(app, port)
-        assert status == 401, f"UNAUTHENTICATED ACCESS on real colab branch: HTTP {status}"
+        assert status == 401, (
+            f"UNAUTHENTICATED ACCESS on real colab branch: HTTP {status}"
+        )
         status, body = _probe(app, port, creds=(AUTH_USER, AUTH_PASS))
         assert status == 200 and "top-secret" in body, (status, body[:60])
     finally:

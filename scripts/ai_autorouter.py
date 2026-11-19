@@ -35,22 +35,33 @@ PROBE_TIMEOUT = 2.0
 DEFAULT_MAX_PARAMS_B = 14.0  # conservative laptop/consumer-GPU ceiling
 
 _EMBEDDING_NAME_RE = re.compile(
-    r"(embed|bge|gte|e5[-_]|nomic|mxbai|paraphrase|rerank|all-minilm)", re.IGNORECASE)
+    r"(embed|bge|gte|e5[-_]|nomic|mxbai|paraphrase|rerank|all-minilm)", re.IGNORECASE
+)
 _SIZE_RE = re.compile(r"(?<![a-z0-9])(\d+(?:\.\d+)?)\s*b(?![a-z])", re.IGNORECASE)
 _MOE_RE = re.compile(r"(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*b", re.IGNORECASE)
 
 _FAMILY_BONUS = {
-    "qwen2.5": 40, "qwen3": 45, "qwen2": 35,
-    "llama3.3": 42, "llama3.1": 38, "llama3": 34,
-    "gpt-oss": 44, "mistral-nemo": 30, "mistral": 26,
-    "gemma3": 32, "gemma2": 28, "deepseek-r1": 36,
-    "phi4": 27, "yi": 24, "command-r": 25,
+    "qwen2.5": 40,
+    "qwen3": 45,
+    "qwen2": 35,
+    "llama3.3": 42,
+    "llama3.1": 38,
+    "llama3": 34,
+    "gpt-oss": 44,
+    "mistral-nemo": 30,
+    "mistral": 26,
+    "gemma3": 32,
+    "gemma2": 28,
+    "deepseek-r1": 36,
+    "phi4": 27,
+    "yi": 24,
+    "command-r": 25,
 }
 
 
 @dataclass
 class Candidate:
-    backend: str                 # "openai" | "gemini" | "g4f"
+    backend: str  # "openai" | "gemini" | "g4f"
     model: str = ""
     base_url: str = ""
     label: str = ""
@@ -60,17 +71,22 @@ class Candidate:
 
     def describe(self) -> str:
         if self.backend == "openai":
-            return "{} ({}{})".format(self.model or "model",
-                                      "local " if self.local else "",
-                                      self.base_url)
+            return "{} ({}{})".format(
+                self.model or "model", "local " if self.local else "", self.base_url
+            )
         if self.backend == "gemini":
             return "Gemini / {}".format(self.model)
         return "g4f / {}".format(self.model or "default")
 
 
 def _is_local_url(url: str) -> bool:
-    return bool(re.search(r"^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|\/)",
-                          str(url or ""), re.IGNORECASE))
+    return bool(
+        re.search(
+            r"^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|\/)",
+            str(url or ""),
+            re.IGNORECASE,
+        )
+    )
 
 
 def _max_params() -> float:
@@ -127,8 +143,11 @@ def model_score(name: str, cap: float | None = None) -> float:
 
 
 def select_model(models, cap: float | None = None) -> str:
-    ranked = sorted((model for model in models or [] if model),
-                    key=lambda name: model_score(name, cap), reverse=True)
+    ranked = sorted(
+        (model for model in models or [] if model),
+        key=lambda name: model_score(name, cap),
+        reverse=True,
+    )
     return ranked[0] if ranked else ""
 
 
@@ -143,16 +162,18 @@ def _config_for(base_url: str, config: dict | None) -> dict:
 def _url_key(url: str) -> str:
     """Canonical probe key: localhost aliases are the same server."""
     text = str(url or "").strip().rstrip("/")
-    match = re.match(r"^(https?)://([^/:]+)(?::(\d+))?(/.*)?$", text,
-                     flags=re.IGNORECASE)
+    match = re.match(
+        r"^(https?)://([^/:]+)(?::(\d+))?(/.*)?$", text, flags=re.IGNORECASE
+    )
     if not match:
         return text
     scheme, host, port, path = match.groups()
     host = host.lower()
     if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"}:
         host = "localhost"
-    return "{}://{}{}{}".format(scheme.lower(), host,
-                                ":" + port if port else "", path or "")
+    return "{}://{}{}{}".format(
+        scheme.lower(), host, ":" + port if port else "", path or ""
+    )
 
 
 def _openai_candidates(config: dict | None, timeout: float) -> list[Candidate]:
@@ -170,9 +191,11 @@ def _openai_candidates(config: dict | None, timeout: float) -> list[Candidate]:
     # an explicit OpenRouter/Groq URL must not be silently outranked by an
     # Ollama instance that happens to be running on the same machine.
     urls = explicit or [openai_compat.DEFAULT_BASE_URL]
-    key = (os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
-           or os.getenv("OPENAI_API_KEY", "").strip()
-           or str(section.get("api_key") or "").strip())
+    key = (
+        os.getenv("VIRALCUTTER_OPENAI_KEY", "").strip()
+        or os.getenv("OPENAI_API_KEY", "").strip()
+        or str(section.get("api_key") or "").strip()
+    )
     candidates = []
     seen_urls = set()
     for url in urls:
@@ -188,31 +211,41 @@ def _openai_candidates(config: dict | None, timeout: float) -> list[Candidate]:
         cfg["openai"]["api_key"] = key
         try:
             models = openai_compat.list_models(
-                config=cfg, timeout=timeout, base_url=clean_url, api_key=key)
+                config=cfg, timeout=timeout, base_url=clean_url, api_key=key
+            )
         except openai_compat.OpenAICompatError:
             continue
         # The configured model wins when it exists on this server; otherwise
         # rank the server's own list.
         configured = str(section.get("model") or "").strip()
-        if (configured and configured in models
-                and not _EMBEDDING_NAME_RE.search(configured)):
+        if (
+            configured
+            and configured in models
+            and not _EMBEDDING_NAME_RE.search(configured)
+        ):
             model = configured
         else:
             model = select_model(models)
         if not model:
             continue
-        candidates.append(Candidate(
-            backend="openai", model=model, base_url=clean_url,
-            label="OpenAI-compatible", local=_is_local_url(clean_url),
-            chunk_size=int(section.get("chunk_size") or 12000),
-            config=cfg,
-        ))
+        candidates.append(
+            Candidate(
+                backend="openai",
+                model=model,
+                base_url=clean_url,
+                label="OpenAI-compatible",
+                local=_is_local_url(clean_url),
+                chunk_size=int(section.get("chunk_size") or 12000),
+                config=cfg,
+            )
+        )
     return candidates
 
 
 def _gemini_candidate(config: dict | None) -> Candidate | None:
     try:
         from scripts.secure_config import resolve_api_keys
+
         keys = resolve_api_keys(warn=False)
     except Exception:
         keys = []
@@ -222,10 +255,11 @@ def _gemini_candidate(config: dict | None) -> Candidate | None:
     section = section if isinstance(section, dict) else {}
     model = resolve_gemini_model(section.get("model") or DEFAULT_GEMINI_MODEL)
     return Candidate(
-        backend="gemini", model=model, label="Gemini",
+        backend="gemini",
+        model=model,
+        label="Gemini",
         chunk_size=int(section.get("chunk_size") or 20000),
-        config={"gemini": {"api_key": keys[0], "api_keys": keys,
-                           "model": model}},
+        config={"gemini": {"api_key": keys[0], "api_keys": keys, "model": model}},
     )
 
 
@@ -235,14 +269,17 @@ def _g4f_candidate(config: dict | None) -> Candidate | None:
     section = (config or {}).get("g4f") if isinstance(config, dict) else {}
     section = section if isinstance(section, dict) else {}
     return Candidate(
-        backend="g4f", model=str(section.get("model") or "gpt-4o-mini"),
-        label="g4f", chunk_size=int(section.get("chunk_size") or 2000),
+        backend="g4f",
+        model=str(section.get("model") or "gpt-4o-mini"),
+        label="g4f",
+        chunk_size=int(section.get("chunk_size") or 2000),
         config={"g4f": section},
     )
 
 
-def detect(config: dict | None = None, *, prefer: str = "",
-           timeout: float = PROBE_TIMEOUT) -> list[Candidate]:
+def detect(
+    config: dict | None = None, *, prefer: str = "", timeout: float = PROBE_TIMEOUT
+) -> list[Candidate]:
     """Return every usable provider, best first. Never raises."""
     candidates = []
     try:
@@ -271,11 +308,13 @@ def detect(config: dict | None = None, *, prefer: str = "",
     candidates.sort(key=rank)
     prefer = str(prefer or "").strip().lower()
     if prefer:
-        preferred = [candidate for candidate in candidates
-                     if candidate.backend == prefer]
+        preferred = [
+            candidate for candidate in candidates if candidate.backend == prefer
+        ]
         if preferred:
-            candidates = preferred + [candidate for candidate in candidates
-                                      if candidate.backend != prefer]
+            candidates = preferred + [
+                candidate for candidate in candidates if candidate.backend != prefer
+            ]
     return candidates
 
 
@@ -319,13 +358,13 @@ class AutoRouter:
             try:
                 output = callback(candidate, prompt)
             except Exception as exc:
-                self.errors.append("{}: {}".format(
-                    candidate.describe(), type(exc).__name__))
+                self.errors.append(
+                    "{}: {}".format(candidate.describe(), type(exc).__name__)
+                )
                 continue
             text = str(output or "").strip()
             if not text or text == "{}":
-                self.errors.append("{}: empty response".format(
-                    candidate.describe()))
+                self.errors.append("{}: empty response".format(candidate.describe()))
                 continue
             self.used = candidate
             return text
@@ -339,7 +378,9 @@ def embedding_model_for(candidates) -> str:
         if candidate.backend != "openai":
             continue
         try:
-            models = openai_compat.list_models(config=candidate.config, timeout=PROBE_TIMEOUT)
+            models = openai_compat.list_models(
+                config=candidate.config, timeout=PROBE_TIMEOUT
+            )
         except openai_compat.OpenAICompatError:
             continue
         matches = [model for model in models if _EMBEDDING_NAME_RE.search(model)]
