@@ -387,7 +387,10 @@ def write_outputs(
         srt_blocks.append(
             f"{index}\n{_timestamp(start)} --> {_timestamp(end)}\n{text}\n"
         )
-        tsv_lines.append(f"{start:.3f}\t{end:.3f}\t{text}")
+        # WhisperX TSV contract: integer milliseconds. Downstream parsers
+        # (create_viral_segments._parse_tsv_transcript, safety_filter) divide
+        # by 1000, so writing seconds here collapsed every transcript 1000x.
+        tsv_lines.append(f"{start * 1000:.0f}\t{end * 1000:.0f}\t{text}")
     _atomic_write(srt_path, "\n".join(srt_blocks) + "\n")
     _atomic_write(tsv_path, "\n".join(tsv_lines) + "\n")
     _atomic_write(json_path, json.dumps(result, ensure_ascii=False, indent=2) + "\n")

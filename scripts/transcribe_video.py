@@ -1067,8 +1067,10 @@ def transcribe(input_file, model_name="large-v3", project_folder="tmp", device="
                 "1\n00:00:00,000 --> 00:00:02,000\nWhisperX not installed. Install it for full transcription.\n"
             )
         with open(tsv_file, "w", encoding="utf-8") as f:
+            # WhisperX TSV contract: integer milliseconds (see
+            # transcription_fallback.write_outputs).
             f.write(
-                "start\tend\ttext\n0.0\t2.0\tWhisperX not installed. Install it for full transcription.\n"
+                "start\tend\ttext\n0\t2000\tWhisperX not installed. Install it for full transcription.\n"
             )
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(placeholder, f, ensure_ascii=False, indent=2)
