@@ -3,6 +3,7 @@
 المحرّك: يقرأ نصًا (ترجمة/بث/دردشة) ويطلع مخالفات محتملة مع طوابع زمنية.
 Rule-based Arabic content-risk engine tuned to YouTube Community Guidelines.
 """
+
 import html
 import json
 import logging
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 class Engine:
     def __init__(self):
-        self.by_stem = {}      # جذع -> [entry]
-        self.phrases = []      # (regex, entry)
+        self.by_stem = {}  # جذع -> [entry]
+        self.phrases = []  # (regex, entry)
         self.groups = set()
         for g in policy.GROUPS:
             self.groups.add(arabic.normalize(g))
@@ -42,8 +43,11 @@ class Engine:
             if not term:
                 continue
             if " " in term:
-                pat = r"(?<![\w\u0600-\u06FF])" + re.escape(term).replace(r"\ ", r"\s+") + \
-                      r"(?![\w\u0600-\u06FF])"
+                pat = (
+                    r"(?<![\w\u0600-\u06FF])"
+                    + re.escape(term).replace(r"\ ", r"\s+")
+                    + r"(?![\w\u0600-\u06FF])"
+                )
                 self.phrases.append((re.compile(pat), e))
             else:
                 _st = arabic.stems(term) or {term}
@@ -52,6 +56,7 @@ class Engine:
 
         def _clean(lst):
             return [t for t in (arabic.normalize(x) for x in lst) if t.strip()]
+
         self.soft = _clean(policy.SOFTENERS)
         self.hard = _clean(policy.HARDENERS)
         self.neg = _clean(policy.NEGATIONS)
@@ -84,7 +89,7 @@ class Engine:
             return []
 
         # --- تجميع الإشارات ---
-        signals = {}   # kind -> أفضل عنصر
+        signals = {}  # kind -> أفضل عنصر
         term_positions = []
 
         for entry, s, e, tok in found:
@@ -116,15 +121,17 @@ class Engine:
         results = []
 
         def add(sev, cat, entry, s, e, reason):
-            results.append({
-                "severity": sev,
-                "category": cat,
-                "category_label": policy.CATEGORY_LABEL.get(cat, cat),
-                "term": entry["t"] if entry else "",
-                "kind": entry["kind"] if entry else "",
-                "reason": reason,
-                "span": [s, e],
-            })
+            results.append(
+                {
+                    "severity": sev,
+                    "category": cat,
+                    "category_label": policy.CATEGORY_LABEL.get(cat, cat),
+                    "term": entry["t"] if entry else "",
+                    "kind": entry["kind"] if entry else "",
+                    "reason": reason,
+                    "span": [s, e],
+                }
+            )
 
         # إشارات "صارمة": تلك التي تكفي بمفردها
         strict = {k: v for k, v in signals.items() if not v[0].get("needs_group")}
@@ -149,30 +156,48 @@ class Engine:
             sev = "critical"
             if soft or (neg and not hard):
                 sev = "medium"
-                reason = ("عبارة تحقيرية موجّهة لمجموعة محميّة، لكن سياقها يبدو "
-                          "اقتباسًا/نقلًا أو نفيًا — تحتاج مراجعة بشرية.")
+                reason = (
+                    "عبارة تحقيرية موجّهة لمجموعة محميّة، لكن سياقها يبدو "
+                    "اقتباسًا/نقلًا أو نفيًا — تحتاج مراجعة بشرية."
+                )
             elif neg:
                 sev = "high"
-                reason = ("إهانة موجّهة لمجموعة محميّة داخل سياق نفي — "
-                          "احتمال استشهاد بالكلام لنقده.")
+                reason = (
+                    "إهانة موجّهة لمجموعة محميّة داخل سياق نفي — "
+                    "احتمال استشهاد بالكلام لنقده."
+                )
             else:
-                reason = ("مجموعة محميّة + %s — هذا هو التعريف المباشر لخطاب "
-                          "الكراهية في سياسات يوتيوب." % _kind_ar(top[0]["kind"]))
+                reason = (
+                    "مجموعة محميّة + %s — هذا هو التعريف المباشر لخطاب "
+                    "الكراهية في سياسات يوتيوب." % _kind_ar(top[0]["kind"])
+                )
             add(sev, "hate", top[0], top[1], top[2], reason)
 
         # 2) تجريد من الإنسانية بدون تسمية مجموعة
         elif s_dehuman:
             dehuman = s_dehuman
             sev = "high" if not soft else "medium"
-            add(sev, "hate", dehuman[0], dehuman[1], dehuman[2],
+            add(
+                sev,
+                "hate",
+                dehuman[0],
+                dehuman[1],
+                dehuman[2],
                 "وصف مُجرِّد من الإنسانية (تشبيه بجراثيم/حشرات/مرض) — "
-                "يُصنَّف خطاب كراهية حتى دون ذكر المجموعة صراحة.")
+                "يُصنَّف خطاب كراهية حتى دون ذكر المجموعة صراحة.",
+            )
 
         # 3) دعوة للإقصاء/الطرد
         elif exclude:
             sev = "high" if not (soft or neg) else "medium"
-            add(sev, "hate", exclude[0], exclude[1], exclude[2],
-                "دعوة لطرد/إقصاء/تمييز — محظورة بغضّ النظر عن المجموعة المستهدَفة.")
+            add(
+                sev,
+                "hate",
+                exclude[0],
+                exclude[1],
+                exclude[2],
+                "دعوة لطرد/إقصاء/تمييز — محظورة بغضّ النظر عن المجموعة المستهدَفة.",
+            )
 
         # 4) عنف صريح
         elif viol:
@@ -181,60 +206,124 @@ class Engine:
                 sev = "medium"
             if soft or neg:
                 sev = "medium" if sev == "high" else "low"
-            add(sev, "violence", viol[0], viol[1], viol[2],
-                "عنف صريح/تهديد — قد يُصنَّف تهديدًا أو تحريضًا على العنف.")
+            add(
+                sev,
+                "violence",
+                viol[0],
+                viol[1],
+                viol[2],
+                "عنف صريح/تهديد — قد يُصنَّف تهديدًا أو تحريضًا على العنف.",
+            )
 
         # 5) تطرّف عنيف
         elif ext:
             if praise:
-                add("critical", "violent_extremism", ext[0], ext[1], ext[2],
+                add(
+                    "critical",
+                    "violent_extremism",
+                    ext[0],
+                    ext[1],
+                    ext[2],
                     "إشادة/دعم صريح لتنظيم أو خطاب متطرّف — مخالفة مباشرة "
-                    "(الترويج للتطرّف العنيف).")
+                    "(الترويج للتطرّف العنيف).",
+                )
             elif soft or neg:
-                add("info", "violent_extremism", ext[0], ext[1], ext[2],
-                    "ذكر التنظيم في سياق إدانة/نقل خبر — لا مخالفة.")
+                add(
+                    "info",
+                    "violent_extremism",
+                    ext[0],
+                    ext[1],
+                    ext[2],
+                    "ذكر التنظيم في سياق إدانة/نقل خبر — لا مخالفة.",
+                )
             else:
-                add("low", "violent_extremism", ext[0], ext[1], ext[2],
-                    "ذكر تنظيم متطرّف دون إدانة صريحة — راجع النبرة.")
+                add(
+                    "low",
+                    "violent_extremism",
+                    ext[0],
+                    ext[1],
+                    ext[2],
+                    "ذكر تنظيم متطرّف دون إدانة صريحة — راجع النبرة.",
+                )
 
         # 6) إهانة بدون مجموعة => تحرّش
         elif s_slur:
             slur = s_slur
-            add("medium", "harassment", slur[0], slur[1], slur[2],
-                "وصف مهين لشخص/جهة — قد يُصنَّف تحرّشًا أو تنمّرًا.")
+            add(
+                "medium",
+                "harassment",
+                slur[0],
+                slur[1],
+                slur[2],
+                "وصف مهين لشخص/جهة — قد يُصنَّف تحرّشًا أو تنمّرًا.",
+            )
 
         # 7) محتوى للبالغين
         elif adult:
-            add("high", "adult", adult[0], adult[1], adult[2],
-                "إيحاء/محتوى جنسي — محتوى مقيَّد، خصوصًا في بث مباشر.")
+            add(
+                "high",
+                "adult",
+                adult[0],
+                adult[1],
+                adult[2],
+                "إيحاء/محتوى جنسي — محتوى مقيَّد، خصوصًا في بث مباشر.",
+            )
 
         # 8) إيذاء الذات
         elif selfharm:
-            add("high", "self_harm", selfharm[0], selfharm[1], selfharm[2],
-                "محتوى إيذاء ذات/انتحار — يحتاج سياقًا وتحذيرًا صريحًا.")
+            add(
+                "high",
+                "self_harm",
+                selfharm[0],
+                selfharm[1],
+                selfharm[2],
+                "محتوى إيذاء ذات/انتحار — يحتاج سياقًا وتحذيرًا صريحًا.",
+            )
 
         # 9) تضليل
         elif misinfo:
-            add("low" if not hard else "medium", "misinfo", misinfo[0],
-                misinfo[1], misinfo[2],
-                "ادّعاء قابل للتفنيد — خطر تصنيفه تضليلًا.")
+            add(
+                "low" if not hard else "medium",
+                "misinfo",
+                misinfo[0],
+                misinfo[1],
+                misinfo[2],
+                "ادّعاء قابل للتفنيد — خطر تصنيفه تضليلًا.",
+            )
 
         # 10) سبام/احتيال
         elif spam:
-            add("medium", "spam", spam[0], spam[1], spam[2],
-                "دعوة لربح/تواصل خارجي أو محتوى مشبوه — قد يُصنَّف احتيالًا.")
+            add(
+                "medium",
+                "spam",
+                spam[0],
+                spam[1],
+                spam[2],
+                "دعوة لربح/تواصل خارجي أو محتوى مشبوه — قد يُصنَّف احتيالًا.",
+            )
 
         # 11) ألفاظ نابية
         elif prof:
-            add("low", "profanity", prof[0], prof[1], prof[2],
-                "لفظ نابٍ — لا يخالف وحده، لكنه يرفع احتمال المراجعة.")
+            add(
+                "low",
+                "profanity",
+                prof[0],
+                prof[1],
+                prof[2],
+                "لفظ نابٍ — لا يخالف وحده، لكنه يرفع احتمال المراجعة.",
+            )
         else:
             if has_group and sup:
                 g = group_spans[0]
-                add("medium", "hate", {"t": g[2], "kind": "superiority"},
-                    g[0], g[1],
+                add(
+                    "medium",
+                    "hate",
+                    {"t": g[2], "kind": "superiority"},
+                    g[0],
+                    g[1],
                     "تعالٍ/احتقار لمجموعة محميّة (أنا أفضل منهم) — "
-                    "قد يُصنَّف خطاب كراهية إذا نقص التقليل من كرامة المجموعة.")
+                    "قد يُصنَّف خطاب كراهية إذا نقص التقليل من كرامة المجموعة.",
+                )
 
         return results
 
@@ -270,26 +359,54 @@ class Engine:
                 if all(cand):
                     for a in cand[0]:
                         for b in cand[-1]:
-                            if b[0] >= a[0] and (b[1] - a[0]) <= win * 2 \
-                               and self._near(a[0], b[1], positions, win):
+                            if (
+                                b[0] >= a[0]
+                                and (b[1] - a[0]) <= win * 2
+                                and self._near(a[0], b[1], positions, win)
+                            ):
                                 return True
         return False
 
 
 def _kind_ar(kind):
-    return {"slur": "وصف مهين", "dehuman": "تجريد من الإنسانية",
-            "exclusion": "دعوة للإقصاء", "violence": "عنف/تهديد"}.get(kind, kind)
+    return {
+        "slur": "وصف مهين",
+        "dehuman": "تجريد من الإنسانية",
+        "exclusion": "دعوة للإقصاء",
+        "violence": "عنف/تهديد",
+    }.get(kind, kind)
 
 
 # --- أنماط مساعدة ----------------------------------------------------------
 PRAISE = [
-    "الله يرحمهم", "ابطال", "نفتخر", "نفتخر بهم", "تحيا", "يدافع",
-    "نصره", "ندعم", "دعم", "شجعان", "يحترمون", "رحمهم الله", "رجال مخلصين",
-    "معهم حق", "نؤيد", "بورك فيهم", "عظماء",
+    "الله يرحمهم",
+    "ابطال",
+    "نفتخر",
+    "نفتخر بهم",
+    "تحيا",
+    "يدافع",
+    "نصره",
+    "ندعم",
+    "دعم",
+    "شجعان",
+    "يحترمون",
+    "رحمهم الله",
+    "رجال مخلصين",
+    "معهم حق",
+    "نؤيد",
+    "بورك فيهم",
+    "عظماء",
 ]
 SUPERIORITY = [
-    "احمد الله انني لست", "الحمد لله اني مش", "نحن افضل من", "احنا خير من",
-    "شعب افضل", "الافضل", "ما تسواش", "اقل منا", "احسن منهم",
+    "احمد الله انني لست",
+    "الحمد لله اني مش",
+    "نحن افضل من",
+    "احنا خير من",
+    "شعب افضل",
+    "الافضل",
+    "ما تسواش",
+    "اقل منا",
+    "احسن منهم",
 ]
 
 
@@ -313,7 +430,7 @@ class Finding:
     term: str
     reason: str
     kind: str = ""
-    source: str = "stream"   # stream | chat
+    source: str = "stream"  # stream | chat
 
 
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
@@ -356,7 +473,9 @@ def parse_srt(text):
                 start = _to_sec(*start_match.groups())
                 end = _to_sec(*end_match.groups())
             except ValueError:
-                logger.warning("Skipping subtitle cue with invalid timestamp components")
+                logger.warning(
+                    "Skipping subtitle cue with invalid timestamp components"
+                )
                 current = None
                 continue
             if end <= start:
@@ -445,7 +564,9 @@ def parse_chat_jsonl(path):
             except RecursionError:
                 malformed += 1
     if malformed:
-        logger.warning("Skipped %d malformed live-chat JSONL records in %s", malformed, path)
+        logger.warning(
+            "Skipped %d malformed live-chat JSONL records in %s", malformed, path
+        )
     return cues
 
 
@@ -466,15 +587,21 @@ def _collect_chat(obj, cues, ctx=None):
             message = renderer.get("message")
             message = message if isinstance(message, dict) else {}
             runs = message.get("runs")
-            text = "".join(
-                str(run.get("text", "")) for run in runs
-                if isinstance(run, dict)
-            ) if isinstance(runs, list) else ""
+            text = (
+                "".join(
+                    str(run.get("text", "")) for run in runs if isinstance(run, dict)
+                )
+                if isinstance(runs, list)
+                else ""
+            )
             if not text:
                 text = str(message.get("simpleText") or "")
             author_value = renderer.get("authorName")
-            author = (str(author_value.get("simpleText") or "")
-                      if isinstance(author_value, dict) else str(author_value or ""))
+            author = (
+                str(author_value.get("simpleText") or "")
+                if isinstance(author_value, dict)
+                else str(author_value or "")
+            )
             offset = parent_offset
             if renderer.get("videoOffsetTimeMsec") is not None:
                 parsed = _chat_offset(renderer["videoOffsetTimeMsec"])
@@ -512,7 +639,9 @@ def parse_chat_json(path):
             except RecursionError:
                 malformed += 1
         if malformed:
-            logger.warning("Skipped %d malformed live-chat JSON records in %s", malformed, path)
+            logger.warning(
+                "Skipped %d malformed live-chat JSON records in %s", malformed, path
+            )
         return cues
     cues = []
     try:
@@ -547,9 +676,18 @@ def scan_cues(engine, cues, source="stream"):
         if not c.text.strip():
             continue
         for r in engine.analyse(c.text):
-            out.append(Finding(c, r["severity"], r["category"],
-                               r["category_label"], r["term"], r["reason"],
-                               r["kind"], source))
+            out.append(
+                Finding(
+                    c,
+                    r["severity"],
+                    r["category"],
+                    r["category_label"],
+                    r["term"],
+                    r["reason"],
+                    r["kind"],
+                    source,
+                )
+            )
     return out
 
 
@@ -567,8 +705,11 @@ def merge_incidents(findings, gap=30.0):
     for f in ranked:
         if f.severity == "info":
             continue
-        if cur and (f.cue.start - cur["end"]) <= gap and \
-           SEV_ORDER[f.severity] <= SEV_ORDER[cur["severity"]] + 2:
+        if (
+            cur
+            and (f.cue.start - cur["end"]) <= gap
+            and SEV_ORDER[f.severity] <= SEV_ORDER[cur["severity"]] + 2
+        ):
             cur["end"] = max(cur["end"], f.cue.end)
             cur["findings"].append(f)
             if SEV_ORDER[f.severity] < SEV_ORDER[cur["severity"]]:
@@ -576,8 +717,12 @@ def merge_incidents(findings, gap=30.0):
         else:
             if cur:
                 incidents.append(cur)
-            cur = {"start": f.cue.start, "end": f.cue.end,
-                   "severity": f.severity, "findings": [f]}
+            cur = {
+                "start": f.cue.start,
+                "end": f.cue.end,
+                "severity": f.severity,
+                "findings": [f],
+            }
     if cur:
         incidents.append(cur)
     incidents.sort(key=lambda i: (SEV_ORDER[i["severity"]], i["start"]))
@@ -610,44 +755,64 @@ def build_report(stream_inc, chat_findings, findings, meta):
 
     def inc_json(i):
         return {
-            "start": i["start"], "end": i["end"],
-            "start_hms": fmt_t(i["start"]), "end_hms": fmt_t(i["end"]),
+            "start": i["start"],
+            "end": i["end"],
+            "start_hms": fmt_t(i["start"]),
+            "end_hms": fmt_t(i["end"]),
             "severity": i["severity"],
             "severity_label": policy.SEVERITY_LABEL[i["severity"]],
             "action": policy.SEVERITY_ACTION[i["severity"]],
-            "items": [{
-                "time": fmt_t(f.cue.start), "text": f.cue.text.strip(),
-                "term": f.term, "category": f.category_label,
-                "reason": f.reason, "kind": f.kind,
-            } for f in i["findings"]],
+            "items": [
+                {
+                    "time": fmt_t(f.cue.start),
+                    "text": f.cue.text.strip(),
+                    "term": f.term,
+                    "category": f.category_label,
+                    "reason": f.reason,
+                    "kind": f.kind,
+                }
+                for f in i["findings"]
+            ],
         }
 
-    chat = [{
-        "time": fmt_t(f.cue.start), "seconds": f.cue.start,
-        "author": f.cue.speaker or "؟", "text": f.cue.text.strip(),
-        "severity": f.severity,
-        "severity_label": policy.SEVERITY_LABEL[f.severity],
-        "category": f.category_label, "term": f.term, "reason": f.reason,
-        "action": CHAT_ACTION.get(f.severity, ""),
-    } for f in sorted(chat_findings,
-                      key=lambda f: (SEV_ORDER[f.severity], f.cue.start))]
+    chat = [
+        {
+            "time": fmt_t(f.cue.start),
+            "seconds": f.cue.start,
+            "author": f.cue.speaker or "؟",
+            "text": f.cue.text.strip(),
+            "severity": f.severity,
+            "severity_label": policy.SEVERITY_LABEL[f.severity],
+            "category": f.category_label,
+            "term": f.term,
+            "reason": f.reason,
+            "action": CHAT_ACTION.get(f.severity, ""),
+        }
+        for f in sorted(
+            chat_findings, key=lambda f: (SEV_ORDER[f.severity], f.cue.start)
+        )
+    ]
 
     authors = {}
     for f in chat_findings:
         if f.severity in ("low", "info"):
             continue
-        a = authors.setdefault(f.cue.speaker or "؟",
-                               {"author": f.cue.speaker or "؟", "count": 0,
-                                "worst": "low"})
+        a = authors.setdefault(
+            f.cue.speaker or "؟",
+            {"author": f.cue.speaker or "؟", "count": 0, "worst": "low"},
+        )
         a["count"] += 1
         if SEV_ORDER[f.severity] < SEV_ORDER[a["worst"]]:
             a["worst"] = f.severity
-    authors = sorted(authors.values(), key=lambda a: (SEV_ORDER[a["worst"]], -a["count"]))
+    authors = sorted(
+        authors.values(), key=lambda a: (SEV_ORDER[a["worst"]], -a["count"])
+    )
 
     return {
         "meta": meta,
-        "summary": {k: counts.get(k, 0) for k in
-                    ["critical", "high", "medium", "low", "info"]},
+        "summary": {
+            k: counts.get(k, 0) for k in ["critical", "high", "medium", "low", "info"]
+        },
         "incidents": [inc_json(i) for i in stream_inc],
         "chat": chat,
         "chat_authors": authors,
@@ -656,11 +821,15 @@ def build_report(stream_inc, chat_findings, findings, meta):
 
 def write_markdown(rep, path):
     s = rep["summary"]
-    L = ["# تقرير فحص المخالفات — %s\n" % _markdown_text(rep["meta"].get("title", "")),
-         "**المصدر:** `%s`  " % _markdown_text(rep["meta"].get("source", "")),
-         "**المدة:** %s  " % _markdown_text(rep["meta"].get("duration", "")),
-         "**التاريخ:** %s\n" % _markdown_text(rep["meta"].get("date", "")),
-         "## الملخّص\n", "| الخطورة | العدد |", "|---|---|"]
+    L = [
+        "# تقرير فحص المخالفات — %s\n" % _markdown_text(rep["meta"].get("title", "")),
+        "**المصدر:** `%s`  " % _markdown_text(rep["meta"].get("source", "")),
+        "**المدة:** %s  " % _markdown_text(rep["meta"].get("duration", "")),
+        "**التاريخ:** %s\n" % _markdown_text(rep["meta"].get("date", "")),
+        "## الملخّص\n",
+        "| الخطورة | العدد |",
+        "|---|---|",
+    ]
     for k in ["critical", "high", "medium", "low", "info"]:
         L.append("| %s | %d |" % (policy.SEVERITY_LABEL[k], s[k]))
     L.append("")
@@ -669,13 +838,21 @@ def write_markdown(rep, path):
     if not rep["incidents"]:
         L.append("✅ لم يُرصد أي مقطع يستدعي تعديلًا في كلام البث.\n")
     for i, inc in enumerate(rep["incidents"], 1):
-        L.append("### %d) %s → %s — **%s**\n" %
-                 (i, inc["start_hms"], inc["end_hms"], inc["severity_label"]))
+        L.append(
+            "### %d) %s → %s — **%s**\n"
+            % (i, inc["start_hms"], inc["end_hms"], inc["severity_label"])
+        )
         L.append("> **الإجراء:** %s\n" % inc["action"])
         for it in inc["items"]:
-            L.append("- `%s` — **%s**  \n  «%s»  \n  ↳ %s" %
-                     (it["time"], _markdown_text(it["category"]), _markdown_text(it["text"]),
-                      _markdown_text(it["reason"])))
+            L.append(
+                "- `%s` — **%s**  \n  «%s»  \n  ↳ %s"
+                % (
+                    it["time"],
+                    _markdown_text(it["category"]),
+                    _markdown_text(it["text"]),
+                    _markdown_text(it["reason"]),
+                )
+            )
         L.append("")
 
     L.append("## ثانيًا: رسائل الدردشة (تُراجع قبل الحذف أو الحظر)\n")
@@ -686,17 +863,32 @@ def write_markdown(rep, path):
         L.append("| الحساب | عدد الرسائل المخالفة | أقصى خطورة |")
         L.append("|---|---|---|")
         for a in rep["chat_authors"][:15]:
-            L.append("| %s | %d | %s |" % (_markdown_text(a["author"]), a["count"],
-                                           policy.SEVERITY_LABEL[a["worst"]]))
+            L.append(
+                "| %s | %d | %s |"
+                % (
+                    _markdown_text(a["author"]),
+                    a["count"],
+                    policy.SEVERITY_LABEL[a["worst"]],
+                )
+            )
         L.append("")
         for c in rep["chat"][:120]:
-            L.append("- `%s` **%s** (%s) — «%s»  \n  ↳ %s" %
-                     (c["time"], _markdown_text(c["author"]), _markdown_text(c["category"]),
-                      _markdown_text(c["text"]), _markdown_text(c["reason"])))
+            L.append(
+                "- `%s` **%s** (%s) — «%s»  \n  ↳ %s"
+                % (
+                    c["time"],
+                    _markdown_text(c["author"]),
+                    _markdown_text(c["category"]),
+                    _markdown_text(c["text"]),
+                    _markdown_text(c["reason"]),
+                )
+            )
     if len(rep["chat"]) > 120:
         L.append("\n*عُرضت أول 120 رسالة فقط؛ التفاصيل الكاملة في `report.json`.*")
-    L.append("\n---\n*أداة مساعدة للفحص آليًا — لا تُغني عن المراجعة البشرية، "
-             "والنتائج تشمل إيجابيات كاذبة (اقتباس/نقد مشروع).*")
+    L.append(
+        "\n---\n*أداة مساعدة للفحص آليًا — لا تُغني عن المراجعة البشرية، "
+        "والنتائج تشمل إيجابيات كاذبة (اقتباس/نقد مشروع).*"
+    )
     with open(path, "w", encoding="utf-8") as report_file:
         report_file.write("\n".join(L))
     return path
@@ -713,37 +905,70 @@ def _markdown_text(value):
 
 def write_html(rep, path):
     s = rep["summary"]
-    color = {"critical": "#c0392b", "high": "#e67e22", "medium": "#f1c40f",
-             "low": "#7f8c8d", "info": "#95a5a6"}
+    color = {
+        "critical": "#c0392b",
+        "high": "#e67e22",
+        "medium": "#f1c40f",
+        "low": "#7f8c8d",
+        "info": "#95a5a6",
+    }
     rows = []
     for i, inc in enumerate(rep["incidents"], 1):
         items = "".join(
             "<li><code>%s</code> <b>%s</b><br><span class=tx>«%s»</span>"
-            "<br><span class=rs>↳ %s</span></li>" %
-            (_html_text(it["time"]), _html_text(it["category"]),
-             _html_text(it["text"]), _html_text(it["reason"]))
-            for it in inc["items"])
+            "<br><span class=rs>↳ %s</span></li>"
+            % (
+                _html_text(it["time"]),
+                _html_text(it["category"]),
+                _html_text(it["text"]),
+                _html_text(it["reason"]),
+            )
+            for it in inc["items"]
+        )
         rows.append(
             '<div class="inc" style="border-right:6px solid %s">'
-            "<h3>%d) %s → %s <span class=badge style=\"background:%s\">%s</span></h3>"
-            '<p class="act">%s</p><ul>%s</ul></div>' %
-            (color[inc["severity"]], i, inc["start_hms"], inc["end_hms"],
-             color[inc["severity"]], inc["severity_label"], inc["action"], items))
+            '<h3>%d) %s → %s <span class=badge style="background:%s">%s</span></h3>'
+            '<p class="act">%s</p><ul>%s</ul></div>'
+            % (
+                color[inc["severity"]],
+                i,
+                inc["start_hms"],
+                inc["end_hms"],
+                color[inc["severity"]],
+                inc["severity_label"],
+                inc["action"],
+                items,
+            )
+        )
     chats = []
     for c in rep["chat"][:150]:
         chats.append(
             '<li><span class=badge style="background:%s">%s</span> '
-            "<code>%s</code> <b>%s</b> — «%s»<br><span class=rs>↳ %s</span></li>" %
-            (color[c["severity"]], _html_text(c["severity_label"]), _html_text(c["time"]),
-             _html_text(c["author"]), _html_text(c["text"]), _html_text(c["reason"])))
+            "<code>%s</code> <b>%s</b> — «%s»<br><span class=rs>↳ %s</span></li>"
+            % (
+                color[c["severity"]],
+                _html_text(c["severity_label"]),
+                _html_text(c["time"]),
+                _html_text(c["author"]),
+                _html_text(c["text"]),
+                _html_text(c["reason"]),
+            )
+        )
     chat_output = "".join(chats) or "<p>✅ لا رسائل مخالفة.</p>"
     if len(rep["chat"]) > 150:
-        chat_output += "<p class=rs>عُرضت أول 150 رسالة فقط؛ التفاصيل الكاملة في report.json.</p>"
+        chat_output += (
+            "<p class=rs>عُرضت أول 150 رسالة فقط؛ التفاصيل الكاملة في report.json.</p>"
+        )
 
-    arows = "".join("<tr><td>%s</td><td>%d</td><td>%s</td></tr>" %
-                    (_html_text(a["author"]), a["count"],
-                     _html_text(policy.SEVERITY_LABEL[a["worst"]]))
-                    for a in rep["chat_authors"][:20])
+    arows = "".join(
+        "<tr><td>%s</td><td>%d</td><td>%s</td></tr>"
+        % (
+            _html_text(a["author"]),
+            a["count"],
+            _html_text(policy.SEVERITY_LABEL[a["worst"]]),
+        )
+        for a in rep["chat_authors"][:20]
+    )
     html = """<!doctype html><html dir="rtl" lang="ar"><meta charset="utf-8">
 <title>تقرير فحص المخالفات</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
@@ -776,14 +1001,20 @@ th{background:#fafbfc}
         _html_text(rep["meta"].get("title", "")),
         _html_text(rep["meta"].get("duration", "")),
         _html_text(rep["meta"].get("date", "")),
-        "".join('<div class="card"><b style="color:%s">%d</b>%s</div>' %
-                (color[k], s[k], policy.SEVERITY_LABEL[k])
-                for k in ["critical", "high", "medium", "low"]),
+        "".join(
+            '<div class="card"><b style="color:%s">%d</b>%s</div>'
+            % (color[k], s[k], policy.SEVERITY_LABEL[k])
+            for k in ["critical", "high", "medium", "low"]
+        ),
         "".join(rows) or "<p>✅ لا مخالفات في كلام البث.</p>",
         chat_output,
-        ("<h3>أكثر الحسابات تكرارًا</h3><table><tr><th>الحساب</th>"
-         "<th>عدد الرسائل</th><th>أقصى خطورة</th></tr>%s</table>" % arows)
-        if arows else "")
+        (
+            "<h3>أكثر الحسابات تكرارًا</h3><table><tr><th>الحساب</th>"
+            "<th>عدد الرسائل</th><th>أقصى خطورة</th></tr>%s</table>" % arows
+        )
+        if arows
+        else "",
+    )
     with open(path, "w", encoding="utf-8") as report_file:
         report_file.write(html)
     return path
@@ -793,8 +1024,14 @@ def write_cutlist(rep, path, only=("critical", "high", "medium")):
     lines = ["# start\tend\tالخطورة\tالسبب"]
     for inc in rep["incidents"]:
         if inc["severity"] in only:
-            lines.append("%.2f\t%.2f\t%s\t%s" % (
-                inc["start"], inc["end"], inc["severity_label"],
-                inc["items"][0]["category"]))
+            lines.append(
+                "%.2f\t%.2f\t%s\t%s"
+                % (
+                    inc["start"],
+                    inc["end"],
+                    inc["severity_label"],
+                    inc["items"][0]["category"],
+                )
+            )
     open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return path

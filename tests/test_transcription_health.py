@@ -5,6 +5,7 @@ The health profile carries backend/CPU/window decisions, is applied with
 setdefault (user env wins), and expires so an old failure does not pin the
 app to the fallback forever.
 """
+
 import json
 import os
 import sys
@@ -33,22 +34,27 @@ def _profile(tmp_path, **overrides):
 
 
 def test_recommended_chunk_seconds_follows_free_ram(monkeypatch):
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(
-        available=1024 ** 3))
+    monkeypatch.setattr(
+        psutil, "virtual_memory", lambda: SimpleNamespace(available=1024**3)
+    )
     assert health.recommended_chunk_seconds() == 120
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(
-        available=2 * 1024 ** 3))
+    monkeypatch.setattr(
+        psutil, "virtual_memory", lambda: SimpleNamespace(available=2 * 1024**3)
+    )
     assert health.recommended_chunk_seconds() == 180
-    monkeypatch.setattr(psutil, "virtual_memory", lambda: SimpleNamespace(
-        available=8 * 1024 ** 3))
+    monkeypatch.setattr(
+        psutil, "virtual_memory", lambda: SimpleNamespace(available=8 * 1024**3)
+    )
     assert health.recommended_chunk_seconds() == 300
 
 
 def test_apply_profile_sets_defaults_and_user_env_wins(tmp_path, monkeypatch):
     path = _profile(tmp_path)
-    for key in ("VIRALCUTTER_TRANSCRIPTION_BACKEND",
-                "VIRALCUTTER_TRANSCRIPTION_FORCE_CPU",
-                "VIRALCUTTER_TRANSCRIBE_CHUNK_SECONDS"):
+    for key in (
+        "VIRALCUTTER_TRANSCRIPTION_BACKEND",
+        "VIRALCUTTER_TRANSCRIPTION_FORCE_CPU",
+        "VIRALCUTTER_TRANSCRIBE_CHUNK_SECONDS",
+    ):
         monkeypatch.delenv(key, raising=False)
     health.apply_profile(path)
     assert os.environ["VIRALCUTTER_TRANSCRIPTION_BACKEND"] == "faster-whisper"
@@ -61,8 +67,11 @@ def test_apply_profile_sets_defaults_and_user_env_wins(tmp_path, monkeypatch):
 
 
 def test_stale_profile_is_ignored(tmp_path, monkeypatch):
-    old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat().replace(
-        "+00:00", "Z")
+    old = (
+        (datetime.now(timezone.utc) - timedelta(days=30))
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     path = _profile(tmp_path, written_at=old)
     monkeypatch.delenv("VIRALCUTTER_TRANSCRIPTION_BACKEND", raising=False)
     assert health.apply_profile(path) == {}
@@ -71,14 +80,19 @@ def test_stale_profile_is_ignored(tmp_path, monkeypatch):
 
 def test_ensure_ready_publishes_a_health_profile(tmp_path, monkeypatch):
     import scripts.transcription_diagnostics as td
+
     profile = tmp_path / "health.json"
     monkeypatch.setattr(health, "profile_path", lambda: str(profile))
     monkeypatch.setattr(td, "_ready_cache_path", lambda: str(tmp_path / "ready.json"))
-    monkeypatch.setattr(td, "diagnose", lambda base_dir=None: {
-        "packages": {"whisperx": {"ok": True, "version": "3.3.1"}},
-        "torch_runtime": {"cuda_available": False},
-        "fallback_ready": True,
-    })
+    monkeypatch.setattr(
+        td,
+        "diagnose",
+        lambda base_dir=None: {
+            "packages": {"whisperx": {"ok": True, "version": "3.3.1"}},
+            "torch_runtime": {"cuda_available": False},
+            "fallback_ready": True,
+        },
+    )
     monkeypatch.setattr(td, "probe_vad", lambda **kwargs: {"ok": True, "error": ""})
     result = td.ensure_ready()
     assert result["ok"] is True

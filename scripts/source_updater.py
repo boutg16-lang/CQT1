@@ -8,6 +8,7 @@ manifests changed so the installer can be rerun deliberately.
     python -m scripts.source_updater --check
     python -m scripts.source_updater --apply
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,18 +21,27 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "boutg16-lang/CQT1"
 DEPENDENCY_FILES = (
-    "requirements.txt", "requirements-transcribe.txt",
-    "requirements-transcribe-fallback.txt", "requirements-upload.txt",
-    "requirements-dubbing.txt", "requirements-browser-bridge.txt",
-    "pyproject.toml", "uv.lock", "install_dependencies.bat",
+    "requirements.txt",
+    "requirements-transcribe.txt",
+    "requirements-transcribe-fallback.txt",
+    "requirements-upload.txt",
+    "requirements-dubbing.txt",
+    "requirements-browser-bridge.txt",
+    "pyproject.toml",
+    "uv.lock",
+    "install_dependencies.bat",
     "setup_on_d.ps1",
 )
 
 
 def _git(args: List[str], cwd: Path | None = None, timeout: int = 120):
     return subprocess.run(
-        ["git", *args], cwd=str(cwd or ROOT), capture_output=True,
-        text=True, timeout=timeout)
+        ["git", *args],
+        cwd=str(cwd or ROOT),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
 
 
 def _out(proc) -> str:
@@ -62,22 +72,38 @@ def _changed_between(old: str, new: str, root: Path) -> List[str]:
 def check(root: Path | None = None) -> Dict[str, Any]:
     root = Path(root or ROOT).resolve()
     if not _is_repo(root):
-        return {"ok": False, "reason": "not_a_git_checkout", "root": str(root),
-                "update_available": False, "dirty": []}
+        return {
+            "ok": False,
+            "reason": "not_a_git_checkout",
+            "root": str(root),
+            "update_available": False,
+            "dirty": [],
+        }
     fetch = _git(["fetch", "origin", "main", "--prune"], root)
     if fetch.returncode != 0:
-        return {"ok": False, "reason": "fetch_failed",
-                "error": _out(fetch)[-500:], "root": str(root),
-                "update_available": False, "dirty": []}
+        return {
+            "ok": False,
+            "reason": "fetch_failed",
+            "error": _out(fetch)[-500:],
+            "root": str(root),
+            "update_available": False,
+            "dirty": [],
+        }
     head = _out(_git(["rev-parse", "HEAD"], root))
     remote = _out(_git(["rev-parse", "origin/main"], root))
     if not head or not remote:
-        return {"ok": False, "reason": "cannot_resolve_refs", "root": str(root),
-                "update_available": False, "dirty": []}
+        return {
+            "ok": False,
+            "reason": "cannot_resolve_refs",
+            "root": str(root),
+            "update_available": False,
+            "dirty": [],
+        }
     ahead = 0
     behind = 0
-    counts = _out(_git(["rev-list", "--left-right", "--count",
-                        "HEAD...origin/main"], root)).split()
+    counts = _out(
+        _git(["rev-list", "--left-right", "--count", "HEAD...origin/main"], root)
+    ).split()
     if len(counts) == 2:
         try:
             ahead, behind = int(counts[0]), int(counts[1])
@@ -85,8 +111,11 @@ def check(root: Path | None = None) -> Dict[str, Any]:
             pass
     dirty = _dirty_files(root)
     changed = _changed_between(head, remote, root) if behind else []
-    deps = [path for path in changed
-            if os.path.basename(path) in DEPENDENCY_FILES or path in DEPENDENCY_FILES]
+    deps = [
+        path
+        for path in changed
+        if os.path.basename(path) in DEPENDENCY_FILES or path in DEPENDENCY_FILES
+    ]
     return {
         "ok": True,
         "root": str(root),
@@ -108,41 +137,50 @@ def apply(root: Path | None = None, allow_dirty: bool = False) -> Dict[str, Any]
     if not report.get("ok"):
         return report
     if report["dirty"] and not allow_dirty:
-        report.update({
-            "applied": False,
-            "reason": "dirty_worktree",
-            "message": "Tracked local changes exist; commit or stash them first.",
-        })
+        report.update(
+            {
+                "applied": False,
+                "reason": "dirty_worktree",
+                "message": "Tracked local changes exist; commit or stash them first.",
+            }
+        )
         return report
     if report["ahead"]:
-        report.update({
-            "applied": False,
-            "reason": "diverged",
-            "message": "Local main is ahead of origin/main; refusing to reset.",
-        })
+        report.update(
+            {
+                "applied": False,
+                "reason": "diverged",
+                "message": "Local main is ahead of origin/main; refusing to reset.",
+            }
+        )
         return report
     if not report["update_available"]:
         report.update({"applied": False, "reason": "up_to_date"})
         return report
     pull = _git(["pull", "--ff-only", "origin", "main"], root)
     if pull.returncode != 0:
-        report.update({
-            "applied": False,
-            "reason": "pull_failed",
-            "error": (_out(pull) or (pull.stderr or ""))[-800:],
-        })
+        report.update(
+            {
+                "applied": False,
+                "reason": "pull_failed",
+                "error": (_out(pull) or (pull.stderr or ""))[-800:],
+            }
+        )
         return report
     new_head = _out(_git(["rev-parse", "HEAD"], root))
-    report.update({
-        "applied": True,
-        "reason": "updated",
-        "head": new_head[:12] or report["head"],
-        "old_head": report["head"],
-    })
+    report.update(
+        {
+            "applied": True,
+            "reason": "updated",
+            "head": new_head[:12] or report["head"],
+            "old_head": report["head"],
+        }
+    )
     if report["dependencies_changed"]:
         report["next_step"] = (
             "Dependency manifests changed. Run .\\setup_on_d.ps1 once, then "
-            "restart the app.")
+            "restart the app."
+        )
     else:
         report["next_step"] = "Restart the app to load the new code."
     return report
@@ -150,7 +188,9 @@ def apply(root: Path | None = None, allow_dirty: bool = False) -> Dict[str, Any]
 
 def _print(report: Dict[str, Any]) -> None:
     if not report.get("ok"):
-        print("❌ " + str(report.get("reason") or report.get("error") or "update failed"))
+        print(
+            "❌ " + str(report.get("reason") or report.get("error") or "update failed")
+        )
         if report.get("root"):
             print("   root: " + report["root"])
         return
@@ -172,8 +212,11 @@ def _print(report: Dict[str, Any]) -> None:
         print("❌ git pull failed:")
         print(report.get("error", "")[-800:])
     if report.get("dependencies_changed"):
-        print("📦 dependency manifests changed: {}".format(
-            ", ".join(report["dependency_files"][:6])))
+        print(
+            "📦 dependency manifests changed: {}".format(
+                ", ".join(report["dependency_files"][:6])
+            )
+        )
 
 
 def main(argv=None) -> int:
@@ -181,8 +224,11 @@ def main(argv=None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="check only (default)")
     mode.add_argument("--apply", action="store_true", help="fast-forward origin/main")
-    parser.add_argument("--allow-dirty", action="store_true",
-                        help="with --apply: allow tracked local changes")
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="with --apply: allow tracked local changes",
+    )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     args = parser.parse_args(argv)
     report = apply() if args.apply else check()

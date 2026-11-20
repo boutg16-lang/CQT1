@@ -6,6 +6,7 @@ of raw Pearson, a shared measurement window, retention as a second signal,
 sample-size confidence, and an automatic refresh that never overwrites good
 data with an empty analytics response.
 """
+
 import json
 import os
 import sys
@@ -19,34 +20,43 @@ from scripts import performance_weights as pw
 def _project(tmp_path, count=6):
     project = tmp_path / "proj"
     project.mkdir()
-    scorecard = {"segments": [
-        {"index": index, "duration": 30 + index * 5,
-         "hook_strength": 40 + index * 8,
-         "narrative_completeness": 50 + index * 5,
-         "clarity_score": 60 + index * 4,
-         "novelty_score": 55 + index * 3,
-         "selection_score": 60 + index * 5,
-         "title_quality_score": 50 + index * 6}
-        for index in range(count)
-    ]}
+    scorecard = {
+        "segments": [
+            {
+                "index": index,
+                "duration": 30 + index * 5,
+                "hook_strength": 40 + index * 8,
+                "narrative_completeness": 50 + index * 5,
+                "clarity_score": 60 + index * 4,
+                "novelty_score": 55 + index * 3,
+                "selection_score": 60 + index * 5,
+                "title_quality_score": 50 + index * 6,
+            }
+            for index in range(count)
+        ]
+    }
     (project / "risk_scorecard.json").write_text(
-        json.dumps(scorecard), encoding="utf-8")
+        json.dumps(scorecard), encoding="utf-8"
+    )
     events = []
     for index in range(count):
-        events.append({
-            "timestamp": "2026-08-{:02d}T10:00:00Z".format(index + 1),
-            "platform": "youtube",
-            "video": "{:03d}_clip.mp4".format(index),
-            "title": "عنوان {}".format(index),
-            "status": "uploaded",
-            "video_id": "vid{}".format(index),
-            "topic": "topic-{}".format(index % 2),
-            "angle": "lesson" if index % 2 else "story",
-            "hook_type": "question" if index % 2 else "story",
-        })
+        events.append(
+            {
+                "timestamp": "2026-08-{:02d}T10:00:00Z".format(index + 1),
+                "platform": "youtube",
+                "video": "{:03d}_clip.mp4".format(index),
+                "title": "عنوان {}".format(index),
+                "status": "uploaded",
+                "video_id": "vid{}".format(index),
+                "topic": "topic-{}".format(index % 2),
+                "angle": "lesson" if index % 2 else "story",
+                "hook_type": "question" if index % 2 else "story",
+            }
+        )
     (project / "publish_history.jsonl").write_text(
         "\n".join(json.dumps(event, ensure_ascii=False) for event in events) + "\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     return str(project)
 
 
@@ -80,7 +90,9 @@ def test_spearman_handles_ties():
 
 def test_analyze_reports_the_shared_window_and_retention(tmp_path, monkeypatch):
     project = _project(tmp_path, 6)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(6))
+    monkeypatch.setattr(
+        pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(6)
+    )
     report = pl.analyze(project, fetch_live=True)
     assert report["window_days"] == pl.DEFAULT_WINDOW_DAYS
     hook = report["correlations"]["hook_strength"]
@@ -88,8 +100,10 @@ def test_analyze_reports_the_shared_window_and_retention(tmp_path, monkeypatch):
     assert hook["samples"] == 6
     assert hook["vs_views"] is not None
     assert hook["vs_retention"] is not None
-    assert report["content_insights"]["categories"]["hook_type"][0].get(
-        "avg_retention") is not None
+    assert (
+        report["content_insights"]["categories"]["hook_type"][0].get("avg_retention")
+        is not None
+    )
     text = "\n".join(report["insights"])
     assert "Spearman" in text
     assert "retention" in text
@@ -97,7 +111,9 @@ def test_analyze_reports_the_shared_window_and_retention(tmp_path, monkeypatch):
 
 def test_window_days_is_env_tunable_and_clamped(tmp_path, monkeypatch):
     project = _project(tmp_path, 3)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(3))
+    monkeypatch.setattr(
+        pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(3)
+    )
     monkeypatch.setenv("VIRALCUTTER_PERF_WINDOW_DAYS", "90")
     assert pl.analyze(project, fetch_live=True)["window_days"] == 90
     monkeypatch.setenv("VIRALCUTTER_PERF_WINDOW_DAYS", "1")
@@ -113,7 +129,8 @@ def test_weights_shrink_small_samples(tmp_path):
     for samples in (3, 5):
         payload = dict(base, with_metrics=samples)
         (project / "performance_insights.json").write_text(
-            json.dumps(payload), encoding="utf-8")
+            json.dumps(payload), encoding="utf-8"
+        )
         weights = pw.load_weights(str(project))
         if samples == 3:
             small = weights
@@ -128,7 +145,9 @@ def test_weights_shrink_small_samples(tmp_path):
 
 def test_auto_refresh_writes_reports_and_then_skips_fresh(tmp_path, monkeypatch):
     project = _project(tmp_path, 5)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(5))
+    monkeypatch.setattr(
+        pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(5)
+    )
     first = pl.auto_refresh(project)
     assert first["refreshed"] is True
     assert os.path.exists(os.path.join(project, pl.REPORT_NAME))
@@ -164,10 +183,13 @@ def test_refresh_due_forces_a_new_query(tmp_path, monkeypatch):
 
 def test_failed_analytics_never_overwrites_good_metrics(tmp_path, monkeypatch):
     project = _project(tmp_path, 4)
-    monkeypatch.setattr(pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(4))
+    monkeypatch.setattr(
+        pl, "_fetch_real_metrics", lambda ids, project_folder=None: _metrics(4)
+    )
     pl.auto_refresh(project, force=True)
-    good = json.loads(open(os.path.join(project, pl.REPORT_NAME),
-                           encoding="utf-8").read())
+    good = json.loads(
+        open(os.path.join(project, pl.REPORT_NAME), encoding="utf-8").read()
+    )
     assert good["with_metrics"] == 4
 
     # A later OAuth/network failure returns no metrics.
@@ -175,8 +197,9 @@ def test_failed_analytics_never_overwrites_good_metrics(tmp_path, monkeypatch):
     status = pl.auto_refresh(project, force=True)
     assert status["refreshed"] is False
     assert status["reason"] == "kept_previous_metrics"
-    kept = json.loads(open(os.path.join(project, pl.REPORT_NAME),
-                           encoding="utf-8").read())
+    kept = json.loads(
+        open(os.path.join(project, pl.REPORT_NAME), encoding="utf-8").read()
+    )
     assert kept["with_metrics"] == 4
     assert kept["generated_at"] == good["generated_at"]
 
@@ -194,9 +217,16 @@ def test_style_bonus_shrinks_with_small_samples():
         "with_metrics": 3,
         "content_insights": {
             "overall_avg_views": 500.0,
-            "categories": {"hook_type": [
-                {"value": "question", "samples": 3, "avg_views": 1000.0,
-                 "delta_pct": 100.0}]},
+            "categories": {
+                "hook_type": [
+                    {
+                        "value": "question",
+                        "samples": 3,
+                        "avg_views": 1000.0,
+                        "delta_pct": 100.0,
+                    }
+                ]
+            },
         },
     }
     full = pw.style_bonuses(dict(content, with_metrics=5), 1.0)

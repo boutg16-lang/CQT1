@@ -6,7 +6,8 @@ from scripts import performance_loop, publish_scheduler
 
 def _write_insights(tmp_path, best_hours):
     (tmp_path / "performance_insights.json").write_text(
-        json.dumps({"best_hours": best_hours}), encoding="utf-8")
+        json.dumps({"best_hours": best_hours}), encoding="utf-8"
+    )
 
 
 def test_best_hours_ranks_by_mean_views_with_min_samples(tmp_path):
@@ -25,21 +26,37 @@ def test_analyze_report_exposes_best_hours(tmp_path, monkeypatch):
     # timezone to UTC so the expected hours hold on every contributor machine,
     # not just on CI (which happens to run on UTC).
     import time
+
     previous_tz = os.environ.get("TZ")
     os.environ["TZ"] = "UTC"
     if hasattr(time, "tzset"):
         time.tzset()
-    monkeypatch.setattr(performance_loop, "_fetch_real_metrics", lambda ids, project_folder=None: {
-        "v0": {"views": 100}, "v1": {"views": 200},
-        "v2": {"views": 900}, "v3": {"views": 1100},
-    })
+    monkeypatch.setattr(
+        performance_loop,
+        "_fetch_real_metrics",
+        lambda ids, project_folder=None: {
+            "v0": {"views": 100},
+            "v1": {"views": 200},
+            "v2": {"views": 900},
+            "v3": {"views": 1100},
+        },
+    )
     try:
         (tmp_path / "publish_history.jsonl").write_text(
-            "\n".join(json.dumps({
-                "status": "uploaded", "video_id": "v%d" % i,
-                "publish_at": "2026-09-0%dT2%d:00:00+00:00" % (
-                    (i // 2) + 1, i % 2),
-            }) for i in range(4)) + "\n", encoding="utf-8")
+            "\n".join(
+                json.dumps(
+                    {
+                        "status": "uploaded",
+                        "video_id": "v%d" % i,
+                        "publish_at": "2026-09-0%dT2%d:00:00+00:00"
+                        % ((i // 2) + 1, i % 2),
+                    }
+                )
+                for i in range(4)
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         report = performance_loop.analyze(str(tmp_path), fetch_live=True)
         assert report["best_hours"] == [21, 20]
         assert any("best publish hours" in i for i in report["insights"])
@@ -61,8 +78,9 @@ def test_scheduler_prefers_measured_hours_over_defaults(tmp_path):
         clips.append(str(f))
     measured = publish_scheduler.load_measured_hours(str(tmp_path))
     assert measured == [6, 23]
-    plan = publish_scheduler.build_plan(clips, platform="youtube",
-                                        measured_hours=measured)
+    plan = publish_scheduler.build_plan(
+        clips, platform="youtube", measured_hours=measured
+    )
     hours = [item["hour"] for item in plan["plan"]]
     assert hours and set(hours) <= {6, 23}
 

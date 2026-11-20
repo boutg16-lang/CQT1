@@ -44,14 +44,23 @@ def _read_urls(path):
 def build_command(url, args):
     """Assemble the main_improved.py CLI command for one URL."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cmd = [sys.executable, os.path.join(root, "main_improved.py"),
-           "--url", url,
-           "--segments", str(args.segments),
-           "--min-duration", str(args.min_duration),
-           "--max-duration", str(args.max_duration),
-           "--ai-backend", args.ai_backend,
-           "--workflow", str(args.workflow),
-           "--skip-prompts"]
+    cmd = [
+        sys.executable,
+        os.path.join(root, "main_improved.py"),
+        "--url",
+        url,
+        "--segments",
+        str(args.segments),
+        "--min-duration",
+        str(args.min_duration),
+        "--max-duration",
+        str(args.max_duration),
+        "--ai-backend",
+        args.ai_backend,
+        "--workflow",
+        str(args.workflow),
+        "--skip-prompts",
+    ]
     if args.viral:
         cmd.append("--viral")
     if args.themes:
@@ -79,34 +88,64 @@ def upload_project(project_folder, args):
     try:
         from webui import publish_panel
     except Exception as exc:
-        return {"ok": False, "uploaded": 0, "dry_run": args.dry_run,
-                "detail": "publish_panel unavailable: {}".format(exc)}
+        return {
+            "ok": False,
+            "uploaded": 0,
+            "dry_run": args.dry_run,
+            "detail": "publish_panel unavailable: {}".format(exc),
+        }
     # Same source precedence as the publish panel (first non-empty source wins):
     # concatenating every folder uploaded one segment up to three times, and the
     # polished/final copies have different fingerprints so the duplicate guard
     # never caught it.
     try:
-        clips = [os.path.abspath(path)
-                 for path in publish_panel.list_clips(project_folder)]
+        clips = [
+            os.path.abspath(path) for path in publish_panel.list_clips(project_folder)
+        ]
     except Exception as exc:
-        return {"ok": False, "uploaded": 0, "dry_run": args.dry_run,
-                "detail": "clip discovery failed: {}".format(str(exc)[:300])}
+        return {
+            "ok": False,
+            "uploaded": 0,
+            "dry_run": args.dry_run,
+            "detail": "clip discovery failed: {}".format(str(exc)[:300]),
+        }
     if not clips:
-        return {"ok": False, "uploaded": 0, "dry_run": args.dry_run,
-                "detail": "no mp4 clips found in {}".format(project_folder)}
+        return {
+            "ok": False,
+            "uploaded": 0,
+            "dry_run": args.dry_run,
+            "detail": "no mp4 clips found in {}".format(project_folder),
+        }
     try:
-        updates = list(publish_panel.stream_upload_batch(
-            project_folder, "youtube", clips, bool(args.dry_run), "warn",
-            privacy_status=args.privacy or "private",
-            require_existing_auth=not args.dry_run,
-        ))
+        updates = list(
+            publish_panel.stream_upload_batch(
+                project_folder,
+                "youtube",
+                clips,
+                bool(args.dry_run),
+                "warn",
+                privacy_status=args.privacy or "private",
+                require_existing_auth=not args.dry_run,
+            )
+        )
     except Exception as exc:
-        return {"ok": False, "uploaded": 0, "dry_run": args.dry_run,
-                "detail": "upload batch failed: {}".format(str(exc)[:300])}
-    uploaded = sum(1 for u in updates if "uploaded" in str(u).lower()
-                   or "scheduled" in str(u).lower())
-    return {"ok": True, "uploaded": uploaded, "dry_run": args.dry_run,
-            "detail": "; ".join(str(u) for u in updates[-5:])}
+        return {
+            "ok": False,
+            "uploaded": 0,
+            "dry_run": args.dry_run,
+            "detail": "upload batch failed: {}".format(str(exc)[:300]),
+        }
+    uploaded = sum(
+        1
+        for u in updates
+        if "uploaded" in str(u).lower() or "scheduled" in str(u).lower()
+    )
+    return {
+        "ok": True,
+        "uploaded": uploaded,
+        "dry_run": args.dry_run,
+        "detail": "; ".join(str(u) for u in updates[-5:]),
+    }
 
 
 def process_url(url, args, index, total):
@@ -118,8 +157,11 @@ def process_url(url, args, index, total):
     proc = subprocess.run(cmd, capture_output=True, text=True)
     elapsed = round(time.time() - started, 1)
     ok = proc.returncode == 0
-    print("[batch] {} in {:.1f}s (exit {})".format(
-        "OK" if ok else "FAILED", elapsed, proc.returncode))
+    print(
+        "[batch] {} in {:.1f}s (exit {})".format(
+            "OK" if ok else "FAILED", elapsed, proc.returncode
+        )
+    )
     if not ok:
         tail = (proc.stdout or "")[-800:] + (proc.stderr or "")[-800:]
         print("[batch] last output:\n" + tail[-1200:])
@@ -130,17 +172,22 @@ def process_url(url, args, index, total):
         # fall back to the newest VIRALS subfolder
         project_folder = None
         import re as _re
+
         m = _re.search(r"project[_ ]folder[=: ]+([^\n]+)", (proc.stdout or "")[-4000:])
         if m:
             candidate = m.group(1).strip()
             if os.path.isdir(candidate):
                 project_folder = candidate
         if project_folder is None:
-            virals = os.path.join(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__))), "VIRALS")
+            virals = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VIRALS"
+            )
             if os.path.isdir(virals):
-                subdirs = [os.path.join(virals, d) for d in os.listdir(virals)
-                           if os.path.isdir(os.path.join(virals, d))]
+                subdirs = [
+                    os.path.join(virals, d)
+                    for d in os.listdir(virals)
+                    if os.path.isdir(os.path.join(virals, d))
+                ]
                 if subdirs:
                     project_folder = max(subdirs, key=os.path.getmtime)
         if project_folder:
@@ -162,36 +209,61 @@ def process_url(url, args, index, total):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("urls_file", help="text file with one URL per line (# = comment)")
+    parser.add_argument(
+        "urls_file", help="text file with one URL per line (# = comment)"
+    )
     parser.add_argument("--segments", type=int, default=3)
     parser.add_argument("--min-duration", type=int, default=15)
     parser.add_argument("--max-duration", type=int, default=90)
-    parser.add_argument("--ai-backend", default="manual",
-                        choices=["manual", "gemini", "g4f", "local"])
-    parser.add_argument("--workflow", type=int, default=1,
-                        choices=[1, 2, 3],
-                        help="1=full, 2=cut only, 3=subtitles only")
+    parser.add_argument(
+        "--ai-backend", default="manual", choices=["manual", "gemini", "g4f", "local"]
+    )
+    parser.add_argument(
+        "--workflow",
+        type=int,
+        default=1,
+        choices=[1, 2, 3],
+        help="1=full, 2=cut only, 3=subtitles only",
+    )
     parser.add_argument("--viral", action="store_true")
     parser.add_argument("--themes", default=None)
-    parser.add_argument("--live-wait", type=float, default=None, metavar="MIN",
-                        help="wait for live streams to end (minutes)")
-    parser.add_argument("--sponsorblock", default=None,
-                        help="sponsor/intro/outro/... or 'all'")
-    parser.add_argument("--quality", default=None,
-                        choices=[None, "best", "1080p", "720p", "480p"])
-    parser.add_argument("--safety-mode", default="block",
-                        choices=["block", "flag", "off"])
-    parser.add_argument("--upload", action="store_true",
-                        help="auto-upload after each project finishes")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="with --upload: simulate, never publish")
-    parser.add_argument("--privacy", default=None,
-                        choices=["private", "unlisted", "public"])
-    parser.add_argument("--extra", action="append", default=[],
-                        metavar="key=value",
-                        help="pass extra CLI flags to main_improved.py (repeatable)")
-    parser.add_argument("--stop-on-error", action="store_true",
-                        help="abort the batch on the first failure")
+    parser.add_argument(
+        "--live-wait",
+        type=float,
+        default=None,
+        metavar="MIN",
+        help="wait for live streams to end (minutes)",
+    )
+    parser.add_argument(
+        "--sponsorblock", default=None, help="sponsor/intro/outro/... or 'all'"
+    )
+    parser.add_argument(
+        "--quality", default=None, choices=[None, "best", "1080p", "720p", "480p"]
+    )
+    parser.add_argument(
+        "--safety-mode", default="block", choices=["block", "flag", "off"]
+    )
+    parser.add_argument(
+        "--upload", action="store_true", help="auto-upload after each project finishes"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="with --upload: simulate, never publish"
+    )
+    parser.add_argument(
+        "--privacy", default=None, choices=["private", "unlisted", "public"]
+    )
+    parser.add_argument(
+        "--extra",
+        action="append",
+        default=[],
+        metavar="key=value",
+        help="pass extra CLI flags to main_improved.py (repeatable)",
+    )
+    parser.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="abort the batch on the first failure",
+    )
     args = parser.parse_args(argv)
 
     urls = _read_urls(args.urls_file)

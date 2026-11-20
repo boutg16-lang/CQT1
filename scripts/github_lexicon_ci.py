@@ -13,8 +13,10 @@ import json
 import os
 import urllib.request
 
-UPSTREAM_URL = ("https://raw.githubusercontent.com/"
-                "mohammedattia/arabic-offensive-words/main/README.md")
+UPSTREAM_URL = (
+    "https://raw.githubusercontent.com/"
+    "mohammedattia/arabic-offensive-words/main/README.md"
+)
 TIMEOUT = 20
 
 
@@ -30,7 +32,8 @@ def _github_output(key, value):
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     req = urllib.request.Request(
-        UPSTREAM_URL, headers={"User-Agent": "viralcutter-lexicon-watch"})
+        UPSTREAM_URL, headers={"User-Agent": "viralcutter-lexicon-watch"}
+    )
     upstream = urllib.request.urlopen(req, timeout=TIMEOUT).read()
     digest = hashlib.sha256(upstream).hexdigest()
 
@@ -42,11 +45,16 @@ def main():
     except Exception:
         stored = ""
 
-    changed = "yes" if (stored and digest != stored) else ("yes" if not stored else "no")
+    changed = (
+        "yes" if (stored and digest != stored) else ("yes" if not stored else "no")
+    )
     _github_output("changed", changed)
     _github_output("upstream_sha256", digest)
-    print("[lexicon-ci] stored={} upstream={} changed={}".format(
-        stored[:16] or "none", digest[:16], changed))
+    print(
+        "[lexicon-ci] stored={} upstream={} changed={}".format(
+            stored[:16] or "none", digest[:16], changed
+        )
+    )
     return 0
 
 

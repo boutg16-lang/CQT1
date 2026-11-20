@@ -16,13 +16,24 @@ def _project(tmp_path, with_tags=False):
     for i in range(2):
         (project / "final" / "{:03d}_clip.mp4".format(i)).write_bytes(b"x" * 40)
     segments = [
-        {"title": "First Title", "caption": "cap 1", "start_time": 0,
-         "end_time": 5, "hashtags": ["viral", "story"] if with_tags else []},
-        {"title": "Second Title", "caption": "cap 2", "start_time": 5,
-         "end_time": 10, "hashtags": "#tips #short" if with_tags else []},
+        {
+            "title": "First Title",
+            "caption": "cap 1",
+            "start_time": 0,
+            "end_time": 5,
+            "hashtags": ["viral", "story"] if with_tags else [],
+        },
+        {
+            "title": "Second Title",
+            "caption": "cap 2",
+            "start_time": 5,
+            "end_time": 10,
+            "hashtags": "#tips #short" if with_tags else [],
+        },
     ]
     (project / "viral_segments.txt").write_text(
-        json.dumps({"segments": segments}), encoding="utf-8")
+        json.dumps({"segments": segments}), encoding="utf-8"
+    )
     return str(project)
 
 
@@ -51,8 +62,10 @@ class TestClipMetadata:
 class TestHashtagsFlowToUploader:
     def test_batch_passes_segment_hashtags(self, tmp_path, monkeypatch):
         project = _project(tmp_path, with_tags=True)
-        clips = [os.path.join(project, "final", "{:03d}_clip.mp4".format(i))
-                 for i in range(2)]
+        clips = [
+            os.path.join(project, "final", "{:03d}_clip.mp4".format(i))
+            for i in range(2)
+        ]
         captured = []
 
         def fake_stream_upload(*args, **kwargs):
@@ -84,15 +97,19 @@ class TestSeoAdvisory:
                 pass
 
             def upload(self, video_path, title, caption, hashtags, index=None):
-                return {"status": "uploaded", "platform": "youtube",
-                        "video_id": "ABC"}
+                return {"status": "uploaded", "platform": "youtube", "video_id": "ABC"}
 
         import scripts.upload_gate as ug
-        monkeypatch.setattr(ug, "UPLOADERS",
-                            {"youtube": lambda *a, **k: FakeUploader(*a, **k)})
+
+        monkeypatch.setattr(
+            ug, "UPLOADERS", {"youtube": lambda *a, **k: FakeUploader(*a, **k)}
+        )
         clip = os.path.join(project, "final", "000_clip.mp4")
-        lines = list(pp.stream_upload(project, "youtube", clip, "My Title",
-                                      "Cap", ["#shorts"], False, "warn"))
+        lines = list(
+            pp.stream_upload(
+                project, "youtube", clip, "My Title", "Cap", ["#shorts"], False, "warn"
+            )
+        )
         out = "\n".join(lines)
         assert "[seo]" in out
 
@@ -104,20 +121,49 @@ class TestCrossPlatformVariantWiring:
         # A prior successful YouTube publish of this same clip exists.
         history = os.path.join(project, "publish_history.jsonl")
         with open(history, "w", encoding="utf-8") as stream:
-            stream.write(json.dumps({
-                "platform": "youtube", "status": "uploaded",
-                "video": "000_clip.mp4", "title": "T",
-                "file_fingerprint": "sha256:x"}, ensure_ascii=False) + "\n")
+            stream.write(
+                json.dumps(
+                    {
+                        "platform": "youtube",
+                        "status": "uploaded",
+                        "video": "000_clip.mp4",
+                        "title": "T",
+                        "file_fingerprint": "sha256:x",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
         decision = {}
         import scripts.platform_variant as pv
-        monkeypatch.setattr(pv, "maybe_variant",
-                            lambda *a, **k: decision or {"action": "none"})
-        monkeypatch.setattr(pv, "plan_variant",
-                            lambda *a, **k: {"action": "variate", "seed": 7,
-                                             "reason": "plan", "preset": {}})
-        updates = list(pp.stream_upload(project, "tiktok", clip, "T", "C", [],
-                                        True, "warn", variant_policy="auto"))
+
+        monkeypatch.setattr(
+            pv, "maybe_variant", lambda *a, **k: decision or {"action": "none"}
+        )
+        monkeypatch.setattr(
+            pv,
+            "plan_variant",
+            lambda *a, **k: {
+                "action": "variate",
+                "seed": 7,
+                "reason": "plan",
+                "preset": {},
+            },
+        )
+        updates = list(
+            pp.stream_upload(
+                project,
+                "tiktok",
+                clip,
+                "T",
+                "C",
+                [],
+                True,
+                "warn",
+                variant_policy="auto",
+            )
+        )
         out = "\n".join(updates)
         assert "نسخة مختلفة" in out
         # dry run must never create the variants folder / render anything
@@ -129,10 +175,19 @@ class TestCrossPlatformVariantWiring:
         clip = os.path.join(project, "final", "000_clip.mp4")
         history = os.path.join(project, "publish_history.jsonl")
         with open(history, "w", encoding="utf-8") as stream:
-            stream.write(json.dumps({
-                "platform": "youtube", "status": "uploaded",
-                "video": "000_clip.mp4", "title": "T",
-                "file_fingerprint": "sha256:x"}, ensure_ascii=False) + "\n")
+            stream.write(
+                json.dumps(
+                    {
+                        "platform": "youtube",
+                        "status": "uploaded",
+                        "video": "000_clip.mp4",
+                        "title": "T",
+                        "file_fingerprint": "sha256:x",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
 
         variant_path = os.path.join(project, "variants", "000_clip__tiktok_7.mp4")
         os.makedirs(os.path.dirname(variant_path), exist_ok=True)
@@ -140,10 +195,18 @@ class TestCrossPlatformVariantWiring:
             stream.write(b"variant-bytes")
 
         import scripts.platform_variant as pv
-        monkeypatch.setattr(pv, "maybe_variant",
-                            lambda *a, **k: {"action": "variate", "path": variant_path,
-                                             "seed": 7, "transforms": ["mirror"],
-                                             "reason": "r"})
+
+        monkeypatch.setattr(
+            pv,
+            "maybe_variant",
+            lambda *a, **k: {
+                "action": "variate",
+                "path": variant_path,
+                "seed": 7,
+                "transforms": ["mirror"],
+                "reason": "r",
+            },
+        )
         captured = {}
 
         class FakeUploader:
@@ -153,14 +216,26 @@ class TestCrossPlatformVariantWiring:
             def upload(self, video_path, title, caption, hashtags, index=None):
                 captured["video"] = video_path
                 captured["tags"] = hashtags
-                return {"status": "uploaded", "platform": "tiktok",
-                        "video_id": "TIK"}
+                return {"status": "uploaded", "platform": "tiktok", "video_id": "TIK"}
 
         import scripts.upload_gate as ug
-        monkeypatch.setattr(ug, "UPLOADERS",
-                            {"tiktok": lambda *a, **k: FakeUploader(*a, **k)})
-        updates = list(pp.stream_upload(project, "tiktok", clip, "T", "C", [],
-                                        False, "warn", variant_policy="auto"))
+
+        monkeypatch.setattr(
+            ug, "UPLOADERS", {"tiktok": lambda *a, **k: FakeUploader(*a, **k)}
+        )
+        updates = list(
+            pp.stream_upload(
+                project,
+                "tiktok",
+                clip,
+                "T",
+                "C",
+                [],
+                False,
+                "warn",
+                variant_policy="auto",
+            )
+        )
         out = "\n".join(updates)
         assert captured["video"] == variant_path
         assert "نسخة مختلفة لمنصة tiktok" in out
@@ -181,9 +256,10 @@ class TestCrossPlatformVariantWiring:
                 return {"status": "uploaded", "platform": "tiktok"}
 
         import scripts.upload_gate as ug
-        monkeypatch.setattr(ug, "UPLOADERS",
-                            {"tiktok": lambda *a, **k: FakeUploader(*a, **k)})
-        list(pp.stream_upload(project, "tiktok", clip, "T", "C", [],
-                              False, "warn"))
+
+        monkeypatch.setattr(
+            ug, "UPLOADERS", {"tiktok": lambda *a, **k: FakeUploader(*a, **k)}
+        )
+        list(pp.stream_upload(project, "tiktok", clip, "T", "C", [], False, "warn"))
         assert captured["video"] == clip
         assert not os.path.exists(os.path.join(project, "variants"))

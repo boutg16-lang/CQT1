@@ -16,16 +16,20 @@ class _Response:
 
 
 def test_extract_keywords_supports_arabic_and_english():
-    terms = broll_engine.extract_keywords("الذكاء الاصطناعي والذكاء الاصطناعي changes business", max_terms=5)
+    terms = broll_engine.extract_keywords(
+        "الذكاء الاصطناعي والذكاء الاصطناعي changes business", max_terms=5
+    )
     assert terms[0] == "الذكاء"
     assert "business" in terms
 
 
 def test_build_broll_plan_uses_timing_and_query():
-    plan = broll_engine.build_broll_plan([
-        {"start": 1, "end": 4, "text": "new technology for business"},
-        {"start": "bad", "end": 5, "text": "ignored"},
-    ])
+    plan = broll_engine.build_broll_plan(
+        [
+            {"start": 1, "end": 4, "text": "new technology for business"},
+            {"start": "bad", "end": 5, "text": "ignored"},
+        ]
+    )
     assert len(plan) == 1
     assert plan[0]["start"] == 1.0
     assert plan[0]["end"] == 4.0
@@ -43,15 +47,20 @@ def test_search_pexels_normalizes_video_files(monkeypatch):
             {
                 "page": 1,
                 "total_results": 1,
-                "videos": [{
-                    "id": 42,
-                    "url": "https://www.pexels.com/video/42/",
-                    "duration": 8,
-                    "video_files": [
-                        {"width": 720, "height": 1280, "link": "https://cdn/a.mp4"},
-                    ],
-                    "user": {"name": "Creator", "url": "https://pexels.com/@creator"},
-                }],
+                "videos": [
+                    {
+                        "id": 42,
+                        "url": "https://www.pexels.com/video/42/",
+                        "duration": 8,
+                        "video_files": [
+                            {"width": 720, "height": 1280, "link": "https://cdn/a.mp4"},
+                        ],
+                        "user": {
+                            "name": "Creator",
+                            "url": "https://pexels.com/@creator",
+                        },
+                    }
+                ],
             },
             {"X-Ratelimit-Remaining": "199"},
         )
@@ -79,8 +88,13 @@ def test_overlay_broll_dry_run_builds_safe_command(tmp_path):
     video.write_bytes(b"video")
     broll.write_bytes(b"broll")
     result = broll_engine.overlay_broll(
-        str(video), str(broll), str(tmp_path / "out.mp4"),
-        start=1.5, end=3.0, opacity=0.3, dry_run=True,
+        str(video),
+        str(broll),
+        str(tmp_path / "out.mp4"),
+        start=1.5,
+        end=3.0,
+        opacity=0.3,
+        dry_run=True,
     )
     assert result["ok"] is True
     assert result["dry_run"] is True

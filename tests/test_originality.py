@@ -46,7 +46,8 @@ class TestSimilarity:
     def test_compare_clips_verdict(self, tmp_path):
         # No OpenCV in this env → gracefully degrade, never crash.
         result = originality.compare_clips(
-            str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4"))
+            str(tmp_path / "a.mp4"), str(tmp_path / "b.mp4")
+        )
         assert "similarity" in result and "verdict" in result
 
 
@@ -56,15 +57,17 @@ class TestAssessAgainstRegistry:
         assert result.get("checked") is False  # fingerprint unavailable here
 
     def test_stored_fingerprint_duplicate(self):
-        rows = [{
-            "project_path": "/p/old",
-            "video_name": "old.mp4",
-            "created_at": "2026-08-01T00:00:00Z",
-            "metadata": {"visual_fingerprint": "|".join(
-                ["0"] * originality.FRAMES_TO_SAMPLE)},
-        }]
-        result = originality.assess_against_registry(
-            "proj", "video.mp4", rows)
+        rows = [
+            {
+                "project_path": "/p/old",
+                "video_name": "old.mp4",
+                "created_at": "2026-08-01T00:00:00Z",
+                "metadata": {
+                    "visual_fingerprint": "|".join(["0"] * originality.FRAMES_TO_SAMPLE)
+                },
+            }
+        ]
+        result = originality.assess_against_registry("proj", "video.mp4", rows)
         # With cv2 present the candidate is computed; with cv2 absent the
         # verdict degrades to "unchecked". Either way: no exception.
         assert "checked" in result
@@ -92,23 +95,32 @@ class TestTransformPresets:
 
     def test_transform_noop_copies(self, tmp_path, monkeypatch):
         calls = []
+
         def fake_run(cmd, **kwargs):
             calls.append(cmd)
             open(cmd[-1], "wb").write(b"x")
+
         monkeypatch.setattr(originality.subprocess, "run", fake_run)
         result = originality.apply_transformation(
-            str(tmp_path / "in.mp4"), str(tmp_path / "out.mp4"))
+            str(tmp_path / "in.mp4"), str(tmp_path / "out.mp4")
+        )
         assert result["ok"] is True and result["transforms"] == []
 
     def test_transform_with_filters(self, tmp_path, monkeypatch):
         calls = []
+
         def fake_run(cmd, **kwargs):
             calls.append(cmd)
             open(cmd[-1], "wb").write(b"x")
+
         monkeypatch.setattr(originality.subprocess, "run", fake_run)
         result = originality.apply_transformation(
-            str(tmp_path / "in.mp4"), str(tmp_path / "out.mp4"),
-            mirror=True, speed=1.02, crop_jitter=4)
+            str(tmp_path / "in.mp4"),
+            str(tmp_path / "out.mp4"),
+            mirror=True,
+            speed=1.02,
+            crop_jitter=4,
+        )
         assert result["ok"] is True
         assert "hflip" in str(calls[0])
         assert "atempo" in str(calls[0])
@@ -116,10 +128,12 @@ class TestTransformPresets:
 
 class TestReport:
     def test_write_report(self, tmp_path):
-        path = originality.write_report(str(tmp_path), [
-            {"verdict": "duplicate"}, {"verdict": "distinct"}])
+        path = originality.write_report(
+            str(tmp_path), [{"verdict": "duplicate"}, {"verdict": "distinct"}]
+        )
         assert os.path.exists(path)
         import json
+
         with open(path, encoding="utf-8") as f:
             report = json.load(f)
         assert report["summary"]["duplicates"] == 1

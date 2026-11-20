@@ -23,6 +23,7 @@ from scripts import one_face
 # burn_subtitles — ffmpeg filtergraph escaping
 # ---------------------------------------------------------------------------
 
+
 def test_ffmpeg_filter_value_escapes_special_characters():
     assert bs._ffmpeg_filter_value("C:\\tmp\\subs.srt") == "C\\:/tmp/subs.srt"
     assert bs._ffmpeg_filter_value("a'b:c") == "a\\'b\\:c"
@@ -44,16 +45,22 @@ def test_fonts_dir_points_at_existing_directory():
 
 
 def test_detect_best_encoder_defaults_to_libx264_without_hardware(monkeypatch):
-    monkeypatch.setattr(bs.subprocess, "run",
-                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="", stderr=""))
+    monkeypatch.setattr(
+        bs.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="", stderr=""),
+    )
     assert bs._detect_best_encoder() == ("libx264", "ultrafast")
 
 
 def test_burn_video_file_uses_detected_hardware_encoder(monkeypatch):
     monkeypatch.setattr(bs, "_detect_best_encoder", lambda: ("h264_nvenc", "p1"))
     calls = []
-    monkeypatch.setattr(bs.subprocess, "run",
-                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(
+        bs.subprocess,
+        "run",
+        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+    )
 
     ok, msg = bs.burn_video_file("in.mp4", "/tmp/subs.srt", "out.mp4")
 
@@ -87,11 +94,15 @@ def test_burn_video_file_reports_fatal_error(monkeypatch):
 
 def test_burn_video_file_prefer_cpu_skips_hardware(monkeypatch):
     calls = []
-    monkeypatch.setattr(bs.subprocess, "run",
-                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(
+        bs.subprocess,
+        "run",
+        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+    )
 
-    ok, msg = bs.burn_video_file("in.mp4", "/tmp/subs.srt", "out.mp4",
-                                 prefer_hardware_acceleration=False)
+    ok, msg = bs.burn_video_file(
+        "in.mp4", "/tmp/subs.srt", "out.mp4", prefer_hardware_acceleration=False
+    )
     assert ok is True and "CPU" in msg
     assert calls and all("libx264" in cmd for cmd in calls)
 
@@ -99,6 +110,7 @@ def test_burn_video_file_prefer_cpu_skips_hardware(monkeypatch):
 # ---------------------------------------------------------------------------
 # one_face — single-face 9:16 framing
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("shape", [(720, 1280, 3), (1080, 1920, 3), (480, 640, 3)])
 def test_crop_and_resize_single_face_returns_9x16_canvas(shape):
@@ -174,8 +186,9 @@ def test_detect_face_or_body_maps_face_detection_to_pixels():
 def test_detect_face_or_body_uses_pose_when_no_face():
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     pose_landmarks = [_Landmark(0.20, 0.10), _Landmark(0.60, 0.90)]
-    detector = _StubDetector(_StubResults(pose=type("P", (), {
-        "landmark": pose_landmarks})()))
+    detector = _StubDetector(
+        _StubResults(pose=type("P", (), {"landmark": pose_landmarks})())
+    )
 
     result = one_face.detect_face_or_body(frame, detector, detector, detector)
 

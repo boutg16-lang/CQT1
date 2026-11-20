@@ -26,26 +26,27 @@ import re
 # (Arabic Supplement). Presentation forms (U+FB50+, U+FE70+) are excluded on
 # purpose: real titles are normalized to the base block, and including them
 # would only add false positives for a purely advisory detector.
-_ARABIC_RE = re.compile("[\u0600-\u06FF\u0750-\u077F]")
+_ARABIC_RE = re.compile("[\u0600-\u06ff\u0750-\u077f]")
 
 # Latin letters: ASCII + Latin-1 Supplement + Latin Extended-A/B. Digits,
 # punctuation and other scripts are ignored by detect_text_script().
-_LATIN_RE = re.compile("[A-Za-z\u00C0-\u024F]")
+_LATIN_RE = re.compile("[A-Za-z\u00c0-\u024f]")
 
 # Conservative emoji ranges (code points, not grapheme clusters):
 # U+1F300-U+1FAFF (Misc Symbols & Pictographs … Symbols for Suppl. A) and
 # U+2600-U+27BF (Misc Symbols / Dingbats). Regional-indicator flags and ZWJ
 # sequences are intentionally NOT counted individually — this is a coarse
 # advisory counter, so it errs toward under-counting exotic sequences.
-EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF]")
+EMOJI_RE = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf]")
 
 # Variation Selector-16 (forces emoji presentation, e.g. U+2764 U+FE0F "❤️").
-VARIATION_SELECTOR_16 = "\uFE0F"
+VARIATION_SELECTOR_16 = "\ufe0f"
 
 
 # ---------------------------------------------------------------------------
 # Arabic script detection
 # ---------------------------------------------------------------------------
+
 
 def is_arabic_script(text):
     """True when `text` contains at least one Arabic-script character."""
@@ -55,7 +56,7 @@ def is_arabic_script(text):
 def _script_counts(text):
     """(arabic_letters, latin_letters, other_letters) among letter chars."""
     arabic = latin = other = 0
-    for char in (text or ""):
+    for char in text or "":
         if not char.isalpha():
             continue  # digits, punctuation, spaces, emoji, marks: not letters
         if _ARABIC_RE.match(char):
@@ -111,6 +112,7 @@ def scripts_match(title, caption):
 # Emoji budget helpers
 # ---------------------------------------------------------------------------
 
+
 def count_emoji(text):
     """Number of emoji code points in `text` (conservative ranges only)."""
     if not text:
@@ -160,11 +162,54 @@ ELLIPSIS = "\u2026"
 _TITLE_WS_RE = re.compile(r"[\s\u200B]+")
 
 _DANGLING_TAIL = {
-    "من", "في", "إلى", "الى", "على", "عن", "و", "ف", "ب", "ل", "ك",
-    "أن", "ان", "التي", "الذي", "الذين", "مع", "ثم", "أو", "او", "لكن",
-    "هذا", "هذه", "ذلك", "تلك", "كل", "بعد", "قبل", "حتى", "عند",
-    "of", "the", "to", "and", "or", "in", "on", "at", "for", "with",
-    "a", "an", "by", "from", "that", "this", "is", "was",
+    "من",
+    "في",
+    "إلى",
+    "الى",
+    "على",
+    "عن",
+    "و",
+    "ف",
+    "ب",
+    "ل",
+    "ك",
+    "أن",
+    "ان",
+    "التي",
+    "الذي",
+    "الذين",
+    "مع",
+    "ثم",
+    "أو",
+    "او",
+    "لكن",
+    "هذا",
+    "هذه",
+    "ذلك",
+    "تلك",
+    "كل",
+    "بعد",
+    "قبل",
+    "حتى",
+    "عند",
+    "of",
+    "the",
+    "to",
+    "and",
+    "or",
+    "in",
+    "on",
+    "at",
+    "for",
+    "with",
+    "a",
+    "an",
+    "by",
+    "from",
+    "that",
+    "this",
+    "is",
+    "was",
 }
 
 
@@ -219,6 +264,6 @@ def fit_publish_title(text, limit=100):
             words.pop()
         if words:
             return " ".join(words) + ELLIPSIS
-        return text[: last_boundary] + ELLIPSIS
+        return text[:last_boundary] + ELLIPSIS
     # Single token longer than the budget: no word boundary to honor.
     return text[: limit - 1] + ELLIPSIS

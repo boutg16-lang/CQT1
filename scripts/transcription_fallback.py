@@ -5,6 +5,7 @@ or downloads a model. The main WhisperX path remains the preferred backend;
 this backend is used only when WhisperX is unavailable or its import stack is
 broken. It returns the same basic segment shape used by the local pipeline.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -44,11 +45,17 @@ def availability() -> Dict[str, Any]:
     try:
         module = _module()
         if module is None:
-            return {"ok": False, "version": "", "error": "faster_whisper is not installed"}
+            return {
+                "ok": False,
+                "version": "",
+                "error": "faster_whisper is not installed",
+            }
         return {
             "ok": callable(getattr(module, "WhisperModel", None)),
             "version": str(getattr(module, "__version__", "installed")),
-            "error": "" if callable(getattr(module, "WhisperModel", None)) else "WhisperModel is missing",
+            "error": ""
+            if callable(getattr(module, "WhisperModel", None))
+            else "WhisperModel is missing",
         }
     except Exception as exc:  # optional backend must never break diagnostics
         return {"ok": False, "version": "", "error": str(exc)}
@@ -66,10 +73,13 @@ def _resolve_device(device: str) -> Tuple[str, str]:
         import torch
 
         if bool(torch.cuda.is_available()):
-            return "cuda", os.getenv("VIRALCUTTER_FASTER_WHISPER_COMPUTE_TYPE", "float16")
+            return "cuda", os.getenv(
+                "VIRALCUTTER_FASTER_WHISPER_COMPUTE_TYPE", "float16"
+            )
     except ImportError as exc:
-        logger.debug("Torch is unavailable for CUDA probing (%s); using CPU.",
-                     type(exc).__name__)
+        logger.debug(
+            "Torch is unavailable for CUDA probing (%s); using CPU.", type(exc).__name__
+        )
     except Exception as exc:
         logger.warning("CUDA probe failed (%s); using CPU.", type(exc).__name__)
     return "cpu", os.getenv("VIRALCUTTER_FASTER_WHISPER_COMPUTE_TYPE", "int8")
@@ -104,7 +114,9 @@ def normalize_segments(segments: Iterable[Any]) -> List[Dict[str, Any]]:
         item: Dict[str, Any] = {"start": start, "end": end, "text": text}
         words = getattr(segment, "words", None)
         if words:
-            normalized_words = [word_item for word in words if (word_item := _word_dict(word))]
+            normalized_words = [
+                word_item for word in words if (word_item := _word_dict(word))
+            ]
             if normalized_words:
                 item["words"] = normalized_words
         normalized.append(item)
@@ -128,9 +140,20 @@ def _chunk_seconds() -> int:
 def _audio_duration(path: str) -> Optional[float]:
     try:
         proc = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", path],
-            capture_output=True, text=True, timeout=60)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         if proc.returncode == 0:
             return float((proc.stdout or "").strip())
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -151,10 +174,28 @@ def _split_audio(path: str, folder: str, chunk_seconds: int):
         length = min(float(chunk_seconds), duration - start)
         try:
             proc = subprocess.run(
-                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                 "-ss", "{:.3f}".format(start), "-t", "{:.3f}".format(length),
-                 "-i", path, "-ar", "16000", "-ac", "1", target],
-                capture_output=True, text=True, timeout=600)
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-ss",
+                    "{:.3f}".format(start),
+                    "-t",
+                    "{:.3f}".format(length),
+                    "-i",
+                    path,
+                    "-ar",
+                    "16000",
+                    "-ac",
+                    "1",
+                    target,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
         except (OSError, subprocess.SubprocessError):
             return []
         if proc.returncode != 0 or not os.path.isfile(target):
@@ -178,22 +219,35 @@ def _is_oom(exc: BaseException) -> bool:
     if isinstance(exc, MemoryError):
         return True
     text = str(exc).lower()
-    return any(marker in text for marker in (
-        "unable to allocate", "out of memory", "bad allocation",
-        "cannot allocate memory", "memoryerror",
-    ))
+    return any(
+        marker in text
+        for marker in (
+            "unable to allocate",
+            "out of memory",
+            "bad allocation",
+            "cannot allocate memory",
+            "memoryerror",
+        )
+    )
 
 
-def _transcribe_windows(model, input_file: str, chunk_seconds: int,
-                        progress: Optional[Callable[[str], None]]):
+def _transcribe_windows(
+    model,
+    input_file: str,
+    chunk_seconds: int,
+    progress: Optional[Callable[[str], None]],
+):
     """Transcribe one audio file using bounded windows; returns merged data."""
     chunk_dir = tempfile.mkdtemp(prefix="cqt1-audio-chunks-")
     try:
         chunks = _split_audio(input_file, chunk_dir, chunk_seconds)
         if chunks:
             if progress:
-                progress("الصوت طويل ({} ثانية/نافذة) — تفريغ على {} نافذة لتوفير الذاكرة".format(
-                    chunk_seconds, len(chunks)))
+                progress(
+                    "الصوت طويل ({} ثانية/نافذة) — تفريغ على {} نافذة لتوفير الذاكرة".format(
+                        chunk_seconds, len(chunks)
+                    )
+                )
             normalized: List[Dict[str, Any]] = []
             language = "unknown"
             for index, (chunk_path, offset) in enumerate(chunks, start=1):
@@ -219,8 +273,11 @@ def _transcribe_windows(model, input_file: str, chunk_seconds: int,
             vad_filter=True,
             word_timestamps=True,
         )
-        return (normalize_segments(segments),
-                str(getattr(info, "language", "") or "unknown"), 1)
+        return (
+            normalize_segments(segments),
+            str(getattr(info, "language", "") or "unknown"),
+            1,
+        )
     finally:
         shutil.rmtree(chunk_dir, ignore_errors=True)
 
@@ -238,10 +295,14 @@ def transcribe(
             "faster-whisper is not installed; install requirements-transcribe-fallback.txt"
         )
     runtime_device, compute_type = _resolve_device(device)
-    resolved_model = _MODEL_ALIASES.get(str(model_name or "large-v3").strip(), str(model_name or "large-v3").strip())
+    resolved_model = _MODEL_ALIASES.get(
+        str(model_name or "large-v3").strip(), str(model_name or "large-v3").strip()
+    )
     if progress:
         progress(f"جاري تحميل faster-whisper ({resolved_model}) على {runtime_device}")
-    model = module.WhisperModel(resolved_model, device=runtime_device, compute_type=compute_type)
+    model = module.WhisperModel(
+        resolved_model, device=runtime_device, compute_type=compute_type
+    )
     if progress:
         progress("جاري التفريغ عبر faster-whisper مع VAD محلي")
     base_chunk = _chunk_seconds()
@@ -257,7 +318,8 @@ def transcribe(
     for chunk_seconds in ladder:
         try:
             normalized, language, chunk_count = _transcribe_windows(
-                model, input_file, chunk_seconds, progress)
+                model, input_file, chunk_seconds, progress
+            )
             used_chunk = chunk_seconds
             break
         except Exception as exc:
@@ -265,8 +327,11 @@ def transcribe(
                 raise
             last_oom = exc
             if progress:
-                progress("الذاكرة غير كافية عند نافذة {}ث — إعادة المحاولة بنافذة أصغر.".format(
-                    chunk_seconds))
+                progress(
+                    "الذاكرة غير كافية عند نافذة {}ث — إعادة المحاولة بنافذة أصغر.".format(
+                        chunk_seconds
+                    )
+                )
     if not normalized:
         if last_oom is not None:
             raise last_oom
@@ -286,7 +351,9 @@ def transcribe(
 def _atomic_write(path: str, text: str) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent))
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent)
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
@@ -306,7 +373,9 @@ def _timestamp(seconds: float, decimal: str = ",") -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}{decimal}{millis:03d}"
 
 
-def write_outputs(result: Dict[str, Any], srt_path: str, tsv_path: str, json_path: str) -> None:
+def write_outputs(
+    result: Dict[str, Any], srt_path: str, tsv_path: str, json_path: str
+) -> None:
     """Write fallback outputs in the same filenames expected by OUSSAMA."""
     segments = list(result.get("segments") or [])
     srt_blocks = []
@@ -315,7 +384,9 @@ def write_outputs(result: Dict[str, Any], srt_path: str, tsv_path: str, json_pat
         start = float(segment["start"])
         end = float(segment["end"])
         text = str(segment.get("text", "")).replace("\n", " ").strip()
-        srt_blocks.append(f"{index}\n{_timestamp(start)} --> {_timestamp(end)}\n{text}\n")
+        srt_blocks.append(
+            f"{index}\n{_timestamp(start)} --> {_timestamp(end)}\n{text}\n"
+        )
         tsv_lines.append(f"{start:.3f}\t{end:.3f}\t{text}")
     _atomic_write(srt_path, "\n".join(srt_blocks) + "\n")
     _atomic_write(tsv_path, "\n".join(tsv_lines) + "\n")

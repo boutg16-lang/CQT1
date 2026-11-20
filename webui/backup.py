@@ -4,6 +4,7 @@ Backups are ZIP files created without OAuth tokens, client secrets, caches or
 Python bytecode. Restore always creates a new sibling project and never
 silently overwrites an existing project.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,16 +16,38 @@ import zipfile
 from pathlib import Path
 
 EXCLUDED_NAMES = {
-    "token.json", "client_secrets.json", "credentials.json",
-    ".batch_queue.json", ".DS_Store",
+    "token.json",
+    "client_secrets.json",
+    "credentials.json",
+    ".batch_queue.json",
+    ".DS_Store",
 }
-EXCLUDED_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".runtime-tmp", ".installer-tmp"}
-MEDIA_SUFFIXES = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".wav", ".flac", ".aac"}
+EXCLUDED_DIRS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".runtime-tmp",
+    ".installer-tmp",
+}
+MEDIA_SUFFIXES = {
+    ".mp4",
+    ".mkv",
+    ".mov",
+    ".avi",
+    ".webm",
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".aac",
+}
 
 
 def _safe_backup_name(project_path):
     name = Path(project_path).name or "project"
-    safe = "".join(ch if ch.isalnum() or ch in " _-" else "_" for ch in name).strip() or "project"
+    safe = (
+        "".join(ch if ch.isalnum() or ch in " _-" else "_" for ch in name).strip()
+        or "project"
+    )
     return safe[:80]
 
 
@@ -42,11 +65,15 @@ def create_backup(project_path, destination_dir=None, include_media=False):
     project = Path(project_path).resolve()
     if not project.is_dir():
         raise FileNotFoundError("project folder not found: {}".format(project))
-    destination = Path(destination_dir or project.parent / ".backups").expanduser().resolve()
+    destination = (
+        Path(destination_dir or project.parent / ".backups").expanduser().resolve()
+    )
     destination.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d_%H%M%S")
     target = destination / "{}_{}.zip".format(_safe_backup_name(project), stamp)
-    fd, temp_name = tempfile.mkstemp(prefix=".backup-", suffix=".tmp", dir=str(destination))
+    fd, temp_name = tempfile.mkstemp(
+        prefix=".backup-", suffix=".tmp", dir=str(destination)
+    )
     os.close(fd)
     manifest = {
         "format": "oussama-cutter-backup",
@@ -57,10 +84,19 @@ def create_backup(project_path, destination_dir=None, include_media=False):
     }
     count = 0
     try:
-        with zipfile.ZipFile(temp_name, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-            archive.writestr("backup_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        with zipfile.ZipFile(
+            temp_name, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6
+        ) as archive:
+            archive.writestr(
+                "backup_manifest.json",
+                json.dumps(manifest, ensure_ascii=False, indent=2),
+            )
             for root, dirs, files in os.walk(project):
-                dirs[:] = [name for name in dirs if name not in EXCLUDED_DIRS and not name.startswith(".")]
+                dirs[:] = [
+                    name
+                    for name in dirs
+                    if name not in EXCLUDED_DIRS and not name.startswith(".")
+                ]
                 for filename in files:
                     path = Path(root) / filename
                     if not _should_include(path, include_media):
@@ -69,7 +105,11 @@ def create_backup(project_path, destination_dir=None, include_media=False):
                     archive.write(path, "project/" + relative)
                     count += 1
         os.replace(temp_name, target)
-        return {"path": str(target), "files": count, "include_media": bool(include_media)}
+        return {
+            "path": str(target),
+            "files": count,
+            "include_media": bool(include_media),
+        }
     finally:
         if os.path.exists(temp_name):
             try:
@@ -90,10 +130,15 @@ def inspect_backup(backup_path):
         manifest = json.loads(archive.read("backup_manifest.json").decode("utf-8"))
         if manifest.get("format") != "oussama-cutter-backup":
             raise ValueError("unsupported backup format")
-        unsafe = [name for name in names if name.startswith("/") or ".." in Path(name).parts]
+        unsafe = [
+            name for name in names if name.startswith("/") or ".." in Path(name).parts
+        ]
         if unsafe:
             raise ValueError("backup contains unsafe paths")
-        return {"manifest": manifest, "files": len([name for name in names if name.startswith("project/")])}
+        return {
+            "manifest": manifest,
+            "files": len([name for name in names if name.startswith("project/")]),
+        }
 
 
 def restore_backup(backup_path, destination_root):
@@ -101,7 +146,10 @@ def restore_backup(backup_path, destination_root):
     info = inspect_backup(backup_path)
     root = Path(destination_root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
-    base = _safe_backup_name(info["manifest"].get("project_name") or "restored") + "_restored"
+    base = (
+        _safe_backup_name(info["manifest"].get("project_name") or "restored")
+        + "_restored"
+    )
     target = root / base
     suffix = 1
     while target.exists():
@@ -113,11 +161,13 @@ def restore_backup(backup_path, destination_root):
             for name in archive.namelist():
                 if not name.startswith("project/"):
                     continue
-                relative = Path(name[len("project/"):])
+                relative = Path(name[len("project/") :])
                 if not relative.parts or ".." in relative.parts:
                     raise ValueError("backup contains unsafe paths")
                 out = temp_target.joinpath(*relative.parts).resolve()
-                if os.path.commonpath([str(temp_target.resolve()), str(out)]) != str(temp_target.resolve()):
+                if os.path.commonpath([str(temp_target.resolve()), str(out)]) != str(
+                    temp_target.resolve()
+                ):
                     raise ValueError("backup path escapes destination")
                 out.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(name) as source, open(out, "wb") as target_file:

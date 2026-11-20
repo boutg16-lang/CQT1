@@ -31,7 +31,9 @@ def validate_project_url(value):
     if parsed.scheme.lower() != "http" or host not in _LOCAL_HOSTS:
         raise PolicyError("Only an HTTP project running on localhost is allowed")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise PolicyError("Project URL must not contain credentials, a query, or a fragment")
+        raise PolicyError(
+            "Project URL must not contain credentials, a query, or a fragment"
+        )
     if parsed.path not in {"", "/"}:
         raise PolicyError("Project URL must point to the project root")
     if not 1 <= port <= 65535:
@@ -60,7 +62,12 @@ def project_origin(value):
 
 
 def validate_navigation_path(value, base_url):
-    if not isinstance(value, str) or len(value) > 1200 or not value.startswith("/") or value.startswith("//"):
+    if (
+        not isinstance(value, str)
+        or len(value) > 1200
+        or not value.startswith("/")
+        or value.startswith("//")
+    ):
         raise PolicyError("Navigation must use a path on the local project")
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc or parsed.fragment or "\\" in value:
@@ -94,7 +101,9 @@ _INLINE_SECRET = re.compile(
     r"password|passphrase|token|secret|authorization|cookie)\s*[:=]\s*([^\s,;]+)"
 )
 _BEARER_SECRET = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}")
-_TOKEN_SHAPE = re.compile(r"\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b")
+_TOKEN_SHAPE = re.compile(
+    r"\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b"
+)
 
 
 def is_sensitive_control_name(value):
@@ -104,7 +113,14 @@ def is_sensitive_control_name(value):
 def redact_sensitive_text(value):
     if not isinstance(value, str):
         return ""
-    text = _INLINE_SECRET.sub(lambda match: match.group(1) + match.group(0)[len(match.group(1)):].split(match.group(2), 1)[0] + "[REDACTED]", value)
+    text = _INLINE_SECRET.sub(
+        lambda match: (
+            match.group(1)
+            + match.group(0)[len(match.group(1)) :].split(match.group(2), 1)[0]
+            + "[REDACTED]"
+        ),
+        value,
+    )
     text = _BEARER_SECRET.sub("Bearer [REDACTED]", text)
     return _TOKEN_SHAPE.sub("[REDACTED_TOKEN]", text)
 
@@ -143,26 +159,45 @@ def validate_action(value):
     if action_type in {"click", "fill", "select", "press"}:
         name = action["name"]
         if not isinstance(name, str) or not name.strip() or len(name) > 160:
-            raise PolicyError("Control name must be a non-empty string of at most 160 characters")
+            raise PolicyError(
+                "Control name must be a non-empty string of at most 160 characters"
+            )
         if is_sensitive_control_name(name):
             raise PolicyError("Secret and credential fields cannot be controlled")
         action["name"] = name.strip()
-    if action_type == "click" and (not isinstance(action["role"], str) or action["role"] not in _ROLES - {"textbox", "combobox"}):
+    if action_type == "click" and (
+        not isinstance(action["role"], str)
+        or action["role"] not in _ROLES - {"textbox", "combobox"}
+    ):
         raise PolicyError("Unsupported control role")
     if action_type == "fill":
         if not isinstance(action["value"], str) or len(action["value"]) > 4000:
             raise PolicyError("Text input must be a string of at most 4000 characters")
     if action_type == "select":
-        if not isinstance(action["label"], str) or not action["label"].strip() or len(action["label"]) > 160:
+        if (
+            not isinstance(action["label"], str)
+            or not action["label"].strip()
+            or len(action["label"]) > 160
+        ):
             raise PolicyError("Option label is invalid")
         action["label"] = action["label"].strip()
-    if action_type == "press" and (not isinstance(action["key"], str) or action["key"] not in _KEYS):
+    if action_type == "press" and (
+        not isinstance(action["key"], str) or action["key"] not in _KEYS
+    ):
         raise PolicyError("Keyboard key is not allowed")
     if action_type == "scroll":
-        if not isinstance(action["direction"], str) or action["direction"] not in {"up", "down"} or type(action["pixels"]) is not int or not 0 <= action["pixels"] <= 1000:
+        if (
+            not isinstance(action["direction"], str)
+            or action["direction"] not in {"up", "down"}
+            or type(action["pixels"]) is not int
+            or not 0 <= action["pixels"] <= 1000
+        ):
             raise PolicyError("Scroll action is outside its allowed range")
     if action_type == "wait":
-        if type(action["milliseconds"]) is not int or not 0 <= action["milliseconds"] <= 8000:
+        if (
+            type(action["milliseconds"]) is not int
+            or not 0 <= action["milliseconds"] <= 8000
+        ):
             raise PolicyError("Wait must be between 0 and 8000 milliseconds")
     return action
 

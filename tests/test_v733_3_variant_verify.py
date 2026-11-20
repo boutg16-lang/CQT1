@@ -26,8 +26,14 @@ def _with_contribution(tmp_path):
 
 
 def _youtube_sibling_event():
-    return [{"platform": "youtube", "status": "uploaded",
-             "video": "000_clip.mp4", "file_fingerprint": "sha256:x"}]
+    return [
+        {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "000_clip.mp4",
+            "file_fingerprint": "sha256:x",
+        }
+    ]
 
 
 def _seed_of(output_path):
@@ -50,8 +56,9 @@ def _install_fakes(monkeypatch, tmp_path, similarities_by_offset):
         # compare against the base seed recorded from plan_variant is complex;
         # simpler: return from queue keyed by call count.
         fake_compare.calls += 1
-        similarity = fake_compare.queue[min(fake_compare.calls - 1,
-                                            len(fake_compare.queue) - 1)]
+        similarity = fake_compare.queue[
+            min(fake_compare.calls - 1, len(fake_compare.queue) - 1)
+        ]
         return {"similarity": similarity, "verdict": "similar"}
 
     fake_compare.calls = 0
@@ -65,9 +72,10 @@ def test_variant_retries_until_distinct(tmp_path, monkeypatch):
     _with_contribution(tmp_path)
     clip = _clip(tmp_path)
     compare = _install_fakes(monkeypatch, tmp_path, [0.95, 0.95, 0.30])
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=_youtube_sibling_event())
-    assert compare.calls == 3          # two too-similar + one accepted
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=_youtube_sibling_event()
+    )
+    assert compare.calls == 3  # two too-similar + one accepted
     assert decision["action"] == "variate"
     assert decision["similarity"] == 0.30
     assert os.path.isfile(decision["path"])
@@ -79,8 +87,9 @@ def test_first_distinct_variant_wins_immediately(tmp_path, monkeypatch):
     clip = _clip(tmp_path)
     _with_contribution(tmp_path)
     compare = _install_fakes(monkeypatch, tmp_path, [0.10])
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=_youtube_sibling_event())
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=_youtube_sibling_event()
+    )
     assert compare.calls == 1
     assert decision["similarity"] == 0.10
     assert decision["action"] == "variate"
@@ -89,12 +98,12 @@ def test_first_distinct_variant_wins_immediately(tmp_path, monkeypatch):
 def test_all_similar_returns_best_effort_with_warning(tmp_path, monkeypatch):
     clip = _clip(tmp_path)
     _with_contribution(tmp_path)
-    compare = _install_fakes(monkeypatch, tmp_path,
-                             [0.9, 0.91, 0.89, 0.92])
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=_youtube_sibling_event())
-    assert compare.calls == 4          # all VERIFY_ATTEMPTS exhausted
-    assert decision["action"] == "variate"          # never hard-blocked
+    compare = _install_fakes(monkeypatch, tmp_path, [0.9, 0.91, 0.89, 0.92])
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=_youtube_sibling_event()
+    )
+    assert compare.calls == 4  # all VERIFY_ATTEMPTS exhausted
+    assert decision["action"] == "variate"  # never hard-blocked
     assert decision["similarity"] == pytest.approx(0.92)
     assert "best-effort" in decision["reason"]
 
@@ -104,8 +113,9 @@ def test_verify_can_be_disabled(tmp_path, monkeypatch):
     _with_contribution(tmp_path)
     monkeypatch.setenv("VIRALCUTTER_VARIANT_VERIFY", "0")
     compare = _install_fakes(monkeypatch, tmp_path, [0.99])
-    decision = pv.maybe_variant(str(tmp_path), clip, "tiktok", policy="auto",
-                                events=_youtube_sibling_event())
-    assert compare.calls == 0          # verification skipped entirely
+    decision = pv.maybe_variant(
+        str(tmp_path), clip, "tiktok", policy="auto", events=_youtube_sibling_event()
+    )
+    assert compare.calls == 0  # verification skipped entirely
     assert decision["action"] == "variate"
     assert "similarity" not in decision

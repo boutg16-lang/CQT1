@@ -4,6 +4,7 @@ Pure logic extracted from app.py: given the run parameters, build the CLI
 command for main_improved.py. No side effects, no gradio imports — fully
 unit-testable.
 """
+
 import os
 import sys
 
@@ -19,34 +20,77 @@ except ImportError:
 WORKFLOW_MAP = {"Full": "1", "Cut Only": "2", "Subtitles Only": "3"}
 
 
-def build_command(main_script_path, source_args, *, segments=None, viral=False,
-                  themes=None, min_duration=None, max_duration=None, model=None,
-                  transcription_device="auto", ai_backend=None, api_key=None, ai_model_name=None, chunk_size=None,
-                  workflow=None, face_model=None, face_mode=None,
-                  face_detect_interval=None, no_face_mode=None,
-                  face_filter_thresh=None, face_two_thresh=None,
-                  face_conf_thresh=None, face_dead_zone=None,
-                  focus_active_speaker=False, active_speaker_mar=None,
-                  active_speaker_score_diff=None, include_motion=False,
-                  active_speaker_motion_threshold=None,
-                  active_speaker_motion_sensitivity=None, active_speaker_decay=None,
-                  face_smoothing=None, face_headroom=None,
-                  translate_target=None, subtitle_config_path=None,
-                  safety_mode=None, safety_ai=None,
-                  # --- v6 features (Roadmap 5.2 / Sprint 3 / 4.2 / 2.4) ---
-                  platform=None, polish=False, music=None, logo=None,
-                  watermark_position=None, watermark_size=None, watermark_opacity=None,
-                  broll=None, broll_query=None, broll_opacity=None,
-                  sfx_dir=None, sfx_volume=None,
-                  checkpoint=None, metadata_gate=None, cookies_browser=None,
-                  sponsorblock=None, live_wait_minutes=None,
-                  title_language=None, music_check=None, music_gate=None,
-                  output_aspect=None, reframe_mode=None, force_new_segments=False,
-                  visual_check="auto", visual_gate="warn", visual_frames=None,
-                  visual_model=None, auto_download_visual=False,
-                  audio_qc="on", audio_qc_gate="warn",
-                  # --- v7.36 voice-face link (v7.35 core, opt-in; WebUI round) ---
-                  voice_face_link=False):
+def build_command(
+    main_script_path,
+    source_args,
+    *,
+    segments=None,
+    viral=False,
+    themes=None,
+    min_duration=None,
+    max_duration=None,
+    model=None,
+    transcription_device="auto",
+    ai_backend=None,
+    api_key=None,
+    ai_model_name=None,
+    chunk_size=None,
+    workflow=None,
+    face_model=None,
+    face_mode=None,
+    face_detect_interval=None,
+    no_face_mode=None,
+    face_filter_thresh=None,
+    face_two_thresh=None,
+    face_conf_thresh=None,
+    face_dead_zone=None,
+    focus_active_speaker=False,
+    active_speaker_mar=None,
+    active_speaker_score_diff=None,
+    include_motion=False,
+    active_speaker_motion_threshold=None,
+    active_speaker_motion_sensitivity=None,
+    active_speaker_decay=None,
+    face_smoothing=None,
+    face_headroom=None,
+    translate_target=None,
+    subtitle_config_path=None,
+    safety_mode=None,
+    safety_ai=None,
+    # --- v6 features (Roadmap 5.2 / Sprint 3 / 4.2 / 2.4) ---
+    platform=None,
+    polish=False,
+    music=None,
+    logo=None,
+    watermark_position=None,
+    watermark_size=None,
+    watermark_opacity=None,
+    broll=None,
+    broll_query=None,
+    broll_opacity=None,
+    sfx_dir=None,
+    sfx_volume=None,
+    checkpoint=None,
+    metadata_gate=None,
+    cookies_browser=None,
+    sponsorblock=None,
+    live_wait_minutes=None,
+    title_language=None,
+    music_check=None,
+    music_gate=None,
+    output_aspect=None,
+    reframe_mode=None,
+    force_new_segments=False,
+    visual_check="auto",
+    visual_gate="warn",
+    visual_frames=None,
+    visual_model=None,
+    auto_download_visual=False,
+    audio_qc="on",
+    audio_qc_gate="warn",
+    # --- v7.36 voice-face link (v7.35 core, opt-in; WebUI round) ---
+    voice_face_link=False,
+):
     """Assemble the full CLI command for main_improved.py.
 
     `source_args` holds the input-source-specific flags already resolved by
@@ -112,9 +156,19 @@ def build_command(main_script_path, source_args, *, segments=None, viral=False,
         if include_motion:
             cmd.append("--include-motion")
         if active_speaker_motion_threshold is not None:
-            cmd.extend(["--active-speaker-motion-threshold", str(active_speaker_motion_threshold)])
+            cmd.extend(
+                [
+                    "--active-speaker-motion-threshold",
+                    str(active_speaker_motion_threshold),
+                ]
+            )
         if active_speaker_motion_sensitivity is not None:
-            cmd.extend(["--active-speaker-motion-sensitivity", str(active_speaker_motion_sensitivity)])
+            cmd.extend(
+                [
+                    "--active-speaker-motion-sensitivity",
+                    str(active_speaker_motion_sensitivity),
+                ]
+            )
         if active_speaker_decay is not None:
             cmd.extend(["--active-speaker-decay", str(active_speaker_decay)])
 

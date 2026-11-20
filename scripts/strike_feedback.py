@@ -31,6 +31,7 @@ Commands:
   from-scorecard --project P [--apply] [--reason R]
   export [--format json|txt]
 """
+
 import argparse
 import json
 import os
@@ -67,8 +68,11 @@ def load_terms(base_dir=None):
     except Exception:
         data = {}
     return {
-        "extra_terms": [t for t in data.get("extra_terms", [])
-                        if isinstance(t, dict) and t.get("term")],
+        "extra_terms": [
+            t
+            for t in data.get("extra_terms", [])
+            if isinstance(t, dict) and t.get("term")
+        ],
         "allow_terms": [str(t) for t in data.get("allow_terms", []) if t],
     }
 
@@ -111,21 +115,35 @@ def save_journal(journal, base_dir=None):
 
 def _now_iso():
     import datetime
+
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
 def log_event(journal, action, term, **extra):
-    ev = {"id": re.sub(r"[^0-9]", "", _now_iso())[:14], "ts": _now_iso(),
-          "action": action, "term": term}
+    ev = {
+        "id": re.sub(r"[^0-9]", "", _now_iso())[:14],
+        "ts": _now_iso(),
+        "action": action,
+        "term": term,
+    }
     ev.update({k: v for k, v in extra.items() if v is not None})
     journal["events"].append(ev)
     return journal
 
+
 # --------------------------------------------------------------------------
 # Commands
 # --------------------------------------------------------------------------
-def cmd_add(term, lang="ar", severity="high", category="custom",
-            reason=None, source="manual", project=None, base_dir=None):
+def cmd_add(
+    term,
+    lang="ar",
+    severity="high",
+    category="custom",
+    reason=None,
+    source="manual",
+    project=None,
+    base_dir=None,
+):
     """Add a term to extra_terms (BLOCK) + journal the event."""
     if severity not in SEVERITIES:
         raise ValueError("severity must be one of %s" % ", ".join(SEVERITIES))
@@ -135,9 +153,17 @@ def cmd_add(term, lang="ar", severity="high", category="custom",
     if term.strip().lower() not in norm:
         terms["extra_terms"].append(entry)
         save_terms(terms["extra_terms"], terms["allow_terms"], base_dir)
-    journal = log_event(load_journal(base_dir), "add", term,
-                        lang=lang, severity=severity, category=category,
-                        reason=reason, source=source, project=project)
+    journal = log_event(
+        load_journal(base_dir),
+        "add",
+        term,
+        lang=lang,
+        severity=severity,
+        category=category,
+        reason=reason,
+        source=source,
+        project=project,
+    )
     save_journal(journal, base_dir)
     return terms_path(base_dir), entry
 
@@ -149,8 +175,9 @@ def cmd_allow(term, reason=None, base_dir=None):
     if term.strip().lower() not in norm:
         terms["allow_terms"].append(term)
         save_terms(terms["extra_terms"], terms["allow_terms"], base_dir)
-    journal = log_event(load_journal(base_dir), "allow", term,
-                        reason=reason, source="manual")
+    journal = log_event(
+        load_journal(base_dir), "allow", term, reason=reason, source="manual"
+    )
     save_journal(journal, base_dir)
     return terms_path(base_dir), term
 
@@ -161,13 +188,17 @@ def cmd_remove(term, allow=False, base_dir=None):
     removed = False
     if allow:
         before = len(terms["allow_terms"])
-        terms["allow_terms"] = [t for t in terms["allow_terms"]
-                                if t.strip().lower() != term.strip().lower()]
+        terms["allow_terms"] = [
+            t for t in terms["allow_terms"] if t.strip().lower() != term.strip().lower()
+        ]
         removed = len(terms["allow_terms"]) < before
     else:
         before = len(terms["extra_terms"])
-        terms["extra_terms"] = [t for t in terms["extra_terms"]
-                                if t["term"].strip().lower() != term.strip().lower()]
+        terms["extra_terms"] = [
+            t
+            for t in terms["extra_terms"]
+            if t["term"].strip().lower() != term.strip().lower()
+        ]
         removed = len(terms["extra_terms"]) < before
     if removed:
         save_terms(terms["extra_terms"], terms["allow_terms"], base_dir)
@@ -250,12 +281,18 @@ def extract_terms_from_project(project_folder):
             for m in seg.get(_REPORT_SEGMENT_MATCHES, []) or []:
                 if not isinstance(m, dict) or not m.get("term"):
                     continue
-                _note(m["term"], m.get("severity"), "matched in segment '%s'" % (seg.get("title") or "?"))
+                _note(
+                    m["term"],
+                    m.get("severity"),
+                    "matched in segment '%s'" % (seg.get("title") or "?"),
+                )
 
     if scorecard:
         for entry in scorecard.get("segments", []):
             idx = entry.get("index")
-            if idx is not None and (idx in blocked_indexes or entry.get("overall") == "danger"):
+            if idx is not None and (
+                idx in blocked_indexes or entry.get("overall") == "danger"
+            ):
                 # NOTE: the raw title is NOT learned as a term — a clip can be
                 # blocked for reuse/visual reasons that have nothing to do with
                 # its words. Only real matched terms are worth learning.
@@ -266,16 +303,24 @@ def extract_terms_from_project(project_folder):
 
     out = []
     for key, cnt in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
-        out.append({"term": key, "severity": severities[key],
-                    "count": cnt, "reasons": reasons.get(key, [])})
+        out.append(
+            {
+                "term": key,
+                "severity": severities[key],
+                "count": cnt,
+                "reasons": reasons.get(key, []),
+            }
+        )
     return out
+
 
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 def _build_parser():
     p = argparse.ArgumentParser(
-        description="ViralCutter strike feedback loop — teach the tool from real outcomes (5.1)")
+        description="ViralCutter strike feedback loop — teach the tool from real outcomes (5.1)"
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     a = sub.add_parser("add", help="add a term to the custom BLOCK list")
@@ -287,37 +332,55 @@ def _build_parser():
     a.add_argument("--project", default=None, help="project folder this came from")
     a.add_argument("--source", default="manual", choices=["manual", "scorecard"])
 
-    al = sub.add_parser("allow", help="add a term to the ALLOW list (false-positive control)")
+    al = sub.add_parser(
+        "allow", help="add a term to the ALLOW list (false-positive control)"
+    )
     al.add_argument("--term", required=True)
     al.add_argument("--reason", default=None)
 
     r = sub.add_parser("remove", help="remove a term")
     r.add_argument("--term", required=True)
-    r.add_argument("--allow", action="store_true", help="remove from allow_terms instead")
+    r.add_argument(
+        "--allow", action="store_true", help="remove from allow_terms instead"
+    )
 
     sub.add_parser("list", help="show current custom terms")
     sub.add_parser("stats", help="journal summary")
 
-    fs = sub.add_parser("from-scorecard",
-                        help="extract patterns from a blocked project's reports")
+    fs = sub.add_parser(
+        "from-scorecard", help="extract patterns from a blocked project's reports"
+    )
     fs.add_argument("--project", required=True)
-    fs.add_argument("--apply", action="store_true",
-                    help="add the extracted terms to safety_terms.json")
+    fs.add_argument(
+        "--apply",
+        action="store_true",
+        help="add the extracted terms to safety_terms.json",
+    )
     fs.add_argument("--reason", default=None)
 
     e = sub.add_parser("export", help="export the journal")
     e.add_argument("--format", choices=["json", "txt"], default="txt")
 
-    p.add_argument("--dir", default=None, help="base dir for the term/journal files "
-                                                "(default: repo root)")
+    p.add_argument(
+        "--dir",
+        default=None,
+        help="base dir for the term/journal files (default: repo root)",
+    )
     return p
 
 
 def _print_terms(terms):
     print("custom block terms (extra_terms): %d" % len(terms["extra_terms"]))
     for t in terms["extra_terms"]:
-        print("  - %-24s lang=%-4s sev=%-6s cat=%s" % (
-            t["term"], t.get("lang", "?"), t.get("severity", "?"), t.get("category", "?")))
+        print(
+            "  - %-24s lang=%-4s sev=%-6s cat=%s"
+            % (
+                t["term"],
+                t.get("lang", "?"),
+                t.get("severity", "?"),
+                t.get("category", "?"),
+            )
+        )
     print("allow terms (false-positive fixes): %d" % len(terms["allow_terms"]))
     for t in terms["allow_terms"]:
         print("  - %s" % t)
@@ -328,21 +391,37 @@ def main(argv=None):
     base_dir = args.dir or APP_ROOT
 
     if args.command == "add":
-        path, entry = cmd_add(args.term, lang=args.lang, severity=args.severity,
-                              category=args.category, reason=args.reason,
-                              source=args.source, project=args.project, base_dir=base_dir)
-        print("✅ added '%s' (severity=%s) → %s" % (entry["term"], entry["severity"], path))
+        path, entry = cmd_add(
+            args.term,
+            lang=args.lang,
+            severity=args.severity,
+            category=args.category,
+            reason=args.reason,
+            source=args.source,
+            project=args.project,
+            base_dir=base_dir,
+        )
+        print(
+            "✅ added '%s' (severity=%s) → %s"
+            % (entry["term"], entry["severity"], path)
+        )
         print("   it is now blocked by the safety filter on every next run.")
         return 0
 
     if args.command == "allow":
         path, term = cmd_allow(args.term, reason=args.reason, base_dir=base_dir)
-        print("✅ allowed '%s' (excluded from the built-in blocklist) → %s" % (term, path))
+        print(
+            "✅ allowed '%s' (excluded from the built-in blocklist) → %s" % (term, path)
+        )
         return 0
 
     if args.command == "remove":
         removed = cmd_remove(args.term, allow=args.allow, base_dir=base_dir)
-        print("✅ removed '%s'" % args.term if removed else "not found — nothing to remove")
+        print(
+            "✅ removed '%s'" % args.term
+            if removed
+            else "not found — nothing to remove"
+        )
         return 0 if removed else 1
 
     if args.command == "list":
@@ -364,7 +443,9 @@ def main(argv=None):
     if args.command == "from-scorecard":
         found = extract_terms_from_project(args.project)
         if not found:
-            print("No patterns found — project has no safety/risk reports or no blocked clips.")
+            print(
+                "No patterns found — project has no safety/risk reports or no blocked clips."
+            )
             return 0
         print("Patterns extracted from '%s':" % args.project)
         for f in found:
@@ -375,13 +456,23 @@ def main(argv=None):
             added = 0
             for f in found:
                 try:
-                    cmd_add(f["term"], lang="auto", severity=f["severity"],
-                            category="learned", reason=args.reason or "; ".join(f["reasons"][:1]),
-                            source="scorecard", project=args.project, base_dir=base_dir)
+                    cmd_add(
+                        f["term"],
+                        lang="auto",
+                        severity=f["severity"],
+                        category="learned",
+                        reason=args.reason or "; ".join(f["reasons"][:1]),
+                        source="scorecard",
+                        project=args.project,
+                        base_dir=base_dir,
+                    )
                     added += 1
                 except Exception:
                     pass
-            print("✅ learned %d term(s) into safety_terms.json — next runs will block them." % added)
+            print(
+                "✅ learned %d term(s) into safety_terms.json — next runs will block them."
+                % added
+            )
         else:
             print("(re-run with --apply to teach them to the tool)")
         return 0
@@ -392,7 +483,10 @@ def main(argv=None):
             print(json.dumps(journal, ensure_ascii=False, indent=2))
         else:
             for ev in journal["events"]:
-                print("[%s] %-6s %s" % (ev.get("ts", "?"), ev.get("action"), ev.get("term")))
+                print(
+                    "[%s] %-6s %s"
+                    % (ev.get("ts", "?"), ev.get("action"), ev.get("term"))
+                )
         return 0
 
     return 0

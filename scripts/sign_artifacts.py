@@ -58,7 +58,8 @@ def _crypto():
     except ImportError as exc:  # pragma: no cover - depends on environment
         raise SigningError(
             "the 'cryptography' package is required for signing: "
-            "pip install cryptography") from exc
+            "pip install cryptography"
+        ) from exc
     return serialization, Ed25519PrivateKey, Ed25519PublicKey
 
 
@@ -84,19 +85,22 @@ def generate_keypair(
         if os.path.exists(path) and not overwrite:
             raise SigningError(
                 "refusing to overwrite existing key {} — pass overwrite=True "
-                "(CLI: --force) if you really want a new identity".format(path))
+                "(CLI: --force) if you really want a new identity".format(path)
+            )
 
     secret = _passphrase(passphrase)
     private_key = Ed25519PrivateKey.generate()
-    encryption = (serialization.BestAvailableEncryption(secret) if secret
-                  else serialization.NoEncryption())
+    encryption = (
+        serialization.BestAvailableEncryption(secret)
+        if secret
+        else serialization.NoEncryption()
+    )
     private_pem = private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        encryption)
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, encryption
+    )
     public_pem = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo)
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
 
     with open(private_path, "wb") as handle:
         handle.write(private_pem)
@@ -125,10 +129,13 @@ def _load_private_key(path: str, *, passphrase: Optional[str] = None):
     except TypeError as exc:
         raise SigningError(
             "private key is passphrase-protected — set {} or pass --passphrase".format(
-                PASSPHRASE_ENV)) from exc
+                PASSPHRASE_ENV
+            )
+        ) from exc
     except ValueError as exc:
         raise SigningError(
-            "cannot load private key {} (wrong passphrase or corrupt PEM)".format(path)) from exc
+            "cannot load private key {} (wrong passphrase or corrupt PEM)".format(path)
+        ) from exc
 
 
 def _load_public_key(path: str):
@@ -141,7 +148,9 @@ def _load_public_key(path: str):
     try:
         return serialization.load_pem_public_key(pem)
     except ValueError as exc:
-        raise SigningError("cannot load public key {} (corrupt PEM)".format(path)) from exc
+        raise SigningError(
+            "cannot load public key {} (corrupt PEM)".format(path)
+        ) from exc
 
 
 def _sha256_file(path: str) -> str:
@@ -167,7 +176,8 @@ def build_sums(files: Sequence[str]) -> str:
         if name in names:
             raise SigningError(
                 "duplicate artifact basename {} — the manifest lives next to "
-                "the artifacts, so names must be unique".format(name))
+                "the artifacts, so names must be unique".format(name)
+            )
         names[name] = os.fspath(path)
     lines = []
     for name in sorted(names):
@@ -189,8 +199,15 @@ def sign_files(
         raise SigningError("no artifacts given to sign")
     private_key = _load_private_key(key_path, passphrase=passphrase)
     sums_text = build_sums(files)
-    folder = os.path.abspath(os.path.expanduser(os.fspath(
-        output_dir or os.path.dirname(os.path.abspath(os.fspath(files[0]))) or ".")))
+    folder = os.path.abspath(
+        os.path.expanduser(
+            os.fspath(
+                output_dir
+                or os.path.dirname(os.path.abspath(os.fspath(files[0])))
+                or "."
+            )
+        )
+    )
     os.makedirs(folder, exist_ok=True)
     sums_path = os.path.join(folder, SUMS_NAME)
     sig_path = sums_path + SIG_SUFFIX
@@ -198,12 +215,15 @@ def sign_files(
     with open(sums_path, "w", encoding="utf-8") as handle:
         handle.write(sums_text)
     with open(sig_path, "w", encoding="utf-8") as handle:
-        handle.write("{}:{}\n".format(SIG_FORMAT, base64.b64encode(signature).decode("ascii")))
+        handle.write(
+            "{}:{}\n".format(SIG_FORMAT, base64.b64encode(signature).decode("ascii"))
+        )
     return {"sums": sums_path, "signature": sig_path, "files": len(files)}
 
 
-def sign_detached(data: bytes, *, key_path: str,
-                  passphrase: Optional[str] = None) -> bytes:
+def sign_detached(
+    data: bytes, *, key_path: str, passphrase: Optional[str] = None
+) -> bytes:
     """Sign raw bytes with the maintainer key; returns the raw signature.
 
     Used for artifacts that are not files (e.g. the canonical JSON of an
@@ -228,14 +248,18 @@ def _read_signature(sig_path: str) -> bytes:
         with open(sig_path, "r", encoding="utf-8") as handle:
             content = handle.read().strip()
     except OSError as exc:
-        raise SigningError("cannot read signature {}: {}".format(sig_path, exc)) from exc
+        raise SigningError(
+            "cannot read signature {}: {}".format(sig_path, exc)
+        ) from exc
     prefix = SIG_FORMAT + ":"
     if not content.startswith(prefix):
         raise SigningError(
             "unsupported signature format in {} (expected '{}:<base64>')".format(
-                sig_path, SIG_FORMAT))
+                sig_path, SIG_FORMAT
+            )
+        )
     try:
-        return base64.b64decode(content[len(prefix):], validate=True)
+        return base64.b64decode(content[len(prefix) :], validate=True)
     except ValueError as exc:
         raise SigningError("corrupt base64 signature in {}".format(sig_path)) from exc
 
@@ -257,7 +281,9 @@ def verify_sums(
         with open(sums_path, "r", encoding="utf-8") as handle:
             sums_text = handle.read()
     except OSError as exc:
-        raise SigningError("cannot read manifest {}: {}".format(sums_path, exc)) from exc
+        raise SigningError(
+            "cannot read manifest {}: {}".format(sums_path, exc)
+        ) from exc
 
     signature_valid = True
     signature_error = None
@@ -269,10 +295,13 @@ def verify_sums(
         signature_error = str(exc)
     except Exception:  # InvalidSignature — do not import the class just for this
         signature_valid = False
-        signature_error = "signature does not match the manifest (tampered or wrong key)"
+        signature_error = (
+            "signature does not match the manifest (tampered or wrong key)"
+        )
 
-    folder = os.path.abspath(os.path.expanduser(os.fspath(
-        base_dir or os.path.dirname(sums_path))))
+    folder = os.path.abspath(
+        os.path.expanduser(os.fspath(base_dir or os.path.dirname(sums_path)))
+    )
     entries: List[Dict[str, Any]] = []
     for line in sums_text.splitlines():
         line = line.strip()
@@ -288,11 +317,13 @@ def verify_sums(
             entries.append({"name": name, "status": "missing"})
             continue
         actual = _sha256_file(artifact)
-        entries.append({
-            "name": name,
-            "status": "ok" if actual == expected else "hash_mismatch",
-            "sha256": actual,
-        })
+        entries.append(
+            {
+                "name": name,
+                "status": "ok" if actual == expected else "hash_mismatch",
+                "sha256": actual,
+            }
+        )
     files_ok = bool(entries) and all(item["status"] == "ok" for item in entries)
     return {
         "ok": signature_valid and files_ok,
@@ -306,54 +337,98 @@ def verify_sums(
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Sign and verify OUSSAMA Cutter release artifacts (Ed25519, offline).")
+        description="Sign and verify OUSSAMA Cutter release artifacts (Ed25519, offline)."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     init_cmd = commands.add_parser("init", help="generate a maintainer keypair")
-    init_cmd.add_argument("--key-dir", default="keys", help="key folder (default: %(default)s)")
-    init_cmd.add_argument("--force", action="store_true", help="overwrite existing keys")
+    init_cmd.add_argument(
+        "--key-dir", default="keys", help="key folder (default: %(default)s)"
+    )
+    init_cmd.add_argument(
+        "--force", action="store_true", help="overwrite existing keys"
+    )
 
-    sign_cmd = commands.add_parser("sign", help="write SHA256SUMS + signature for artifacts")
+    sign_cmd = commands.add_parser(
+        "sign", help="write SHA256SUMS + signature for artifacts"
+    )
     sign_cmd.add_argument("files", nargs="+", help="artifact files to sign")
-    sign_cmd.add_argument("--key", default=os.path.join("keys", PRIVATE_KEY_NAME),
-                          help="private key path (default: %(default)s)")
-    sign_cmd.add_argument("--passphrase", default=None,
-                          help="key passphrase (default: ${} or unencrypted)".format(PASSPHRASE_ENV))
-    sign_cmd.add_argument("--output-dir", default=None,
-                          help="where to write the manifest (default: next to the first artifact)")
+    sign_cmd.add_argument(
+        "--key",
+        default=os.path.join("keys", PRIVATE_KEY_NAME),
+        help="private key path (default: %(default)s)",
+    )
+    sign_cmd.add_argument(
+        "--passphrase",
+        default=None,
+        help="key passphrase (default: ${} or unencrypted)".format(PASSPHRASE_ENV),
+    )
+    sign_cmd.add_argument(
+        "--output-dir",
+        default=None,
+        help="where to write the manifest (default: next to the first artifact)",
+    )
 
-    verify_cmd = commands.add_parser("verify", help="verify a SHA256SUMS manifest and its files")
-    verify_cmd.add_argument("sums", nargs="?", default=SUMS_NAME,
-                            help="manifest path (default: ./%(default)s)")
-    verify_cmd.add_argument("--key", default=os.path.join("keys", PUBLIC_KEY_NAME),
-                            help="public key path (default: %(default)s)")
-    verify_cmd.add_argument("--base-dir", default=None,
-                            help="artifact folder (default: the manifest's own folder)")
+    verify_cmd = commands.add_parser(
+        "verify", help="verify a SHA256SUMS manifest and its files"
+    )
+    verify_cmd.add_argument(
+        "sums",
+        nargs="?",
+        default=SUMS_NAME,
+        help="manifest path (default: ./%(default)s)",
+    )
+    verify_cmd.add_argument(
+        "--key",
+        default=os.path.join("keys", PUBLIC_KEY_NAME),
+        help="public key path (default: %(default)s)",
+    )
+    verify_cmd.add_argument(
+        "--base-dir",
+        default=None,
+        help="artifact folder (default: the manifest's own folder)",
+    )
 
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
             result = generate_keypair(args.key_dir, overwrite=args.force)
-            print("[sign] keypair ready: {} (private, keep secret) / {}".format(
-                result["private_key"], result["public_key"]))
+            print(
+                "[sign] keypair ready: {} (private, keep secret) / {}".format(
+                    result["private_key"], result["public_key"]
+                )
+            )
             if not result["encrypted"]:
-                print("[sign] NOTE: private key is unencrypted (mode 0600) — set {} "
-                      "at init time for passphrase protection".format(PASSPHRASE_ENV))
+                print(
+                    "[sign] NOTE: private key is unencrypted (mode 0600) — set {} "
+                    "at init time for passphrase protection".format(PASSPHRASE_ENV)
+                )
             return 0
         if args.command == "sign":
             result = sign_files(
-                args.files, key_path=args.key,
-                passphrase=args.passphrase, output_dir=args.output_dir)
-            print("[sign] wrote {} + {} ({} artifact(s))".format(
-                result["sums"], result["signature"], result["files"]))
+                args.files,
+                key_path=args.key,
+                passphrase=args.passphrase,
+                output_dir=args.output_dir,
+            )
+            print(
+                "[sign] wrote {} + {} ({} artifact(s))".format(
+                    result["sums"], result["signature"], result["files"]
+                )
+            )
             return 0
         report = verify_sums(args.sums, key_path=args.key, base_dir=args.base_dir)
         for entry in report["files"]:
             print("[verify] {:<40} {}".format(entry["name"], entry["status"]))
         if not report["signature_valid"]:
             print("[verify] SIGNATURE INVALID: {}".format(report["signature_error"]))
-        print("[verify] {}".format("OK — signature and all hashes match" if report["ok"]
-                                   else "FAILED — do not ship these artifacts"))
+        print(
+            "[verify] {}".format(
+                "OK — signature and all hashes match"
+                if report["ok"]
+                else "FAILED — do not ship these artifacts"
+            )
+        )
         return 0 if report["ok"] else 1
     except SigningError as exc:
         print("[sign] error: {}".format(exc), file=sys.stderr)
@@ -361,9 +436,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 __all__ = [
-    "PASSPHRASE_ENV", "PRIVATE_KEY_NAME", "PUBLIC_KEY_NAME", "SIG_FORMAT",
-    "SIG_SUFFIX", "SUMS_NAME", "SigningError", "build_sums", "generate_keypair",
-    "main", "sign_files", "verify_sums",
+    "PASSPHRASE_ENV",
+    "PRIVATE_KEY_NAME",
+    "PUBLIC_KEY_NAME",
+    "SIG_FORMAT",
+    "SIG_SUFFIX",
+    "SUMS_NAME",
+    "SigningError",
+    "build_sums",
+    "generate_keypair",
+    "main",
+    "sign_files",
+    "verify_sums",
 ]
 
 

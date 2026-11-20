@@ -21,14 +21,18 @@ from scripts import tts_providers as tp  # noqa: E402
 # Registry
 # ---------------------------------------------------------------------------
 
+
 class TestRegistry:
     def test_provider_names_sorted(self):
         assert tp.provider_names() == ["edge", "file"]
 
     def test_provider_info_case_insensitive(self):
         info = tp.provider_info("EDGE")
-        assert info == {"name": "edge", "network": True,
-                        "description": "Microsoft Edge TTS — free, no API key, sends text to Microsoft"}
+        assert info == {
+            "name": "edge",
+            "network": True,
+            "description": "Microsoft Edge TTS — free, no API key, sends text to Microsoft",
+        }
         assert "synthesize" not in info
 
     def test_provider_info_file(self):
@@ -42,8 +46,15 @@ class TestRegistry:
     def test_register_custom_provider(self):
         @tp.register("dummy-test", network=False, description="test only")
         def _dummy(text, out_path, *, voice=None, rate=None, timeout=120):
-            return {"ok": True, "path": out_path, "provider": "dummy-test",
-                    "voice": voice, "network": False, "duration": 1.0, "error": None}
+            return {
+                "ok": True,
+                "path": out_path,
+                "provider": "dummy-test",
+                "voice": voice,
+                "network": False,
+                "duration": 1.0,
+                "error": None,
+            }
 
         try:
             assert "dummy-test" in tp.provider_names()
@@ -59,11 +70,19 @@ class TestRegistry:
 # Network gate and routing
 # ---------------------------------------------------------------------------
 
+
 class TestNetworkGate:
-    @pytest.mark.parametrize("value,expected", [
-        ("1", True), (" 1 ", True), ("0", False), ("yes", False),
-        ("", False), (None, False),
-    ])
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("1", True),
+            (" 1 ", True),
+            ("0", False),
+            ("yes", False),
+            ("", False),
+            (None, False),
+        ],
+    )
     def test_network_allowed(self, monkeypatch, value, expected):
         if value is None:
             monkeypatch.delenv(tp.NETWORK_OPT_IN_ENV, raising=False)
@@ -124,27 +143,38 @@ class TestSynthesizeRouting:
 class TestResultHelpers:
     def test_failure_shape(self):
         result = tp._failure("edge", "something broke")
-        assert result == {"ok": False, "path": None, "provider": "edge",
-                          "voice": None, "network": True, "duration": 0.0,
-                          "error": "something broke"}
+        assert result == {
+            "ok": False,
+            "path": None,
+            "provider": "edge",
+            "voice": None,
+            "network": True,
+            "duration": 0.0,
+            "error": "something broke",
+        }
 
     def test_failure_truncates_long_message(self):
         result = tp._failure("file", "x" * 500)
         assert len(result["error"]) == 400
 
     def test_duration_parses_ffprobe_output(self, monkeypatch):
-        monkeypatch.setattr(tp.subprocess, "run",
-                            lambda *a, **k: SimpleNamespace(stdout="3.25\n"))
+        monkeypatch.setattr(
+            tp.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="3.25\n")
+        )
         assert tp._duration("/tmp/x.wav") == 3.25
 
     def test_duration_bad_output_is_zero(self, monkeypatch):
-        monkeypatch.setattr(tp.subprocess, "run",
-                            lambda *a, **k: SimpleNamespace(stdout="not-a-number\n"))
+        monkeypatch.setattr(
+            tp.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(stdout="not-a-number\n"),
+        )
         assert tp._duration("/tmp/x.wav") == 0.0
 
     def test_duration_negative_clamped(self, monkeypatch):
-        monkeypatch.setattr(tp.subprocess, "run",
-                            lambda *a, **k: SimpleNamespace(stdout="-2.5\n"))
+        monkeypatch.setattr(
+            tp.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="-2.5\n")
+        )
         assert tp._duration("/tmp/x.wav") == 0.0
 
     def test_duration_subprocess_failure_is_zero(self, monkeypatch):
@@ -159,6 +189,7 @@ class TestResultHelpers:
 # file provider
 # ---------------------------------------------------------------------------
 
+
 def _make_voice_dir(base, files):
     voice = base / "voice"
     voice.mkdir()
@@ -169,8 +200,9 @@ def _make_voice_dir(base, files):
 
 class TestFileProvider:
     def test_picks_sorted_first_and_marks_used(self, tmp_path):
-        voice = _make_voice_dir(tmp_path, {"b.wav": b"B", "a.wav": b"A",
-                                           "notes.txt": b"ignore me"})
+        voice = _make_voice_dir(
+            tmp_path, {"b.wav": b"B", "a.wav": b"A", "notes.txt": b"ignore me"}
+        )
         out = tmp_path / "out.wav"
         result = tp.synthesize("hello", str(out), provider="file", voice=str(voice))
         assert result["ok"] is True
@@ -197,15 +229,17 @@ class TestFileProvider:
         assert "already used" in result["error"]
 
     def test_missing_folder(self, tmp_path):
-        result = tp.synthesize("hi", str(tmp_path / "o.wav"), provider="file",
-                               voice=str(tmp_path / "nope"))
+        result = tp.synthesize(
+            "hi", str(tmp_path / "o.wav"), provider="file", voice=str(tmp_path / "nope")
+        )
         assert result["ok"] is False
         assert "existing folder" in result["error"]
 
     def test_no_audio_files(self, tmp_path):
         voice = _make_voice_dir(tmp_path, {"notes.txt": b"x"})
-        result = tp.synthesize("hi", str(tmp_path / "o.wav"), provider="file",
-                               voice=str(voice))
+        result = tp.synthesize(
+            "hi", str(tmp_path / "o.wav"), provider="file", voice=str(voice)
+        )
         assert result["ok"] is False
         assert "no audio files" in result["error"]
 
@@ -228,6 +262,7 @@ class TestFileProvider:
 # ---------------------------------------------------------------------------
 # edge provider (stubbed edge-tts, no network)
 # ---------------------------------------------------------------------------
+
 
 def _install_fake_edge_tts(monkeypatch, save_behaviour="ok"):
     fake = types.ModuleType("edge_tts")
@@ -253,8 +288,13 @@ class TestEdgeProvider:
     def test_happy_path_with_stubbed_edge_tts(self, tmp_path, monkeypatch):
         _install_fake_edge_tts(monkeypatch)
         out = tmp_path / "dub.wav"
-        result = tp.synthesize("hello", str(out), provider="edge",
-                               voice="ar-EG-ShakirNeural", allow_network=True)
+        result = tp.synthesize(
+            "hello",
+            str(out),
+            provider="edge",
+            voice="ar-EG-ShakirNeural",
+            allow_network=True,
+        )
         assert result["ok"] is True
         assert result["provider"] == "edge"
         assert result["voice"] == "ar-EG-ShakirNeural"
@@ -279,8 +319,9 @@ class TestEdgeProvider:
 
     def test_save_failure_becomes_failure(self, tmp_path, monkeypatch):
         _install_fake_edge_tts(monkeypatch, save_behaviour="raise")
-        result = tp.synthesize("hello", str(tmp_path / "dub.wav"), provider="edge",
-                               allow_network=True)
+        result = tp.synthesize(
+            "hello", str(tmp_path / "dub.wav"), provider="edge", allow_network=True
+        )
         assert result["ok"] is False
         assert "synthesis failed" in result["error"]
         assert "network down" in result["error"]
@@ -297,7 +338,8 @@ class TestEdgeProvider:
 
         fake.Communicate = _Communicate
         monkeypatch.setitem(sys.modules, "edge_tts", fake)
-        result = tp.synthesize("hello", str(tmp_path / "dub.wav"), provider="edge",
-                               allow_network=True)
+        result = tp.synthesize(
+            "hello", str(tmp_path / "dub.wav"), provider="edge", allow_network=True
+        )
         assert result["ok"] is False
         assert "no audio" in result["error"]

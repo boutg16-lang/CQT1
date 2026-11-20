@@ -28,7 +28,10 @@ def test_collect_checks_deduplicates_shared_dependencies(monkeypatch):
     requirements = {
         "requirements.txt": [("numpy", "numpy")],
         "requirements-transcribe.txt": [("numpy", "numpy<2"), ("torch", "torch")],
-        "requirements-transcribe-fallback.txt": [("numpy", "numpy<2"), ("faster-whisper", "faster-whisper")],
+        "requirements-transcribe-fallback.txt": [
+            ("numpy", "numpy<2"),
+            ("faster-whisper", "faster-whisper"),
+        ],
     }
     monkeypatch.setattr(
         preflight,
@@ -41,8 +44,10 @@ def test_collect_checks_deduplicates_shared_dependencies(monkeypatch):
     )
     monkeypatch.setattr(preflight, "_read_req_names", lambda name: requirements[name])
     monkeypatch.setattr(preflight, "_app_dir", lambda: "/tmp")
+
     def status(name):
         return {"name": name, "status": preflight.OK, "detail": "ok"}
+
     monkeypatch.setattr(preflight, "check_python", lambda: status("Python"))
     monkeypatch.setattr(preflight, "check_ffmpeg_toolchain", lambda: [status("ffmpeg")])
     monkeypatch.setattr(preflight, "check_bundled_binary", lambda name: None)
@@ -50,22 +55,32 @@ def test_collect_checks_deduplicates_shared_dependencies(monkeypatch):
     monkeypatch.setattr(preflight, "check_writable", lambda path, label: status(label))
     monkeypatch.setattr(preflight, "check_api_config", lambda: status("API"))
     monkeypatch.setattr(preflight, "check_assets", lambda: status("Assets"))
-    monkeypatch.setattr(preflight, "check_safety_blocklist_freshness", lambda: status("Blocklist"))
+    monkeypatch.setattr(
+        preflight, "check_safety_blocklist_freshness", lambda: status("Blocklist")
+    )
     monkeypatch.setattr(preflight, "check_models_dir", lambda: status("Models"))
     monkeypatch.setattr(preflight, "check_telegram_config", lambda: status("Telegram"))
     dependency_calls = []
     monkeypatch.setattr(
         preflight,
         "check_dependency",
-        lambda dist, raw, critical: dependency_calls.append((dist, critical)) or status(dist),
+        lambda dist, raw, critical: (
+            dependency_calls.append((dist, critical)) or status(dist)
+        ),
     )
     pin_calls = []
     monkeypatch.setattr(preflight, "PINNED_RULES", [("numpy", "numpy<2", "test pin")])
-    monkeypatch.setattr(preflight, "check_pin", lambda *args: pin_calls.append(args) or None)
+    monkeypatch.setattr(
+        preflight, "check_pin", lambda *args: pin_calls.append(args) or None
+    )
 
     preflight.collect_checks()
 
-    assert dependency_calls == [("numpy", True), ("torch", False), ("faster-whisper", False)]
+    assert dependency_calls == [
+        ("numpy", True),
+        ("torch", False),
+        ("faster-whisper", False),
+    ]
     assert len(pin_calls) == 1
 
 
@@ -103,6 +118,7 @@ def test_check_bundled_binary_found_when_frozen(monkeypatch, tmp_path):
 def test_check_dependency_present():
     assert preflight.check_dependency("json", "json", True)["status"] == preflight.OK
 
+
 def test_opentelemetry_distribution_uses_public_import_name():
     assert preflight._import_name("opentelemetry-api") == "opentelemetry"
 
@@ -110,8 +126,16 @@ def test_opentelemetry_distribution_uses_public_import_name():
 def test_check_dependency_missing(monkeypatch):
     monkeypatch.setattr(preflight, "_module_importable", lambda m: False)
     monkeypatch.setattr(preflight, "_dist_installed", lambda d: False)
-    assert preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", True)["status"] == preflight.FAIL
-    assert preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", False)["status"] == preflight.WARN
+    assert (
+        preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", True)["status"]
+        == preflight.FAIL
+    )
+    assert (
+        preflight.check_dependency("no_such_pkg_xyz", "no_such_pkg_xyz", False)[
+            "status"
+        ]
+        == preflight.WARN
+    )
 
 
 def test_check_dependency_reports_incompatible_websockets_version(monkeypatch):
@@ -126,9 +150,13 @@ def test_check_dependency_reports_incompatible_websockets_version(monkeypatch):
     assert preflight.ensure_websockets.COMPATIBILITY_SPEC in result["detail"]
 
 
-def test_import_failure_detail_reports_missing_module_without_exception_message(monkeypatch):
+def test_import_failure_detail_reports_missing_module_without_exception_message(
+    monkeypatch,
+):
     def fail_import(module):
-        raise ModuleNotFoundError("api_token=must-not-be-shown", name="google.genai.types")
+        raise ModuleNotFoundError(
+            "api_token=must-not-be-shown", name="google.genai.types"
+        )
 
     monkeypatch.setattr(preflight.importlib, "import_module", fail_import)
 
@@ -182,10 +210,18 @@ def test_check_api_config_missing(monkeypatch, tmp_path):
 
 def test_check_api_config_openai_backend_needs_no_gemini_key(tmp_path, monkeypatch):
     monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
-    (tmp_path / "api_config.json").write_text(json.dumps({
-        "selected_api": "openai",
-        "openai": {"base_url": "http://localhost:11434/v1", "model": "llama3.1"},
-    }), encoding="utf-8")
+    (tmp_path / "api_config.json").write_text(
+        json.dumps(
+            {
+                "selected_api": "openai",
+                "openai": {
+                    "base_url": "http://localhost:11434/v1",
+                    "model": "llama3.1",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     result = preflight.check_api_config()
     assert result["status"] == preflight.OK
     assert "openai" in result["detail"]
@@ -199,8 +235,9 @@ def test_check_api_config_accepts_encrypted_key(tmp_path, monkeypatch):
     monkeypatch.delenv("VIRALCUTTER_GEMINI_KEYS", raising=False)
     monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", passphrase)
     monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
-    secure_config.set_key("AIza_test_preflight_key_123456", passphrase=passphrase,
-                          base_dir=str(tmp_path))
+    secure_config.set_key(
+        "AIza_test_preflight_key_123456", passphrase=passphrase, base_dir=str(tmp_path)
+    )
 
     result = preflight.check_api_config()
 
@@ -214,9 +251,15 @@ def test_unreadable_encrypted_store_disables_legacy_fallback(tmp_path, monkeypat
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     monkeypatch.setattr(preflight, "_app_dir", lambda: str(tmp_path))
-    (tmp_path / "api_config.json").write_text(json.dumps({
-        "selected_api": "gemini", "gemini": {"api_key": legacy_key, "api_keys": []},
-    }), encoding="utf-8")
+    (tmp_path / "api_config.json").write_text(
+        json.dumps(
+            {
+                "selected_api": "gemini",
+                "gemini": {"api_key": legacy_key, "api_keys": []},
+            }
+        ),
+        encoding="utf-8",
+    )
     (tmp_path / "api_config.secure.json").write_text("{broken", encoding="utf-8")
 
     result = preflight.check_api_config()
@@ -242,7 +285,9 @@ def test_check_api_config_invalid(tmp_path):
 
 def test_check_api_config_empty_key(tmp_path):
     p = tmp_path / "api_config.json"
-    p.write_text(json.dumps({"selected_api": "gemini", "gemini": {"api_key": "", "model": "m"}}))
+    p.write_text(
+        json.dumps({"selected_api": "gemini", "gemini": {"api_key": "", "model": "m"}})
+    )
     old = preflight._app_dir
     preflight._app_dir = lambda: str(tmp_path)
     try:
@@ -281,20 +326,24 @@ def test_safety_blocklist_freshness_warns_after_review_interval(tmp_path):
     _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "2026-09-27")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 12))
+        str(tmp_path), today=datetime.date(2026, 10, 12)
+    )
 
     assert result["status"] == preflight.WARN
     assert "15 days ago" in result["detail"]
     assert "14-day review interval" in result["detail"]
 
 
-def test_safety_blocklist_freshness_uses_review_date_without_rewriting_content_date(tmp_path):
+def test_safety_blocklist_freshness_uses_review_date_without_rewriting_content_date(
+    tmp_path,
+):
     _write_safety_pack(
-        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
-        reviewed_at="2026-10-25")
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27", reviewed_at="2026-10-25"
+    )
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 25))
+        str(tmp_path), today=datetime.date(2026, 10, 25)
+    )
 
     assert result["status"] == preflight.OK
     assert "last reviewed 2026-10-25" in result["detail"]
@@ -303,41 +352,46 @@ def test_safety_blocklist_freshness_uses_review_date_without_rewriting_content_d
 
 def test_safety_blocklist_freshness_does_not_hide_newer_unreviewed_version(tmp_path):
     _write_safety_pack(
-        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
-        reviewed_at="2026-10-25")
-    _write_safety_pack(
-        tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27", reviewed_at="2026-10-25"
+    )
+    _write_safety_pack(tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 25))
+        str(tmp_path), today=datetime.date(2026, 10, 25)
+    )
 
     assert result["status"] == preflight.WARN
     assert "v8 from downloaded cache" in result["detail"]
     assert "older than the 14-day review interval" in result["detail"]
 
 
-def test_safety_blocklist_freshness_uses_review_date_without_changing_content_date(tmp_path):
+def test_safety_blocklist_freshness_uses_review_date_without_changing_content_date(
+    tmp_path,
+):
     _write_safety_pack(
-        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
-        reviewed_at="2026-10-25")
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27", reviewed_at="2026-10-25"
+    )
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 25))
+        str(tmp_path), today=datetime.date(2026, 10, 25)
+    )
 
     assert result["status"] == preflight.OK
     assert "last reviewed 2026-10-25 (0 days ago" in result["detail"]
     assert "content last updated 2026-09-27" in result["detail"]
 
 
-def test_safety_blocklist_freshness_prefers_newer_version_over_reviewed_older_pack(tmp_path):
+def test_safety_blocklist_freshness_prefers_newer_version_over_reviewed_older_pack(
+    tmp_path,
+):
     _write_safety_pack(
-        tmp_path / "safety_blocklist.json", 7, "2026-09-27",
-        reviewed_at="2026-10-25")
-    _write_safety_pack(
-        tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
+        tmp_path / "safety_blocklist.json", 7, "2026-09-27", reviewed_at="2026-10-25"
+    )
+    _write_safety_pack(tmp_path / "safety_blocklist_cache.json", 8, "2026-10-01")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 25))
+        str(tmp_path), today=datetime.date(2026, 10, 25)
+    )
 
     assert result["status"] == preflight.WARN
     assert "downloaded cache" in result["detail"]
@@ -350,7 +404,8 @@ def test_safety_blocklist_freshness_uses_newer_cache_at_boundary(tmp_path):
     _write_safety_pack(tmp_path / "safety_blocklist_cache.json", 7, "2026-10-10")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 24))
+        str(tmp_path), today=datetime.date(2026, 10, 24)
+    )
 
     assert result["status"] == preflight.OK
     assert "downloaded cache" in result["detail"]
@@ -361,7 +416,8 @@ def test_safety_blocklist_freshness_warns_when_date_is_missing(tmp_path):
     _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 24))
+        str(tmp_path), today=datetime.date(2026, 10, 24)
+    )
 
     assert result["status"] == preflight.WARN
     assert "could not verify" in result["detail"]
@@ -371,7 +427,8 @@ def test_safety_blocklist_freshness_warns_for_future_date(tmp_path):
     _write_safety_pack(tmp_path / "safety_blocklist.json", 6, "2026-10-25")
 
     result = preflight.check_safety_blocklist_freshness(
-        str(tmp_path), today=datetime.date(2026, 10, 24))
+        str(tmp_path), today=datetime.date(2026, 10, 24)
+    )
 
     assert result["status"] == preflight.WARN
     assert "future" in result["detail"]
@@ -475,7 +532,9 @@ def test_fix_ctranslate2_pin_preserves_existing_dependencies(monkeypatch):
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight, "_version", lambda dist: "4.5.0")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
-    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+    monkeypatch.setattr(
+        preflight, "_run_pip", lambda args: calls.append(args) or Result()
+    )
 
     ok, detail = preflight.fix_ctranslate2_pin()
 
@@ -497,7 +556,9 @@ def test_fix_setuptools_pin_installs_patched_release(monkeypatch):
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight, "_version", lambda dist: "81.0.0")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
-    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+    monkeypatch.setattr(
+        preflight, "_run_pip", lambda args: calls.append(args) or Result()
+    )
 
     ok, detail = preflight.fix_setuptools_pin()
 
@@ -550,7 +611,9 @@ def test_fix_transformers_pin_repairs_related_huggingface_packages(monkeypatch):
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight, "_version", lambda dist: "4.57.6")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
-    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+    monkeypatch.setattr(
+        preflight, "_run_pip", lambda args: calls.append(args) or Result()
+    )
 
     ok, _ = preflight.fix_transformers_pin()
 
@@ -567,7 +630,9 @@ def test_check_pin_hub_accepts_compatible_one_x_range(monkeypatch):
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight._pkg_meta, "version", lambda d: "1.27.0")
-    assert preflight.check_pin("huggingface-hub", "huggingface-hub>=1.16.0,<2.0") is None
+    assert (
+        preflight.check_pin("huggingface-hub", "huggingface-hub>=1.16.0,<2.0") is None
+    )
 
 
 def test_check_pin_hub_rejects_version_below_gradio_minimum(monkeypatch):
@@ -601,7 +666,9 @@ def test_fix_hub_pin_restores_compatible_transformers_stack(monkeypatch):
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(preflight, "_version", lambda dist: "0.36.2")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
-    monkeypatch.setattr(preflight, "_run_pip", lambda args: calls.append(args) or Result())
+    monkeypatch.setattr(
+        preflight, "_run_pip", lambda args: calls.append(args) or Result()
+    )
 
     ok, _ = preflight.fix_hub_pin()
 
@@ -620,8 +687,10 @@ def test_check_pin_tokenizers_ok(monkeypatch):
 
     monkeypatch.setattr(preflight._iu, "find_spec", lambda name: FakeSpec())
     monkeypatch.setattr(
-        preflight._pkg_meta, "version",
-        lambda d: "0.22.2" if d == "tokenizers" else "4.56.0")
+        preflight._pkg_meta,
+        "version",
+        lambda d: "0.22.2" if d == "tokenizers" else "4.56.0",
+    )
     assert preflight.check_pin("tokenizers", "tokenizers<0.23.1") is None
 
 
@@ -688,7 +757,14 @@ def test_ensure_api_config_creates_template(tmp_path):
 
 def test_ensure_api_config_preserves_existing(tmp_path):
     p = tmp_path / "api_config.json"
-    p.write_text(json.dumps({"selected_api": "gemini", "gemini": {"api_key": "AIzaSECRET", "model": "m"}}))
+    p.write_text(
+        json.dumps(
+            {
+                "selected_api": "gemini",
+                "gemini": {"api_key": "AIzaSECRET", "model": "m"},
+            }
+        )
+    )
     old = preflight._app_dir
     preflight._app_dir = lambda: str(tmp_path)
     try:
@@ -828,11 +904,15 @@ def test_run_preflight_critical_blocks(monkeypatch):
 
 def test_repair_uses_targeted_websockets_fix_without_reinstalling_core(monkeypatch):
     installs = []
-    checks = [{"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}]
+    checks = [
+        {"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}
+    ]
     monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
     monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
     monkeypatch.setattr(preflight.ensure_websockets, "repair", lambda: True)
-    monkeypatch.setattr(preflight, "install_requirements", lambda *args, **kwargs: installs.append(args))
+    monkeypatch.setattr(
+        preflight, "install_requirements", lambda *args, **kwargs: installs.append(args)
+    )
     monkeypatch.setattr(preflight, "check_pin", lambda *args, **kwargs: None)
     monkeypatch.setattr(preflight, "collect_checks", lambda: ([], [], []))
 
@@ -841,7 +921,10 @@ def test_repair_uses_targeted_websockets_fix_without_reinstalling_core(monkeypat
     assert not installs
     assert not remaining
     assert not warnings
-    assert any(item["name"] == "websockets" and item["status"] == preflight.OK for item in fixed)
+    assert any(
+        item["name"] == "websockets" and item["status"] == preflight.OK
+        for item in fixed
+    )
 
 
 def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
@@ -860,8 +943,11 @@ def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
 
     def fake_collect():
         if not calls:
-            return ([{"name": "gradio", "status": preflight.FAIL, "detail": "missing"}],
-                    ["gradio"], [])
+            return (
+                [{"name": "gradio", "status": preflight.FAIL, "detail": "missing"}],
+                ["gradio"],
+                [],
+            )
         return ([{"name": "gradio", "status": preflight.OK, "detail": "6.0"}], [], [])
 
     monkeypatch.setattr(preflight, "collect_checks", fake_collect)
@@ -870,7 +956,9 @@ def test_run_preflight_autofix_installs_core(monkeypatch, tmp_path):
 
 
 def test_repair_keeps_websockets_failure_out_of_core_reinstall(monkeypatch):
-    checks = [{"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}]
+    checks = [
+        {"name": "websockets", "status": preflight.FAIL, "detail": "incompatible"}
+    ]
     calls = []
     monkeypatch.setattr(preflight, "ensure_dirs", lambda: [])
     monkeypatch.setattr(preflight, "ensure_api_config", lambda: (True, "ok"))
@@ -879,15 +967,23 @@ def test_repair_keeps_websockets_failure_out_of_core_reinstall(monkeypatch):
         "repair",
         lambda: calls.append("websockets") or False,
     )
-    monkeypatch.setattr(preflight, "REQ_FILES", {"requirements.txt": ("core", False, "")})
-    monkeypatch.setattr(preflight, "_read_req_names", lambda _: [("websockets", "websockets>=16.1.1,<17")])
+    monkeypatch.setattr(
+        preflight, "REQ_FILES", {"requirements.txt": ("core", False, "")}
+    )
+    monkeypatch.setattr(
+        preflight,
+        "_read_req_names",
+        lambda _: [("websockets", "websockets>=16.1.1,<17")],
+    )
     monkeypatch.setattr(
         preflight,
         "install_requirements",
         lambda *args, **kwargs: calls.append("core") or (True, "installed"),
     )
     monkeypatch.setattr(preflight, "PINNED_RULES", [])
-    monkeypatch.setattr(preflight, "collect_checks", lambda: (checks, ["websockets"], []))
+    monkeypatch.setattr(
+        preflight, "collect_checks", lambda: (checks, ["websockets"], [])
+    )
 
     fixed, remaining, warnings = preflight.repair("auto-fix", checks)
 
@@ -959,9 +1055,15 @@ def test_run_package_reinstall_uses_uv_when_pip_is_unavailable(monkeypatch):
     ]
 
 
-def test_repair_reinstalls_all_broken_imports_without_resolving_dependencies(monkeypatch):
+def test_repair_reinstalls_all_broken_imports_without_resolving_dependencies(
+    monkeypatch,
+):
     checks = [
-        {"name": dist, "status": preflight.FAIL, "detail": f"installed but import failed ({module})"}
+        {
+            "name": dist,
+            "status": preflight.FAIL,
+            "detail": f"installed but import failed ({module})",
+        }
         for dist, module in (
             ("google-genai", "google.genai"),
             ("gradio", "gradio"),
@@ -996,7 +1098,14 @@ def test_repair_reinstalls_all_broken_imports_without_resolving_dependencies(mon
     monkeypatch.setattr(
         preflight,
         "collect_checks",
-        lambda: ([{"name": dist, "status": preflight.OK, "detail": versions[dist]} for dist in versions], [], []),
+        lambda: (
+            [
+                {"name": dist, "status": preflight.OK, "detail": versions[dist]}
+                for dist in versions
+            ],
+            [],
+            [],
+        ),
     )
 
     fixed, remaining, warnings = preflight.repair("auto-fix", checks)
@@ -1004,15 +1113,19 @@ def test_repair_reinstalls_all_broken_imports_without_resolving_dependencies(mon
     assert set(calls) == set(versions.items())
     assert not remaining
     assert not warnings
-    assert {item["name"] for item in fixed if item["status"] == preflight.OK} >= set(versions)
+    assert {item["name"] for item in fixed if item["status"] == preflight.OK} >= set(
+        versions
+    )
 
 
 def test_repair_falls_back_to_core_stack_when_targeted_import_repair_fails(monkeypatch):
-    checks = [{
-        "name": "gradio",
-        "status": preflight.FAIL,
-        "detail": "installed but import failed (gradio)",
-    }]
+    checks = [
+        {
+            "name": "gradio",
+            "status": preflight.FAIL,
+            "detail": "installed but import failed (gradio)",
+        }
+    ]
     targeted_calls = []
     install_calls = []
 
@@ -1044,13 +1157,19 @@ def test_repair_falls_back_to_core_stack_when_targeted_import_repair_fails(monke
     monkeypatch.setattr(
         preflight,
         "install_requirements",
-        lambda req_file, dry_run=False: install_calls.append((req_file, dry_run)) or (True, "installed core"),
+        lambda req_file, dry_run=False: (
+            install_calls.append((req_file, dry_run)) or (True, "installed core")
+        ),
     )
     monkeypatch.setattr(preflight, "PINNED_RULES", [])
     monkeypatch.setattr(
         preflight,
         "collect_checks",
-        lambda: ([{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}], [], []),
+        lambda: (
+            [{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}],
+            [],
+            [],
+        ),
     )
 
     fixed, remaining, warnings = preflight.repair("auto-fix", checks)
@@ -1059,15 +1178,20 @@ def test_repair_falls_back_to_core_stack_when_targeted_import_repair_fails(monke
     assert install_calls == [("requirements.txt", False)]
     assert not remaining
     assert not warnings
-    assert any(item["name"] == "stack Core" and item["status"] == preflight.OK for item in fixed)
+    assert any(
+        item["name"] == "stack Core" and item["status"] == preflight.OK
+        for item in fixed
+    )
 
 
 def test_repair_falls_back_to_core_install_when_import_reinstall_fails(monkeypatch):
-    checks = [{
-        "name": "gradio",
-        "status": preflight.FAIL,
-        "detail": "installed but import failed (gradio; ModuleNotFoundError: missing module gradio_client)",
-    }]
+    checks = [
+        {
+            "name": "gradio",
+            "status": preflight.FAIL,
+            "detail": "installed but import failed (gradio; ModuleNotFoundError: missing module gradio_client)",
+        }
+    ]
     calls = []
 
     class Result:
@@ -1081,24 +1205,34 @@ def test_repair_falls_back_to_core_install_when_import_reinstall_fails(monkeypat
     monkeypatch.setattr(preflight, "_version", lambda dist: "6.0.0")
     monkeypatch.setattr(preflight, "_is_frozen", lambda: False)
     monkeypatch.setattr(preflight, "_run_package_reinstall", lambda *args: Result())
-    monkeypatch.setattr(preflight, "REQ_FILES", {"requirements.txt": ("Core", False, "")})
+    monkeypatch.setattr(
+        preflight, "REQ_FILES", {"requirements.txt": ("Core", False, "")}
+    )
     monkeypatch.setattr(preflight, "_read_req_names", lambda _: [("gradio", "gradio")])
     monkeypatch.setattr(
         preflight,
         "install_requirements",
-        lambda req_file, dry_run=False: calls.append(req_file) or (True, "installed core"),
+        lambda req_file, dry_run=False: (
+            calls.append(req_file) or (True, "installed core")
+        ),
     )
     monkeypatch.setattr(preflight, "PINNED_RULES", [])
     monkeypatch.setattr(
         preflight,
         "collect_checks",
-        lambda: ([{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}], [], []),
+        lambda: (
+            [{"name": "gradio", "status": preflight.OK, "detail": "6.0.0"}],
+            [],
+            [],
+        ),
     )
 
     fixed, remaining, warnings = preflight.repair("auto-fix", checks)
 
     assert calls == ["requirements.txt"]
-    assert any(item["name"] == "gradio" and item["status"] == preflight.FAIL for item in fixed)
+    assert any(
+        item["name"] == "gradio" and item["status"] == preflight.FAIL for item in fixed
+    )
     assert not remaining
     assert not warnings
 
@@ -1117,14 +1251,36 @@ def test_main_json_output(capsys):
 
 
 def test_main_json_output_when_autofix_repairs(monkeypatch, capsys):
-    reports = iter([
-        ([{"name": "api_config.json", "status": preflight.FAIL, "detail": "missing"}],
-         ["api_config.json"], []),
-        ([{"name": "api_config.json", "status": preflight.OK, "detail": "created"}],
-         [], ["whisperx"]),
-    ])
+    reports = iter(
+        [
+            (
+                [
+                    {
+                        "name": "api_config.json",
+                        "status": preflight.FAIL,
+                        "detail": "missing",
+                    }
+                ],
+                ["api_config.json"],
+                [],
+            ),
+            (
+                [
+                    {
+                        "name": "api_config.json",
+                        "status": preflight.OK,
+                        "detail": "created",
+                    }
+                ],
+                [],
+                ["whisperx"],
+            ),
+        ]
+    )
     monkeypatch.setattr(preflight, "collect_checks", lambda: next(reports))
-    monkeypatch.setattr(preflight, "repair", lambda *args, **kwargs: ([], [], ["whisperx"]))
+    monkeypatch.setattr(
+        preflight, "repair", lambda *args, **kwargs: ([], [], ["whisperx"])
+    )
 
     code = preflight.main(["--auto-fix", "--json"])
     out = capsys.readouterr().out
@@ -1136,7 +1292,9 @@ def test_main_json_output_when_autofix_repairs(monkeypatch, capsys):
 def test_run_pip_falls_back_to_uv_when_pip_missing(monkeypatch):
     calls = []
     monkeypatch.setattr(preflight, "_module_importable", lambda name: False)
-    monkeypatch.setattr(preflight.shutil, "which", lambda name: "uv.exe" if name == "uv" else None)
+    monkeypatch.setattr(
+        preflight.shutil, "which", lambda name: "uv.exe" if name == "uv" else None
+    )
 
     class Result:
         returncode = 0
@@ -1168,9 +1326,28 @@ def test_run_preflight_ensure_upload_installs_oauth(monkeypatch):
 
     def fake_collect():
         if not calls:
-            return ([{"name": "google-auth-oauthlib", "status": preflight.FAIL, "detail": "missing"}],
-                    ["google-auth-oauthlib"], [])
-        return ([{"name": "google-auth-oauthlib", "status": preflight.OK, "detail": "installed"}], [], [])
+            return (
+                [
+                    {
+                        "name": "google-auth-oauthlib",
+                        "status": preflight.FAIL,
+                        "detail": "missing",
+                    }
+                ],
+                ["google-auth-oauthlib"],
+                [],
+            )
+        return (
+            [
+                {
+                    "name": "google-auth-oauthlib",
+                    "status": preflight.OK,
+                    "detail": "installed",
+                }
+            ],
+            [],
+            [],
+        )
 
     monkeypatch.setattr(preflight, "collect_checks", fake_collect)
     assert preflight.run_preflight(mode="auto-fix", quiet=True, ensure_upload=True) == 0
@@ -1191,9 +1368,28 @@ def test_run_preflight_ensure_upload_repairs_warning_only(monkeypatch):
 
     def fake_collect():
         if not calls:
-            return ([{"name": "google-auth-oauthlib", "status": preflight.WARN, "detail": "optional - missing"}],
-                    [], ["google-auth-oauthlib"])
-        return ([{"name": "google-auth-oauthlib", "status": preflight.OK, "detail": "installed"}], [], [])
+            return (
+                [
+                    {
+                        "name": "google-auth-oauthlib",
+                        "status": preflight.WARN,
+                        "detail": "optional - missing",
+                    }
+                ],
+                [],
+                ["google-auth-oauthlib"],
+            )
+        return (
+            [
+                {
+                    "name": "google-auth-oauthlib",
+                    "status": preflight.OK,
+                    "detail": "installed",
+                }
+            ],
+            [],
+            [],
+        )
 
     monkeypatch.setattr(preflight, "collect_checks", fake_collect)
     assert preflight.run_preflight(mode="auto-fix", quiet=True, ensure_upload=True) == 0
@@ -1208,11 +1404,13 @@ def test_check_telegram_config_disabled():
 
 def test_check_telegram_config_ready_hides_token():
     token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm"
-    result = preflight.check_telegram_config({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "1",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "100 200, invalid",
-    })
+    result = preflight.check_telegram_config(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "1",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "100 200, invalid",
+        }
+    )
     assert result["status"] == preflight.OK
     assert "2 allowlisted" in result["detail"]
     assert token not in result["detail"]
@@ -1220,11 +1418,13 @@ def test_check_telegram_config_ready_hides_token():
 
 def test_check_telegram_config_missing_allowlist_hides_token():
     token = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklm"
-    result = preflight.check_telegram_config({
-        "VIRALCUTTER_TELEGRAM_ENABLED": "true",
-        "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
-        "VIRALCUTTER_TELEGRAM_CHAT_IDS": "../demo abc",
-    })
+    result = preflight.check_telegram_config(
+        {
+            "VIRALCUTTER_TELEGRAM_ENABLED": "true",
+            "VIRALCUTTER_TELEGRAM_BOT_TOKEN": token,
+            "VIRALCUTTER_TELEGRAM_CHAT_IDS": "../demo abc",
+        }
+    )
     assert result["status"] == preflight.WARN
     assert "Chat ID" in result["detail"]
     assert token not in result["detail"]
@@ -1235,9 +1435,13 @@ def test_legacy_gemini_import_check_uses_metadata_without_import(monkeypatch):
 
     def fake_import(module):
         imported.append(module)
-        raise AssertionError("legacy Gemini SDK should not be imported during preflight")
+        raise AssertionError(
+            "legacy Gemini SDK should not be imported during preflight"
+        )
 
     monkeypatch.setattr(preflight.importlib, "import_module", fake_import)
-    monkeypatch.setattr(preflight, "_dist_installed", lambda dist: dist == "google-generativeai")
+    monkeypatch.setattr(
+        preflight, "_dist_installed", lambda dist: dist == "google-generativeai"
+    )
     assert preflight._module_importable("google.generativeai") is True
     assert imported == []

@@ -314,7 +314,9 @@ def test_main_status_lists_stages(tmp_path, monkeypatch, capsys):
 def test_main_mark_and_pending(tmp_path, monkeypatch, capsys):
     import sys
 
-    monkeypatch.setattr(sys, "argv", ["checkpoint", "--project", str(tmp_path), "--mark", "cut"])
+    monkeypatch.setattr(
+        sys, "argv", ["checkpoint", "--project", str(tmp_path), "--mark", "cut"]
+    )
     assert checkpoint.main() == 0
     assert is_done(str(tmp_path), "cut") is True
     assert "marked 'cut' done" in capsys.readouterr().out

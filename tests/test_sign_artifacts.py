@@ -55,7 +55,8 @@ def test_sign_and_verify_roundtrip(tmp_path, keypair):
     assert report["ok"] is True
     assert report["signature_valid"] is True
     assert report["files"] == [
-        {"name": "OUSSAMA-Cutter.exe", "status": "ok", "sha256": digest}]
+        {"name": "OUSSAMA-Cutter.exe", "status": "ok", "sha256": digest}
+    ]
 
 
 def test_verify_detects_tampered_artifact(tmp_path, keypair):
@@ -106,7 +107,9 @@ def test_build_sums_rejects_duplicate_basenames(tmp_path):
     first.mkdir()
     second.mkdir()
     paths = [_artifact(first, "same.exe", b"1"), _artifact(second, "same.exe", b"2")]
-    with pytest.raises(sign_artifacts.SigningError, match="duplicate artifact basename"):
+    with pytest.raises(
+        sign_artifacts.SigningError, match="duplicate artifact basename"
+    ):
         sign_artifacts.build_sums(paths)
 
 
@@ -160,8 +163,10 @@ def test_cli_sign_reports_errors_cleanly(tmp_path, capsys):
     key_dir = str(tmp_path / "keys")
     assert sign_artifacts.main(["init", "--key-dir", key_dir]) == 0
     private_key = os.path.join(key_dir, sign_artifacts.PRIVATE_KEY_NAME)
-    assert sign_artifacts.main(
-        ["sign", str(tmp_path / "ghost.exe"), "--key", private_key]) == 2
+    assert (
+        sign_artifacts.main(["sign", str(tmp_path / "ghost.exe"), "--key", private_key])
+        == 2
+    )
     assert "error" in capsys.readouterr().err
 
 

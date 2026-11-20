@@ -19,8 +19,12 @@ from scripts import organize_output as oo
 # sanitize_filename
 # ---------------------------------------------------------------------------
 
+
 def test_sanitize_filename_removes_invalid_chars():
-    assert oo.sanitize_filename('My: Video / Title? "x" <y> | z*') == "My Video  Title x y  z"
+    assert (
+        oo.sanitize_filename('My: Video / Title? "x" <y> | z*')
+        == "My Video  Title x y  z"
+    )
     assert oo.sanitize_filename("a\\b*c") == "abc"
 
 
@@ -38,10 +42,12 @@ def test_sanitize_filename_all_invalid_becomes_empty():
 # organize()
 # ---------------------------------------------------------------------------
 
+
 def _write_meta(folder, segments):
     (folder / "tmp").mkdir(exist_ok=True)
     (folder / "tmp" / "viral_segments.txt").write_text(
-        json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8")
+        json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def test_organize_missing_metadata_returns(tmp_path, monkeypatch, capsys):
@@ -97,12 +103,17 @@ def test_organize_falls_back_to_final_folder(tmp_path, monkeypatch):
 
 def test_organize_missing_video_is_skipped(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    _write_meta(tmp_path, [
-        {"title": "Missing"},
-        {"title": "Present"},
-    ])
+    _write_meta(
+        tmp_path,
+        [
+            {"title": "Missing"},
+            {"title": "Present"},
+        ],
+    )
     (tmp_path / "burned_sub").mkdir()
-    (tmp_path / "burned_sub" / "output001_original_scale_subtitled.mp4").write_bytes(b"v2")
+    (tmp_path / "burned_sub" / "output001_original_scale_subtitled.mp4").write_bytes(
+        b"v2"
+    )
 
     oo.organize()
     out = capsys.readouterr().out
@@ -121,7 +132,9 @@ def test_organize_empty_title_after_sanitising_uses_fallback(tmp_path, monkeypat
     monkeypatch.chdir(tmp_path)
     _write_meta(tmp_path, [{"title": "???"}])
     (tmp_path / "burned_sub").mkdir()
-    (tmp_path / "burned_sub" / "output000_original_scale_subtitled.mp4").write_bytes(b"v")
+    (tmp_path / "burned_sub" / "output000_original_scale_subtitled.mp4").write_bytes(
+        b"v"
+    )
 
     oo.organize()
 
@@ -132,7 +145,9 @@ def test_organize_missing_title_key_uses_fallback(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_meta(tmp_path, [{"score": 9}])
     (tmp_path / "burned_sub").mkdir()
-    (tmp_path / "burned_sub" / "output000_original_scale_subtitled.mp4").write_bytes(b"v")
+    (tmp_path / "burned_sub" / "output000_original_scale_subtitled.mp4").write_bytes(
+        b"v"
+    )
 
     oo.organize()
 

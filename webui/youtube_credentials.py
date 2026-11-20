@@ -1,4 +1,5 @@
 """Secure local storage and validation for YouTube OAuth client secrets."""
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ def scopes_for_access(full_access=False):
 
 def missing_scopes(granted_scopes, full_access=False):
     """Return required OAuth scopes absent from a stored credential."""
-    granted = {str(scope).strip() for scope in (granted_scopes or []) if str(scope).strip()}
+    granted = {
+        str(scope).strip() for scope in (granted_scopes or []) if str(scope).strip()
+    }
     return [scope for scope in scopes_for_access(full_access) if scope not in granted]
 
 
@@ -40,7 +43,9 @@ def require_scopes(credentials, full_access=False):
         raise OAuthScopesError(
             "OAuth token lacks required YouTube permissions: {}. "
             "The old token must be revoked and YouTube login repeated.".format(
-                ", ".join(missing)))
+                ", ".join(missing)
+            )
+        )
     return credentials
 
 
@@ -55,7 +60,9 @@ def _secure_directory(path: Path) -> Path:
 
 def _atomic_private_write(path: Path, data: bytes) -> Path:
     _secure_directory(path.parent)
-    fd, tmp_name = tempfile.mkstemp(prefix=".youtube-", suffix=".tmp", dir=str(path.parent))
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=".youtube-", suffix=".tmp", dir=str(path.parent)
+    )
     tmp = Path(tmp_name)
     try:
         try:
@@ -118,7 +125,9 @@ def store_client_secrets(source_path, destination=None) -> dict:
         raise ValueError("YouTube OAuth file must have a .json extension")
     payload = _read_json(source)
     metadata = validate_client_secrets_payload(payload)
-    target = Path(destination or os.getenv("YT_CLIENT_SECRETS_FILE") or DEFAULT_CLIENT_SECRETS).expanduser()
+    target = Path(
+        destination or os.getenv("YT_CLIENT_SECRETS_FILE") or DEFAULT_CLIENT_SECRETS
+    ).expanduser()
     previous = None
     if target.is_file():
         try:
@@ -134,7 +143,9 @@ def store_client_secrets(source_path, destination=None) -> dict:
 
 def invalidate_token(destination=None) -> bool:
     """Remove the stored OAuth token and report whether a file was removed."""
-    token = Path(destination or os.getenv("YT_TOKEN_FILE") or DEFAULT_TOKEN_FILE).expanduser()
+    token = Path(
+        destination or os.getenv("YT_TOKEN_FILE") or DEFAULT_TOKEN_FILE
+    ).expanduser()
     try:
         existed = token.exists()
         if existed:
@@ -144,7 +155,9 @@ def invalidate_token(destination=None) -> bool:
         return False
 
 
-def replace_client_secrets(source_path, destination=None, invalidate_token=True) -> dict:
+def replace_client_secrets(
+    source_path, destination=None, invalidate_token=True
+) -> dict:
     """Install a new OAuth client JSON and optionally remove its old token.
 
     A token belongs to the previous OAuth client configuration in many Google
@@ -167,7 +180,9 @@ def replace_client_secrets(source_path, destination=None, invalidate_token=True)
 
 def store_token_json(token_json, destination=None) -> str:
     """Store OAuth refresh-token JSON with private permissions and atomic replace."""
-    target = Path(destination or os.getenv("YT_TOKEN_FILE") or DEFAULT_TOKEN_FILE).expanduser()
+    target = Path(
+        destination or os.getenv("YT_TOKEN_FILE") or DEFAULT_TOKEN_FILE
+    ).expanduser()
     if isinstance(token_json, str):
         data = token_json.encode("utf-8")
     else:
@@ -178,7 +193,11 @@ def store_token_json(token_json, destination=None) -> str:
 
 def client_secrets_path() -> str:
     configured = os.getenv("YT_CLIENT_SECRETS_FILE")
-    return str(Path(configured).expanduser()) if configured else str(DEFAULT_CLIENT_SECRETS)
+    return (
+        str(Path(configured).expanduser())
+        if configured
+        else str(DEFAULT_CLIENT_SECRETS)
+    )
 
 
 def token_path() -> str:

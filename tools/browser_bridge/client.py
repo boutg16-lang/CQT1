@@ -82,7 +82,9 @@ def probe_project_url(project_url, timeout=2.0):
     candidates = [requested_port]
     scan_end = WEBUI_PORT_START + WEBUI_PORT_COUNT
     if WEBUI_PORT_START <= requested_port < scan_end:
-        candidates.extend(port for port in range(WEBUI_PORT_START, scan_end) if port != requested_port)
+        candidates.extend(
+            port for port in range(WEBUI_PORT_START, scan_end) if port != requested_port
+        )
     hosts = [parsed.hostname]
     if parsed.hostname == "localhost":
         hosts = ["127.0.0.1", "::1"]
@@ -98,7 +100,10 @@ def probe_project_url(project_url, timeout=2.0):
     message = _t(
         "The CAT page at {url} is unreachable ({reason}). Start OUSSAMA Cutter, wait for its WebUI, then use the exact local URL shown in your browser."
     ).format(url=normalized_url, reason=last_reason[:160])
-    raise BridgeError("{} {}".format(message, _t("The pairing code has not been used.")))
+    raise BridgeError(
+        "{} {}".format(message, _t("The pairing code has not been used."))
+    )
+
 
 CONSENT_NOTICE = "Only this isolated CAT tab is shared. Zo receives page text or screenshots only when it requests an inspection. The session stays active until you press Stop or close this window; it ends if the relay restarts or the heartbeat is lost for 2 minutes."
 
@@ -143,11 +148,29 @@ def _visible_controls(page):
             kind = item.get_attribute("type") or ""
             if kind.lower() in {"password", "hidden"}:
                 continue
-            name = item.get_attribute("aria-label") or item.get_attribute("placeholder") or item.get_attribute("name") or ""
-            text = item.inner_text(timeout=500) if item.evaluate("element => element.tagName") not in {"INPUT", "TEXTAREA", "SELECT"} else ""
-            description = redact_sensitive_text(" ".join(part.strip() for part in (text, name) if part and part.strip()))
+            name = (
+                item.get_attribute("aria-label")
+                or item.get_attribute("placeholder")
+                or item.get_attribute("name")
+                or ""
+            )
+            text = (
+                item.inner_text(timeout=500)
+                if item.evaluate("element => element.tagName")
+                not in {"INPUT", "TEXTAREA", "SELECT"}
+                else ""
+            )
+            description = redact_sensitive_text(
+                " ".join(part.strip() for part in (text, name) if part and part.strip())
+            )
             if description:
-                items.append({"name": description[:200], "tag": item.evaluate("element => element.tagName").lower(), "type": kind[:40]})
+                items.append(
+                    {
+                        "name": description[:200],
+                        "tag": item.evaluate("element => element.tagName").lower(),
+                        "type": kind[:40],
+                    }
+                )
         except Exception:
             continue
     return items
@@ -156,7 +179,9 @@ def _visible_controls(page):
 def perform_action(page, context, project_url, action):
     action = validate_action(action)
     if requires_manual_approval(action):
-        raise PolicyError("This action can process, publish, upload, or change files; click it manually on the local device")
+        raise PolicyError(
+            "This action can process, publish, upload, or change files; click it manually on the local device"
+        )
     origin = project_origin(project_url)
     if action["type"] == "snapshot":
         return {
@@ -164,13 +189,25 @@ def perform_action(page, context, project_url, action):
             "type": "snapshot",
             "title": redact_sensitive_text(page.title())[:200],
             "url": redact_sensitive_text(page.url)[:1200],
-            "text": redact_sensitive_text(page.locator("body").inner_text(timeout=5000))[:MAX_PAGE_TEXT],
+            "text": redact_sensitive_text(
+                page.locator("body").inner_text(timeout=5000)
+            )[:MAX_PAGE_TEXT],
             "controls": _visible_controls(page),
         }
     if action["type"] == "screenshot":
-        page.add_style_tag(content="input[type='password'], input[type='hidden'], input[autocomplete*='password' i], input[name*='token' i], input[id*='token' i], input[name*='secret' i], input[id*='secret' i], input[name*='api' i][name*='key' i], input[id*='api' i][id*='key' i], textarea[name*='token' i], textarea[name*='secret' i], textarea[name*='api' i][name*='key' i] { filter: blur(12px) !important; }")
-        image = page.screenshot(type="jpeg", quality=65, full_page=False, animations="disabled")
-        return {"ok": True, "type": "screenshot", "url": redact_sensitive_text(page.url)[:1200], "media_type": "image/jpeg", "image_base64": base64.b64encode(image).decode("ascii")}
+        page.add_style_tag(
+            content="input[type='password'], input[type='hidden'], input[autocomplete*='password' i], input[name*='token' i], input[id*='token' i], input[name*='secret' i], input[id*='secret' i], input[name*='api' i][name*='key' i], input[id*='api' i][id*='key' i], textarea[name*='token' i], textarea[name*='secret' i], textarea[name*='api' i][name*='key' i] { filter: blur(12px) !important; }"
+        )
+        image = page.screenshot(
+            type="jpeg", quality=65, full_page=False, animations="disabled"
+        )
+        return {
+            "ok": True,
+            "type": "screenshot",
+            "url": redact_sensitive_text(page.url)[:1200],
+            "media_type": "image/jpeg",
+            "image_base64": base64.b64encode(image).decode("ascii"),
+        }
     if action["type"] == "navigate":
         target = validate_navigation_path(action["path"], project_url)
         page.goto(target, wait_until="domcontentloaded", timeout=30000)
@@ -190,13 +227,20 @@ def perform_action(page, context, project_url, action):
         )
         if any(is_sensitive_control_name(value) for value in sensitive_attributes):
             raise PolicyError("Secret fields cannot be controlled")
-        if action["type"] == "click" and (locator.get_attribute("type") or "").lower() == "file":
-            raise PolicyError("File selection requires a manual click on the local device")
+        if (
+            action["type"] == "click"
+            and (locator.get_attribute("type") or "").lower() == "file"
+        ):
+            raise PolicyError(
+                "File selection requires a manual click on the local device"
+            )
         if action["type"] == "click":
             if action["role"] == "link":
                 href = locator.get_attribute("href")
                 if href:
-                    candidate = page.evaluate("(href) => new URL(href, location.href).href", href)
+                    candidate = page.evaluate(
+                        "(href) => new URL(href, location.href).href", href
+                    )
                     if not _safe_request_url(candidate, origin):
                         raise PolicyError("Links outside the local project are blocked")
             locator.click(timeout=10000)
@@ -227,11 +271,15 @@ def perform_action(page, context, project_url, action):
         on_project_origin = False
     if not on_project_origin:
         page.goto(project_url, wait_until="domcontentloaded", timeout=30000)
-        raise PolicyError("The page tried to leave the local project; navigation was reset")
+        raise PolicyError(
+            "The page tried to leave the local project; navigation was reset"
+        )
     return {"ok": True, "type": action["type"], "url": page.url}
 
 
-def run_browser_session(relay_url, pairing_code, project_url, events, stop_event, session_state):
+def run_browser_session(
+    relay_url, pairing_code, project_url, events, stop_event, session_state
+):
     client_token = None
     session_id = None
     browser = None
@@ -244,14 +292,23 @@ def run_browser_session(relay_url, pairing_code, project_url, events, stop_event
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as exc:
-            raise BridgeError("Playwright is not installed. Run Start_Browser_Test.bat again to install it.") from exc
+            raise BridgeError(
+                "Playwright is not installed. Run Start_Browser_Test.bat again to install it."
+            ) from exc
         allowed_origin = project_origin(project_url)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(
                 headless=False,
-                args=["--disable-sync", "--no-first-run", "--disable-background-networking", "--disable-features=Translate,MediaRouter"],
+                args=[
+                    "--disable-sync",
+                    "--no-first-run",
+                    "--disable-background-networking",
+                    "--disable-features=Translate,MediaRouter",
+                ],
             )
-            context = browser.new_context(accept_downloads=False, service_workers="block")
+            context = browser.new_context(
+                accept_downloads=False, service_workers="block"
+            )
 
             def route_request(route):
                 if _safe_request_url(route.request.url, allowed_origin):
@@ -277,18 +334,42 @@ def run_browser_session(relay_url, pairing_code, project_url, events, stop_event
             if not isinstance(session_id, str) or not session_id:
                 raise BridgeError("The relay returned an invalid session")
             client_token = paired["client_token"]
-            session_state.update({"session_id": session_id, "client_token": client_token})
-            events.put(("paired", "Ready. The local CAT page is isolated; Zo can inspect it while you work."))
+            session_state.update(
+                {"session_id": session_id, "client_token": client_token}
+            )
+            events.put(
+                (
+                    "paired",
+                    "Ready. The local CAT page is isolated; Zo can inspect it while you work.",
+                )
+            )
             while not stop_event.is_set():
                 try:
-                    response = request(relay_url, "/v1/sessions/{}/next".format(session_id), token=client_token, timeout=25)
+                    response = request(
+                        relay_url,
+                        "/v1/sessions/{}/next".format(session_id),
+                        token=client_token,
+                        timeout=25,
+                    )
                 except BridgeError as exc:
                     if stop_event.is_set():
                         break
                     if exc.status in {401, 403, 404}:
-                        events.put(("status", "The relay or heartbeat is unavailable; closing the isolated browser."))
+                        events.put(
+                            (
+                                "status",
+                                "The relay or heartbeat is unavailable; closing the isolated browser.",
+                            )
+                        )
                         break
-                    events.put(("status", "Relay retry: {}".format(redact_sensitive_text(str(exc))[:200])))
+                    events.put(
+                        (
+                            "status",
+                            "Relay retry: {}".format(
+                                redact_sensitive_text(str(exc))[:200]
+                            ),
+                        )
+                    )
                     time.sleep(1)
                     continue
                 if response.get("stop"):
@@ -297,9 +378,16 @@ def run_browser_session(relay_url, pairing_code, project_url, events, stop_event
                 if not isinstance(command, dict):
                     continue
                 try:
-                    result = perform_action(page, context, project_url, command.get("action"))
+                    result = perform_action(
+                        page, context, project_url, command.get("action")
+                    )
                 except Exception as exc:
-                    result = {"ok": False, "error": redact_sensitive_text("{}: {}".format(type(exc).__name__, str(exc)))[:400]}
+                    result = {
+                        "ok": False,
+                        "error": redact_sensitive_text(
+                            "{}: {}".format(type(exc).__name__, str(exc))
+                        )[:400],
+                    }
                 request(
                     relay_url,
                     "/v1/sessions/{}/results".format(session_id),
@@ -308,14 +396,28 @@ def run_browser_session(relay_url, pairing_code, project_url, events, stop_event
                     body={"command_id": command.get("command_id"), "result": result},
                     timeout=15,
                 )
-                events.put(("status", "Completed: {}".format(command.get("action", {}).get("type", "action"))))
+                events.put(
+                    (
+                        "status",
+                        "Completed: {}".format(
+                            command.get("action", {}).get("type", "action")
+                        ),
+                    )
+                )
             context.close()
     except Exception as exc:
         events.put(("error", "{}: {}".format(type(exc).__name__, str(exc)[:500])))
     finally:
         if client_token and session_id:
             try:
-                request(relay_url, "/v1/sessions/{}/stop".format(session_id), method="POST", token=client_token, body={}, timeout=5)
+                request(
+                    relay_url,
+                    "/v1/sessions/{}/stop".format(session_id),
+                    method="POST",
+                    token=client_token,
+                    body={},
+                    timeout=5,
+                )
             except Exception:
                 pass
         if browser is not None:
@@ -323,7 +425,9 @@ def run_browser_session(relay_url, pairing_code, project_url, events, stop_event
                 browser.close()
             except Exception:
                 pass
-        events.put(("stopped", "Session ended. The temporary browser profile has been closed."))
+        events.put(
+            ("stopped", "Session ended. The temporary browser profile has been closed.")
+        )
 
 
 class BrowserBridgeWindow:
@@ -345,26 +449,50 @@ class BrowserBridgeWindow:
         self.root.resizable(False, False)
         frame = ttk.Frame(root, padding=18)
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Test OUSSAMA Cutter in a temporary local browser", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Project URL (must be on this device)").pack(anchor="w", pady=(16, 3))
+        ttk.Label(
+            frame,
+            text="Test OUSSAMA Cutter in a temporary local browser",
+            font=("Segoe UI", 14, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(frame, text="Project URL (must be on this device)").pack(
+            anchor="w", pady=(16, 3)
+        )
         self.url = tk.StringVar(value=DEFAULT_PROJECT_URL)
         ttk.Entry(frame, textvariable=self.url, width=72).pack(fill="x")
-        ttk.Label(frame, text="One-time pairing code from Zo").pack(anchor="w", pady=(12, 3))
+        ttk.Label(frame, text="One-time pairing code from Zo").pack(
+            anchor="w", pady=(12, 3)
+        )
         self.code = tk.StringVar()
         ttk.Entry(frame, textvariable=self.code, width=40, show="•").pack(anchor="w")
         self.consent = tk.BooleanVar(value=False)
         _add_consent_controls(ttk, frame, self.consent)
         buttons = ttk.Frame(frame)
         buttons.pack(anchor="w", pady=6)
-        self.check_button = ttk.Button(buttons, text=_t("Check local URL"), command=self.check_local_url)
+        self.check_button = ttk.Button(
+            buttons, text=_t("Check local URL"), command=self.check_local_url
+        )
         self.check_button.pack(side="left", padx=(0, 8))
-        self.start_button = ttk.Button(buttons, text="Connect and start", command=self.start)
+        self.start_button = ttk.Button(
+            buttons, text="Connect and start", command=self.start
+        )
         self.start_button.pack(side="left")
-        self.stop_button = ttk.Button(buttons, text="Stop session", command=self.stop, state="disabled")
+        self.stop_button = ttk.Button(
+            buttons, text="Stop session", command=self.stop, state="disabled"
+        )
         self.stop_button.pack(side="left", padx=8)
-        self.status = tk.StringVar(value=_t("Check the local URL before pairing. A failed check will not use the pairing code."))
-        ttk.Label(frame, textvariable=self.status, wraplength=545).pack(anchor="w", pady=(12, 4))
-        ttk.Label(frame, text="Scope: isolated Chromium profile; localhost project only; no downloads, uploads, saved cookies, or arbitrary code execution.", wraplength=545).pack(anchor="w", pady=(8, 0))
+        self.status = tk.StringVar(
+            value=_t(
+                "Check the local URL before pairing. A failed check will not use the pairing code."
+            )
+        )
+        ttk.Label(frame, textvariable=self.status, wraplength=545).pack(
+            anchor="w", pady=(12, 4)
+        )
+        ttk.Label(
+            frame,
+            text="Scope: isolated Chromium profile; localhost project only; no downloads, uploads, saved cookies, or arbitrary code execution.",
+            wraplength=545,
+        ).pack(anchor="w", pady=(8, 0))
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(150, self.poll_events)
 
@@ -376,11 +504,17 @@ class BrowserBridgeWindow:
             self.messagebox.showwarning(_t("Local page unavailable"), str(exc))
             return
         self.url.set(project_url)
-        self.status.set(_t("The local CAT page is reachable at {url}. You can pair now.").format(url=project_url))
+        self.status.set(
+            _t("The local CAT page is reachable at {url}. You can pair now.").format(
+                url=project_url
+            )
+        )
 
     def start(self):
         if not self.consent.get():
-            self.messagebox.showwarning("Consent required", "Approve local CAT access before connecting.")
+            self.messagebox.showwarning(
+                "Consent required", "Approve local CAT access before connecting."
+            )
             return
         try:
             project_url = validate_project_url(self.url.get())
@@ -398,7 +532,14 @@ class BrowserBridgeWindow:
         self.status.set(_t("Checking the local CAT page before pairing…"))
         self.worker = threading.Thread(
             target=run_browser_session,
-            args=(self.relay_url, code, project_url, self.events, self.stop_event, self.session_state),
+            args=(
+                self.relay_url,
+                code,
+                project_url,
+                self.events,
+                self.stop_event,
+                self.session_state,
+            ),
             daemon=True,
         )
         self.worker.start()
@@ -450,8 +591,13 @@ class BrowserBridgeWindow:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pair an isolated local CAT browser with Zo for inspection and testing.")
-    parser.add_argument("--relay-url", default=os.environ.get("CAT_BROWSER_BRIDGE_URL", DEFAULT_RELAY_URL))
+    parser = argparse.ArgumentParser(
+        description="Pair an isolated local CAT browser with Zo for inspection and testing."
+    )
+    parser.add_argument(
+        "--relay-url",
+        default=os.environ.get("CAT_BROWSER_BRIDGE_URL", DEFAULT_RELAY_URL),
+    )
     args = parser.parse_args()
     import tkinter as tk
 

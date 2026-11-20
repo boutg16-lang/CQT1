@@ -6,7 +6,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui"))
+sys.path.insert(
+    0,
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "webui"),
+)
 
 from webui import publish_panel as pp  # noqa: E402
 
@@ -18,12 +21,30 @@ def _project(tmp_path):
     (project / "cuts").mkdir()
     for i in range(2):
         (project / "final" / "{:03d}_clip.mp4".format(i)).write_bytes(b"x")
-        (project / "cuts" / "{:03d}_clip_original_scale.mp4".format(i)).write_bytes(b"x")
-    (project / "viral_segments.txt").write_text(json.dumps({
-        "segments": [
-            {"title": "First Title", "caption": "cap 1", "start_time": 0, "end_time": 5},
-            {"title": "Second Title", "caption": "cap 2", "start_time": 5, "end_time": 10},
-        ]}), encoding="utf-8")
+        (project / "cuts" / "{:03d}_clip_original_scale.mp4".format(i)).write_bytes(
+            b"x"
+        )
+    (project / "viral_segments.txt").write_text(
+        json.dumps(
+            {
+                "segments": [
+                    {
+                        "title": "First Title",
+                        "caption": "cap 1",
+                        "start_time": 0,
+                        "end_time": 5,
+                    },
+                    {
+                        "title": "Second Title",
+                        "caption": "cap 2",
+                        "start_time": 5,
+                        "end_time": 10,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     return str(project)
 
 
@@ -52,7 +73,10 @@ class TestClips:
     def test_list_explicit_source_and_specific_file(self, tmp_path):
         project = _project(tmp_path)
         cuts_clip = os.path.join(project, "cuts", "000_clip_original_scale.mp4")
-        assert pp.list_clips(project, "cuts") == [cuts_clip, os.path.join(project, "cuts", "001_clip_original_scale.mp4")]
+        assert pp.list_clips(project, "cuts") == [
+            cuts_clip,
+            os.path.join(project, "cuts", "001_clip_original_scale.mp4"),
+        ]
         selected = tmp_path / "outside.mp4"
         selected.write_bytes(b"x")
         assert pp.list_clips(project, "specific_file", str(selected)) == [str(selected)]
@@ -64,10 +88,24 @@ class TestClips:
         output = os.path.join(polished, "000_clip.mp4")
         with open(output, "wb") as stream:
             stream.write(b"polished")
-        with open(os.path.join(project, "polish_report.json"), "w", encoding="utf-8") as stream:
-            json.dump({"clips": [{"video": "000_clip.mp4", "output": output,
-                                   "media_validated": True, "fallback_used": True,
-                                   "failed_stages": [], "quality_status": "fallback"}]}, stream)
+        with open(
+            os.path.join(project, "polish_report.json"), "w", encoding="utf-8"
+        ) as stream:
+            json.dump(
+                {
+                    "clips": [
+                        {
+                            "video": "000_clip.mp4",
+                            "output": output,
+                            "media_validated": True,
+                            "fallback_used": True,
+                            "failed_stages": [],
+                            "quality_status": "fallback",
+                        }
+                    ]
+                },
+                stream,
+            )
         assert pp.list_clips(project, "auto") == [
             os.path.join(project, "final", "000_clip.mp4"),
             os.path.join(project, "final", "001_clip.mp4"),
@@ -128,6 +166,7 @@ class TestTranslate:
         # translate_json uses the built-in requests adapter; patch the module
         # function itself so the panel test remains fully offline.
         import types
+
         tqdm_mod = types.ModuleType("tqdm")
         tqdm_asyncio = types.ModuleType("tqdm.asyncio")
         tqdm_asyncio.tqdm_asyncio = None
@@ -138,7 +177,9 @@ class TestTranslate:
         clip = os.path.join(project, "final", "000_clip.mp4")
         sub = os.path.join(project, "subs", "000_clip_processed.json")
         with open(sub, "w", encoding="utf-8") as f:
-            json.dump({"segments": [{"text": "مرحبا", "words": [{"word": "مرحبا"}]}]}, f)
+            json.dump(
+                {"segments": [{"text": "مرحبا", "words": [{"word": "مرحبا"}]}]}, f
+            )
 
         import scripts.translate_json as tj
 
@@ -165,11 +206,16 @@ class TestMusicCheck:
             "summary": {"checked": 2, "matched": 1, "no_fpcalc": 0, "errors": 0},
             "clips": [
                 {"index": 0, "video": "a.mp4", "verdict": "clean"},
-                {"index": 1, "video": "b.mp4", "verdict": "local_match",
-                 "suggestion": "Audio overlaps 'T' (80%)"},
+                {
+                    "index": 1,
+                    "video": "b.mp4",
+                    "verdict": "local_match",
+                    "suggestion": "Audio overlaps 'T' (80%)",
+                },
             ],
         }
         import scripts.music_fingerprint as mf
+
         monkeypatch.setattr(mf, "analyze_project", lambda *a, **k: report)
         monkeypatch.setattr(mf, "build_local_db", lambda *a, **k: {"songs": []})
         monkeypatch.setattr(mf, "load_local_db", lambda *a: {"songs": []})
@@ -181,8 +227,11 @@ class TestMusicCheck:
 
 class TestStreamUpload:
     def test_missing_clip(self):
-        lines = list(pp.stream_upload("/tmp/x", "youtube", "/nope.mp4",
-                                      "T", "C", [], True, "warn"))
+        lines = list(
+            pp.stream_upload(
+                "/tmp/x", "youtube", "/nope.mp4", "T", "C", [], True, "warn"
+            )
+        )
         assert any("Clip not found" in label for label in lines)
 
     def test_upload_flow(self, tmp_path, monkeypatch):
@@ -201,14 +250,18 @@ class TestStreamUpload:
                 captured["video"] = video_path
                 captured["title"] = title
                 captured["index"] = index
-                return {"status": "uploaded", "platform": "youtube",
-                        "video_id": "ABC"}
+                return {"status": "uploaded", "platform": "youtube", "video_id": "ABC"}
 
         import scripts.upload_gate as ug
-        monkeypatch.setattr(ug, "UPLOADERS",
-                            {"youtube": lambda *a, **k: FakeUploader(*a, **k)})
-        lines = list(pp.stream_upload(project, "youtube", clip, "My Title",
-                                      "Cap", ["#shorts"], False, "block"))
+
+        monkeypatch.setattr(
+            ug, "UPLOADERS", {"youtube": lambda *a, **k: FakeUploader(*a, **k)}
+        )
+        lines = list(
+            pp.stream_upload(
+                project, "youtube", clip, "My Title", "Cap", ["#shorts"], False, "block"
+            )
+        )
         out = "\n".join(lines)
         assert captured["video"] == clip
         assert captured["index"] == 0
@@ -219,8 +272,16 @@ class TestStreamUpload:
         second_clip = os.path.join(project, "final", "001_clip.mp4")
         with open(second_clip, "wb") as stream:
             stream.write(b"unique-second-clip")
-        generator = pp.stream_upload(project, "youtube", second_clip, "My Title",
-                                      "Cap", ["#shorts"], False, "block")
+        generator = pp.stream_upload(
+            project,
+            "youtube",
+            second_clip,
+            "My Title",
+            "Cap",
+            ["#shorts"],
+            False,
+            "block",
+        )
         try:
             while True:
                 next(generator)
@@ -231,15 +292,26 @@ class TestStreamUpload:
     def test_audio_qc_blocks_real_upload_before_uploader(self, tmp_path, monkeypatch):
         project = _project(tmp_path)
         clip = os.path.join(project, "final", "000_clip.mp4")
-        monkeypatch.setattr(pp, "_audio_qc_upload_allowed", lambda *args: (False, "Audio QC requires review"))
+        monkeypatch.setattr(
+            pp,
+            "_audio_qc_upload_allowed",
+            lambda *args: (False, "Audio QC requires review"),
+        )
 
         import scripts.upload_gate as ug
+
         monkeypatch.setattr(
-            ug, "UPLOADERS",
-            {"youtube": lambda *a, **k: (_ for _ in ()).throw(
-                AssertionError("uploader must not be constructed"))},
+            ug,
+            "UPLOADERS",
+            {
+                "youtube": lambda *a, **k: (_ for _ in ()).throw(
+                    AssertionError("uploader must not be constructed")
+                )
+            },
         )
-        updates = list(pp.stream_upload(project, "youtube", clip, "T", "C", [], False, "warn"))
+        updates = list(
+            pp.stream_upload(project, "youtube", clip, "T", "C", [], False, "warn")
+        )
         assert any("Audio QC" in item for item in updates)
 
     def test_blocked_clip_reported(self, tmp_path, monkeypatch):
@@ -254,10 +326,13 @@ class TestStreamUpload:
                 raise Exception("Upload refused by ViralCutter safety gate: blocked")
 
         import scripts.upload_gate as ug
-        monkeypatch.setattr(ug, "UPLOADERS",
-                            {"youtube": lambda *a, **k: FakeUploader(*a, **k)})
-        lines = list(pp.stream_upload(project, "youtube", clip, "T", "C", [],
-                                      True, "warn"))
+
+        monkeypatch.setattr(
+            ug, "UPLOADERS", {"youtube": lambda *a, **k: FakeUploader(*a, **k)}
+        )
+        lines = list(
+            pp.stream_upload(project, "youtube", clip, "T", "C", [], True, "warn")
+        )
         out = "\n".join(lines)
         assert "Upload refused" in out
 
@@ -265,16 +340,25 @@ class TestStreamUpload:
         project = _project(tmp_path)
         clip = os.path.join(project, "final", "000_clip.mp4")
         from scripts import content_guard
+
         assert content_guard.record_channel_incident(
-            project, "youtube", "policy", "Community Guidelines strike", lock=True)
+            project, "youtube", "policy", "Community Guidelines strike", lock=True
+        )
 
         import scripts.upload_gate as ug
+
         monkeypatch.setattr(
-            ug, "UPLOADERS",
-            {"youtube": lambda *a, **k: (_ for _ in ()).throw(
-                AssertionError("uploader must not be constructed"))},
+            ug,
+            "UPLOADERS",
+            {
+                "youtube": lambda *a, **k: (_ for _ in ()).throw(
+                    AssertionError("uploader must not be constructed")
+                )
+            },
         )
-        lines = list(pp.stream_upload(project, "youtube", clip, "T", "C", [], False, "warn"))
+        lines = list(
+            pp.stream_upload(project, "youtube", clip, "T", "C", [], False, "warn")
+        )
         out = "\n".join(lines)
         assert "قاطع دائرة القناة مقفول" in out
 
@@ -293,11 +377,17 @@ class TestStreamUpload:
             yield "done"
 
         monkeypatch.setattr(pp, "stream_upload", fake_stream_upload)
-        updates = list(pp.stream_upload_batch(
-            project, "youtube", clips, True, "warn",
-            publish_at="2030-01-01T10:00:00+00:00",
-            schedule_interval_minutes=90,
-        ))
+        updates = list(
+            pp.stream_upload_batch(
+                project,
+                "youtube",
+                clips,
+                True,
+                "warn",
+                publish_at="2030-01-01T10:00:00+00:00",
+                schedule_interval_minutes=90,
+            )
+        )
         assert len(captured) == 6
         assert captured[0] == "2030-01-01T10:00:00+00:00"
         assert captured[1] == "2030-01-01T11:30:00+00:00"
@@ -306,8 +396,10 @@ class TestStreamUpload:
 
     def test_batch_writes_summary_and_retries_only_failed(self, tmp_path, monkeypatch):
         project = _project(tmp_path)
-        paths = [os.path.join(project, "final", "000_clip.mp4"),
-                 os.path.join(project, "final", "001_clip.mp4")]
+        paths = [
+            os.path.join(project, "final", "000_clip.mp4"),
+            os.path.join(project, "final", "001_clip.mp4"),
+        ]
         calls = []
         attempts = {}
 
@@ -315,13 +407,22 @@ class TestStreamUpload:
             path = args[2]
             calls.append(path)
             attempts[path] = attempts.get(path, 0) + 1
-            status = "failed" if path == paths[0] and attempts[path] == 1 else "uploaded"
+            status = (
+                "failed" if path == paths[0] and attempts[path] == 1 else "uploaded"
+            )
             yield "done"
-            return pp._publish_result(status, path, args[3], kwargs.get("publish_at"),
-                                      error="temporary" if status == "failed" else None)
+            return pp._publish_result(
+                status,
+                path,
+                args[3],
+                kwargs.get("publish_at"),
+                error="temporary" if status == "failed" else None,
+            )
 
         monkeypatch.setattr(pp, "stream_upload", fake_stream)
-        first_updates = list(pp.stream_upload_batch(project, "youtube", paths, False, "warn"))
+        first_updates = list(
+            pp.stream_upload_batch(project, "youtube", paths, False, "warn")
+        )
         report_path = os.path.join(project, "publish_batch_report.json")
         with open(report_path, encoding="utf-8") as stream:
             report = json.load(stream)
@@ -330,8 +431,11 @@ class TestStreamUpload:
         assert any("مشاكل" in item for item in first_updates)
 
         calls.clear()
-        list(pp.stream_upload_batch(project, "youtube", paths, False, "warn",
-                                    retry_failed_only=True))
+        list(
+            pp.stream_upload_batch(
+                project, "youtube", paths, False, "warn", retry_failed_only=True
+            )
+        )
         assert calls == [paths[0]]
         with open(report_path, encoding="utf-8") as stream:
             retried = json.load(stream)
@@ -341,13 +445,20 @@ class TestStreamUpload:
     def test_batch_schedule_rejects_naive_start(self, tmp_path):
         project = _project(tmp_path)
         clip = os.path.join(project, "final", "000_clip.mp4")
-        updates = list(pp.stream_upload_batch(
-            project, "youtube", [clip], True, "warn",
-            publish_at="2030-01-01T10:00:00",
-        ))
+        updates = list(
+            pp.stream_upload_batch(
+                project,
+                "youtube",
+                [clip],
+                True,
+                "warn",
+                publish_at="2030-01-01T10:00:00",
+            )
+        )
         assert any("وقت بداية الجدولة" in item for item in updates)
 
 
 def shutil_rmtree(project, sub):
     import shutil
+
     shutil.rmtree(os.path.join(project, sub))

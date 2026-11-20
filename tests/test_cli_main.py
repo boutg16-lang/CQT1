@@ -16,10 +16,21 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 _HEAVY_MODULES = [
-    "cv2", "mediapipe", "torch", "torchaudio", "whisperx", "insightface",
-    "onnxruntime", "av", "moviepy", "librosa", "soundfile",
+    "cv2",
+    "mediapipe",
+    "torch",
+    "torchaudio",
+    "whisperx",
+    "insightface",
+    "onnxruntime",
+    "av",
+    "moviepy",
+    "librosa",
+    "soundfile",
     # light but not in requirements-dev.txt (CI installs pytest + numpy only)
-    "tqdm", "tqdm.asyncio", "psutil",
+    "tqdm",
+    "tqdm.asyncio",
+    "psutil",
 ]
 
 
@@ -47,6 +58,7 @@ def cli():
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
+
 
 def test_parse_face_detect_interval_single(cli):
     assert cli.parse_face_detect_interval("0.5") == {"1": 0.5, "2": 0.5}
@@ -101,7 +113,9 @@ def test_get_subtitle_config_defaults(cli):
 
 def test_get_subtitle_config_override_keeps_untouched_defaults(cli, tmp_path):
     p = tmp_path / "sub.json"
-    p.write_text(json.dumps({"base_size": 42, "mode": "word_by_word"}), encoding="utf-8")
+    p.write_text(
+        json.dumps({"base_size": 42, "mode": "word_by_word"}), encoding="utf-8"
+    )
     cfg = cli.get_subtitle_config(str(p))
     assert cfg["base_size"] == 42
     assert cfg["mode"] == "word_by_word"
@@ -113,6 +127,7 @@ def test_cleanup_temp_files_removes(cli, tmp_path, monkeypatch):
     target.write_text("{}")
     # the helper lives in scripts.pipeline_utils now — patch its home module
     from scripts import pipeline_utils
+
     monkeypatch.setattr(pipeline_utils, "TEMP_SUBTITLE_CONFIG", str(target))
     cli.cleanup_temp_files()
     assert not target.exists()
@@ -120,7 +135,10 @@ def test_cleanup_temp_files_removes(cli, tmp_path, monkeypatch):
 
 def test_cleanup_temp_files_missing_is_ok(cli, tmp_path, monkeypatch):
     from scripts import pipeline_utils
-    monkeypatch.setattr(pipeline_utils, "TEMP_SUBTITLE_CONFIG", str(tmp_path / "missing.json"))
+
+    monkeypatch.setattr(
+        pipeline_utils, "TEMP_SUBTITLE_CONFIG", str(tmp_path / "missing.json")
+    )
     cli.cleanup_temp_files()  # must not raise
 
 
@@ -133,6 +151,7 @@ def test_interactive_input_int_retries_until_valid(cli, monkeypatch):
 # ---------------------------------------------------------------------------
 # Startup / argument paths
 # ---------------------------------------------------------------------------
+
 
 def test_main_no_args_launches_webui(cli, monkeypatch):
     """Double-click UX: bare invocation must open the WebUI, never the CLI."""
@@ -149,7 +168,15 @@ def test_main_help_exits_zero_and_lists_flags(cli, monkeypatch, capsys):
         cli.main()
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    for flag in ("--url", "--segments", "--ai-backend", "--workflow", "--face-mode", "--audio-qc", "--audio-qc-gate"):
+    for flag in (
+        "--url",
+        "--segments",
+        "--ai-backend",
+        "--workflow",
+        "--face-mode",
+        "--audio-qc",
+        "--audio-qc-gate",
+    ):
         assert flag in out
 
 
@@ -164,21 +191,32 @@ def test_main_unknown_flag_exits_two(cli, monkeypatch):
 # run_safety_stage (extracted pipeline stage)
 # ---------------------------------------------------------------------------
 
+
 def _safety_args(**over):
-    base = {"safety_mode": "block", "safety_autoupdate": "off",
-            "safety_min_severity": "high", "safety_extra_terms": None,
-            "safety_ai": "off", "ai_model_name": None}
+    base = {
+        "safety_mode": "block",
+        "safety_autoupdate": "off",
+        "safety_min_severity": "high",
+        "safety_extra_terms": None,
+        "safety_ai": "off",
+        "ai_model_name": None,
+    }
     base.update(over)
     return types.SimpleNamespace(**base)
 
 
 def _segments(*texts):
-    return {"segments": [{"title": f"clip {i}", "text": t} for i, t in enumerate(texts)]}
+    return {
+        "segments": [{"title": f"clip {i}", "text": t} for i, t in enumerate(texts)]
+    }
 
 
 def test_resolve_safety_backend_prefers_openai_moderation(cli, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    assert cli.resolve_safety_backend("auto", "manual") == ("openai-moderation", "test-openai-key")
+    assert cli.resolve_safety_backend("auto", "manual") == (
+        "openai-moderation",
+        "test-openai-key",
+    )
 
 
 def test_resolve_safety_backend_falls_back_to_local(cli, monkeypatch):
@@ -190,68 +228,118 @@ def test_resolve_safety_backend_falls_back_to_local(cli, monkeypatch):
 
 def test_safety_stage_skips_workflow_3(cli, tmp_path):
     segs = _segments("hello")
-    out = cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                               args=_safety_args(), ai_backend="manual",
-                               api_key=None, workflow_choice="3")
+    out = cli.run_safety_stage(
+        segs,
+        project_folder=str(tmp_path),
+        args=_safety_args(),
+        ai_backend="manual",
+        api_key=None,
+        workflow_choice="3",
+    )
     assert out is segs  # untouched
 
 
 def test_safety_stage_skips_mode_off(cli, tmp_path):
     segs = _segments("hello")
-    out = cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                               args=_safety_args(safety_mode="off"),
-                               ai_backend="manual", api_key=None,
-                               workflow_choice="1")
+    out = cli.run_safety_stage(
+        segs,
+        project_folder=str(tmp_path),
+        args=_safety_args(safety_mode="off"),
+        ai_backend="manual",
+        api_key=None,
+        workflow_choice="1",
+    )
     assert out is segs
 
 
 def test_contextual_review_uses_only_transcript_text(cli, tmp_path, monkeypatch):
     monkeypatch.setattr(cli.safety_filter, "load_transcript", lambda _path: [])
-    assert cli._contextual_review_text({
-        "title": "A title that must not substitute for a transcript",
-        "start_time": 0,
-        "end_time": 10,
-    }, []) == ""
-    assert cli._contextual_review_text({"transcript_text": "stored transcript"}, []) == "stored transcript"
-    assert cli._contextual_review_text({"start_time": 0, "end_time": 10}, [
-        {"start": "broken", "end": "timestamps", "text": "bad row"},
-        {"start": 1, "end": 2, "text": "valid transcript"},
-    ]) == "valid transcript"
+    assert (
+        cli._contextual_review_text(
+            {
+                "title": "A title that must not substitute for a transcript",
+                "start_time": 0,
+                "end_time": 10,
+            },
+            [],
+        )
+        == ""
+    )
+    assert (
+        cli._contextual_review_text({"transcript_text": "stored transcript"}, [])
+        == "stored transcript"
+    )
+    assert (
+        cli._contextual_review_text(
+            {"start_time": 0, "end_time": 10},
+            [
+                {"start": "broken", "end": "timestamps", "text": "bad row"},
+                {"start": 1, "end": 2, "text": "valid transcript"},
+            ],
+        )
+        == "valid transcript"
+    )
 
 
 def test_safety_stage_returns_filtered_segments(cli, tmp_path, monkeypatch):
     filtered = {"segments": [{"title": "ok", "text": "fine"}]}
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter",
-                        lambda *a, **k: filtered)
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda *a, **k: filtered
+    )
     saved = []
-    monkeypatch.setattr(cli.save_json, "save_viral_segments",
-                        lambda data, **k: saved.append(data))
-    out = cli.run_safety_stage(_segments("bad word"), project_folder=str(tmp_path),
-                               args=_safety_args(), ai_backend="manual",
-                               api_key=None, workflow_choice="1")
+    monkeypatch.setattr(
+        cli.save_json, "save_viral_segments", lambda data, **k: saved.append(data)
+    )
+    out = cli.run_safety_stage(
+        _segments("bad word"),
+        project_folder=str(tmp_path),
+        args=_safety_args(),
+        ai_backend="manual",
+        api_key=None,
+        workflow_choice="1",
+    )
     assert out is filtered
     assert saved == [filtered]  # filtered result persisted
 
 
 def test_safety_stage_unchanged_filter_does_not_resave(cli, tmp_path, monkeypatch):
     segs = _segments("clean")
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter",
-                        lambda *a, **k: segs)  # same object = nothing blocked
-    monkeypatch.setattr(cli.save_json, "save_viral_segments",
-                        lambda *a, **k: pytest.fail("must not resave"))
-    out = cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                               args=_safety_args(), ai_backend="manual",
-                               api_key=None, workflow_choice="1")
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda *a, **k: segs
+    )  # same object = nothing blocked
+    monkeypatch.setattr(
+        cli.save_json,
+        "save_viral_segments",
+        lambda *a, **k: pytest.fail("must not resave"),
+    )
+    out = cli.run_safety_stage(
+        segs,
+        project_folder=str(tmp_path),
+        args=_safety_args(),
+        ai_backend="manual",
+        api_key=None,
+        workflow_choice="1",
+    )
     assert out is segs
 
 
-def test_safety_stage_fails_closed_when_contextual_review_is_unavailable(cli, tmp_path, monkeypatch):
+def test_safety_stage_fails_closed_when_contextual_review_is_unavailable(
+    cli, tmp_path, monkeypatch
+):
     segs = _segments("clean transcript")
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data)
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
+    )
     with pytest.raises(SystemExit) as exc:
-        cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                             args=_safety_args(safety_ai="on"), ai_backend="local",
-                             api_key=None, safety_backend="local", workflow_choice="1")
+        cli.run_safety_stage(
+            segs,
+            project_folder=str(tmp_path),
+            args=_safety_args(safety_ai="on"),
+            ai_backend="local",
+            api_key=None,
+            safety_backend="local",
+            workflow_choice="1",
+        )
     assert exc.value.code == 1
     report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
     assert report["ai_review_requested"] is True
@@ -259,53 +347,84 @@ def test_safety_stage_fails_closed_when_contextual_review_is_unavailable(cli, tm
     assert report["ai_reviewed_clips"][0]["index"] == 0
 
 
-def test_safety_stage_allows_unavailable_review_in_flag_mode(cli, tmp_path, monkeypatch):
+def test_safety_stage_allows_unavailable_review_in_flag_mode(
+    cli, tmp_path, monkeypatch
+):
     segs = _segments("clean transcript")
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data)
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
+    )
     result = cli.run_safety_stage(
-        segs, project_folder=str(tmp_path),
+        segs,
+        project_folder=str(tmp_path),
         args=_safety_args(safety_mode="flag", safety_ai="on"),
-        ai_backend="local", api_key=None, safety_backend="local", workflow_choice="1")
+        ai_backend="local",
+        api_key=None,
+        safety_backend="local",
+        workflow_choice="1",
+    )
     assert result is segs
     report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
     assert report["ai_review_status"] == "unavailable"
 
 
-def test_safety_stage_fails_closed_on_incomplete_contextual_review(cli, tmp_path, monkeypatch):
+def test_safety_stage_fails_closed_on_incomplete_contextual_review(
+    cli, tmp_path, monkeypatch
+):
     segs = _segments("clean transcript")
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data)
-    monkeypatch.setattr(cli.safety_ai, "review_segments", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
+    )
+    monkeypatch.setattr(
+        cli.safety_ai, "review_segments", lambda *_args, **_kwargs: None
+    )
     with pytest.raises(SystemExit) as exc:
-        cli.run_safety_stage(segs, project_folder=str(tmp_path),
-                             args=_safety_args(safety_ai="on"), ai_backend="gemini",
-                             api_key=None, safety_backend="gemini", workflow_choice="1")
+        cli.run_safety_stage(
+            segs,
+            project_folder=str(tmp_path),
+            args=_safety_args(safety_ai="on"),
+            ai_backend="gemini",
+            api_key=None,
+            safety_backend="gemini",
+            workflow_choice="1",
+        )
     assert exc.value.code == 1
     report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
     assert report["ai_review_status"] == "failed"
 
 
 def test_safety_stage_exits_when_everything_blocked(cli, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli.safety_filter, "apply_safety_filter",
-                        lambda *a, **k: {"segments": []})
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda *a, **k: {"segments": []}
+    )
     monkeypatch.setattr(cli.save_json, "save_viral_segments", lambda *a, **k: None)
     with pytest.raises(SystemExit) as exc:
-        cli.run_safety_stage(_segments("slur"), project_folder=str(tmp_path),
-                             args=_safety_args(safety_mode="block"),
-                             ai_backend="manual", api_key=None,
-                             workflow_choice="1")
+        cli.run_safety_stage(
+            _segments("slur"),
+            project_folder=str(tmp_path),
+            args=_safety_args(safety_mode="block"),
+            ai_backend="manual",
+            api_key=None,
+            workflow_choice="1",
+        )
     assert exc.value.code == 1
 
 
 def test_safety_stage_fails_closed_when_filter_errors(cli, tmp_path, monkeypatch):
     def boom(*_args, **_kwargs):
         raise RuntimeError("filter exploded")
+
     monkeypatch.setattr(cli.safety_filter, "apply_safety_filter", boom)
     with pytest.raises(SystemExit) as exc:
-        cli.run_safety_stage(_segments("anything"), project_folder=str(tmp_path),
-                             args=_safety_args(), ai_backend="manual",
-                             api_key=None, workflow_choice="1")
+        cli.run_safety_stage(
+            _segments("anything"),
+            project_folder=str(tmp_path),
+            args=_safety_args(),
+            ai_backend="manual",
+            api_key=None,
+            workflow_choice="1",
+        )
     assert exc.value.code == 1
-
 
 
 def test_process_segments_keeps_distinct_partial_overlap():
@@ -319,12 +438,26 @@ def test_process_segments_keeps_distinct_partial_overlap():
         {"start": 40.0, "end": 41.0, "text": "third"},
     ]
     raw = [
-        {"title": "A", "start_time_ref": "0s", "start_text": "first", "end_text": "", "score": 90},
-        {"title": "B", "start_time_ref": "10s", "start_text": "second", "end_text": "", "score": 80},
+        {
+            "title": "A",
+            "start_time_ref": "0s",
+            "start_text": "first",
+            "end_text": "",
+            "score": 90,
+        },
+        {
+            "title": "B",
+            "start_time_ref": "10s",
+            "start_text": "second",
+            "end_text": "",
+            "score": 80,
+        },
     ]
     result = process_segments(raw, transcript, 15, 90)
     assert len(result["segments"]) == 2
-    windows = {(round(s["start_time"]), round(s["end_time"])) for s in result["segments"]}
+    windows = {
+        (round(s["start_time"]), round(s["end_time"])) for s in result["segments"]
+    }
     assert windows == {(0, 15), (10, 25)}
 
 
@@ -348,16 +481,32 @@ def test_content_guard_stage_filters_before_export(cli, tmp_path):
         encoding="utf-8",
     )
     (current / "viral_segments.txt").write_text(
-        json.dumps({"segments": [{"title": "same", "start_time": 10, "end_time": 30},
-                                   {"title": "new", "start_time": 50, "end_time": 70}]}),
+        json.dumps(
+            {
+                "segments": [
+                    {"title": "same", "start_time": 10, "end_time": 30},
+                    {"title": "new", "start_time": 50, "end_time": 70},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     assert content_guard.record_publish(
-        str(previous), "youtube", str(previous / "old.mp4"), index=0,
-        result={"status": "uploaded"})
+        str(previous),
+        "youtube",
+        str(previous / "old.mp4"),
+        index=0,
+        result={"status": "uploaded"},
+    )
 
     out = cli.run_content_guard_stage(
-        {"segments": [{"title": "same", "start_time": 10, "end_time": 30},
-                      {"title": "new", "start_time": 50, "end_time": 70}]},
-        project_folder=str(current), workflow_choice="1")
+        {
+            "segments": [
+                {"title": "same", "start_time": 10, "end_time": 30},
+                {"title": "new", "start_time": 50, "end_time": 70},
+            ]
+        },
+        project_folder=str(current),
+        workflow_choice="1",
+    )
     assert [item["title"] for item in out["segments"]] == ["new"]

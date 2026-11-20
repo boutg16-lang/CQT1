@@ -65,7 +65,13 @@ def test_wait_for_http_is_false_on_closed_port():
 
 def test_report_json_is_written_by_run_documented_shape(tmp_path):
     # Guards the on-disk contract the user shares with the agent.
-    report = {"url": "u", "ok": True, "tabs": [], "console_errors": [], "page_errors": []}
+    report = {
+        "url": "u",
+        "ok": True,
+        "tabs": [],
+        "console_errors": [],
+        "page_errors": [],
+    }
     path = tmp_path / "report.json"
     path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
     assert json.loads(path.read_text(encoding="utf-8"))["ok"] is True

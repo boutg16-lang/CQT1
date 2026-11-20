@@ -37,8 +37,12 @@ _WIN_MEDIA_EXTS = (
 # Credentials must never leave the machine in a crash report.
 _CREDENTIAL_PATTERNS = (
     # Authorization: Bearer <token> / Authorization: Basic <blob>
-    (re.compile(r"(?i)\b(authorization)\s*[:=]\s*[\"']?(?:bearer|basic)\s+[^\s,\"';]+"),
-     r"\1=<REDACTED>"),
+    (
+        re.compile(
+            r"(?i)\b(authorization)\s*[:=]\s*[\"']?(?:bearer|basic)\s+[^\s,\"';]+"
+        ),
+        r"\1=<REDACTED>",
+    ),
     (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*"), "Bearer <REDACTED>"),
     # JSON Web Tokens
     (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), "<JWT>"),
@@ -46,10 +50,13 @@ _CREDENTIAL_PATTERNS = (
     (re.compile(r"\bAIza[0-9A-Za-z_-]{35}"), "<REDACTED>"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"), "<REDACTED>"),
     # key=/token=/secret=/password= query params and assignments
-    (re.compile(
-        r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
-        r"token|secret|password|passwd|pwd|auth|key)\s*[=:]\s*[\"']?([^\"'\s&,;]+)"),
-     r"\1=<REDACTED>"),
+    (
+        re.compile(
+            r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+            r"token|secret|password|passwd|pwd|auth|key)\s*[=:]\s*[\"']?([^\"'\s&,;]+)"
+        ),
+        r"\1=<REDACTED>",
+    ),
 )
 
 
@@ -65,14 +72,20 @@ def _sanitize(message, max_len=300):
     # then fall back to end-of-line for extensionless paths.
     text = re.sub(
         r"[A-Za-z]:\\[^\r\n'\"]*?\.(?:" + _WIN_MEDIA_EXTS + r")\b",
-        "<PATH>", text, flags=re.IGNORECASE)
+        "<PATH>",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"[A-Za-z]:\\(?:[^\r\n'\"\\]+\\)*[^\r\n'\"]+", "<PATH>", text)
-    text = re.sub(r"(?<![A-Za-z0-9])/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+", "<PATH>", text)
+    text = re.sub(
+        r"(?<![A-Za-z0-9])/(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+", "<PATH>", text
+    )
     return text[:max_len]
 
 
 def _collect(stage="unknown", exc=None):
     import traceback
+
     tb = ""
     if exc is not None:
         tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
@@ -80,6 +93,7 @@ def _collect(stage="unknown", exc=None):
     cuda = False
     try:
         import torch
+
         cuda = bool(torch.cuda.is_available())
     except Exception:
         pass
@@ -113,9 +127,11 @@ def send_crash(entry, endpoint=None):
         return False
     try:
         req = urllib.request.Request(
-            endpoint, data=json.dumps(entry).encode("utf-8"),
+            endpoint,
+            data=json.dumps(entry).encode("utf-8"),
             headers={"Content-Type": "application/json"},
-            method="POST")
+            method="POST",
+        )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status < 400
     except Exception:
@@ -125,7 +141,12 @@ def send_crash(entry, endpoint=None):
 def report(stage="unknown", exc=None, log_path="crash_report.log", endpoint=None):
     """Log locally; send only when the user opted in. Returns the entry."""
     entry = log_crash(stage, exc, log_path)
-    opt_in = os.getenv("VIRALCUTTER_CRASH_REPORT", "").strip().lower() in {"1", "true", "yes", "on"}
+    opt_in = os.getenv("VIRALCUTTER_CRASH_REPORT", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if opt_in:
         send_crash(entry, endpoint)
     return entry
@@ -133,10 +154,13 @@ def report(stage="unknown", exc=None, log_path="crash_report.log", endpoint=None
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="ViralCutter crash reporter.")
     parser.add_argument("--stage", default="cli")
     parser.add_argument("--message", default="test crash")
-    parser.add_argument("--send", action="store_true", help="send to endpoint if configured")
+    parser.add_argument(
+        "--send", action="store_true", help="send to endpoint if configured"
+    )
     args = parser.parse_args()
     if args.send:
         os.environ.setdefault("VIRALCUTTER_CRASH_REPORT", "1")

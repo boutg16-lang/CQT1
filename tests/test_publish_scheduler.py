@@ -25,7 +25,9 @@ def videos(tmp_path):
 
 
 def _plan(videos, **kwargs):
-    return publish_scheduler.build_plan(videos, start_at="2030-01-07T00:00:00Z", **kwargs)
+    return publish_scheduler.build_plan(
+        videos, start_at="2030-01-07T00:00:00Z", **kwargs
+    )
 
 
 class TestLoadMeasuredHours:
@@ -36,7 +38,9 @@ class TestLoadMeasuredHours:
         assert publish_scheduler.load_measured_hours(str(tmp_path)) == []
 
     def test_malformed_json_returns_empty(self, tmp_path):
-        (tmp_path / "performance_insights.json").write_text("{not json", encoding="utf-8")
+        (tmp_path / "performance_insights.json").write_text(
+            "{not json", encoding="utf-8"
+        )
         assert publish_scheduler.load_measured_hours(str(tmp_path)) == []
 
     def test_non_dict_json_returns_empty(self, tmp_path):
@@ -45,12 +49,14 @@ class TestLoadMeasuredHours:
 
     def test_non_list_hours_returns_empty(self, tmp_path):
         (tmp_path / "performance_insights.json").write_text(
-            '{"best_hours": 17}', encoding="utf-8")
+            '{"best_hours": 17}', encoding="utf-8"
+        )
         assert publish_scheduler.load_measured_hours(str(tmp_path)) == []
 
     def test_hours_normalised_sorted_and_deduped(self, tmp_path):
         (tmp_path / "performance_insights.json").write_text(
-            '{"best_hours": [17, 25, 9.5, "x", 17, 0]}', encoding="utf-8")
+            '{"best_hours": [17, 25, 9.5, "x", 17, 0]}', encoding="utf-8"
+        )
         assert publish_scheduler.load_measured_hours(str(tmp_path)) == [0, 1, 9, 17]
 
 
@@ -82,7 +88,9 @@ class TestBuildPlan:
 
     def test_weekend_windows(self, videos):
         # 2030-01-12 is a Saturday; youtube weekend windows are 10-13 and 17-21.
-        result = publish_scheduler.build_plan(videos[:2], start_at="2030-01-12T00:00:00Z")
+        result = publish_scheduler.build_plan(
+            videos[:2], start_at="2030-01-12T00:00:00Z"
+        )
         assert [p["hour"] for p in result["plan"]] == [10, 11]
 
     def test_user_hours_override_windows(self, videos):
@@ -115,17 +123,23 @@ class TestBuildPlan:
             extra.append(str(path))
         result = _plan(videos + extra)  # 6 clips, 4 weekday slots per day
         assert result["count"] == 6
-        assert [p["day"] for p in result["plan"]] == ["2030-01-07"] * 4 + ["2030-01-08"] * 2
+        assert [p["day"] for p in result["plan"]] == ["2030-01-07"] * 4 + [
+            "2030-01-08"
+        ] * 2
         assert [p["hour"] for p in result["plan"]] == [17, 18, 19, 20, 17, 18]
 
     def test_naive_start_at_treated_as_utc(self, videos):
-        result = publish_scheduler.build_plan(videos[:1], start_at="2030-01-07T00:00:00")
+        result = publish_scheduler.build_plan(
+            videos[:1], start_at="2030-01-07T00:00:00"
+        )
         assert result["plan"][0]["hour"] == 17
 
     def test_slots_in_the_past_are_skipped(self, videos):
         # Start Sunday 22:00: every Sunday slot has passed, so the first
         # slot is Monday's 17:00 window.
-        result = publish_scheduler.build_plan(videos[:1], start_at="2030-01-06T22:00:00Z")
+        result = publish_scheduler.build_plan(
+            videos[:1], start_at="2030-01-06T22:00:00Z"
+        )
         assert result["plan"][0]["day"] == "2030-01-07"
         assert result["plan"][0]["hour"] == 17
 
@@ -141,8 +155,9 @@ class TestSavePlan:
 class TestWaitUntil:
     def test_past_target_returns_immediately(self):
         calls = []
-        publish_scheduler._wait_until(dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1),
-                                      sleep=calls.append)
+        publish_scheduler._wait_until(
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1), sleep=calls.append
+        )
         assert calls == []
 
 
@@ -158,21 +173,31 @@ def _stub_publish_panel(monkeypatch, stream_fn):
 class TestRunDaemon:
     def test_invalid_plan_returns_error(self):
         assert publish_scheduler.run_daemon({"ok": False, "error": "nope"}) == {
-            "ok": False, "error": "nope"}
+            "ok": False,
+            "error": "nope",
+        }
 
     def test_dry_run_calls_uploader_with_dry_run_flag(self, videos, monkeypatch):
         seen = {}
 
         def fake_stream(folder, platform, paths, dry_run, *args, **kwargs):
-            seen.update({"folder": folder, "platform": platform, "paths": paths,
-                         "dry_run": dry_run, "publish_at": kwargs.get("publish_at")})
+            seen.update(
+                {
+                    "folder": folder,
+                    "platform": platform,
+                    "paths": paths,
+                    "dry_run": dry_run,
+                    "publish_at": kwargs.get("publish_at"),
+                }
+            )
             return ["uploaded clip_a.mp4"]
 
         _stub_publish_panel(monkeypatch, fake_stream)
         progress = []
         plan = _plan(videos[:1])
         summary = publish_scheduler.run_daemon(
-            plan, dry_run=True, progress=lambda *a: progress.append(a))
+            plan, dry_run=True, progress=lambda *a: progress.append(a)
+        )
         assert summary["ok"] is True
         assert summary["dry_run"] is True
         assert summary["results"][0]["status"] == "dry_run"
@@ -207,8 +232,9 @@ class TestRunDaemon:
 
     def test_invalid_lead_minutes_falls_back_to_default(self, videos, monkeypatch):
         _stub_publish_panel(monkeypatch, lambda *a, **k: [])
-        summary = publish_scheduler.run_daemon(_plan(videos[:1]), dry_run=True,
-                                               lead_minutes="bogus")
+        summary = publish_scheduler.run_daemon(
+            _plan(videos[:1]), dry_run=True, lead_minutes="bogus"
+        )
         assert summary["ok"] is True
 
     def test_progress_none_is_fine(self, videos, monkeypatch):
@@ -224,24 +250,39 @@ class TestMain:
         assert "provide --videos or --plan" in capsys.readouterr().out
 
     def test_build_plan_from_cli(self, videos, tmp_path, monkeypatch, capsys):
-        monkeypatch.setattr(sys, "argv", ["publish_scheduler", "--videos", videos[0],
-                                          "--start-at", "2030-01-07T00:00:00Z",
-                                          "--project", str(tmp_path / "proj")])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "publish_scheduler",
+                "--videos",
+                videos[0],
+                "--start-at",
+                "2030-01-07T00:00:00Z",
+                "--project",
+                str(tmp_path / "proj"),
+            ],
+        )
         assert publish_scheduler.main() == 0
-        plan = json.loads(capsys.readouterr().out.split("plan saved: ")[-1].split("\n", 1)[-1])
+        plan = json.loads(
+            capsys.readouterr().out.split("plan saved: ")[-1].split("\n", 1)[-1]
+        )
         assert plan["count"] == 1
         assert (tmp_path / "proj" / "publish_schedule.json").exists()
 
     def test_missing_videos_from_cli_returns_1(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setattr(sys, "argv", ["publish_scheduler", "--videos",
-                                          str(tmp_path / "ghost.mp4")])
+        monkeypatch.setattr(
+            sys, "argv", ["publish_scheduler", "--videos", str(tmp_path / "ghost.mp4")]
+        )
         assert publish_scheduler.main() == 1
 
     def test_plan_file_executes_dry_run(self, videos, tmp_path, monkeypatch, capsys):
         _stub_publish_panel(monkeypatch, lambda *a, **k: ["simulated"])
         plan_path = tmp_path / "plan.json"
         plan_path.write_text(json.dumps(_plan(videos[:1])), encoding="utf-8")
-        monkeypatch.setattr(sys, "argv", ["publish_scheduler", "--plan", str(plan_path)])
+        monkeypatch.setattr(
+            sys, "argv", ["publish_scheduler", "--plan", str(plan_path)]
+        )
         assert publish_scheduler.main() == 0
         summary = json.loads(capsys.readouterr().out)
         assert summary["results"][0]["status"] == "dry_run"

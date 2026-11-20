@@ -19,7 +19,9 @@ def _http(relay_url, path, method="GET", token=None, body=None, timeout=35):
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = "Bearer " + token
-    request = urllib.request.Request(relay_url + path, data=data, headers=headers, method=method)
+    request = urllib.request.Request(
+        relay_url + path, data=data, headers=headers, method=method
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
@@ -67,7 +69,10 @@ def _create_and_pair(relay_url):
         relay_url,
         "/v1/pair",
         method="POST",
-        body={"pairing_code": session["pairing_code"], "project_url": "http://127.0.0.1:7860"},
+        body={
+            "pairing_code": session["pairing_code"],
+            "project_url": "http://127.0.0.1:7860",
+        },
     )
     assert status == 200
     return session, paired
@@ -95,7 +100,9 @@ def test_session_creation_requires_control_token(relay_url):
     assert created["session_id"]
 
 
-def test_relay_fails_closed_when_control_token_is_not_configured(relay_url, monkeypatch):
+def test_relay_fails_closed_when_control_token_is_not_configured(
+    relay_url, monkeypatch
+):
     monkeypatch.delenv(relay.CONTROL_TOKEN_FILE_ENV)
     status, _ = _http(
         relay_url,
@@ -150,7 +157,9 @@ def test_agent_relay_url_is_pinned_to_the_owner_service():
 
 
 def test_project_url_accepts_only_loopback_http():
-    assert policy.validate_project_url("http://localhost:7860/") == "http://localhost:7860"
+    assert (
+        policy.validate_project_url("http://localhost:7860/") == "http://localhost:7860"
+    )
     assert policy.validate_project_url("http://[::1]:7860") == "http://[::1]:7860"
     for value in (
         "https://127.0.0.1:7860",
@@ -167,14 +176,27 @@ def test_project_url_accepts_only_loopback_http():
 def test_navigation_and_actions_are_confined_to_local_project():
     base = "http://127.0.0.1:7860"
     assert policy.validate_navigation_path("/settings", base) == base + "/settings"
-    for path in ("//example.com", "https://example.com", "/../secret", "/x#fragment", "/\\evil"):
+    for path in (
+        "//example.com",
+        "https://example.com",
+        "/../secret",
+        "/x#fragment",
+        "/\\evil",
+    ):
         with pytest.raises(policy.PolicyError):
             policy.validate_navigation_path(path, base)
     with pytest.raises(policy.PolicyError):
-        policy.validate_action({"type": "evaluate", "script": "fetch('https://example.com')"})
+        policy.validate_action(
+            {"type": "evaluate", "script": "fetch('https://example.com')"}
+        )
     with pytest.raises(policy.PolicyError):
         policy.validate_action({"type": "fill", "name": "API token", "value": "secret"})
-    assert policy.validate_action({"type": "fill", "name": "Project title", "value": "Test"})["value"] == "Test"
+    assert (
+        policy.validate_action(
+            {"type": "fill", "name": "Project title", "value": "Test"}
+        )["value"]
+        == "Test"
+    )
 
 
 def test_secret_strings_are_redacted_from_page_output():
@@ -291,7 +313,10 @@ def test_session_requires_pairing_and_bearer_auth(relay_url):
         relay_url,
         "/v1/pair",
         method="POST",
-        body={"pairing_code": session["pairing_code"], "project_url": "http://127.0.0.1:7860"},
+        body={
+            "pairing_code": session["pairing_code"],
+            "project_url": "http://127.0.0.1:7860",
+        },
     )
     assert status == 401
     assert paired["client_token"]
@@ -310,7 +335,10 @@ def test_pairing_code_does_not_accept_remote_project_url(relay_url):
         relay_url,
         "/v1/pair",
         method="POST",
-        body={"pairing_code": session["pairing_code"], "project_url": "http://example.com:7860"},
+        body={
+            "pairing_code": session["pairing_code"],
+            "project_url": "http://example.com:7860",
+        },
     )
     assert status == 400
 
@@ -344,7 +372,10 @@ def test_action_round_trip_returns_only_matching_browser_result(relay_url):
         "/v1/sessions/{}/results".format(session["session_id"]),
         method="POST",
         token=paired["client_token"],
-        body={"command_id": command["command_id"], "result": {"ok": True, "text": "CAT ready"}},
+        body={
+            "command_id": command["command_id"],
+            "result": {"ok": True, "text": "CAT ready"},
+        },
     )
     assert result_status == 200
     action_thread.join(timeout=3)
@@ -378,7 +409,9 @@ def test_pairing_rate_limit_and_action_rate_limits_are_bounded(relay_url):
     assert len(set(codes)) == len(codes)
 
 
-def test_client_poll_renews_lease_without_a_fixed_session_deadline(relay_url, monkeypatch):
+def test_client_poll_renews_lease_without_a_fixed_session_deadline(
+    relay_url, monkeypatch
+):
     monkeypatch.setattr(relay, "LONG_POLL_SECONDS", 0)
     session, paired = _create_and_pair(relay_url)
     state = relay.SESSIONS[session["session_id"]]
@@ -436,7 +469,9 @@ def test_action_rate_limit_returns_429_without_stopping_browser(relay_url, monke
     assert relay.SESSIONS[session["session_id"]].active
 
 
-def test_timed_out_action_closes_session_and_drops_pending_command(relay_url, monkeypatch):
+def test_timed_out_action_closes_session_and_drops_pending_command(
+    relay_url, monkeypatch
+):
     monkeypatch.setattr(relay, "ACTION_TIMEOUT_SECONDS", 0.05)
     session, paired = _create_and_pair(relay_url)
     status, result = _http(

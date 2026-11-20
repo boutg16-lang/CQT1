@@ -10,6 +10,7 @@ warnings.filterwarnings("ignore")
 
 try:
     from insightface.app import FaceAnalysis
+
     INSIGHTFACE_AVAILABLE = True
 except Exception:
     # InsightFace has native dependencies that may fail during import when
@@ -17,6 +18,7 @@ except Exception:
     INSIGHTFACE_AVAILABLE = False
 
 app = None
+
 
 @contextmanager
 def suppress_stdout_stderr():
@@ -32,6 +34,7 @@ def suppress_stdout_stderr():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
+
 def init_insightface():
     """Explicit initialization if needed outside import."""
     global app
@@ -41,22 +44,26 @@ def init_insightface():
     if app is None:
         # Provider options to reduce logging if possible (often needs env var)
         # But redirection is safer for C++ logs
-        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
         try:
             import onnxruntime as ort
+
             available = ort.get_available_providers()
             print(f"InsightFace: Available ONNX Providers: {available}")
-            if 'CUDAExecutionProvider' not in available:
-                print("WARNING: CUDAExecutionProvider not found. InsightFace will likely run on CPU.")
+            if "CUDAExecutionProvider" not in available:
+                print(
+                    "WARNING: CUDAExecutionProvider not found. InsightFace will likely run on CPU."
+                )
                 print("To fix, install onnxruntime-gpu: pip install onnxruntime-gpu")
         except Exception as e:
             print(f"InsightFace: Could not check available providers: {e}")
 
         with suppress_stdout_stderr():
-            app = FaceAnalysis(name='buffalo_l', providers=providers)
+            app = FaceAnalysis(name="buffalo_l", providers=providers)
             app.prepare(ctx_id=0, det_size=(640, 640))
     return app
+
 
 def detect_faces_insightface(frame):
     """
@@ -74,19 +81,22 @@ def detect_faces_insightface(frame):
         # Convert bbox to int
         bbox = face.bbox.astype(int)
         res = {
-            'bbox': bbox, # [x1, y1, x2, y2]
-            'kps': face.kps,
-            'det_score': face.det_score
+            "bbox": bbox,  # [x1, y1, x2, y2]
+            "kps": face.kps,
+            "det_score": face.det_score,
         }
-        if hasattr(face, 'landmark_2d_106') and face.landmark_2d_106 is not None:
-             res['landmark_2d_106'] = face.landmark_2d_106
-        if hasattr(face, 'landmark_3d_68') and face.landmark_3d_68 is not None:
-             res['landmark_3d_68'] = face.landmark_3d_68
+        if hasattr(face, "landmark_2d_106") and face.landmark_2d_106 is not None:
+            res["landmark_2d_106"] = face.landmark_2d_106
+        if hasattr(face, "landmark_3d_68") and face.landmark_3d_68 is not None:
+            res["landmark_3d_68"] = face.landmark_3d_68
 
         results.append(res)
     return results
 
-def crop_and_resize_insightface(frame, face_bbox, target_width=1080, target_height=1920, headroom=0.0, face_zoom=0.0):
+
+def crop_and_resize_insightface(
+    frame, face_bbox, target_width=1080, target_height=1920, headroom=0.0, face_zoom=0.0
+):
     """
     Crops and resizes the frame to target dimensions centered on the face_bbox.
     face_bbox: [x1, y1, x2, y2]
@@ -194,9 +204,12 @@ def crop_and_resize_insightface(frame, face_bbox, target_width=1080, target_heig
     cropped = frame[crop_y1:crop_y2, crop_x1:crop_x2]
 
     # Resize to final target
-    result = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
+    result = cv2.resize(
+        cropped, (target_width, target_height), interpolation=cv2.INTER_LINEAR
+    )
 
     return result
+
 
 if __name__ == "__main__":
     # Test block

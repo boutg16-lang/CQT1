@@ -6,6 +6,7 @@
 
     python -m scripts.stream_guard --help
 """
+
 from .scan import Engine, load_cues, merge_incidents, scan_cues  # noqa: F401
 
 __all__ = ["Engine", "load_cues", "scan_cues", "merge_incidents"]

@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 _CACHE: dict[tuple[str, str], list[float]] = {}
 _CACHE_LIMIT = 1024
 _DISABLED_REASON = ""
-_AUTO_MODELS: dict[str, str] = {}   # base_url -> detected embedding model
-_AUTO_FAILED: set[str] = set()      # base_url -> no embedding model
+_AUTO_MODELS: dict[str, str] = {}  # base_url -> detected embedding model
+_AUTO_FAILED: set[str] = set()  # base_url -> no embedding model
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
@@ -38,13 +38,19 @@ FALSE_VALUES = {"0", "false", "no", "off"}
 # Model families that are actually embedding models. Auto-detection only
 # enables the feature when the local server advertises one of these.
 _EMBEDDING_NAME_RE = __import__("re").compile(
-    r"(embed|bge|gte|e5[-_]|nomic|mxbai|paraphrase|all-minilm)", __import__("re").IGNORECASE)
+    r"(embed|bge|gte|e5[-_]|nomic|mxbai|paraphrase|all-minilm)",
+    __import__("re").IGNORECASE,
+)
 
 
 def _is_local_url(url: str) -> bool:
-    return bool(__import__("re").search(
-        r"^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|/)",
-        str(url or ""), __import__("re").IGNORECASE))
+    return bool(
+        __import__("re").search(
+            r"^https?://(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|/)",
+            str(url or ""),
+            __import__("re").IGNORECASE,
+        )
+    )
 
 
 def _auto_key(config: dict | None) -> str:
@@ -82,8 +88,11 @@ def _auto_enable(config: dict | None) -> bool:
         _AUTO_FAILED.add(base_url)
         return False
     _AUTO_MODELS[base_url] = sorted(matches, key=len, reverse=True)[0]
-    logger.info("Auto-enabled semantic embeddings with %s on %s",
-                _AUTO_MODELS[base_url], base_url)
+    logger.info(
+        "Auto-enabled semantic embeddings with %s on %s",
+        _AUTO_MODELS[base_url],
+        base_url,
+    )
     return True
 
 
@@ -118,8 +127,10 @@ def enabled(config: dict | None = None, *, allow_auto: bool = False) -> bool:
 def model_name(config: dict | None = None) -> str:
     section = (config or {}).get("openai") if isinstance(config, dict) else {}
     section = section if isinstance(section, dict) else {}
-    explicit = (os.getenv("VIRALCUTTER_EMBEDDING_MODEL", "").strip()
-                or str(section.get("embedding_model") or "").strip())
+    explicit = (
+        os.getenv("VIRALCUTTER_EMBEDDING_MODEL", "").strip()
+        or str(section.get("embedding_model") or "").strip()
+    )
     if explicit:
         return explicit
     detected = _AUTO_MODELS.get(_auto_key(config))
@@ -132,8 +143,9 @@ def _cache_key(text: str, config: dict | None) -> tuple[str, str]:
     return model_name(config), text
 
 
-def embed_texts(texts, config: dict | None = None, *,
-                allow_auto: bool = False) -> list[list[float]] | None:
+def embed_texts(
+    texts, config: dict | None = None, *, allow_auto: bool = False
+) -> list[list[float]] | None:
     """Embed the texts, or return None (never raise) when unavailable.
 
     The caller is expected to fall back to lexical similarity on None.
@@ -159,17 +171,23 @@ def embed_texts(texts, config: dict | None = None, *,
             _DISABLED_REASON = str(exc)
             logger.warning(
                 "Embeddings unavailable (%s); using lexical similarity for this run.",
-                exc)
+                exc,
+            )
             return None
         except Exception as exc:  # never let an optimization break a run
             _DISABLED_REASON = type(exc).__name__
-            logger.warning("Embeddings failed (%s); using lexical similarity.",
-                           type(exc).__name__)
+            logger.warning(
+                "Embeddings failed (%s); using lexical similarity.", type(exc).__name__
+            )
             return None
         if len(vectors) != len(missing):
             _DISABLED_REASON = "vector count mismatch"
-            logger.warning("Embeddings returned %d vectors for %d texts; "
-                           "using lexical similarity.", len(vectors), len(missing))
+            logger.warning(
+                "Embeddings returned %d vectors for %d texts; "
+                "using lexical similarity.",
+                len(vectors),
+                len(missing),
+            )
             return None
         if len(_CACHE) + len(missing) > _CACHE_LIMIT:
             _CACHE.clear()

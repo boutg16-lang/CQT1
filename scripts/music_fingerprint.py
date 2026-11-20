@@ -67,6 +67,7 @@ def _import_acoustid():
     """Best-effort import of pyacoustid; never raises."""
     try:
         import acoustid  # noqa: F401
+
         return acoustid
     except Exception:
         return None
@@ -87,7 +88,10 @@ def _fpcalc_candidates():
         cands += [os.path.join(bundle, "fpcalc.exe"), os.path.join(bundle, "fpcalc")]
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
     cands += [os.path.join(exe_dir, "fpcalc.exe"), os.path.join(exe_dir, "fpcalc")]
-    cands += [os.path.join(USER_BIN_DIR, "fpcalc.exe"), os.path.join(USER_BIN_DIR, "fpcalc")]
+    cands += [
+        os.path.join(USER_BIN_DIR, "fpcalc.exe"),
+        os.path.join(USER_BIN_DIR, "fpcalc"),
+    ]
     seen = []
     for c in cands:
         if c and os.path.isfile(c) and c not in seen:
@@ -119,9 +123,14 @@ def fingerprint_file(video_path, timeout=600):
     if acoustid is not None:
         try:
             duration, fingerprint = acoustid.fingerprint_file(
-                str(video_path), timeout=timeout)
-            return {"fingerprint": fingerprint, "duration": float(duration),
-                    "engine": "pyacoustid", "format": "compressed"}
+                str(video_path), timeout=timeout
+            )
+            return {
+                "fingerprint": fingerprint,
+                "duration": float(duration),
+                "engine": "pyacoustid",
+                "format": "compressed",
+            }
         except Exception:
             pass  # fall through to the fpcalc CLI
 
@@ -133,7 +142,8 @@ def fingerprint_file(video_path, timeout=600):
             "    (auto-downloads fpcalc.exe next to the app — bundled in the "
             "official Windows build, so packaged users never see this), OR\n"
             "  • pip install pyacoustid  (needs the native chromaprint lib), OR\n"
-            "  • Linux: sudo apt-get install libchromaprint-tools")
+            "  • Linux: sudo apt-get install libchromaprint-tools"
+        )
 
     errors = []
     for candidate in fpcalc:
@@ -162,13 +172,19 @@ def fingerprint_file(video_path, timeout=600):
         if not ints:
             errors.append(
                 "{} produced no fingerprint — is the file a valid video with "
-                "audio?".format(fpcalc))
+                "audio?".format(fpcalc)
+            )
             continue
-        return {"fingerprint": ints, "duration": duration, "engine": "fpcalc",
-                "format": "raw"}
+        return {
+            "fingerprint": ints,
+            "duration": duration,
+            "engine": "fpcalc",
+            "format": "raw",
+        }
     if errors:
-        raise RuntimeError("fpcalc failed on every candidate:\n  " +
-                           "\n  ".join(errors[:5]))
+        raise RuntimeError(
+            "fpcalc failed on every candidate:\n  " + "\n  ".join(errors[:5])
+        )
     raise RuntimeError("no fpcalc found")
 
 
@@ -183,6 +199,7 @@ def decode_fingerprint(fingerprint, fmt="compressed"):
     if acoustid is not None:
         try:
             from acoustid.chromaprint import decode_fingerprint as _decode
+
             return list(_decode(fingerprint))
         except Exception:
             pass
@@ -212,6 +229,7 @@ def compress_fingerprint(ints):
 # ---------------------------------------------------------------------------
 # AcoustID identification (network)
 # ---------------------------------------------------------------------------
+
 
 def identify_acoustid(fingerprint, duration, api_key=None, timeout=60):
     """Query the AcoustID lookup API.
@@ -246,15 +264,17 @@ def identify_acoustid(fingerprint, duration, api_key=None, timeout=60):
     for item in payload.get("results", []):
         for recording in item.get("recordings", []):
             artists = ", ".join(
-                a.get("name", "") for a in recording.get("artists", [])
-                if a.get("name"))
-            results.append({
-                "id": recording.get("id", ""),
-                "artist": artists,
-                "title": recording.get("title", ""),
-                "score": item.get("score", 0.0),
-                "sources": recording.get("sources", 0),
-            })
+                a.get("name", "") for a in recording.get("artists", []) if a.get("name")
+            )
+            results.append(
+                {
+                    "id": recording.get("id", ""),
+                    "artist": artists,
+                    "title": recording.get("title", ""),
+                    "score": item.get("score", 0.0),
+                    "sources": recording.get("sources", 0),
+                }
+            )
     results.sort(key=lambda r: (r["score"], r["sources"]), reverse=True)
     return results
 
@@ -262,6 +282,7 @@ def identify_acoustid(fingerprint, duration, api_key=None, timeout=60):
 # ---------------------------------------------------------------------------
 # Local database matching (offline)
 # ---------------------------------------------------------------------------
+
 
 def _atomic_write(path, data):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -279,8 +300,19 @@ def build_local_db(music_dir, cache_path=None):
     """
     if not os.path.isdir(music_dir):
         raise NotADirectoryError("local music dir not found: {}".format(music_dir))
-    supported = (".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus",
-                 ".mp4", ".mkv", ".webm", ".mov")
+    supported = (
+        ".mp3",
+        ".wav",
+        ".flac",
+        ".m4a",
+        ".aac",
+        ".ogg",
+        ".opus",
+        ".mp4",
+        ".mkv",
+        ".webm",
+        ".mov",
+    )
     songs = []
     for root, _dirs, files in os.walk(music_dir):
         for name in sorted(files):
@@ -291,13 +323,15 @@ def build_local_db(music_dir, cache_path=None):
                 fp = fingerprint_file(path)
             except Exception:
                 continue
-            songs.append({
-                "path": path,
-                "title": os.path.splitext(name)[0],
-                "duration": fp["duration"],
-                "fingerprint": fp["fingerprint"],
-                "format": fp["format"],
-            })
+            songs.append(
+                {
+                    "path": path,
+                    "title": os.path.splitext(name)[0],
+                    "duration": fp["duration"],
+                    "fingerprint": fp["fingerprint"],
+                    "format": fp["format"],
+                }
+            )
     db = {"songs": songs}
     if cache_path:
         _atomic_write(cache_path, db)
@@ -318,7 +352,7 @@ def _grams(ints, window=8):
     """Sliding-window n-grams of raw sub-fingerprints."""
     if len(ints) < window:
         return {tuple(ints)}
-    return {tuple(ints[i:i + window]) for i in range(len(ints) - window + 1)}
+    return {tuple(ints[i : i + window]) for i in range(len(ints) - window + 1)}
 
 
 def match_local(db, fingerprint, fmt="compressed", threshold=None):
@@ -330,17 +364,28 @@ def match_local(db, fingerprint, fmt="compressed", threshold=None):
     threshold = LOCAL_MATCH_THRESHOLD if threshold is None else threshold
     clip_ints = decode_fingerprint(fingerprint, fmt)
     if not clip_ints:
-        return {"matched": False, "song": None, "score": 0.0,
-                "threshold": threshold, "error": "decode_failed"}
+        return {
+            "matched": False,
+            "song": None,
+            "score": 0.0,
+            "threshold": threshold,
+            "error": "decode_failed",
+        }
     clip_grams = _grams(clip_ints)
     if not clip_grams:
-        return {"matched": False, "song": None, "score": 0.0,
-                "threshold": threshold, "error": "empty_fingerprint"}
+        return {
+            "matched": False,
+            "song": None,
+            "score": 0.0,
+            "threshold": threshold,
+            "error": "empty_fingerprint",
+        }
 
     best = {"score": 0.0, "song": None}
     for song in (db or {}).get("songs", []):
-        song_ints = decode_fingerprint(song.get("fingerprint"),
-                                       song.get("format", "compressed"))
+        song_ints = decode_fingerprint(
+            song.get("fingerprint"), song.get("format", "compressed")
+        )
         if not song_ints:
             continue
         song_grams = _grams(song_ints)
@@ -365,8 +410,10 @@ def match_local(db, fingerprint, fmt="compressed", threshold=None):
 # Project analysis
 # ---------------------------------------------------------------------------
 
+
 def _find_clips(project_folder):
     import glob
+
     final_dir = os.path.join(project_folder, "final")
     hits = sorted(glob.glob(os.path.join(final_dir, "*.mp4")))
     if hits:
@@ -376,13 +423,20 @@ def _find_clips(project_folder):
 
 def _index_from_path(path):
     import re
+
     m = re.match(r"(\d+)", os.path.basename(path))
     return int(m.group(1)) if m else None
 
 
-def analyze_project(project_folder, acoustid_key=None, local_db=None,
-                    gate="warn", threshold=None, do_acoustid=True,
-                    do_local=True):
+def analyze_project(
+    project_folder,
+    acoustid_key=None,
+    local_db=None,
+    gate="warn",
+    threshold=None,
+    do_acoustid=True,
+    do_local=True,
+):
     """Fingerprint every clip and write `music_fingerprint.json`.
 
     `local_db` may be a db dict (from build_local_db) or a path to a cached
@@ -414,12 +468,21 @@ def analyze_project(project_folder, acoustid_key=None, local_db=None,
         "backend": backend,
         "coverage_note": coverage_note,
         "clips": [],
-        "summary": {"checked": 0, "matched": 0, "warned": 0,
-                    "no_fpcalc": 0, "errors": 0},
+        "summary": {
+            "checked": 0,
+            "matched": 0,
+            "warned": 0,
+            "no_fpcalc": 0,
+            "errors": 0,
+        },
     }
     for clip in _find_clips(project_folder):
-        entry = {"index": _index_from_path(clip), "video": clip,
-                 "verdict": "clean", "suggestion": None}
+        entry = {
+            "index": _index_from_path(clip),
+            "video": clip,
+            "verdict": "clean",
+            "suggestion": None,
+        }
         try:
             fp = fingerprint_file(clip)
         except FpcalcUnavailable as e:
@@ -441,22 +504,25 @@ def analyze_project(project_folder, acoustid_key=None, local_db=None,
 
         # Local reference matching (offline, both engines work).
         if do_local and local_db.get("songs"):
-            local = match_local(local_db, fp["fingerprint"], fp["format"],
-                                threshold=threshold)
+            local = match_local(
+                local_db, fp["fingerprint"], fp["format"], threshold=threshold
+            )
             entry["local_match"] = local
             if local["matched"]:
                 entry["verdict"] = "local_match"
-                entry["suggestion"] = ("Audio overlaps local reference "
-                                       "'{}' ({:.0%})".format(
-                                           local["song"], local["score"]))
+                entry["suggestion"] = (
+                    "Audio overlaps local reference '{}' ({:.0%})".format(
+                        local["song"], local["score"]
+                    )
+                )
 
         # AcoustID lookup — works with BOTH engines now: pyacoustid's
         # compressed string, or raw fpcalc ints (encoded in identify_acoustid).
         acoustid_matches = []
         if do_acoustid:
-            acoustid_matches = identify_acoustid(fp["fingerprint"],
-                                                 fp["duration"],
-                                                 api_key=acoustid_key)
+            acoustid_matches = identify_acoustid(
+                fp["fingerprint"], fp["duration"], api_key=acoustid_key
+            )
             entry["acoustid"] = acoustid_matches[:3]
             if acoustid_matches and acoustid_matches[0]["score"] >= 0.5:
                 top = acoustid_matches[0]
@@ -464,8 +530,9 @@ def analyze_project(project_folder, acoustid_key=None, local_db=None,
                     entry["verdict"] = "acoustid_match"
                 entry["suggestion"] = (
                     "AcoustID: '{}' by {} (score {:.0%}, {} sources)".format(
-                        top["title"], top["artist"], top["score"],
-                        top.get("sources", 0)))
+                        top["title"], top["artist"], top["score"], top.get("sources", 0)
+                    )
+                )
 
         if entry["verdict"] == "acoustid_match":
             report["summary"]["matched"] += 1
@@ -481,6 +548,7 @@ def analyze_project(project_folder, acoustid_key=None, local_db=None,
 # ---------------------------------------------------------------------------
 # Upload-gate integration
 # ---------------------------------------------------------------------------
+
 
 def music_gate_reasons(project_folder, index=None, gate=None):
     """Reasons a clip should not be published, from the music report.
@@ -506,17 +574,20 @@ def music_gate_reasons(project_folder, index=None, gate=None):
             continue
         if entry.get("verdict") in ("acoustid_match", "local_match"):
             detail = entry.get("suggestion") or "audio fingerprint matched"
-            reasons.append({
-                "source": "music_fingerprint",
-                "detail": "clip #{} — {}".format(entry.get("index", "?"), detail),
-                "severity": "high" if gate == "block" else "medium",
-            })
+            reasons.append(
+                {
+                    "source": "music_fingerprint",
+                    "detail": "clip #{} — {}".format(entry.get("index", "?"), detail),
+                    "severity": "high" if gate == "block" else "medium",
+                }
+            )
     return reasons
 
 
 # ---------------------------------------------------------------------------
 # fpcalc auto-install (--install-fpcalc)
 # ---------------------------------------------------------------------------
+
 
 def install_fpcalc(target_dir=None, timeout=300):
     """Download and extract the Chromaprint fpcalc binary for this platform.
@@ -545,15 +616,18 @@ def install_fpcalc(target_dir=None, timeout=300):
 
     if system.startswith("win"):
         asset = "chromaprint-fpcalc-{}-windows-{}.zip".format(
-            FPCalc_RELEASE.lstrip("v"), arch)
+            FPCalc_RELEASE.lstrip("v"), arch
+        )
         exe_name = "fpcalc.exe"
     elif system == "darwin":
         asset = "chromaprint-fpcalc-{}-macos-{}.tar.gz".format(
-            FPCalc_RELEASE.lstrip("v"), arch)
+            FPCalc_RELEASE.lstrip("v"), arch
+        )
         exe_name = "fpcalc"
     else:  # linux & friends
         asset = "chromaprint-fpcalc-{}-linux-{}.tar.gz".format(
-            FPCalc_RELEASE.lstrip("v"), arch)
+            FPCalc_RELEASE.lstrip("v"), arch
+        )
         exe_name = "fpcalc"
 
     # The packaged build of ViralCutter bundles fpcalc next to the exe, so a
@@ -567,11 +641,13 @@ def install_fpcalc(target_dir=None, timeout=300):
 
     download_urls = [
         "https://github.com/acoustid/chromaprint/releases/download/{}/{}".format(
-            FPCalc_RELEASE, asset),
+            FPCalc_RELEASE, asset
+        ),
     ]
     req = urllib.request.Request(
-        FPCalc_GH_API, headers={"Accept": "application/vnd.github+json",
-                                "User-Agent": "ViralCutter"})
+        FPCalc_GH_API,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "ViralCutter"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             release = json.loads(resp.read().decode("utf-8", errors="replace"))
@@ -592,14 +668,18 @@ def install_fpcalc(target_dir=None, timeout=300):
                         shutil.copyfileobj(resp, f)
                 if archive.endswith(".zip"):
                     with zipfile.ZipFile(archive) as z:
-                        members = [m for m in z.namelist()
-                                   if m.endswith(exe_name) and "/" not in m]
+                        members = [
+                            m
+                            for m in z.namelist()
+                            if m.endswith(exe_name) and "/" not in m
+                        ]
                         z.extract(members[0], td) if members else z.extractall(td)
                         extracted = os.path.join(td, members[0] if members else "")
                 else:
                     with tarfile.open(archive, "r:gz") as t:
-                        members = [m for m in t.getmembers()
-                                   if m.name.endswith("/" + exe_name)]
+                        members = [
+                            m for m in t.getmembers() if m.name.endswith("/" + exe_name)
+                        ]
                         if members:
                             t.extract(members[0], td)
                             extracted = os.path.join(td, members[0].name)
@@ -613,7 +693,7 @@ def install_fpcalc(target_dir=None, timeout=300):
                     os.chmod(dest, 0o755)
                 print("fpcalc installed → {}".format(dest))
                 if target_dir == USER_BIN_DIR:
-                    print("add it to PATH: export PATH=\"{}:$PATH\"".format(target_dir))
+                    print('add it to PATH: export PATH="{}:$PATH"'.format(target_dir))
                 return dest
         except Exception as e:
             last_err = e
@@ -622,26 +702,46 @@ def install_fpcalc(target_dir=None, timeout=300):
         "fpcalc download failed for {} ({}). Download it manually from "
         "https://github.com/acoustid/chromaprint/releases and place {} next "
         "to the app or on PATH. Last error: {}".format(
-            asset, system, exe_name, last_err))
+            asset, system, exe_name, last_err
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main(argv=None):
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="ViralCutter music fingerprint check (Chromaprint/AcoustID).")
+        description="ViralCutter music fingerprint check (Chromaprint/AcoustID)."
+    )
     parser.add_argument("--project", help="Project folder to analyze")
-    parser.add_argument("--acoustid-key", default=None, help="AcoustID API key (or ACOUSTID_API_KEY env)")
-    parser.add_argument("--local-db", default=None,
-                        help="JSON db from --build-local-db, or a folder of reference songs")
-    parser.add_argument("--build-local-db", default=None,
-                        help="Fingerprint a folder of songs into a JSON cache (no project needed)")
-    parser.add_argument("--db-cache", default=None, help="Cache path for --build-local-db")
-    parser.add_argument("--install-fpcalc", action="store_true",
-                        help="Download Chromaprint's fpcalc binary for this platform (no project needed)")
+    parser.add_argument(
+        "--acoustid-key",
+        default=None,
+        help="AcoustID API key (or ACOUSTID_API_KEY env)",
+    )
+    parser.add_argument(
+        "--local-db",
+        default=None,
+        help="JSON db from --build-local-db, or a folder of reference songs",
+    )
+    parser.add_argument(
+        "--build-local-db",
+        default=None,
+        help="Fingerprint a folder of songs into a JSON cache (no project needed)",
+    )
+    parser.add_argument(
+        "--db-cache", default=None, help="Cache path for --build-local-db"
+    )
+    parser.add_argument(
+        "--install-fpcalc",
+        action="store_true",
+        help="Download Chromaprint's fpcalc binary for this platform (no project needed)",
+    )
     parser.add_argument("--gate", choices=["warn", "block", "off"], default="warn")
     parser.add_argument("--threshold", type=float, default=None)
     args = parser.parse_args(argv)
@@ -652,7 +752,8 @@ def main(argv=None):
 
     if args.build_local_db:
         cache = args.db_cache or os.path.join(
-            os.path.expanduser("~"), ".viralcutter", "music_db.json")
+            os.path.expanduser("~"), ".viralcutter", "music_db.json"
+        )
         db = build_local_db(args.build_local_db, cache_path=cache)
         print("local DB: {} songs → {}".format(len(db["songs"]), cache))
         return 0
@@ -664,31 +765,52 @@ def main(argv=None):
     if args.local_db:
         if os.path.isdir(args.local_db):
             cache = args.db_cache or os.path.join(
-                os.path.expanduser("~"), ".viralcutter", "music_db.json")
+                os.path.expanduser("~"), ".viralcutter", "music_db.json"
+            )
             local_db = build_local_db(args.local_db, cache_path=cache)
             print("local DB built: {} songs".format(len(local_db["songs"])))
         else:
             local_db = load_local_db(args.local_db)
 
-    report = analyze_project(args.project, acoustid_key=args.acoustid_key,
-                             local_db=local_db, gate=args.gate,
-                             threshold=args.threshold)
+    report = analyze_project(
+        args.project,
+        acoustid_key=args.acoustid_key,
+        local_db=local_db,
+        gate=args.gate,
+        threshold=args.threshold,
+    )
     s = report["summary"]
-    print("music check: backend={} | {} clips, {} matched, {} no_fpcalc, {} errors".format(
-        report.get("backend", "?"), s["checked"], s["matched"],
-        s["no_fpcalc"], s["errors"]))
+    print(
+        "music check: backend={} | {} clips, {} matched, {} no_fpcalc, {} errors".format(
+            report.get("backend", "?"),
+            s["checked"],
+            s["matched"],
+            s["no_fpcalc"],
+            s["errors"],
+        )
+    )
     if s["no_fpcalc"]:
-        print("⚠️ Chromaprint (fpcalc) is missing — the check did NOT run for "
-              "{} clip(s). Install it with: python -m scripts.music_fingerprint "
-              "--install-fpcalc".format(s["no_fpcalc"]))
+        print(
+            "⚠️ Chromaprint (fpcalc) is missing — the check did NOT run for "
+            "{} clip(s). Install it with: python -m scripts.music_fingerprint "
+            "--install-fpcalc".format(s["no_fpcalc"])
+        )
     if report.get("coverage_note"):
         print("ℹ️ " + report["coverage_note"])
     for clip in report["clips"]:
         verdict = clip["verdict"]
-        mark = {"clean": "✅", "acoustid_match": "🎵⚠️", "local_match": "🎵⚠️",
-                "no_fpcalc": "⚠️", "error": "❌"}.get(verdict, "?")
-        print("  {} #{} {} — {}".format(mark, clip.get("index", "?"),
-                                        os.path.basename(clip["video"]), verdict))
+        mark = {
+            "clean": "✅",
+            "acoustid_match": "🎵⚠️",
+            "local_match": "🎵⚠️",
+            "no_fpcalc": "⚠️",
+            "error": "❌",
+        }.get(verdict, "?")
+        print(
+            "  {} #{} {} — {}".format(
+                mark, clip.get("index", "?"), os.path.basename(clip["video"]), verdict
+            )
+        )
         if clip.get("suggestion"):
             print("      ↳ {}".format(clip["suggestion"]))
     print("report → {}".format(os.path.join(args.project, REPORT_NAME)))

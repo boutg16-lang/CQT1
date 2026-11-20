@@ -84,7 +84,8 @@ if _BACKEND_ENV == "faster-whisper":
     whisperx = None
     _WHISPERX_IMPORT_ERROR = (
         "WhisperX import skipped because VIRALCUTTER_TRANSCRIPTION_BACKEND="
-        "faster-whisper")
+        "faster-whisper"
+    )
 else:
     try:
         prepare_ctranslate2_windows_import()
@@ -169,17 +170,29 @@ def _log_memory_state(label=""):
     """Print available RAM/VRAM so low-memory failures are diagnosable."""
     try:
         import psutil
+
         mem = psutil.virtual_memory()
         free_gib = mem.available / 2**30
-        print("[memory] {} available RAM: {:.2f} GiB / {:.1f} GiB".format(
-            label, free_gib, mem.total / 2**30), flush=True)
+        print(
+            "[memory] {} available RAM: {:.2f} GiB / {:.1f} GiB".format(
+                label, free_gib, mem.total / 2**30
+            ),
+            flush=True,
+        )
         if free_gib < 2.0:
-            print("[memory] ⚠️ RAM is nearly exhausted — close the browser and "
-                  "heavy apps, or restart the PC, before retrying.", flush=True)
+            print(
+                "[memory] ⚠️ RAM is nearly exhausted — close the browser and "
+                "heavy apps, or restart the PC, before retrying.",
+                flush=True,
+            )
         if torch is not None and torch.cuda.is_available():
             free_v, total_v = torch.cuda.mem_get_info()
-            print("[memory] {} available VRAM: {:.2f} GiB / {:.1f} GiB".format(
-                label, free_v / 2**30, total_v / 2**30), flush=True)
+            print(
+                "[memory] {} available VRAM: {:.2f} GiB / {:.1f} GiB".format(
+                    label, free_v / 2**30, total_v / 2**30
+                ),
+                flush=True,
+            )
     except Exception as exc:
         logger.debug("Memory state inspection failed (%s).", type(exc).__name__)
 
@@ -207,11 +220,13 @@ def _load_whisperx_model(candidate, device, compute_type, requested_device):
         try:
             model = _run_with_heartbeat(
                 f"جاري تحميل نموذج WhisperX {candidate} وVAD — قد يستغرق ذلك وقتاً أول مرة",
-                lambda candidate=candidate, device=device, compute_type=compute_type: whisperx.load_model(
-                    candidate,
-                    device,
-                    compute_type=compute_type,
-                    asr_options={"hotwords": None}
+                lambda candidate=candidate, device=device, compute_type=compute_type: (
+                    whisperx.load_model(
+                        candidate,
+                        device,
+                        compute_type=compute_type,
+                        asr_options={"hotwords": None},
+                    )
                 ),
                 stage="transcribe",
                 start_percent=25,
@@ -244,10 +259,18 @@ def _is_transcription_stack_error(exc):
     so it is worth one attempt before surfacing the error.
     """
     text = ("%s: %s" % (type(exc).__name__, exc)).lower()
-    return any(marker in text for marker in (
-        "tokenizers", "transformers", "huggingface", "hf_hub",
-        "pyannote", "asteroid_filterbanks", "sentencepiece",
-    ))
+    return any(
+        marker in text
+        for marker in (
+            "tokenizers",
+            "transformers",
+            "huggingface",
+            "hf_hub",
+            "pyannote",
+            "asteroid_filterbanks",
+            "sentencepiece",
+        )
+    )
 
 
 def _is_vad_dependency_error(exc):
@@ -260,15 +283,29 @@ def _is_vad_dependency_error(exc):
     text = ("%s: %s" % (type(exc).__name__, exc)).lower()
     if isinstance(exc, (ImportError, ModuleNotFoundError)):
         return True
-    return any(marker in text for marker in (
-        "asteroid_filterbanks", "asteroid-filterbanks", "pyannote",
-        "no module named", "cannot import name",
-    ))
+    return any(
+        marker in text
+        for marker in (
+            "asteroid_filterbanks",
+            "asteroid-filterbanks",
+            "pyannote",
+            "no module named",
+            "cannot import name",
+        )
+    )
 
 
-def _transcribe_via_fallback(input_file, model_name, project_folder,
-                             srt_file, tsv_file, json_file, cache_path, device,
-                             reason="memory"):
+def _transcribe_via_fallback(
+    input_file,
+    model_name,
+    project_folder,
+    srt_file,
+    tsv_file,
+    json_file,
+    cache_path,
+    device,
+    reason="memory",
+):
     """Degraded-mode rescue: run the lightweight faster-whisper backend.
 
     Called when WhisperX (+pyannote VAD) cannot fit in RAM/VRAM, or when its
@@ -279,42 +316,73 @@ def _transcribe_via_fallback(input_file, model_name, project_folder,
     """
     _log_memory_state("before faster-whisper fallback")
     if reason == "vad":
-        print("[transcribe] pyannote VAD is unavailable — switching to the "
-              "independent faster-whisper backend (its own Silero VAD; "
-              "word-alignment step skipped).", flush=True)
+        print(
+            "[transcribe] pyannote VAD is unavailable — switching to the "
+            "independent faster-whisper backend (its own Silero VAD; "
+            "word-alignment step skipped).",
+            flush=True,
+        )
     elif reason == "load":
-        print("[transcribe] WhisperX could not load its model stack — "
-              "switching to the independent faster-whisper backend "
-              "(word-alignment step skipped).", flush=True)
+        print(
+            "[transcribe] WhisperX could not load its model stack — "
+            "switching to the independent faster-whisper backend "
+            "(word-alignment step skipped).",
+            flush=True,
+        )
     else:
-        print("[transcribe] WhisperX could not fit in memory — switching to the "
-              "lighter faster-whisper backend (word-alignment step skipped).",
-              flush=True)
+        print(
+            "[transcribe] WhisperX could not fit in memory — switching to the "
+            "lighter faster-whisper backend (word-alignment step skipped).",
+            flush=True,
+        )
     from scripts import transcription_fallback
+
     try:
         result = transcription_fallback.transcribe(
-            input_file, model_name, device=str(device or "auto"),
-            progress=lambda msg: print(msg, flush=True))
+            input_file,
+            model_name,
+            device=str(device or "auto"),
+            progress=lambda msg: print(msg, flush=True),
+        )
     except Exception as exc:
         if str(device).lower() != "cuda" or not _is_cuda_runtime_error(exc):
             raise
-        print("[transcribe] faster-whisper CUDA runtime is unavailable ({}); "
-              "retrying on CPU.".format(exc), flush=True)
+        print(
+            "[transcribe] faster-whisper CUDA runtime is unavailable ({}); "
+            "retrying on CPU.".format(exc),
+            flush=True,
+        )
         result = transcription_fallback.transcribe(
-            input_file, model_name, device="cpu",
-            progress=lambda msg: print(msg, flush=True))
+            input_file,
+            model_name,
+            device="cpu",
+            progress=lambda msg: print(msg, flush=True),
+        )
     transcription_fallback.write_outputs(result, srt_file, tsv_file, json_file)
     try:
-        _save_transcription_cache(cache_path, input_file, model_name,
-                                  srt_file, tsv_file, json_file, device=device)
+        _save_transcription_cache(
+            cache_path,
+            input_file,
+            model_name,
+            srt_file,
+            tsv_file,
+            json_file,
+            device=device,
+        )
     except Exception as exc:
         logger.warning("Could not save transcription cache (%s).", type(exc).__name__)
-    print("[transcribe] faster-whisper fallback finished: {} / {}".format(
-        srt_file, tsv_file), flush=True)
+    print(
+        "[transcribe] faster-whisper fallback finished: {} / {}".format(
+            srt_file, tsv_file
+        ),
+        flush=True,
+    )
     return srt_file, tsv_file
 
 
-def _run_with_heartbeat(label, fn, stage="transcribe", start_percent=25, end_percent=85, interval=15):
+def _run_with_heartbeat(
+    label, fn, stage="transcribe", start_percent=25, end_percent=85, interval=15
+):
     """Run a blocking WhisperX call while emitting visible WebUI heartbeats."""
     started = time.time()
     print(f"PROGRESS|{stage}|{start_percent}|{label}", flush=True)
@@ -330,7 +398,9 @@ def _run_with_heartbeat(label, fn, stage="transcribe", start_percent=25, end_per
             print(f"PROGRESS|{stage}|{last_percent}|{label} — {elapsed}ث", flush=True)
         result = future.result()
     elapsed = int(time.time() - started)
-    print(f"PROGRESS|{stage}|{end_percent}|{label} — اكتملت خلال {elapsed}ث", flush=True)
+    print(
+        f"PROGRESS|{stage}|{end_percent}|{label} — اكتملت خلال {elapsed}ث", flush=True
+    )
     return result
 
 
@@ -348,7 +418,9 @@ def _read_transcription_cache(cache_path):
         return None
 
 
-def _build_transcription_cache(input_file, model_name, srt_file, tsv_file, json_file, device="auto"):
+def _build_transcription_cache(
+    input_file, model_name, srt_file, tsv_file, json_file, device="auto"
+):
     stat = os.stat(input_file)
     return {
         "input_file": os.path.abspath(input_file),
@@ -377,7 +449,9 @@ def _transcript_artifacts_ok(srt_file, tsv_file, json_file):
     return True
 
 
-def _cache_matches(cache, input_file, model_name, srt_file, tsv_file, json_file, device="auto"):
+def _cache_matches(
+    cache, input_file, model_name, srt_file, tsv_file, json_file, device="auto"
+):
     if not cache:
         return False
     try:
@@ -398,13 +472,18 @@ def _cache_matches(cache, input_file, model_name, srt_file, tsv_file, json_file,
         return False
 
 
-def _save_transcription_cache(cache_path, input_file, model_name, srt_file, tsv_file, json_file, device="auto"):
+def _save_transcription_cache(
+    cache_path, input_file, model_name, srt_file, tsv_file, json_file, device="auto"
+):
     try:
-        cache = _build_transcription_cache(input_file, model_name, srt_file, tsv_file, json_file, device=device)
+        cache = _build_transcription_cache(
+            input_file, model_name, srt_file, tsv_file, json_file, device=device
+        )
         with open(cache_path, "w", encoding="utf-8") as f:
             json.dump(cache, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Aviso: não foi possível salvar cache da transcrição: {e}")
+
 
 def apply_safe_globals_hack():
     """
@@ -426,8 +505,14 @@ def apply_safe_globals_hack():
 
         safe_globals = [
             (Any, "typing.Any"),
-            int, float, bool, str, bytes, complex, type(None),
-        ]        # Builtins containers: pyannote/Lightning checkpoints legitimately
+            int,
+            float,
+            bool,
+            str,
+            bytes,
+            complex,
+            type(None),
+        ]  # Builtins containers: pyannote/Lightning checkpoints legitimately
         # reference plain list/dict/set/tuple globals (e.g. VAD
         # hyper_parameters), which torch's weights_only unpickler rejects by
         # default ("Unsupported global: GLOBAL builtins.list"). These are
@@ -436,32 +521,53 @@ def apply_safe_globals_hack():
         try:
             import collections
 
-            safe_globals.extend([
-                collections.OrderedDict,
-                collections.defaultdict,
-                collections.Counter,
-            ])
+            safe_globals.extend(
+                [
+                    collections.OrderedDict,
+                    collections.defaultdict,
+                    collections.Counter,
+                ]
+            )
         except (ImportError, AttributeError):
             pass
         try:
             import numpy as _np
 
-            safe_globals.extend([
-                _np.float16, _np.float32, _np.float64,
-                _np.int8, _np.int16, _np.int32, _np.int64,
-                _np.uint8, _np.uint16, _np.uint32, _np.uint64,
-                _np.bool_, _np.dtype,
-                _np.core.multiarray._reconstruct,
-                _np.core.multiarray.scalar,
-                _np.core.multiarray.fillcontiguousarray_fromfile,
-                _np.core.multiarray.reconstruct,
-            ])
+            safe_globals.extend(
+                [
+                    _np.float16,
+                    _np.float32,
+                    _np.float64,
+                    _np.int8,
+                    _np.int16,
+                    _np.int32,
+                    _np.int64,
+                    _np.uint8,
+                    _np.uint16,
+                    _np.uint32,
+                    _np.uint64,
+                    _np.bool_,
+                    _np.dtype,
+                    _np.core.multiarray._reconstruct,
+                    _np.core.multiarray.scalar,
+                    _np.core.multiarray.fillcontiguousarray_fromfile,
+                    _np.core.multiarray.reconstruct,
+                ]
+            )
             safe_globals.extend(
                 getattr(_np.dtypes, name)
                 for name in (
-                    "Float16DType", "Float32DType", "Float64DType",
-                    "Int8DType", "Int16DType", "Int32DType", "Int64DType",
-                    "UInt8DType", "UInt16DType", "UInt32DType", "UInt64DType",
+                    "Float16DType",
+                    "Float32DType",
+                    "Float64DType",
+                    "Int8DType",
+                    "Int16DType",
+                    "Int32DType",
+                    "Int64DType",
+                    "UInt8DType",
+                    "UInt16DType",
+                    "UInt32DType",
+                    "UInt64DType",
                     "BoolDType",
                 )
                 if hasattr(_np.dtypes, name)
@@ -470,20 +576,29 @@ def apply_safe_globals_hack():
             pass
         try:
             import omegaconf
-            safe_globals.extend([
-                omegaconf.listconfig.ListConfig,
-                omegaconf.dictconfig.DictConfig,
-                omegaconf.base.ContainerMetadata,
-                omegaconf.base.Node,
-            ])
+
+            safe_globals.extend(
+                [
+                    omegaconf.listconfig.ListConfig,
+                    omegaconf.dictconfig.DictConfig,
+                    omegaconf.base.ContainerMetadata,
+                    omegaconf.base.Node,
+                ]
+            )
             try:
                 from omegaconf import nodes as _oc_nodes
 
                 safe_globals.extend(
                     getattr(_oc_nodes, name)
                     for name in (
-                        "AnyNode", "ValueNode", "BooleanNode", "IntegerNode",
-                        "FloatNode", "StringNode", "DateNode", "DateTimeNode",
+                        "AnyNode",
+                        "ValueNode",
+                        "BooleanNode",
+                        "IntegerNode",
+                        "FloatNode",
+                        "StringNode",
+                        "DateNode",
+                        "DateTimeNode",
                         "EnumNode",
                     )
                     if hasattr(_oc_nodes, name)
@@ -493,7 +608,7 @@ def apply_safe_globals_hack():
         except (ImportError, AttributeError):
             pass
 
-        if hasattr(torch.serialization, 'add_safe_globals'):
+        if hasattr(torch.serialization, "add_safe_globals"):
             torch.serialization.add_safe_globals(safe_globals)
             print("Registrados safe globals do typing e Omegaconf.")
     except Exception as e:
@@ -517,6 +632,7 @@ def apply_safe_globals_hack():
 
             try:
                 import whisperx.vad as vad_module
+
                 vad_path = os.path.join(
                     os.path.dirname(os.path.realpath(vad_module.__file__)),
                     "assets",
@@ -535,11 +651,13 @@ def apply_safe_globals_hack():
                 return False
 
             url = getattr(vad_module, "VAD_SEGMENTATION_URL", "")
-            expected = url.split("/")[-2].lower() if isinstance(url, str) and "/" in url else ""
+            expected = (
+                url.split("/")[-2].lower()
+                if isinstance(url, str) and "/" in url
+                else ""
+            )
             if not re.fullmatch(r"[0-9a-f]{64}", expected):
-                raise RuntimeError(
-                    "Refusing VAD unsafe load: invalid expected SHA256."
-                )
+                raise RuntimeError("Refusing VAD unsafe load: invalid expected SHA256.")
 
             digest = hashlib.sha256()
             try:
@@ -616,12 +734,17 @@ def apply_safe_globals_hack():
                     module_name, _, attr_name = qualified.rpartition(".")
                     try:
                         import importlib
+
                         module = importlib.import_module(module_name)
                         obj = getattr(module, attr_name)
                         torch.serialization.add_safe_globals([obj])
                         print("Registered missing safe global: {}".format(qualified))
                     except Exception as reg_err:
-                        print("Could not auto-register {}: {!r}".format(qualified, reg_err))
+                        print(
+                            "Could not auto-register {}: {!r}".format(
+                                qualified, reg_err
+                            )
+                        )
                         break
                     _rewind_stream()
                     try:
@@ -634,9 +757,12 @@ def apply_safe_globals_hack():
                         "trust this model file and need legacy loading, set "
                         "VIRALCUTTER_ALLOW_UNSAFE_LOAD=1.".format(safe_err)
                     ) from safe_err
-                print("WARNING: weights_only=True failed ({!r}); retrying with "
-                      "weights_only=False (VIRALCUTTER_ALLOW_UNSAFE_LOAD=1)."
-                      .format(safe_err))
+                print(
+                    "WARNING: weights_only=True failed ({!r}); retrying with "
+                    "weights_only=False (VIRALCUTTER_ALLOW_UNSAFE_LOAD=1).".format(
+                        safe_err
+                    )
+                )
                 _rewind_stream()
                 unsafe_kwargs = dict(safe_kwargs)
                 unsafe_kwargs["weights_only"] = False
@@ -648,11 +774,17 @@ def apply_safe_globals_hack():
 
     try:
         import torchaudio
-        if not hasattr(torchaudio, 'list_audio_backends'):
+
+        if not hasattr(torchaudio, "list_audio_backends"):
             torchaudio.list_audio_backends = lambda: []
-            print("Aplicado monkeypatch em torchaudio.list_audio_backends para PyTorch >= 2.4.")
+            print(
+                "Aplicado monkeypatch em torchaudio.list_audio_backends para PyTorch >= 2.4."
+            )
     except Exception as exc:
-        logger.warning("torchaudio compatibility check unavailable (%s).", type(exc).__name__)
+        logger.warning(
+            "torchaudio compatibility check unavailable (%s).", type(exc).__name__
+        )
+
 
 def parse_srt(srt_path):
     """
@@ -662,16 +794,16 @@ def parse_srt(srt_path):
     print(f"Parsing SRT: {srt_path}")
     segments = []
     try:
-        with open(srt_path, 'r', encoding='utf-8') as f:
+        with open(srt_path, "r", encoding="utf-8") as f:
             content = f.read()
-            
-        content = content.replace('\r\n', '\n')
-        blocks = content.strip().split('\n\n')
-        
+
+        content = content.replace("\r\n", "\n")
+        blocks = content.strip().split("\n\n")
+
         def time_to_seconds(t_str):
             # SRT: 00:00:00,000
-            t_str = t_str.replace(',', '.')
-            parts = t_str.split(':')
+            t_str = t_str.replace(",", ".")
+            parts = t_str.split(":")
             if len(parts) == 3:
                 h, m, s = parts
                 return int(h) * 3600 + int(m) * 60 + float(s)
@@ -681,28 +813,25 @@ def parse_srt(srt_path):
             return 0.0
 
         for block in blocks:
-            lines = block.split('\n')
+            lines = block.split("\n")
             # Busca linha de tempo
             for i, line in enumerate(lines):
-                if '-->' in line:
-                    start_str, end_str = line.split(' --> ')
-                    text_lines = lines[i+1:]
+                if "-->" in line:
+                    start_str, end_str = line.split(" --> ")
+                    text_lines = lines[i + 1 :]
                     text = " ".join(text_lines).strip()
-                    text = re.sub(r'<[^>]+>', '', text) # Remove tags
-                    
+                    text = re.sub(r"<[^>]+>", "", text)  # Remove tags
+
                     if text:
                         start = time_to_seconds(start_str.strip())
                         end = time_to_seconds(end_str.strip())
-                        segments.append({
-                            "start": start,
-                            "end": end,
-                            "text": text
-                        })
+                        segments.append({"start": start, "end": end, "text": text})
                     break
     except Exception as e:
         print(f"Error parsing SRT {srt_path}: {e}")
         return None
     return segments
+
 
 def parse_vtt(vtt_path):
     """
@@ -711,13 +840,13 @@ def parse_vtt(vtt_path):
     print(f"Parsing VTT: {vtt_path}")
     segments = []
     try:
-        with open(vtt_path, 'r', encoding='utf-8') as f:
+        with open(vtt_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        
+
         def vtt_time_to_seconds(t_str):
             # VTT: 00:00:00.000 or 00:00.000
             t_str = t_str.strip()
-            parts = t_str.split(':')
+            parts = t_str.split(":")
             if len(parts) == 3:
                 h, m, s = parts
                 return int(h) * 3600 + int(m) * 60 + float(s)
@@ -727,7 +856,7 @@ def parse_vtt(vtt_path):
             return 0.0
 
         current_entry = {"text": []}
-        
+
         for line in lines:
             line = line.strip()
             if not line:
@@ -735,48 +864,57 @@ def parse_vtt(vtt_path):
                 if "start" in current_entry and current_entry["text"]:
                     full_text = " ".join(current_entry["text"]).strip()
                     # Limpeza extra VTT
-                    full_text = re.sub(r'<[^>]+>', '', full_text)
-                    full_text = re.sub(r'&[^;]+;', '', full_text)
-                    
+                    full_text = re.sub(r"<[^>]+>", "", full_text)
+                    full_text = re.sub(r"&[^;]+;", "", full_text)
+
                     if full_text:
-                        segments.append({
-                            "start": current_entry["start"],
-                            "end": current_entry["end"],
-                            "text": full_text
-                        })
+                        segments.append(
+                            {
+                                "start": current_entry["start"],
+                                "end": current_entry["end"],
+                                "text": full_text,
+                            }
+                        )
                 current_entry = {"text": []}
                 continue
-            
-            if line.startswith("WEBVTT") or line.startswith("X-TIMESTAMP-MAP") or line.startswith("NOTE"):
+
+            if (
+                line.startswith("WEBVTT")
+                or line.startswith("X-TIMESTAMP-MAP")
+                or line.startswith("NOTE")
+            ):
                 continue
 
             # Timestamp line: 00:00:05.000 --> 00:00:10.000 (pode ter settings depois)
             if "-->" in line:
                 times = line.split("-->")
                 start_str = times[0].strip()
-                end_str = times[1].strip().split(" ")[0] # remove settings
+                end_str = times[1].strip().split(" ")[0]  # remove settings
                 current_entry["start"] = vtt_time_to_seconds(start_str)
                 current_entry["end"] = vtt_time_to_seconds(end_str)
             else:
                 # É texto (se já tivermos timestamps)
                 if "start" in current_entry:
-                     current_entry["text"].append(line)
-                     
+                    current_entry["text"].append(line)
+
         # Salva ultimo bloco se existir
         if "start" in current_entry and current_entry["text"]:
             full_text = " ".join(current_entry["text"]).strip()
-            full_text = re.sub(r'<[^>]+>', '', full_text)
+            full_text = re.sub(r"<[^>]+>", "", full_text)
             if full_text:
-                segments.append({
-                    "start": current_entry["start"],
-                    "end": current_entry["end"],
-                    "text": full_text
-                })
+                segments.append(
+                    {
+                        "start": current_entry["start"],
+                        "end": current_entry["end"],
+                        "text": full_text,
+                    }
+                )
 
     except Exception as e:
         print(f"Error parsing VTT {vtt_path}: {e}")
         return None
     return segments
+
 
 def _placeholder_allowed():
     """Escape hatch for testing stages without the transcription stack.
@@ -786,7 +924,11 @@ def _placeholder_allowed():
     instead of silently producing garbage segments from a fake transcript.
     """
     return os.getenv("VIRALCUTTER_ALLOW_PLACEHOLDER", "").strip().lower() in {
-        "1", "true", "yes", "on"}
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def resolve_model_candidates(model_name):
@@ -808,7 +950,9 @@ def resolve_model_candidates(model_name):
 def _transcription_backend_preference():
     """Return a validated backend preference without importing either stack."""
     preference = os.getenv("VIRALCUTTER_TRANSCRIPTION_BACKEND", "auto").strip().lower()
-    return preference if preference in {"auto", "whisperx", "faster-whisper"} else "auto"
+    return (
+        preference if preference in {"auto", "whisperx", "faster-whisper"} else "auto"
+    )
 
 
 def _run_faster_whisper_fallback(
@@ -853,14 +997,14 @@ def _run_faster_whisper_fallback(
     return srt_file, tsv_file
 
 
-def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='auto'):
+def transcribe(input_file, model_name="large-v3", project_folder="tmp", device="auto"):
     backend_preference = _transcription_backend_preference()
     primary_missing = whisperx is None or torch is None
     use_fallback = backend_preference == "faster-whisper" or (
         backend_preference == "auto" and primary_missing
     )
     if primary_missing or use_fallback:
-        output_folder = project_folder or os.path.dirname(input_file) or 'tmp'
+        output_folder = project_folder or os.path.dirname(input_file) or "tmp"
         os.makedirs(output_folder, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(input_file))[0]
         srt_file = os.path.join(output_folder, f"{base_name}.srt")
@@ -868,8 +1012,12 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
         json_file = os.path.join(output_folder, f"{base_name}.json")
         cache_path = _transcription_cache_path(output_folder)
         cache = _read_transcription_cache(cache_path)
-        if _cache_matches(cache, input_file, model_name, srt_file, tsv_file, json_file, device=device):
-            print("Transcrição de fallback já em cache. Reutilizando JSON/SRT/TSV existentes.")
+        if _cache_matches(
+            cache, input_file, model_name, srt_file, tsv_file, json_file, device=device
+        ):
+            print(
+                "Transcrição de fallback já em cache. Reutilizando JSON/SRT/TSV existentes."
+            )
             return srt_file, tsv_file
         if use_fallback:
             try:
@@ -900,37 +1048,61 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
         if not _placeholder_allowed():
             raise TranscriptionUnavailableError(msg)
         print("[transcribe] WARNING: " + msg)
-        print("[transcribe] Placeholder subtitles will be generated \u2014 viral-segment "
-              "selection will NOT work; only downstream tooling can be tested.")
-        placeholder = {"segments": [{"start": 0.0, "end": 2.0, "text": "WhisperX not installed. Install it for full transcription."}], "language": "en"}
-        with open(srt_file, 'w', encoding='utf-8') as f:
-            f.write("1\n00:00:00,000 --> 00:00:02,000\nWhisperX not installed. Install it for full transcription.\n")
-        with open(tsv_file, 'w', encoding='utf-8') as f:
-            f.write("start\tend\ttext\n0.0\t2.0\tWhisperX not installed. Install it for full transcription.\n")
-        with open(json_file, 'w', encoding='utf-8') as f:
+        print(
+            "[transcribe] Placeholder subtitles will be generated \u2014 viral-segment "
+            "selection will NOT work; only downstream tooling can be tested."
+        )
+        placeholder = {
+            "segments": [
+                {
+                    "start": 0.0,
+                    "end": 2.0,
+                    "text": "WhisperX not installed. Install it for full transcription.",
+                }
+            ],
+            "language": "en",
+        }
+        with open(srt_file, "w", encoding="utf-8") as f:
+            f.write(
+                "1\n00:00:00,000 --> 00:00:02,000\nWhisperX not installed. Install it for full transcription.\n"
+            )
+        with open(tsv_file, "w", encoding="utf-8") as f:
+            f.write(
+                "start\tend\ttext\n0.0\t2.0\tWhisperX not installed. Install it for full transcription.\n"
+            )
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(placeholder, f, ensure_ascii=False, indent=2)
-        _save_transcription_cache(cache_path, input_file, model_name, srt_file, tsv_file, json_file, device=device)
+        _save_transcription_cache(
+            cache_path,
+            input_file,
+            model_name,
+            srt_file,
+            tsv_file,
+            json_file,
+            device=device,
+        )
         return srt_file, tsv_file
     print(i18n(f"Iniciando transcrição de {input_file}..."))
     if torch is None:
         raise ImportError(
             "torch is required for transcription (pip install torch). "
-            "The rest of ViralCutter works without it.")
-    
+            "The rest of ViralCutter works without it."
+        )
+
     # Diagnóstico de Ambiente
     print(f"DEBUG: Python: {sys.executable}")
     print(f"DEBUG: Torch: {torch.__version__}")
-    
+
     start_time = time.time()
-    
+
     if project_folder is None:
         project_folder = os.path.dirname(input_file)
         if not project_folder:
-            project_folder = 'tmp'
+            project_folder = "tmp"
 
     output_folder = project_folder
     os.makedirs(output_folder, exist_ok=True)
-    
+
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     srt_file = os.path.join(output_folder, f"{base_name}.srt")
     tsv_file = os.path.join(output_folder, f"{base_name}.tsv")
@@ -939,14 +1111,18 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
     cache_path = _transcription_cache_path(output_folder)
     cache = _read_transcription_cache(cache_path)
 
-    if _cache_matches(cache, input_file, model_name, srt_file, tsv_file, json_file, device=device):
+    if _cache_matches(
+        cache, input_file, model_name, srt_file, tsv_file, json_file, device=device
+    ):
         print("Transcrição já em cache. Reutilizando JSON/SRT/TSV existentes.")
         return srt_file, tsv_file
 
     # Verifica se os arquivos já existem
     if _transcript_artifacts_ok(srt_file, tsv_file, json_file):
         print("Os arquivos SRT, TSV e JSON já existem. Pulando a transcrição.")
-        _save_transcription_cache(cache_path, input_file, model_name, srt_file, tsv_file, json_file)
+        _save_transcription_cache(
+            cache_path, input_file, model_name, srt_file, tsv_file, json_file
+        )
         return srt_file, tsv_file
 
     # Device setup: auto detects CUDA; explicit CPU/CUDA follows the user's choice.
@@ -954,26 +1130,36 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
     if requested_device not in {"auto", "cpu", "cuda"}:
         requested_device = "auto"
     if os.getenv("VIRALCUTTER_TRANSCRIPTION_FORCE_CPU", "").strip().lower() in {
-            "1", "true", "yes", "on"}:
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         # Crash recovery: a native CUDA/CTranslate2 failure cannot be caught
         # in Python, so the launcher pins CPU for this run.
         requested_device = "cpu"
-        print("[transcribe] Crash recovery: forcing CPU for this run.",
-              flush=True)
+        print("[transcribe] Crash recovery: forcing CPU for this run.", flush=True)
     if requested_device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA was selected, but no usable NVIDIA CUDA device is available. Choose CPU or Auto.")
-    device = "cuda" if requested_device == "cuda" or (requested_device == "auto" and torch.cuda.is_available()) else "cpu"
+        raise RuntimeError(
+            "CUDA was selected, but no usable NVIDIA CUDA device is available. Choose CPU or Auto."
+        )
+    device = (
+        "cuda"
+        if requested_device == "cuda"
+        or (requested_device == "auto" and torch.cuda.is_available())
+        else "cpu"
+    )
     print(f"[transcribe] Device: {device} (requested: {requested_device})")
     compute_type = "float16" if device == "cuda" else "float32"
 
     try:
         apply_safe_globals_hack()
         _log_memory_state("before loading audio/model")
-        
+
         # 1. Carregar Áudio (sempre necessário)
         print(f"Carregando áudio: {input_file}")
         audio = whisperx.load_audio(input_file)
-        
+
         # 2. Verificar se existem legendas baixadas para Alignment Only
         # Procurar por *.srt E *.vtt na pasta que comecem com input (ou o nome base)
         if os.path.exists(os.path.join(output_folder, "input.srt")):
@@ -982,20 +1168,20 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
             potential_subs = [os.path.join(output_folder, "input.vtt")]
         else:
             potential_subs = []
-        
+
         start_segments = None
         alignment_only = False
-        
+
         # Default blind guess if we have no info
-        detected_language = "en" 
+        detected_language = "en"
 
         if potential_subs:
             sub_path = potential_subs[0]
             print(f"Usando legenda fornecida: {sub_path}")
-            
-            if sub_path.endswith('.srt'):
+
+            if sub_path.endswith(".srt"):
                 parsed = parse_srt(sub_path)
-            elif sub_path.endswith('.vtt'):
+            elif sub_path.endswith(".vtt"):
                 parsed = parse_vtt(sub_path)
             else:
                 parsed = None
@@ -1003,36 +1189,42 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
             if parsed and len(parsed) > 0:
                 start_segments = parsed
                 alignment_only = True
-                
+
                 # Script-aware alignment language (was hard-coded 'en'): Arabic
                 # and Moroccan-Darija subtitles used to be forced through the
                 # English wav2vec2 model, which cannot align Arabic script.
                 # Import locally (NOT at module top) so this module still
                 # imports in environments without whisperx/torch.
                 from scripts.subtitle_language import choose_alignment_language
+
                 subtitle_text = " ".join(
-                    str(item.get("text") or "") for item in parsed)[:2000]
+                    str(item.get("text") or "") for item in parsed
+                )[:2000]
                 detected_language = choose_alignment_language(subtitle_text)
-                if detected_language == 'ar':
-                    print("Legendas em árabe detectadas — alinhamento com o modelo "
-                          "árabe (as legendas árabes NÃO são mais forçadas pelo "
-                          "wav2vec2 inglês).")
+                if detected_language == "ar":
+                    print(
+                        "Legendas em árabe detectadas — alinhamento com o modelo "
+                        "árabe (as legendas árabes NÃO são mais forçadas pelo "
+                        "wav2vec2 inglês)."
+                    )
                 else:
                     print(f"Idioma forçado para alinhamento: {detected_language}")
-                
+
                 print("--- MODO ALINHAMENTO RÁPIDO ATIVADO ---")
-        
+
         result = None
-        
+
         if alignment_only and start_segments:
             # Pular Transcrição, ir direto para Alinhamento
             print("--- MODO ALINHAMENTO RÁPIDO ATIVADO ---")
             # Estrutura que o align espera: {'segments': [...], 'language': ...}
             # Mas o align recebe segments como lista.
-            pass 
+            pass
         else:
             # 3. Transcrever (Caminho Normal)
-            print("Nenhuma legenda válida encontrada. Realizando transcrição completa (WhisperX)...")
+            print(
+                "Nenhuma legenda válida encontrada. Realizando transcrição completa (WhisperX)..."
+            )
             print(f"Carregando modelo {model_name}...")
             model = None
             last_load_err = None
@@ -1042,11 +1234,17 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                         candidate, device, compute_type, requested_device
                     )
                     if candidate != model_name:
-                        print("[transcribe] '{}' not supported by this faster-whisper "
-                              "build — falling back to '{}'.".format(model_name, candidate))
+                        print(
+                            "[transcribe] '{}' not supported by this faster-whisper "
+                            "build — falling back to '{}'.".format(
+                                model_name, candidate
+                            )
+                        )
                     break
                 except ValueError as load_err:
-                    if "Invalid model size" in str(load_err) or "expected one of" in str(load_err):
+                    if "Invalid model size" in str(
+                        load_err
+                    ) or "expected one of" in str(load_err):
                         last_load_err = load_err
                         continue
                     raise
@@ -1055,27 +1253,38 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                     # (VAD, pyannote, huggingface_hub, bundled model files)
                     # is an environment problem, not bad audio. The
                     # independent faster-whisper backend can still transcribe.
-                    reason = ("vad" if _is_vad_dependency_error(load_err)
-                              else "load")
-                    print("[transcribe] WhisperX model load failed: {} — "
-                          "switching to the independent faster-whisper "
-                          "backend.".format(load_err), flush=True)
+                    reason = "vad" if _is_vad_dependency_error(load_err) else "load"
+                    print(
+                        "[transcribe] WhisperX model load failed: {} — "
+                        "switching to the independent faster-whisper "
+                        "backend.".format(load_err),
+                        flush=True,
+                    )
                     try:
                         return _transcribe_via_fallback(
-                            input_file, model_name, project_folder,
-                            srt_file, tsv_file, json_file, cache_path, device,
-                            reason=reason)
+                            input_file,
+                            model_name,
+                            project_folder,
+                            srt_file,
+                            tsv_file,
+                            json_file,
+                            cache_path,
+                            device,
+                            reason=reason,
+                        )
                     except Exception as fallback_err:
                         raise TranscriptionUnavailableError(
                             build_error_message(
-                                whisperx_error=str(load_err),
-                                base_dir=project_folder)
+                                whisperx_error=str(load_err), base_dir=project_folder
+                            )
                             + "\nfaster-whisper fallback failed: {}".format(
-                                fallback_err)
+                                fallback_err
+                            )
                         ) from load_err
             if model is None:
                 raise last_load_err or ValueError(
-                    "No usable Whisper model size for '{}'".format(model_name))
+                    "No usable Whisper model size for '{}'".format(model_name)
+                )
 
             # v7.32.3 memory ladder: WhisperX + pyannote VAD can exhaust
             # RAM/VRAM on long videos ("bad allocation" / "Unable to
@@ -1089,42 +1298,66 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                     result = _run_with_heartbeat(
                         "جاري التفريغ الصوتي على الجهاز المحدد",
                         lambda b=batch_size: model.transcribe(
-                            audio, batch_size=b, chunk_size=10),
+                            audio, batch_size=b, chunk_size=10
+                        ),
                         stage="transcribe",
                         start_percent=45,
                         end_percent=72,
                     )
                     if batch_size == 8:
-                        print("[transcribe] WhisperX succeeded with reduced "
-                              "batch_size=8.", flush=True)
+                        print(
+                            "[transcribe] WhisperX succeeded with reduced "
+                            "batch_size=8.",
+                            flush=True,
+                        )
                     break
                 except Exception as exc:
                     if not _is_memory_error(exc):
                         if _is_transcription_stack_error(exc):
-                            print("[transcribe] WhisperX transcription failed in "
-                                  "its tokenizer/model stack: {} — switching to "
-                                  "faster-whisper.".format(exc), flush=True)
+                            print(
+                                "[transcribe] WhisperX transcription failed in "
+                                "its tokenizer/model stack: {} — switching to "
+                                "faster-whisper.".format(exc),
+                                flush=True,
+                            )
                             _release_cuda_memory(model, delete_model=True)
                             return _transcribe_via_fallback(
-                                input_file, model_name, project_folder,
-                                srt_file, tsv_file, json_file, cache_path,
-                                device, reason="load")
+                                input_file,
+                                model_name,
+                                project_folder,
+                                srt_file,
+                                tsv_file,
+                                json_file,
+                                cache_path,
+                                device,
+                                reason="load",
+                            )
                         raise
                     memory_error = exc
                     _log_memory_state("after WhisperX OOM")
-                    print("[transcribe] WhisperX ran out of memory (RAM/VRAM): "
-                          "{} — retrying lighter.".format(exc), flush=True)
+                    print(
+                        "[transcribe] WhisperX ran out of memory (RAM/VRAM): "
+                        "{} — retrying lighter.".format(exc),
+                        flush=True,
+                    )
                     # Keep the model alive for the smaller-batch retry.
                     _release_cuda_memory(model, delete_model=False)
             if result is None and memory_error is not None:
                 _release_cuda_memory(model, delete_model=True)
                 return _transcribe_via_fallback(
-                    input_file, model_name, project_folder,
-                    srt_file, tsv_file, json_file, cache_path, device)
+                    input_file,
+                    model_name,
+                    project_folder,
+                    srt_file,
+                    tsv_file,
+                    json_file,
+                    cache_path,
+                    device,
+                )
 
             detected_language = result["language"]
             start_segments = result["segments"]
-            
+
             # Limpar modelo de transcrição
             if device == "cuda":
                 del model
@@ -1132,85 +1365,105 @@ def transcribe(input_file, model_name='large-v3', project_folder='tmp', device='
                 torch.cuda.empty_cache()
 
         # 4. Alinhar (Sempre executado, seja com subs parsed ou transcritos)
-        print(f"Alinhando transcrição (Idioma: {detected_language}) para obter timestamps precisos...", flush=True)
-        print("PROGRESS|transcribe|74|جاري محاذاة الكلمات العربية — قد يستغرق ذلك وقتاً", flush=True)
+        print(
+            f"Alinhando transcrição (Idioma: {detected_language}) para obter timestamps precisos...",
+            flush=True,
+        )
+        print(
+            "PROGRESS|transcribe|74|جاري محاذاة الكلمات العربية — قد يستغرق ذلك وقتاً",
+            flush=True,
+        )
         # Usa o modelo específico solicitado pelo usuário: WAV2VEC2_ASR_LARGE_LV60K_960H
         # Mas o whisperx.load_align_model escolhe automaticamente baseado na linguagem.
         # Se for inglês, ele usa wav2vec2-large-960h-lv60-self geralmente.
         # Não podemos forçar facilmente o modelo exato sem hackear o whisperx, mas o padrão é bom.
-        
+
         try:
             model_a, metadata = _run_with_heartbeat(
                 "جاري تحميل نموذج محاذاة الكلمات",
-                lambda: whisperx.load_align_model(language_code=detected_language, device=device),
+                lambda: whisperx.load_align_model(
+                    language_code=detected_language, device=device
+                ),
                 stage="transcribe",
                 start_percent=74,
                 end_percent=82,
             )
-            
+
             aligned_result = _run_with_heartbeat(
                 "جاري محاذاة الكلمات والتوقيتات",
-                lambda: whisperx.align(start_segments, model_a, metadata, audio, device, return_char_alignments=False),
+                lambda: whisperx.align(
+                    start_segments,
+                    model_a,
+                    metadata,
+                    audio,
+                    device,
+                    return_char_alignments=False,
+                ),
                 stage="transcribe",
                 start_percent=82,
                 end_percent=94,
             )
-            
+
             # aligned_result agora contém "segments" com word timestamps
             result = aligned_result
             result["language"] = detected_language
-            
+
             if device == "cuda":
-                 del model_a
-                 torch.cuda.empty_cache()
-                 
+                del model_a
+                torch.cuda.empty_cache()
+
         except Exception as e:
             print(f"Erro durante alinhamento: {e}. ")
             if alignment_only:
-                 print("Falha crítica no alinhamento de legendas externas. Abortando usage de legendas externas.")
-                 # Opcional: Fallback para transcrição normal se falhar? Seria complexo aqui pois já limpamos memória.
-                 # Vamos apenas salvar o que temos (timestamps da legenda original podem não bater com áudio perfeitamente se não alinhar)
-                 result = {"segments": start_segments, "language": detected_language}
+                print(
+                    "Falha crítica no alinhamento de legendas externas. Abortando usage de legendas externas."
+                )
+                # Opcional: Fallback para transcrição normal se falhar? Seria complexo aqui pois já limpamos memória.
+                # Vamos apenas salvar o que temos (timestamps da legenda original podem não bater com áudio perfeitamente se não alinhar)
+                result = {"segments": start_segments, "language": detected_language}
             else:
-                 print("Continuando com transcrição bruta.")
+                print("Continuando com transcrição bruta.")
 
         # 5. Salvar Resultados
         print("Salvando resultados...")
         from whisperx.utils import get_writer
-        
+
         save_options = {
             "highlight_words": False,
             "max_line_count": None,
-            "max_line_width": None
+            "max_line_width": None,
         }
-        
+
         # Se veio do alignment_only, result é {'segments': [...], ...}
         # Se o alinhamento falhou, result tem segments originais.
-        
+
         # WhisperX writers esperam um dicionário result com chaves 'segments', 'language'.
-        
+
         writer_srt = get_writer("srt", output_folder)
         writer_srt(result, input_file, save_options)
-        
+
         writer_tsv = get_writer("tsv", output_folder)
         writer_tsv(result, input_file, save_options)
-        
+
         writer_json = get_writer("json", output_folder)
         writer_json(result, input_file, save_options)
 
-        _save_transcription_cache(cache_path, input_file, model_name, srt_file, tsv_file, json_file)
-        
+        _save_transcription_cache(
+            cache_path, input_file, model_name, srt_file, tsv_file, json_file
+        )
+
         end_time = time.time()
         elapsed = end_time - start_time
-        print(f"Processamento concluído em {int(elapsed//60)}m {int(elapsed%60)}s.")
+        print(f"Processamento concluído em {int(elapsed // 60)}m {int(elapsed % 60)}s.")
 
     except Exception as e:
         print(f"ERRO CRÍTICO na transcrição: {e}")
         import traceback
+
         traceback.print_exc()
         raise
 
     if not os.path.exists(srt_file):
         print(f"AVISO: Arquivo SRT {srt_file} não encontrado após execução.")
-    
+
     return srt_file, tsv_file

@@ -41,4 +41,7 @@ def test_replace_client_secrets_invalidates_previous_token(tmp_path, monkeypatch
     assert result["stored"] is True
     assert result["token_invalidated"] is True
     assert not token.exists()
-    assert json.loads(target.read_text(encoding="utf-8"))["installed"]["client_id"] == "demo.apps.googleusercontent.com"
+    assert (
+        json.loads(target.read_text(encoding="utf-8"))["installed"]["client_id"]
+        == "demo.apps.googleusercontent.com"
+    )

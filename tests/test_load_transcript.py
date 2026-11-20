@@ -2,14 +2,15 @@
 transcript artifacts named after the video (local/external files keep their
 original basename — v7.27 fix for "Could not parse transcript from TSV or SRT")."""
 
-
 import pytest
 
 from scripts.create_viral_segments import load_transcript
 
 TSV = "start\tend\ttext\n0\t3120\tمرحبا بكم في هذه الحلقة\n3120\t9840\tنستضيف اليوم المحامي نجيب بيطام\n"
-SRT = ("1\n00:00:00,000 --> 00:00:03,120\nمرحبا بكم في هذه الحلقة\n\n"
-       "2\n00:00:03,120 --> 00:00:09,840\nنستضيف اليوم المحامي نجيب بيطام\n")
+SRT = (
+    "1\n00:00:00,000 --> 00:00:03,120\nمرحبا بكم في هذه الحلقة\n\n"
+    "2\n00:00:03,120 --> 00:00:09,840\nنستضيف اليوم المحامي نجيب بيطام\n"
+)
 
 
 def test_loads_input_tsv(tmp_path):

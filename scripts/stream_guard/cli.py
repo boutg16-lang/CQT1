@@ -7,6 +7,7 @@ stream_guard.cli — واجهة سطر الأوامر لحراسة البثّ.
     python -m scripts.stream_guard apply <risk_windows.json> --project DIR
     python -m scripts.stream_guard scan FILE... --out DIR
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,14 +30,21 @@ from . import text as arabic
 logger = logging.getLogger(__name__)
 
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-SEV_LABEL_AR = {"critical": "حرِج", "high": "مرتفع", "medium": "متوسط",
-                "low": "منخفض", "info": "معلومة"}
+SEV_LABEL_AR = {
+    "critical": "حرِج",
+    "high": "مرتفع",
+    "medium": "متوسط",
+    "low": "منخفض",
+    "info": "معلومة",
+}
+
 
 def _write_json(path: str, payload: dict) -> None:
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp",
-                                     dir=directory)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, ensure_ascii=False, indent=1)
@@ -50,16 +58,22 @@ def _write_json(path: str, payload: dict) -> None:
             os.unlink(temp_path)
 
 
-
 # ---------------------------------------------------------------------------
 # جلب الترجمة والدردشة
 # ---------------------------------------------------------------------------
 _VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}\Z")
-_YOUTUBE_HOSTS = frozenset({
-    "youtu.be", "www.youtu.be", "youtube.com", "www.youtube.com",
-    "m.youtube.com", "music.youtube.com", "youtube-nocookie.com",
-    "www.youtube-nocookie.com",
-})
+_YOUTUBE_HOSTS = frozenset(
+    {
+        "youtu.be",
+        "www.youtu.be",
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
+        "youtube-nocookie.com",
+        "www.youtube-nocookie.com",
+    }
+)
 
 
 def _video_id(value: str) -> str:
@@ -72,7 +86,12 @@ def _video_id(value: str) -> str:
         host = (parsed.hostname or "").lower()
     except ValueError as exc:
         raise ValueError("Expected a YouTube video ID or URL") from exc
-    if parsed.scheme != "https" or host not in _YOUTUBE_HOSTS or parsed.username or parsed.password:
+    if (
+        parsed.scheme != "https"
+        or host not in _YOUTUBE_HOSTS
+        or parsed.username
+        or parsed.password
+    ):
         raise ValueError("Expected a YouTube video ID or URL")
     video_id = ""
     if host in {"youtu.be", "www.youtu.be"}:
@@ -88,8 +107,9 @@ def _video_id(value: str) -> str:
     return video_id
 
 
-def fetch_tracks(url: str, outdir: str, chat: bool = True,
-                 retries: int = 3, wait: int = 300) -> list[str]:
+def fetch_tracks(
+    url: str, outdir: str, chat: bool = True, retries: int = 3, wait: int = 300
+) -> list[str]:
     """ينزّل الترجمة والدردشة إلى مجلد محاولة فريد ويعيد مسارات الملفات."""
     if isinstance(retries, bool) or not isinstance(retries, int) or retries < 1:
         raise ValueError("retries must be a positive integer")
@@ -122,8 +142,11 @@ def fetch_tracks(url: str, outdir: str, chat: bool = True,
                 last_error = None
             except Exception as exc:
                 last_error = exc
-                logger.warning("Track download attempt %d failed (%s)",
-                               attempt + 1, type(exc).__name__)
+                logger.warning(
+                    "Track download attempt %d failed (%s)",
+                    attempt + 1,
+                    type(exc).__name__,
+                )
             files = sorted(
                 glob.glob(os.path.join(run_dir, "*.srt"))
                 + glob.glob(os.path.join(run_dir, "*.vtt"))
@@ -137,26 +160,35 @@ def fetch_tracks(url: str, outdir: str, chat: bool = True,
                 print(f"[guard] لا ترجمة بعد — انتظار {wait} ثانية…")
                 time.sleep(wait)
         if last_error is not None:
-            raise RuntimeError("yt-dlp failed to download YouTube tracks") from last_error
+            raise RuntimeError(
+                "yt-dlp failed to download YouTube tracks"
+            ) from last_error
         return []
     finally:
         if not keep_run_dir:
             try:
                 shutil.rmtree(run_dir)
             except OSError as exc:
-                logger.warning("Could not remove empty track attempt directory (%s)",
-                               type(exc).__name__)
+                logger.warning(
+                    "Could not remove empty track attempt directory (%s)",
+                    type(exc).__name__,
+                )
 
 
 # ---------------------------------------------------------------------------
 # الفحص
 # ---------------------------------------------------------------------------
-def _layer2(text: str, safety_filter, index, allow_terms, min_severity: str) -> list[dict]:
+def _layer2(
+    text: str, safety_filter, index, allow_terms, min_severity: str
+) -> list[dict]:
     try:
         matches = safety_filter.find_matches(
-            text, index=index, allow_terms=allow_terms, min_severity=min_severity)
+            text, index=index, allow_terms=allow_terms, min_severity=min_severity
+        )
     except Exception as exc:
-        raise RuntimeError("safety_filter failed while scanning transcript text") from exc
+        raise RuntimeError(
+            "safety_filter failed while scanning transcript text"
+        ) from exc
     if not isinstance(matches, list):
         raise RuntimeError("safety_filter returned a malformed result list")
     actionable = []
@@ -186,19 +218,25 @@ def scan_files(files: list[str], min_sev: str = "medium") -> list:
     indexes = {}
     safety_minimum = "high" if min_sev in {"critical", "high"} else min_sev
     for filename in files:
-        source = "chat" if "live_chat" in os.path.basename(filename).lower() else "stream"
+        source = (
+            "chat" if "live_chat" in os.path.basename(filename).lower() else "stream"
+        )
         folder = os.path.dirname(os.path.abspath(filename))
         if folder not in indexes:
             try:
                 custom = safety_filter.load_custom_terms(
-                    project_folder=folder, sync=False, include_policy=False)
+                    project_folder=folder, sync=False, include_policy=False
+                )
                 extra = safety_filter.load_remote_terms()
                 extra.extend(custom.get("extra_terms", []))
                 from scripts import policy_lexicon
+
                 seen_policy_paths = set()
                 for policy_folder in (None, folder):
                     policy_path = policy_lexicon.db_path(policy_folder)
-                    if policy_path in seen_policy_paths or not os.path.isfile(policy_path):
+                    if policy_path in seen_policy_paths or not os.path.isfile(
+                        policy_path
+                    ):
                         continue
                     seen_policy_paths.add(policy_path)
                     extra.extend(policy_lexicon.load_terms(policy_folder, sync=False))
@@ -207,13 +245,17 @@ def scan_files(files: list[str], min_sev: str = "medium") -> list:
                     custom.get("allow_terms", []),
                 )
             except Exception as exc:
-                raise RuntimeError("safety_filter index could not be initialized") from exc
+                raise RuntimeError(
+                    "safety_filter index could not be initialized"
+                ) from exc
         safety_index, allow_terms = indexes[folder]
         cues = scan.load_cues(filename)
         primary = scan.scan_cues(eng, cues, source=source)
         out.extend(primary)
         for cue in cues:
-            matches = _layer2(cue.text, safety_filter, safety_index, allow_terms, safety_minimum)
+            matches = _layer2(
+                cue.text, safety_filter, safety_index, allow_terms, safety_minimum
+            )
             for match in matches:
                 if not isinstance(match, dict):
                     raise RuntimeError("safety_filter returned a malformed match")
@@ -224,52 +266,74 @@ def scan_files(files: list[str], min_sev: str = "medium") -> list:
                 if SEV_ORDER[severity] > SEV_ORDER[min_sev]:
                     continue
                 mapped_category = {
-                    "hate_slur": "hate", "hate_dehumanize": "hate",
-                    "violence_threat": "violence", "profanity": "profanity",
+                    "hate_slur": "hate",
+                    "hate_dehumanize": "hate",
+                    "violence_threat": "violence",
+                    "profanity": "profanity",
                     "harassment": "harassment",
                 }.get(category, category)
-                out.append(scan.Finding(
-                    cue=cue,
-                    severity=severity,
-                    category=mapped_category,
-                    category_label=policy.CATEGORY_LABEL.get(mapped_category, mapped_category),
-                    term=str(match.get("term") or ""),
-                    reason="مطابقة من safety_filter المدمج؛ تحقّق من السياق قبل الإجراء.",
-                    kind=category,
-                    source=source,
-                ))
+                out.append(
+                    scan.Finding(
+                        cue=cue,
+                        severity=severity,
+                        category=mapped_category,
+                        category_label=policy.CATEGORY_LABEL.get(
+                            mapped_category, mapped_category
+                        ),
+                        term=str(match.get("term") or ""),
+                        reason="مطابقة من safety_filter المدمج؛ تحقّق من السياق قبل الإجراء.",
+                        kind=category,
+                        source=source,
+                    )
+                )
 
-    filtered = [finding for finding in out
-                if finding.severity in SEV_ORDER
-                and SEV_ORDER[finding.severity] <= SEV_ORDER[min_sev]]
+    filtered = [
+        finding
+        for finding in out
+        if finding.severity in SEV_ORDER
+        and SEV_ORDER[finding.severity] <= SEV_ORDER[min_sev]
+    ]
     unique = {}
     for finding in filtered:
         key = (finding.source, id(finding.cue), arabic.normalize(finding.term))
         previous = unique.get(key)
-        if previous is None or SEV_ORDER[finding.severity] < SEV_ORDER[previous.severity]:
+        if (
+            previous is None
+            or SEV_ORDER[finding.severity] < SEV_ORDER[previous.severity]
+        ):
             unique[key] = finding
     return list(unique.values())
 
 
 def build_windows(findings: list, gap: float = 20.0) -> list[dict]:
-    if isinstance(gap, bool) or not isinstance(gap, (int, float)) or not math.isfinite(gap) or gap < 0:
+    if (
+        isinstance(gap, bool)
+        or not isinstance(gap, (int, float))
+        or not math.isfinite(gap)
+        or gap < 0
+    ):
         raise ValueError("gap must be a finite non-negative number")
     stream_f = [f for f in findings if f.source == "stream"]
     incidents = scan.merge_incidents(stream_f, gap=gap)
     windows = []
     for incident in incidents:
-        top_findings = [finding for finding in incident["findings"]
-                        if finding.severity == incident["severity"]]
+        top_findings = [
+            finding
+            for finding in incident["findings"]
+            if finding.severity == incident["severity"]
+        ]
         lead = top_findings[0] if top_findings else incident["findings"][0]
-        windows.append({
-            "start": round(incident["start"], 2),
-            "end": round(incident["end"], 2),
-            "severity": incident["severity"],
-            "category": lead.category_label,
-            "term": lead.term,
-            "reason": lead.reason,
-            "text": lead.cue.text.strip()[:200],
-        })
+        windows.append(
+            {
+                "start": round(incident["start"], 2),
+                "end": round(incident["end"], 2),
+                "severity": incident["severity"],
+                "category": lead.category_label,
+                "term": lead.term,
+                "reason": lead.reason,
+                "text": lead.cue.text.strip()[:200],
+            }
+        )
     return windows
 
 
@@ -294,7 +358,12 @@ def safe_windows(windows: list[dict], duration: float) -> list[dict]:
             start, end = float(window["start"]), float(window["end"])
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"window {index} has invalid start/end") from exc
-        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+        if (
+            not math.isfinite(start)
+            or not math.isfinite(end)
+            or start < 0
+            or end <= start
+        ):
             raise ValueError(f"window {index} must have finite start < end")
         start, end = min(duration, start), min(duration, end)
         if end > start:
@@ -310,15 +379,23 @@ def safe_windows(windows: list[dict], duration: float) -> list[dict]:
     return out
 
 
-def check(url_or_id: str, outdir: str | None = None, min_sev: str = "medium",
-          gap: float = 20.0, retries: int = 3, wait: int = 300) -> dict:
+def check(
+    url_or_id: str,
+    outdir: str | None = None,
+    min_sev: str = "medium",
+    gap: float = 20.0,
+    retries: int = 3,
+    wait: int = 300,
+) -> dict:
     vid = _video_id(url_or_id)
     url = f"https://www.youtube.com/watch?v={vid}"
     outdir = outdir or os.path.join("stream_reports", vid)
     os.makedirs(outdir, exist_ok=True)
 
     print(f"[guard] فحص {vid} — تنزيل الترجمة والدردشة…")
-    files = fetch_tracks(url, os.path.join(outdir, "tracks"), retries=retries, wait=wait)
+    files = fetch_tracks(
+        url, os.path.join(outdir, "tracks"), retries=retries, wait=wait
+    )
     if not files:
         print("[guard] لم أجد ترجمة. قد يكون البثّ لم ينتهِ بعد أو الترجمة غير متاحة.")
         return {}
@@ -333,29 +410,44 @@ def check(url_or_id: str, outdir: str | None = None, min_sev: str = "medium",
         cues = scan.load_cues(f)
         duration = max([duration] + [c.end for c in cues])
 
-    meta = {"title": vid, "duration": scan.fmt_t(duration),
-            "date": time.strftime("%Y-%m-%d %H:%M"), "source": vid}
-    incidents = scan.merge_incidents([f for f in findings if f.source == "stream"], gap=gap)
-    rep = scan.build_report(incidents, [f for f in findings if f.source != "stream"],
-                            findings, meta)
+    meta = {
+        "title": vid,
+        "duration": scan.fmt_t(duration),
+        "date": time.strftime("%Y-%m-%d %H:%M"),
+        "source": vid,
+    }
+    incidents = scan.merge_incidents(
+        [f for f in findings if f.source == "stream"], gap=gap
+    )
+    rep = scan.build_report(
+        incidents, [f for f in findings if f.source != "stream"], findings, meta
+    )
     _write_json(os.path.join(outdir, "report.json"), rep)
 
     scan.write_html(rep, os.path.join(outdir, "report.html"))
     scan.write_markdown(rep, os.path.join(outdir, "report.md"))
 
     safe = safe_windows(windows, duration)
-    payload = {"source": vid, "duration": duration, "windows": windows,
-               "safe_windows": safe,
-               "chat_findings": len([f for f in findings if f.source != "stream"])}
+    payload = {
+        "source": vid,
+        "duration": duration,
+        "windows": windows,
+        "safe_windows": safe,
+        "chat_findings": len([f for f in findings if f.source != "stream"]),
+    }
     _write_json(os.path.join(outdir, "risk_windows.json"), payload)
-    _write_json(os.path.join(outdir, "safe_windows.json"),
-                {"source": vid, "duration": duration, "windows": safe})
+    _write_json(
+        os.path.join(outdir, "safe_windows.json"),
+        {"source": vid, "duration": duration, "windows": safe},
+    )
 
     print(f"\n✔ {len(windows)} نافذة خطر · {len(payload['safe_windows'])} نافذة آمنة")
     print("التقرير:", os.path.join(outdir, "report.html"))
     for w in windows:
-        print(f"   {scan.fmt_t(w['start'])}–{scan.fmt_t(w['end'])}  "
-              f"[{SEV_LABEL_AR[w['severity']]}] {w['category']}: {w['term']}")
+        print(
+            f"   {scan.fmt_t(w['start'])}–{scan.fmt_t(w['end'])}  "
+            f"[{SEV_LABEL_AR[w['severity']]}] {w['category']}: {w['term']}"
+        )
     return payload
 
 
@@ -371,25 +463,38 @@ def scan_local(files: list[str], outdir: str, min_sev: str, gap: float) -> dict:
         if "live_chat" in os.path.basename(f).lower():
             continue
         duration = max([duration] + [c.end for c in scan.load_cues(f)])
-    meta = {"title": os.path.basename(files[0]), "duration": scan.fmt_t(duration),
-            "date": time.strftime("%Y-%m-%d %H:%M"), "source": files[0]}
+    meta = {
+        "title": os.path.basename(files[0]),
+        "duration": scan.fmt_t(duration),
+        "date": time.strftime("%Y-%m-%d %H:%M"),
+        "source": files[0],
+    }
     inc = scan.merge_incidents([f for f in findings if f.source == "stream"], gap=gap)
-    rep = scan.build_report(inc, [f for f in findings if f.source != "stream"],
-                            findings, meta)
+    rep = scan.build_report(
+        inc, [f for f in findings if f.source != "stream"], findings, meta
+    )
     _write_json(os.path.join(outdir, "report.json"), rep)
 
     scan.write_html(rep, os.path.join(outdir, "report.html"))
     scan.write_markdown(rep, os.path.join(outdir, "report.md"))
     safe = safe_windows(windows, duration)
-    payload = {"source": files[0], "duration": duration, "windows": windows,
-               "safe_windows": safe}
+    payload = {
+        "source": files[0],
+        "duration": duration,
+        "windows": windows,
+        "safe_windows": safe,
+    }
     _write_json(os.path.join(outdir, "risk_windows.json"), payload)
-    _write_json(os.path.join(outdir, "safe_windows.json"),
-                {"source": files[0], "duration": duration, "windows": safe})
+    _write_json(
+        os.path.join(outdir, "safe_windows.json"),
+        {"source": files[0], "duration": duration, "windows": safe},
+    )
     print(f"✔ {len(windows)} نافذة خطر · {len(payload['safe_windows'])} نافذة آمنة")
     for w in windows:
-        print(f"   {scan.fmt_t(w['start'])}–{scan.fmt_t(w['end'])} "
-              f"[{SEV_LABEL_AR[w['severity']]}] {w['category']}: {w['term']}")
+        print(
+            f"   {scan.fmt_t(w['start'])}–{scan.fmt_t(w['end'])} "
+            f"[{SEV_LABEL_AR[w['severity']]}] {w['category']}: {w['term']}"
+        )
     return payload
 
 
@@ -418,7 +523,9 @@ def apply_to_project(project_dir: str, risk_path: str, margin: float = 3.0) -> i
     project_root = os.path.realpath(project_dir)
     segment_path = os.path.join(project_root, "viral_segments.txt")
     if os.path.islink(segment_path) or not os.path.isfile(segment_path):
-        raise FileNotFoundError(f"A regular viral_segments.txt is required in {project_root}")
+        raise FileNotFoundError(
+            f"A regular viral_segments.txt is required in {project_root}"
+        )
 
     with open(risk_path, "r", encoding="utf-8-sig") as stream:
         risk = json.load(stream)
@@ -436,7 +543,12 @@ def apply_to_project(project_dir: str, risk_path: str, margin: float = 3.0) -> i
             end = float(window["end"])
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"risk window {index} has invalid start/end") from exc
-        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+        if (
+            not math.isfinite(start)
+            or not math.isfinite(end)
+            or start < 0
+            or end <= start
+        ):
             raise ValueError(f"risk window {index} must have finite start < end")
         windows.append((max(0.0, start - margin), end + margin, start, end))
 
@@ -457,22 +569,35 @@ def apply_to_project(project_dir: str, risk_path: str, margin: float = 3.0) -> i
     for index, segment in enumerate(data["segments"]):
         if not isinstance(segment, dict):
             raise ValueError(f"segment {index} must be an object")
-        if isinstance(segment.get("start_time"), bool) or isinstance(segment.get("end_time"), bool):
+        if isinstance(segment.get("start_time"), bool) or isinstance(
+            segment.get("end_time"), bool
+        ):
             raise ValueError(f"segment {index} has invalid start_time/end_time")
         try:
             start = float(segment["start_time"])
             end = float(segment["end_time"])
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(f"segment {index} has invalid start_time/end_time") from exc
-        if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
+            raise ValueError(
+                f"segment {index} has invalid start_time/end_time"
+            ) from exc
+        if (
+            not math.isfinite(start)
+            or not math.isfinite(end)
+            or start < 0
+            or end <= start
+        ):
             raise ValueError(f"segment {index} must have finite start_time < end_time")
-        overlap = next((window for window in windows
-                        if start < window[1] and end > window[0]), None)
+        overlap = next(
+            (window for window in windows if start < window[1] and end > window[0]),
+            None,
+        )
         if overlap:
-            dropped.append({
-                "segment": str(segment.get("title") or f"{start:.0f}-{end:.0f}"),
-                "overlaps": [round(overlap[2], 1), round(overlap[3], 1)],
-            })
+            dropped.append(
+                {
+                    "segment": str(segment.get("title") or f"{start:.0f}-{end:.0f}"),
+                    "overlaps": [round(overlap[2], 1), round(overlap[3], 1)],
+                }
+            )
         else:
             kept.append(segment)
 
@@ -500,14 +625,19 @@ def apply_to_project(project_dir: str, risk_path: str, margin: float = 3.0) -> i
         try:
             os.unlink(backup_path)
         except OSError as cleanup_error:
-            logger.error("Could not remove incomplete backup (%s)", type(cleanup_error).__name__)
+            logger.error(
+                "Could not remove incomplete backup (%s)", type(cleanup_error).__name__
+            )
         raise
 
     temp_path = None
     try:
-        temp_fd, temp_path = tempfile.mkstemp(prefix=".viral_segments.", suffix=".tmp",
-                                              dir=project_root)
-        original_mode = stat.S_IMODE(os.stat(segment_path, follow_symlinks=False).st_mode)
+        temp_fd, temp_path = tempfile.mkstemp(
+            prefix=".viral_segments.", suffix=".tmp", dir=project_root
+        )
+        original_mode = stat.S_IMODE(
+            os.stat(segment_path, follow_symlinks=False).st_mode
+        )
         if hasattr(os, "fchmod"):
             os.fchmod(temp_fd, original_mode)
         else:
@@ -547,9 +677,15 @@ def _channel_live_url(target: str) -> str:
         port = parsed.port
     except ValueError as exc:
         raise ValueError("Expected a YouTube channel URL") from exc
-    if (parsed.scheme != "https" or host not in _YOUTUBE_HOSTS
-            or parsed.username or parsed.password or port not in (None, 443)
-            or parsed.query or parsed.fragment):
+    if (
+        parsed.scheme != "https"
+        or host not in _YOUTUBE_HOSTS
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+        or parsed.query
+        or parsed.fragment
+    ):
         raise ValueError("Expected a YouTube channel URL")
     parts = [part for part in parsed.path.split("/") if part]
     if parts and parts[-1] == "live":
@@ -574,7 +710,11 @@ def _channel_live_url(target: str) -> str:
 def watch(target: str, poll: int = 120, wait_after: int = 600) -> None:
     if isinstance(poll, bool) or not isinstance(poll, int) or poll < 1:
         raise ValueError("poll must be a positive integer")
-    if isinstance(wait_after, bool) or not isinstance(wait_after, int) or wait_after < 0:
+    if (
+        isinstance(wait_after, bool)
+        or not isinstance(wait_after, int)
+        or wait_after < 0
+    ):
         raise ValueError("wait_after must be a non-negative integer")
     monitor_url, known_video_id = _watch_target(target)
     try:
@@ -603,16 +743,24 @@ def watch(target: str, poll: int = 120, wait_after: int = 600) -> None:
                         try:
                             result = check(video_id)
                         except Exception as exc:
-                            logger.warning("Post-live scan failed (%s)", type(exc).__name__)
+                            logger.warning(
+                                "Post-live scan failed (%s)", type(exc).__name__
+                            )
                             result = {}
                         if isinstance(result, dict) and "windows" in result:
                             seen.add(video_id)
                             retry_at.pop(video_id, None)
                         else:
-                            retry_at[video_id] = time.monotonic() + max(poll, wait_after)
+                            retry_at[video_id] = time.monotonic() + max(
+                                poll, wait_after
+                            )
             elif state == "unknown":
-                logger.warning("Live status unavailable (%s)",
-                               type(status.get("error")).__name__ if isinstance(status, dict) else "invalid result")
+                logger.warning(
+                    "Live status unavailable (%s)",
+                    type(status.get("error")).__name__
+                    if isinstance(status, dict)
+                    else "invalid result",
+                )
             time.sleep(poll)
         except KeyboardInterrupt:
             return
@@ -623,20 +771,27 @@ def watch(target: str, poll: int = 120, wait_after: int = 600) -> None:
             except KeyboardInterrupt:
                 return
 
+
 # ---------------------------------------------------------------------------
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m scripts.stream_guard",
-        description="حراسة البثّ المباشر: فحص بعد الانتهاء + تقاطع مع القصّ")
+        description="حراسة البثّ المباشر: فحص بعد الانتهاء + تقاطع مع القصّ",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("check", help="افحص ترجمة بثّ YouTube ودردشته بعد انتهائه")
     p.add_argument("target")
     p.add_argument("--out")
-    p.add_argument("--min-severity", default="medium",
-                   choices=["critical", "high", "medium", "low"])
+    p.add_argument(
+        "--min-severity",
+        default="medium",
+        choices=["critical", "high", "medium", "low"],
+    )
     p.add_argument("--gap", type=float, default=20.0)
-    p.add_argument("--wait", type=int, default=300, help="ثواني الانتظار بين محاولات الترجمة")
+    p.add_argument(
+        "--wait", type=int, default=300, help="ثواني الانتظار بين محاولات الترجمة"
+    )
 
     p = sub.add_parser("watch", help="راقب قناة وافحص البثّ بعد انتهائه")
     p.add_argument("target")
@@ -646,8 +801,11 @@ def main(argv=None) -> int:
     p = sub.add_parser("scan", help="افحص ملفات ترجمة/دردشة محلية دون تنزيل")
     p.add_argument("files", nargs="+")
     p.add_argument("--out", required=True)
-    p.add_argument("--min-severity", default="medium",
-                   choices=["critical", "high", "medium", "low"])
+    p.add_argument(
+        "--min-severity",
+        default="medium",
+        choices=["critical", "high", "medium", "low"],
+    )
     p.add_argument("--gap", type=float, default=20.0)
 
     p = sub.add_parser("apply", help="احذف المقاطع المتقاطعة مع نوافذ تمت مراجعتها")

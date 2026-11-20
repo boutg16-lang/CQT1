@@ -23,6 +23,7 @@ Usage:
 The same module is imported by main_improved.py / webui/app.py through
 run_preflight(mode) — see the integration notes there.
 """
+
 import argparse
 import datetime
 import importlib
@@ -70,14 +71,26 @@ APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # requirement file -> (label, optional?, install hint)
 REQ_FILES = {
     "requirements.txt": ("Core", False, "required for the app to boot"),
-    "requirements-transcribe.txt": ("Transcription (whisperx + torch)", True,
-                                    "needed for the FULL YouTube->shorts pipeline (~2 GB)"),
-    "requirements-transcribe-fallback.txt": ("Transcription fallback (faster-whisper)", True,
-                                              "optional recovery path when WhisperX is unavailable"),
-    "requirements-upload.txt": ("Upload (YouTube OAuth)", True,
-                                "needed only for direct uploads"),
-    "requirements-dubbing.txt": ("Dubbing (Edge TTS)", True,
-                                 "optional; the offline 'file' provider needs nothing"),
+    "requirements-transcribe.txt": (
+        "Transcription (whisperx + torch)",
+        True,
+        "needed for the FULL YouTube->shorts pipeline (~2 GB)",
+    ),
+    "requirements-transcribe-fallback.txt": (
+        "Transcription fallback (faster-whisper)",
+        True,
+        "optional recovery path when WhisperX is unavailable",
+    ),
+    "requirements-upload.txt": (
+        "Upload (YouTube OAuth)",
+        True,
+        "needed only for direct uploads",
+    ),
+    "requirements-dubbing.txt": (
+        "Dubbing (Edge TTS)",
+        True,
+        "optional; the offline 'file' provider needs nothing",
+    ),
 }
 
 # Packages whose failure degrades a feature but must not block the WebUI.
@@ -129,18 +142,36 @@ DIST_TO_MODULE = {
 # Version pins that MUST be enforced at runtime (import alone is not enough).
 PINNED_RULES = [
     # (dist, violated_if, fix_note)
-    ("numpy", "numpy<2", "whisperx/pyannote break on NumPy 2.x - installing numpy==1.26.4"),
-    ("transformers", "transformers>=5.14.1,<5.16",
-     "keep Transformers on the Hub 1.x-compatible release line"),
-    ("tokenizers", "tokenizers<0.23.1",
-     "install tokenizers 0.22.2, the newest available version below 0.23.1"),
-    ("huggingface-hub", "huggingface-hub>=1.16.0,<2.0",
-     "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0"),
-    ("ctranslate2", "ctranslate2>=4.4.0,<4.5.0",
-     "WhisperX 3.3.1 requires CTranslate2<4.5.0; Windows uses the local pkg_resources compatibility shim"),
-    ("setuptools", "setuptools>=84.1.0,<85",
-     "avoid vulnerable setuptools releases while retaining the tested transcription stack"),
-
+    (
+        "numpy",
+        "numpy<2",
+        "whisperx/pyannote break on NumPy 2.x - installing numpy==1.26.4",
+    ),
+    (
+        "transformers",
+        "transformers>=5.14.1,<5.16",
+        "keep Transformers on the Hub 1.x-compatible release line",
+    ),
+    (
+        "tokenizers",
+        "tokenizers<0.23.1",
+        "install tokenizers 0.22.2, the newest available version below 0.23.1",
+    ),
+    (
+        "huggingface-hub",
+        "huggingface-hub>=1.16.0,<2.0",
+        "the supported Transformers/Gradio stack requires huggingface-hub>=1.16.0,<2.0",
+    ),
+    (
+        "ctranslate2",
+        "ctranslate2>=4.4.0,<4.5.0",
+        "WhisperX 3.3.1 requires CTranslate2<4.5.0; Windows uses the local pkg_resources compatibility shim",
+    ),
+    (
+        "setuptools",
+        "setuptools>=84.1.0,<85",
+        "avoid vulnerable setuptools releases while retaining the tested transcription stack",
+    ),
 ]
 
 # --------------------------------------------------------------------------
@@ -151,10 +182,15 @@ ASSETS = list(RUNTIME_ASSETS)
 API_CONFIG_TEMPLATE = {
     "selected_api": "auto",
     "gemini": {"api_key": "", "model": DEFAULT_GEMINI_MODEL, "chunk_size": 20000},
-    "openai": {"base_url": "http://localhost:11434/v1", "api_key": "",
-               "model": "llama3.1", "chunk_size": 12000},
+    "openai": {
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "",
+        "model": "llama3.1",
+        "chunk_size": 12000,
+    },
     "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
 }
+
 
 # --------------------------------------------------------------------------
 # Small helpers
@@ -182,7 +218,14 @@ def _parse_req_line(line):
     # "name[extra]==1.0" -> name; "name @ url" -> skip url form
     if " @ " in line:
         line = line.split(" @ ", 1)[0]
-    name = line.split("==")[0].split("<")[0].split(">")[0].split("~=")[0].split("!=")[0].strip()
+    name = (
+        line.split("==")[0]
+        .split("<")[0]
+        .split(">")[0]
+        .split("~=")[0]
+        .split("!=")[0]
+        .strip()
+    )
     name = name.split("[")[0].strip()
     if not name:
         return None
@@ -226,6 +269,7 @@ def _module_importable(module):
             from scripts.transcription_diagnostics import (
                 prepare_ctranslate2_windows_import,
             )
+
             prepare_ctranslate2_windows_import()
         except Exception:
             pass
@@ -264,24 +308,43 @@ def check_python():
     v = sys.version_info
     version_text = "%d.%d.%d" % (v[0], v[1], v[2])
     if v < MIN_PYTHON:
-        return {"name": "Python", "status": FAIL,
-                "detail": "%s - required >= %d.%d" % (version_text, MIN_PYTHON[0], MIN_PYTHON[1])}
+        return {
+            "name": "Python",
+            "status": FAIL,
+            "detail": "%s - required >= %d.%d"
+            % (version_text, MIN_PYTHON[0], MIN_PYTHON[1]),
+        }
     if (v[0], v[1]) > MAX_PYTHON:
-        return {"name": "Python", "status": FAIL,
-                "detail": "%s - supported range is Python %d.%d through %d.%d; use Python 3.12" % (
-                    version_text, MIN_PYTHON[0], MIN_PYTHON[1], MAX_PYTHON[0], MAX_PYTHON[1])}
+        return {
+            "name": "Python",
+            "status": FAIL,
+            "detail": "%s - supported range is Python %d.%d through %d.%d; use Python 3.12"
+            % (
+                version_text,
+                MIN_PYTHON[0],
+                MIN_PYTHON[1],
+                MAX_PYTHON[0],
+                MAX_PYTHON[1],
+            ),
+        }
     status = OK if v >= MIN_PYTHON_RECOMMENDED else WARN
     note = "recommended 3.10/3.11" if status == WARN else ""
-    return {"name": "Python", "status": status,
-            "detail": "%s%s" % (version_text, (" - " + note) if note else "")}
+    return {
+        "name": "Python",
+        "status": status,
+        "detail": "%s%s" % (version_text, (" - " + note) if note else ""),
+    }
 
 
 def check_binary(name, critical=True):
     path = shutil.which(name)
     if path:
         return {"name": name, "status": OK, "detail": path}
-    return {"name": name, "status": FAIL if critical else WARN,
-            "detail": "not found on PATH"}
+    return {
+        "name": name,
+        "status": FAIL if critical else WARN,
+        "detail": "not found on PATH",
+    }
 
 
 def check_ffmpeg_toolchain():
@@ -295,8 +358,10 @@ def check_ffmpeg_toolchain():
     try:
         from scripts.ffmpeg_toolchain import resolve_toolchain
     except Exception:  # pragma: no cover - defensive
-        return [check_binary("ffmpeg", critical=True),
-                check_binary("ffprobe", critical=True)]
+        return [
+            check_binary("ffmpeg", critical=True),
+            check_binary("ffprobe", critical=True),
+        ]
     tc = resolve_toolchain()
     entries = []
     for name in ("ffmpeg", "ffprobe"):
@@ -305,16 +370,28 @@ def check_ffmpeg_toolchain():
         if state == "ok":
             entries.append({"name": name, "status": OK, "detail": path})
         elif state == "rescued":
-            entries.append({"name": name, "status": WARN,
-                            "detail": "PATH copy broken/missing - using verified %s "
-                                      "(fix the broken PATH entry when convenient)" % path})
+            entries.append(
+                {
+                    "name": name,
+                    "status": WARN,
+                    "detail": "PATH copy broken/missing - using verified %s "
+                    "(fix the broken PATH entry when convenient)" % path,
+                }
+            )
         elif state == "broken":
-            entries.append({"name": name, "status": FAIL,
-                            "detail": "found at %s but it does not run (corrupt or missing "
-                                      "DLLs) - delete it or reinstall full ffmpeg "
-                                      "(winget install ffmpeg)" % path})
+            entries.append(
+                {
+                    "name": name,
+                    "status": FAIL,
+                    "detail": "found at %s but it does not run (corrupt or missing "
+                    "DLLs) - delete it or reinstall full ffmpeg "
+                    "(winget install ffmpeg)" % path,
+                }
+            )
         else:
-            entries.append({"name": name, "status": FAIL, "detail": "not found on PATH"})
+            entries.append(
+                {"name": name, "status": FAIL, "detail": "not found on PATH"}
+            )
     return entries
 
 
@@ -335,8 +412,11 @@ def check_disk_space(path):
     try:
         free = shutil.disk_usage(path).free // (1024 * 1024)
         status = OK if free >= MIN_FREE_DISK_MB else FAIL
-        return {"name": "Disk space", "status": status,
-                "detail": "%d MB free (need >= %d MB)" % (free, MIN_FREE_DISK_MB)}
+        return {
+            "name": "Disk space",
+            "status": status,
+            "detail": "%d MB free (need >= %d MB)" % (free, MIN_FREE_DISK_MB),
+        }
     except Exception as e:
         return {"name": "Disk space", "status": WARN, "detail": "cannot check: %s" % e}
 
@@ -367,7 +447,8 @@ def check_dependency(dist, raw_line, critical):
             detail = "missing (%s)" % dist
         else:
             detail = "incompatible or damaged version %s (requires %s)" % (
-                _version(dist), ensure_websockets.COMPATIBILITY_SPEC,
+                _version(dist),
+                ensure_websockets.COMPATIBILITY_SPEC,
             )
         return {"name": dist, "status": FAIL if critical else WARN, "detail": detail}
     if not _module_importable(module):
@@ -376,7 +457,8 @@ def check_dependency(dist, raw_line, critical):
             detail = "missing (%s)" % dist
         else:
             detail = "installed but import failed (%s; %s)" % (
-                module, _import_failure_detail(module),
+                module,
+                _import_failure_detail(module),
             )
         if optional_reason:
             detail += " — optional: " + optional_reason
@@ -399,6 +481,7 @@ def check_dependency(dist, raw_line, critical):
 
 def _site_packages_dirs():
     import sysconfig
+
     paths = []
     for key in ("purelib", "platlib"):
         try:
@@ -472,32 +555,45 @@ def check_pyannote_vad(import_module=None):
     "No module named 'asteroid_filterbanks'". Check the actual VAD import.
     """
     if not _dist_installed("whisperx"):
-        return {"name": "pyannote VAD", "status": OK,
-                "detail": "whisperx not installed (optional stack)"}
+        return {
+            "name": "pyannote VAD",
+            "status": OK,
+            "detail": "whisperx not installed (optional stack)",
+        }
     import_module = import_module or importlib.import_module
     try:
         import_module("asteroid_filterbanks")
         import_module("pyannote.audio.models.segmentation.PyanNet")
     except Exception as exc:
         return {
-            "name": "pyannote VAD", "status": WARN,
-            "detail": ("incomplete (%s: %s) — install asteroid-filterbanks, "
-                       "einops, omegaconf and soundfile" % (
-                           type(exc).__name__, exc)),
+            "name": "pyannote VAD",
+            "status": WARN,
+            "detail": (
+                "incomplete (%s: %s) — install asteroid-filterbanks, "
+                "einops, omegaconf and soundfile" % (type(exc).__name__, exc)
+            ),
         }
-    return {"name": "pyannote VAD", "status": OK,
-            "detail": "asteroid_filterbanks + PyanNet import cleanly"}
+    return {
+        "name": "pyannote VAD",
+        "status": OK,
+        "detail": "asteroid_filterbanks + PyanNet import cleanly",
+    }
 
 
 def check_venv_metadata():
     """Proactively surface a venv that the next uv/pip install cannot read."""
     broken = find_incomplete_dist_info()
     if not broken:
-        return {"name": "venv metadata", "status": OK,
-                "detail": "all installed packages have readable metadata"}
+        return {
+            "name": "venv metadata",
+            "status": OK,
+            "detail": "all installed packages have readable metadata",
+        }
     names = [name for _root, name in broken]
     detail = "%d incomplete metadata folder(s): %s" % (
-        len(names), ", ".join(names[:3]) + (" …" if len(names) > 3 else ""))
+        len(names),
+        ", ".join(names[:3]) + (" …" if len(names) > 3 else ""),
+    )
     return {"name": "venv metadata", "status": FAIL, "detail": detail}
 
 
@@ -513,7 +609,8 @@ def check_pin(dist, rule, note=None):
         return {
             "name": dist,
             "status": FAIL,
-            "detail": "cannot verify %s because packaging metadata support is unavailable" % rule,
+            "detail": "cannot verify %s because packaging metadata support is unavailable"
+            % rule,
         }
     if note is None:
         for _dist, _rule, _note in PINNED_RULES:
@@ -526,7 +623,8 @@ def check_pin(dist, rule, note=None):
         return {
             "name": dist,
             "status": FAIL,
-            "detail": "could not determine installed version for %s; cannot verify %s" % (dist, rule),
+            "detail": "could not determine installed version for %s; cannot verify %s"
+            % (dist, rule),
         }
     try:
         installed = parse_version(version)
@@ -534,10 +632,13 @@ def check_pin(dist, rule, note=None):
         return {
             "name": dist,
             "status": FAIL,
-            "detail": "invalid installed version metadata for %s; cannot verify %s" % (dist, rule),
+            "detail": "invalid installed version metadata for %s; cannot verify %s"
+            % (dist, rule),
         }
-    constraint = rule[len(dist):].strip()
-    if constraint and not SpecifierSet(constraint).contains(installed, prereleases=True):
+    constraint = rule[len(dist) :].strip()
+    if constraint and not SpecifierSet(constraint).contains(
+        installed, prereleases=True
+    ):
         return {
             "name": dist,
             "status": FAIL,
@@ -549,11 +650,20 @@ def check_pin(dist, rule, note=None):
 def check_api_config():
     app_dir = _app_dir()
     path = os.path.join(app_dir, "api_config.json")
-    env_present = any(os.getenv(name, "").strip() for name in (
-        "VIRALCUTTER_GEMINI_KEYS", "VIRALCUTTER_GEMINI_KEY", "GEMINI_API_KEY"))
-    secure_store_exists = os.path.isfile(os.path.join(app_dir, "api_config.secure.json"))
+    env_present = any(
+        os.getenv(name, "").strip()
+        for name in (
+            "VIRALCUTTER_GEMINI_KEYS",
+            "VIRALCUTTER_GEMINI_KEY",
+            "GEMINI_API_KEY",
+        )
+    )
+    secure_store_exists = os.path.isfile(
+        os.path.join(app_dir, "api_config.secure.json")
+    )
     try:
         from scripts.secure_config import get_keys, resolve_api_keys, secure_config_path
+
         resolved_keys = resolve_api_keys(base_dir=app_dir, warn=False)
         encrypted_keys = get_keys(base_dir=app_dir)
         secure_store_exists = os.path.isfile(secure_config_path(app_dir))
@@ -566,38 +676,65 @@ def check_api_config():
         if env_present and resolved_keys:
             key = resolved_keys[0]
             if not key.startswith("AIza"):
-                return {"name": "Gemini API key", "status": WARN,
-                        "detail": "environment key does not look like a Gemini key"}
-            return {"name": "Gemini API key", "status": OK,
-                    "detail": "configured via environment; no plaintext config file needed"}
+                return {
+                    "name": "Gemini API key",
+                    "status": WARN,
+                    "detail": "environment key does not look like a Gemini key",
+                }
+            return {
+                "name": "Gemini API key",
+                "status": OK,
+                "detail": "configured via environment; no plaintext config file needed",
+            }
         if encrypted_keys:
-            return {"name": "Gemini API key", "status": OK,
-                    "detail": "configured in encrypted store; no plaintext config file needed"}
+            return {
+                "name": "Gemini API key",
+                "status": OK,
+                "detail": "configured in encrypted store; no plaintext config file needed",
+            }
         if secure_store_exists:
-            return {"name": "Encrypted Gemini key store", "status": WARN,
-                    "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled"}
-        return {"name": "api_config.json", "status": WARN,
-                "detail": "missing on first run; Gemini credentials are optional until AI analysis is used"}
+            return {
+                "name": "Encrypted Gemini key store",
+                "status": WARN,
+                "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled",
+            }
+        return {
+            "name": "api_config.json",
+            "status": WARN,
+            "detail": "missing on first run; Gemini credentials are optional until AI analysis is used",
+        }
 
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, UnicodeError, ValueError, TypeError) as exc:
-        return {"name": "api_config.json", "status": FAIL,
-                "detail": "invalid JSON (%s); the file was not changed" % type(exc).__name__}
+        return {
+            "name": "api_config.json",
+            "status": FAIL,
+            "detail": "invalid JSON (%s); the file was not changed"
+            % type(exc).__name__,
+        }
     if not isinstance(data, dict):
-        return {"name": "api_config.json", "status": FAIL,
-                "detail": "invalid configuration structure; expected a JSON object"}
+        return {
+            "name": "api_config.json",
+            "status": FAIL,
+            "detail": "invalid configuration structure; expected a JSON object",
+        }
     gemini = data.get("gemini") or {}
     if not isinstance(gemini, dict):
-        return {"name": "api_config.json", "status": FAIL,
-                "detail": "invalid Gemini configuration structure"}
+        return {
+            "name": "api_config.json",
+            "status": FAIL,
+            "detail": "invalid Gemini configuration structure",
+        }
     backend = str(data.get("selected_api") or "gemini").strip().lower()
     if backend in {"g4f", "local", "manual", "openai", "auto"}:
         detail = "not required for selected backend: %s" % backend
         if backend == "openai":
-            base_url = str((data.get("openai") or {}).get("base_url")
-                           or "http://localhost:11434/v1")
+            base_url = str(
+                (data.get("openai") or {}).get("base_url")
+                or "http://localhost:11434/v1"
+            )
             detail += " (OpenAI-compatible server: %s)" % base_url
         elif backend == "auto":
             detail += " (providers are probed automatically at run time)"
@@ -606,42 +743,75 @@ def check_api_config():
     if env_present and resolved_keys:
         key = resolved_keys[0]
         if not key.startswith("AIza"):
-            return {"name": "Gemini API key", "status": WARN,
-                    "detail": "environment key does not look like a Gemini key"}
-        return {"name": "Gemini API key", "status": OK,
-                "detail": "configured via environment"}
+            return {
+                "name": "Gemini API key",
+                "status": WARN,
+                "detail": "environment key does not look like a Gemini key",
+            }
+        return {
+            "name": "Gemini API key",
+            "status": OK,
+            "detail": "configured via environment",
+        }
     if encrypted_keys:
         key = encrypted_keys[0]
         if not key.startswith("AIza"):
-            return {"name": "Gemini API key", "status": WARN,
-                    "detail": "encrypted key does not look like a Gemini key"}
-        return {"name": "Gemini API key", "status": OK,
-                "detail": "configured in encrypted store"}
+            return {
+                "name": "Gemini API key",
+                "status": WARN,
+                "detail": "encrypted key does not look like a Gemini key",
+            }
+        return {
+            "name": "Gemini API key",
+            "status": OK,
+            "detail": "configured in encrypted store",
+        }
 
     if secure_store_exists:
-        return {"name": "Encrypted Gemini key store", "status": WARN,
-                "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled"}
+        return {
+            "name": "Encrypted Gemini key store",
+            "status": WARN,
+            "detail": "encrypted credentials could not be opened; check VIRALCUTTER_CONFIG_PASSPHRASE; plaintext fallback is disabled",
+        }
 
     file_keys = gemini.get("api_keys") or [gemini.get("api_key", "")]
-    key = next((str(value or "").strip() for value in file_keys
-                if str(value or "").strip()), "")
+    key = next(
+        (str(value or "").strip() for value in file_keys if str(value or "").strip()),
+        "",
+    )
     if not key:
-        return {"name": "Gemini API key", "status": WARN,
-                "detail": "empty - set an environment key or encrypted store, or use --ai-backend manual/g4f/local/openai"}
+        return {
+            "name": "Gemini API key",
+            "status": WARN,
+            "detail": "empty - set an environment key or encrypted store, or use --ai-backend manual/g4f/local/openai",
+        }
     if not key.startswith("AIza"):
-        return {"name": "Gemini API key", "status": WARN,
-                "detail": "legacy file key does not look like a Gemini key"}
-    return {"name": "Gemini API key", "status": WARN,
-            "detail": "configured in legacy plaintext api_config.json; set VIRALCUTTER_CONFIG_PASSPHRASE to migrate"}
+        return {
+            "name": "Gemini API key",
+            "status": WARN,
+            "detail": "legacy file key does not look like a Gemini key",
+        }
+    return {
+        "name": "Gemini API key",
+        "status": WARN,
+        "detail": "configured in legacy plaintext api_config.json; set VIRALCUTTER_CONFIG_PASSPHRASE to migrate",
+    }
 
 
 def check_assets():
     missing = [a for a in ASSETS if not os.path.exists(os.path.join(APP_ROOT, a))]
     if missing:
-        return {"name": "Packaged assets", "status": FAIL,
-                "detail": "missing: %s - re-clone/re-extract the app; a damaged install will fail mid-pipeline"
-                % ", ".join(missing[:3])}
-    return {"name": "Packaged assets", "status": OK, "detail": "%d files present" % len(ASSETS)}
+        return {
+            "name": "Packaged assets",
+            "status": FAIL,
+            "detail": "missing: %s - re-clone/re-extract the app; a damaged install will fail mid-pipeline"
+            % ", ".join(missing[:3]),
+        }
+    return {
+        "name": "Packaged assets",
+        "status": OK,
+        "detail": "%d files present" % len(ASSETS),
+    }
 
 
 def check_safety_blocklist_freshness(base_dir=None, today=None):
@@ -657,7 +827,9 @@ def check_safety_blocklist_freshness(base_dir=None, today=None):
 
     if validate_pack:
         try:
-            with open(os.path.join(base_dir, "safety_blocklist.json"), "r", encoding="utf-8") as f:
+            with open(
+                os.path.join(base_dir, "safety_blocklist.json"), "r", encoding="utf-8"
+            ) as f:
                 bundled = validate_pack(json.load(f))
             if bundled:
                 candidates.append(("bundled list", bundled))
@@ -678,7 +850,8 @@ def check_safety_blocklist_freshness(base_dir=None, today=None):
             version = 0
         try:
             content_updated = datetime.date.fromisoformat(
-                str(pack.get("updated", ""))[:10])
+                str(pack.get("updated", ""))[:10]
+            )
         except (TypeError, ValueError):
             content_updated = None
         review_value = pack.get("reviewed_at") or pack.get("updated", "")
@@ -689,24 +862,39 @@ def check_safety_blocklist_freshness(base_dir=None, today=None):
         dated.append((version, reviewed, content_updated, source))
 
     if not dated:
-        return {"name": "Safety blocklist freshness", "status": WARN,
-                "detail": "could not verify the list review date; review the safety pack manually"}
+        return {
+            "name": "Safety blocklist freshness",
+            "status": WARN,
+            "detail": "could not verify the list review date; review the safety pack manually",
+        }
 
     latest_version = max(item[0] for item in dated)
-    current = max((item for item in dated if item[0] == latest_version),
-                  key=lambda item: item[1])
+    current = max(
+        (item for item in dated if item[0] == latest_version), key=lambda item: item[1]
+    )
     version, reviewed, content_updated, source = current
     age_days = (today - reviewed).days
     content_date = content_updated.isoformat() if content_updated else "unknown"
-    detail = "v{} from {} last reviewed {} ({} days ago; content last updated {})".format(
-        version or "unknown", source, reviewed.isoformat(), age_days, content_date)
+    detail = (
+        "v{} from {} last reviewed {} ({} days ago; content last updated {})".format(
+            version or "unknown", source, reviewed.isoformat(), age_days, content_date
+        )
+    )
     if age_days < 0:
-        return {"name": "Safety blocklist freshness", "status": WARN,
-                "detail": detail + "; review date is in the future, check the system clock"}
+        return {
+            "name": "Safety blocklist freshness",
+            "status": WARN,
+            "detail": detail + "; review date is in the future, check the system clock",
+        }
     if age_days > SAFETY_BLOCKLIST_MAX_AGE_DAYS:
-        return {"name": "Safety blocklist freshness", "status": WARN,
-                "detail": detail + "; older than the {}-day review interval".format(
-                    SAFETY_BLOCKLIST_MAX_AGE_DAYS)}
+        return {
+            "name": "Safety blocklist freshness",
+            "status": WARN,
+            "detail": detail
+            + "; older than the {}-day review interval".format(
+                SAFETY_BLOCKLIST_MAX_AGE_DAYS
+            ),
+        }
     return {"name": "Safety blocklist freshness", "status": OK, "detail": detail}
 
 
@@ -715,11 +903,21 @@ def check_models_dir():
     if os.path.isdir(path):
         files = [f for f in os.listdir(path) if not f.startswith(".")]
         if files:
-            return {"name": "models/", "status": OK,
-                    "detail": "%d local model(s): %s" % (len(files), ", ".join(files[:3]))}
-        return {"name": "models/", "status": WARN,
-                "detail": "empty - local GGUF models go here (optional; cloud AI works without them)"}
-    return {"name": "models/", "status": WARN, "detail": "missing - will be created (optional)"}
+            return {
+                "name": "models/",
+                "status": OK,
+                "detail": "%d local model(s): %s" % (len(files), ", ".join(files[:3])),
+            }
+        return {
+            "name": "models/",
+            "status": WARN,
+            "detail": "empty - local GGUF models go here (optional; cloud AI works without them)",
+        }
+    return {
+        "name": "models/",
+        "status": WARN,
+        "detail": "missing - will be created (optional)",
+    }
 
 
 def _dir_size_gb(path):
@@ -735,10 +933,10 @@ def _dir_size_gb(path):
                     pass
                 seen += 1
                 if seen >= 200000:
-                    return total / (1024 ** 3)
+                    return total / (1024**3)
     except OSError:
         return 0.0
-    return total / (1024 ** 3)
+    return total / (1024**3)
 
 
 def _model_cache_status(active_hub, legacy_hub):
@@ -751,20 +949,24 @@ def _model_cache_status(active_hub, legacy_hub):
         return WARN, (
             "new cache is empty but the old cache has {:.1f} GB at {}; run "
             "`python -m scripts.model_paths --migrate` to reuse it instead of "
-            "downloading again".format(legacy_gb, legacy_hub))
+            "downloading again".format(legacy_gb, legacy_hub)
+        )
     return OK, (
         "empty on first run; transcription downloads the Whisper model "
-        "(about 1.6 GB) here. Watch for the ⏳ progress lines.")
+        "(about 1.6 GB) here. Watch for the ⏳ progress lines."
+    )
 
 
 def check_model_cache():
     """Show where Hugging Face/Torch downloads land (project drive by default)."""
     try:
         from scripts import model_paths
+
         paths = model_paths.current_paths()
         target = paths.get("hf_home") or ""
         active_hub = paths.get("hf_hub_cache") or (
-            os.path.join(target, "hub") if target else "")
+            os.path.join(target, "hub") if target else ""
+        )
         try:
             legacy_hub = str(model_paths._default_hf_home() / "hub")
         except Exception:
@@ -778,7 +980,7 @@ def check_model_cache():
         status, cache_detail = _model_cache_status(active_hub, legacy_hub)
         free = None
         try:
-            free = shutil.disk_usage(target).free / (1024 ** 3)
+            free = shutil.disk_usage(target).free / (1024**3)
         except OSError:
             pass
         detail = target
@@ -787,32 +989,57 @@ def check_model_cache():
         detail += " — " + cache_detail
         return {"name": "Model cache", "status": status, "detail": detail}
     except Exception as exc:
-        return {"name": "Model cache", "status": WARN,
-                "detail": "could not resolve the cache path: {}".format(exc)}
+        return {
+            "name": "Model cache",
+            "status": WARN,
+            "detail": "could not resolve the cache path: {}".format(exc),
+        }
 
 
 def check_telegram_config(environ=None):
     """Check optional local Telegram settings without importing the WebUI."""
     env = environ if environ is not None else os.environ
-    enabled = str(env.get("VIRALCUTTER_TELEGRAM_ENABLED", "")).strip().lower() in {"1", "true", "yes", "on"}
+    enabled = str(env.get("VIRALCUTTER_TELEGRAM_ENABLED", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if not enabled:
-        return {"name": "Telegram Control", "status": WARN,
-                "detail": "disabled - no local polling will start"}
+        return {
+            "name": "Telegram Control",
+            "status": WARN,
+            "detail": "disabled - no local polling will start",
+        }
     token = str(env.get("VIRALCUTTER_TELEGRAM_BOT_TOKEN", "") or "").strip()
     raw_ids = str(env.get("VIRALCUTTER_TELEGRAM_CHAT_IDS", "") or "")
     values = [item for item in re.split(r"[\s,;]+", raw_ids.strip()) if item]
     chat_ids = {item for item in values if re.fullmatch(r"-?\d+", item)}
     if not token:
-        return {"name": "Telegram Control", "status": WARN,
-                "detail": "enabled but bot token is missing (value is never shown)"}
+        return {
+            "name": "Telegram Control",
+            "status": WARN,
+            "detail": "enabled but bot token is missing (value is never shown)",
+        }
     if not chat_ids:
-        return {"name": "Telegram Control", "status": WARN,
-                "detail": "enabled but no valid allowlisted Chat ID is configured"}
+        return {
+            "name": "Telegram Control",
+            "status": WARN,
+            "detail": "enabled but no valid allowlisted Chat ID is configured",
+        }
     if not re.fullmatch(r"\d{6,}:[A-Za-z0-9_-]{20,}", token):
-        return {"name": "Telegram Control", "status": WARN,
-                "detail": "enabled with a token whose format could not be validated"}
-    return {"name": "Telegram Control", "status": OK,
-            "detail": "ready; local long polling; %d allowlisted Chat ID(s)" % len(chat_ids)}
+        return {
+            "name": "Telegram Control",
+            "status": WARN,
+            "detail": "enabled with a token whose format could not be validated",
+        }
+    return {
+        "name": "Telegram Control",
+        "status": OK,
+        "detail": "ready; local long polling; %d allowlisted Chat ID(s)"
+        % len(chat_ids),
+    }
+
 
 # --------------------------------------------------------------------------
 # Repair actions
@@ -867,7 +1094,10 @@ def _run_package_reinstall(dist, version):
 
 def fix_broken_import(dist):
     if not _dist_installed(dist):
-        return False, "%s metadata is missing; core dependency installation is required" % dist
+        return (
+            False,
+            "%s metadata is missing; core dependency installation is required" % dist,
+        )
     version = _version(dist)
     if version == "?":
         return False, "could not determine the installed %s version" % dist
@@ -877,7 +1107,11 @@ def fix_broken_import(dist):
     if proc is None:
         return False, "pip and uv are unavailable for repairing %s" % dist
     if proc.returncode != 0:
-        return False, "could not reinstall %s %s (installer exit %d)" % (dist, version, proc.returncode)
+        return False, "could not reinstall %s %s (installer exit %d)" % (
+            dist,
+            version,
+            proc.returncode,
+        )
     module = _import_name(dist)
     for loaded in tuple(sys.modules):
         if loaded == module or loaded.startswith(module + "."):
@@ -885,9 +1119,14 @@ def fix_broken_import(dist):
     importlib.invalidate_caches()
     if not _module_importable(module):
         return False, "reinstalled %s %s but import still fails (%s)" % (
-            dist, version, _import_failure_detail(module),
+            dist,
+            version,
+            _import_failure_detail(module),
         )
-    return True, "reinstalled %s %s without changing other dependencies" % (dist, version)
+    return True, "reinstalled %s %s without changing other dependencies" % (
+        dist,
+        version,
+    )
 
 
 def fix_google_genai_import():
@@ -902,14 +1141,21 @@ def install_requirements(req_file, dry_run=False):
     if dry_run:
         return False, "would run: pip install -r %s" % req_file
     if _is_frozen():
-        return False, "cannot pip-install inside the packaged exe (bundled deps are fixed)"
+        return (
+            False,
+            "cannot pip-install inside the packaged exe (bundled deps are fixed)",
+        )
     proc = _run_pip(["-r", os.path.join(APP_ROOT, req_file)])
     if proc is None:
         return False, "pip unavailable (%s)" % sys.executable
     if proc.returncode == 0:
         return True, "installed %d packages from %s" % (len(deps), req_file)
     tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:] or [""]
-    return False, "pip failed (exit %d) on %s: %s" % (proc.returncode, req_file, tail[0][:200])
+    return False, "pip failed (exit %d) on %s: %s" % (
+        proc.returncode,
+        req_file,
+        tail[0][:200],
+    )
 
 
 def fix_numpy_pin(dry_run=False):
@@ -922,6 +1168,7 @@ def fix_numpy_pin(dry_run=False):
     if version != "?":
         try:
             import packaging.version as _pv
+
             parsed = _pv.parse(version)
         except Exception:
             pass
@@ -929,7 +1176,10 @@ def fix_numpy_pin(dry_run=False):
         return True, "numpy %s OK (<2)" % version
     if dry_run:
         if version == "?" or parsed is None:
-            return False, "would reinstall numpy==1.26.4 because the installed version cannot be verified"
+            return (
+                False,
+                "would reinstall numpy==1.26.4 because the installed version cannot be verified",
+            )
         return False, "would downgrade numpy (currently %s)" % version
     if _is_frozen():
         return False, "cannot reinstall numpy inside the packaged exe"
@@ -937,11 +1187,17 @@ def fix_numpy_pin(dry_run=False):
     if proc is None:
         return False, "pip and uv are unavailable for repairing numpy"
     if proc.returncode != 0:
-        return False, "could not reinstall numpy==1.26.4 (installer exit %d)" % proc.returncode
+        return (
+            False,
+            "could not reinstall numpy==1.26.4 (installer exit %d)" % proc.returncode,
+        )
     importlib.invalidate_caches()
     repaired_version = _version("numpy")
     if repaired_version != "1.26.4":
-        return False, "reinstalled numpy==1.26.4 but its version metadata is still unverifiable"
+        return (
+            False,
+            "reinstalled numpy==1.26.4 but its version metadata is still unverifiable",
+        )
     return True, "numpy pinned to 1.26.4 (<2)"
 
 
@@ -954,6 +1210,7 @@ def fix_tokenizers_pin(dry_run=False):
         return True, "tokenizers not installed - nothing to pin"
     try:
         import packaging.version as _pv
+
         v = _version("tokenizers")
         if v != "?" and _pv.parse(v) < _pv.parse("0.23.1"):
             return True, "tokenizers %s OK (<0.23.1)" % v
@@ -963,10 +1220,14 @@ def fix_tokenizers_pin(dry_run=False):
         return False, "would downgrade tokenizers (currently %s)" % v
     if _is_frozen():
         return False, "cannot reinstall tokenizers inside the packaged exe"
-    proc = _run_pip(["--force-reinstall", "--no-cache-dir", "--no-deps", "tokenizers==0.22.2"])
+    proc = _run_pip(
+        ["--force-reinstall", "--no-cache-dir", "--no-deps", "tokenizers==0.22.2"]
+    )
     if proc is not None and proc.returncode == 0:
         return True, "pinned tokenizers to 0.22.2 (<0.23.1)"
-    return False, "could not downgrade tokenizers (exit %s)" % (proc.returncode if proc else "?")
+    return False, "could not downgrade tokenizers (exit %s)" % (
+        proc.returncode if proc else "?"
+    )
 
 
 def fix_transformers_pin(dry_run=False):
@@ -976,25 +1237,37 @@ def fix_transformers_pin(dry_run=False):
         return True, "transformers not installed - nothing to pin"
     try:
         import packaging.version as _pv
+
         v = _version("transformers")
         if v != "?" and _pv.parse("5.14.1") <= _pv.parse(v) < _pv.parse("5.16"):
             return True, "transformers %s OK (>=5.14.1,<5.16)" % v
     except Exception:
         return True, "cannot read transformers version"
     if dry_run:
-        return False, "would reinstall the compatible Transformers 5.x stack (currently %s)" % v
+        return (
+            False,
+            "would reinstall the compatible Transformers 5.x stack (currently %s)" % v,
+        )
     if _is_frozen():
         return False, "cannot reinstall transformers inside the packaged exe"
-    proc = _run_pip([
-        "--force-reinstall", "--no-cache-dir",
-        "transformers>=5.14.1,<5.16",
-        "huggingface-hub>=1.16.0,<2.0",
-        "tokenizers>=0.22.2,<0.23.1",
-        "numpy<2",
-    ])
+    proc = _run_pip(
+        [
+            "--force-reinstall",
+            "--no-cache-dir",
+            "transformers>=5.14.1,<5.16",
+            "huggingface-hub>=1.16.0,<2.0",
+            "tokenizers>=0.22.2,<0.23.1",
+            "numpy<2",
+        ]
+    )
     if proc is not None and proc.returncode == 0:
-        return True, "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack"
-    return False, "could not install compatible Transformers stack (exit %s)" % (proc.returncode if proc else "?")
+        return (
+            True,
+            "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack",
+        )
+    return False, "could not install compatible Transformers stack (exit %s)" % (
+        proc.returncode if proc else "?"
+    )
 
 
 def fix_hub_pin(dry_run=False):
@@ -1004,34 +1277,51 @@ def fix_hub_pin(dry_run=False):
         return True, "huggingface-hub not installed - nothing to pin"
     try:
         import packaging.version as _pv
+
         v = _version("huggingface-hub")
         if v != "?" and _pv.parse("1.16.0") <= _pv.parse(v) < _pv.parse("2.0"):
             return True, "huggingface-hub %s OK (>=1.16.0,<2.0)" % v
     except Exception:
         return True, "cannot read huggingface-hub version"
     if dry_run:
-        return False, "would reinstall the compatible Transformers 5.x / Hub 1.x stack (Hub currently %s)" % v
+        return (
+            False,
+            "would reinstall the compatible Transformers 5.x / Hub 1.x stack (Hub currently %s)"
+            % v,
+        )
     if _is_frozen():
         return False, "cannot reinstall huggingface-hub inside the packaged exe"
-    proc = _run_pip([
-        "--force-reinstall", "--no-cache-dir",
-        "transformers>=5.14.1,<5.16",
-        "huggingface-hub>=1.16.0,<2.0",
-        "tokenizers>=0.22.2,<0.23.1",
-        "numpy<2",
-    ])
+    proc = _run_pip(
+        [
+            "--force-reinstall",
+            "--no-cache-dir",
+            "transformers>=5.14.1,<5.16",
+            "huggingface-hub>=1.16.0,<2.0",
+            "tokenizers>=0.22.2,<0.23.1",
+            "numpy<2",
+        ]
+    )
     if proc is not None and proc.returncode == 0:
-        return True, "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack"
-    return False, "could not install compatible Hub stack (exit %s)" % (proc.returncode if proc else "?")
+        return (
+            True,
+            "installed the compatible Transformers 5.x / Hub 1.x / tokenizers stack",
+        )
+    return False, "could not install compatible Hub stack (exit %s)" % (
+        proc.returncode if proc else "?"
+    )
 
 
 def fix_setuptools_pin(dry_run=False):
     """Keep the transcription environment on a patched setuptools release."""
     spec = _iu.find_spec("setuptools")
     if spec is None:
-        return True, "setuptools not installed - the transcription stack installs its supported range"
+        return (
+            True,
+            "setuptools not installed - the transcription stack installs its supported range",
+        )
     try:
         from packaging.version import Version
+
         v = _version("setuptools")
         if v != "?" and Version("84.1.0") <= Version(v) < Version("85.0.0"):
             return True, "setuptools %s OK (>=84.1.0,<85)" % v
@@ -1044,16 +1334,22 @@ def fix_setuptools_pin(dry_run=False):
     proc = _run_pip(["--upgrade", "--no-cache-dir", "setuptools>=84.1.0,<85"])
     if proc is not None and proc.returncode == 0:
         return True, "installed patched setuptools>=84.1.0,<85"
-    return False, "could not install patched setuptools (exit %s)" % (proc.returncode if proc else "?")
+    return False, "could not install patched setuptools (exit %s)" % (
+        proc.returncode if proc else "?"
+    )
 
 
 def fix_ctranslate2_pin(dry_run=False):
     """Keep CTranslate2 inside WhisperX 3.3.1's supported dependency range."""
     spec = _iu.find_spec("ctranslate2")
     if spec is None:
-        return True, "CTranslate2 not installed - the optional transcription stack installs its supported range"
+        return (
+            True,
+            "CTranslate2 not installed - the optional transcription stack installs its supported range",
+        )
     try:
         from packaging.version import Version
+
         version = _version("ctranslate2")
         if version != "?" and Version("4.4.0") <= Version(version) < Version("4.5.0"):
             return True, "CTranslate2 %s OK (>=4.4.0,<4.5.0)" % version
@@ -1063,10 +1359,14 @@ def fix_ctranslate2_pin(dry_run=False):
         return False, "would install ctranslate2>=4.4.0,<4.5.0"
     if _is_frozen():
         return False, "cannot reinstall CTranslate2 inside the packaged exe"
-    proc = _run_pip(["--upgrade", "--no-cache-dir", "--no-deps", "ctranslate2>=4.4.0,<4.5.0"])
+    proc = _run_pip(
+        ["--upgrade", "--no-cache-dir", "--no-deps", "ctranslate2>=4.4.0,<4.5.0"]
+    )
     if proc is not None and proc.returncode == 0:
         return True, "installed CTranslate2>=4.4.0,<4.5.0"
-    return False, "could not install compatible CTranslate2 (exit %s)" % (proc.returncode if proc else "?")
+    return False, "could not install compatible CTranslate2 (exit %s)" % (
+        proc.returncode if proc else "?"
+    )
 
 
 def ensure_dirs():
@@ -1098,9 +1398,12 @@ def ensure_api_config():
             shutil.copy2(path, backup)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(API_CONFIG_TEMPLATE, fh, indent=4, ensure_ascii=False)
-        return True, "api_config.json %s (add your AI key in it)" % ("recreated" if os.path.exists(backup) else "created")
+        return True, "api_config.json %s (add your AI key in it)" % (
+            "recreated" if os.path.exists(backup) else "created"
+        )
     except Exception as e:
         return False, "could not write api_config.json: %s" % e
+
 
 # --------------------------------------------------------------------------
 # Orchestration
@@ -1111,11 +1414,20 @@ def collect_checks():
     bundled = check_bundled_binary("ffmpeg")
     if bundled:
         checks.append(bundled)
-    checks += [check_disk_space(_app_dir()),
-               check_writable(_app_dir(), "Working dir writable")]
-    checks += [check_api_config(), check_assets(), check_safety_blocklist_freshness(),
-               check_models_dir(), check_model_cache(), check_telegram_config(),
-               check_venv_metadata(), check_pyannote_vad()]
+    checks += [
+        check_disk_space(_app_dir()),
+        check_writable(_app_dir(), "Working dir writable"),
+    ]
+    checks += [
+        check_api_config(),
+        check_assets(),
+        check_safety_blocklist_freshness(),
+        check_models_dir(),
+        check_model_cache(),
+        check_telegram_config(),
+        check_venv_metadata(),
+        check_pyannote_vad(),
+    ]
 
     # dependency checks per requirements file
     seen_dists = set()
@@ -1155,25 +1467,40 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
     #    METADATA-less dist-info folders before asking pip/uv to do anything.
     removed, metadata_failed = repair_incomplete_dist_info()
     for name in removed:
-        fixed.append({"name": "metadata " + name, "status": OK,
-                      "detail": "removed incomplete .dist-info (no METADATA)"})
+        fixed.append(
+            {
+                "name": "metadata " + name,
+                "status": OK,
+                "detail": "removed incomplete .dist-info (no METADATA)",
+            }
+        )
     for name, error in metadata_failed:
-        fixed.append({"name": "metadata " + name, "status": FAIL,
-                      "detail": "could not remove: " + error})
+        fixed.append(
+            {
+                "name": "metadata " + name,
+                "status": FAIL,
+                "detail": "could not remove: " + error,
+            }
+        )
 
     # 1) cheap fixes: dirs + config
     for rel, ok, detail in ensure_dirs():
         if ok:
             fixed.append({"name": "dir " + rel, "status": OK, "detail": detail})
     ok_cfg, cfg_detail = ensure_api_config()
-    fixed.append({"name": "api_config.json", "status": OK if ok_cfg else FAIL, "detail": cfg_detail})
+    fixed.append(
+        {
+            "name": "api_config.json",
+            "status": OK if ok_cfg else FAIL,
+            "detail": cfg_detail,
+        }
+    )
 
     # 2) Reinstall broken packages individually before resolving the core stack.
     broken_imports = {
         c["name"]
         for c in checks
-        if c["status"] == FAIL
-        and c["detail"].startswith("installed but import failed")
+        if c["status"] == FAIL and c["detail"].startswith("installed but import failed")
     }
     failed_import_repairs = set()
     for dist in sorted(broken_imports):
@@ -1182,25 +1509,34 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
             failed_import_repairs.add(dist)
         fixed.append({"name": dist, "status": OK if ok else FAIL, "detail": detail})
     broken_websockets = any(
-        c["name"] == "websockets" and c["status"] == FAIL
-        for c in checks
+        c["name"] == "websockets" and c["status"] == FAIL for c in checks
     )
     if broken_websockets and not websockets_prechecked:
         ok = not _is_frozen() and ensure_websockets.repair()
-        detail = "compatible version installed" if ok else "compatible version could not be installed"
-        fixed.append({"name": "websockets", "status": OK if ok else FAIL, "detail": detail})
+        detail = (
+            "compatible version installed"
+            if ok
+            else "compatible version could not be installed"
+        )
+        fixed.append(
+            {"name": "websockets", "status": OK if ok else FAIL, "detail": detail}
+        )
 
     # 3) pip installs (core always attempted; optional stacks only on request)
     fail_names = [
-        c["name"] for c in checks
+        c["name"]
+        for c in checks
         if c["status"] == FAIL
         and (c["name"] not in broken_imports or c["name"] in failed_import_repairs)
         and not (broken_websockets and c["name"] == "websockets")
     ]
     if ensure_upload:
-        upload_dists = {dist for dist, _raw in _read_req_names("requirements-upload.txt")}
+        upload_dists = {
+            dist for dist, _raw in _read_req_names("requirements-upload.txt")
+        }
         fail_names.extend(
-            c["name"] for c in checks
+            c["name"]
+            for c in checks
             if c["name"] in upload_dists and c["status"] == WARN
         )
     req_fails = {}
@@ -1223,10 +1559,14 @@ def repair(mode, checks, ensure_upload=False, websockets_prechecked=False):
             do_install = bool(ensure_upload and req_file == "requirements-upload.txt")
         if not do_install:
             for d in missing_in_file:
-                fixed.append({"name": d, "status": WARN, "detail": "optional - skipped"})
+                fixed.append(
+                    {"name": d, "status": WARN, "detail": "optional - skipped"}
+                )
             continue
         ok, detail = install_requirements(req_file, dry_run=False)
-        fixed.append({"name": "stack " + label, "status": OK if ok else FAIL, "detail": detail})
+        fixed.append(
+            {"name": "stack " + label, "status": OK if ok else FAIL, "detail": detail}
+        )
 
     # 3) version pins for the transcription stack and NumPy.
     for dist, rule, note in PINNED_RULES:
@@ -1285,10 +1625,11 @@ def run_preflight(mode="auto-fix", json_out=False, quiet=False, ensure_upload=Fa
 
     upload_missing = False
     if ensure_upload:
-        upload_dists = {dist for dist, _raw in _read_req_names("requirements-upload.txt")}
+        upload_dists = {
+            dist for dist, _raw in _read_req_names("requirements-upload.txt")
+        }
         upload_missing = any(
-            c["name"] in upload_dists and c["status"] in (FAIL, WARN)
-            for c in checks
+            c["name"] in upload_dists and c["status"] in (FAIL, WARN) for c in checks
         )
     if (critical or upload_missing) and mode in ("fix", "auto-fix"):
         if not quiet and not json_out:
@@ -1304,35 +1645,60 @@ def run_preflight(mode="auto-fix", json_out=False, quiet=False, ensure_upload=Fa
     if not quiet and not json_out:
         _print_report(checks)
         if critical:
-            print("❌ %d critical problem(s) remain. Fix them before running %s." % (len(critical), APP_NAME))
+            print(
+                "❌ %d critical problem(s) remain. Fix them before running %s."
+                % (len(critical), APP_NAME)
+            )
             if "ffmpeg" in critical or "ffprobe" in critical:
                 print_ffmpeg_help()
             return 1
         if warn:
-            print("✅ System ready. (%d optional warning(s) - app will still work)" % len(warn))
+            print(
+                "✅ System ready. (%d optional warning(s) - app will still work)"
+                % len(warn)
+            )
         else:
             print("✅ System ready. Everything in place.")
         return 0
 
     if json_out:
-        print(json.dumps({"exit": 1 if critical else (2 if warn else 0),
-                          "critical": critical, "warnings": warn,
-                          "checks": checks}, indent=2, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "exit": 1 if critical else (2 if warn else 0),
+                    "critical": critical,
+                    "warnings": warn,
+                    "checks": checks,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
     return 1 if critical else (2 if warn else 0)
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=APP_NAME + " pre-flight check & auto-repair",
-                                     epilog="Exit: 0=ready, 1=critical problems remain, 2=warnings only")
+    parser = argparse.ArgumentParser(
+        description=APP_NAME + " pre-flight check & auto-repair",
+        epilog="Exit: 0=ready, 1=critical problems remain, 2=warnings only",
+    )
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--check", action="store_true", help="read-only check (no installs)")
+    mode.add_argument(
+        "--check", action="store_true", help="read-only check (no installs)"
+    )
     mode.add_argument("--fix", action="store_true", help="interactive repair")
     mode.add_argument("--auto-fix", action="store_true", help="non-interactive repair")
     mode.add_argument("--off", action="store_true", help="skip everything, exit 0")
-    parser.add_argument("--repair-metadata", action="store_true",
-                        help="remove incomplete *.dist-info folders and exit")
-    parser.add_argument("--ensure-upload", action="store_true",
-                        help="auto-install YouTube OAuth/upload dependencies")
+    parser.add_argument(
+        "--repair-metadata",
+        action="store_true",
+        help="remove incomplete *.dist-info folders and exit",
+    )
+    parser.add_argument(
+        "--ensure-upload",
+        action="store_true",
+        help="auto-install YouTube OAuth/upload dependencies",
+    )
     parser.add_argument("--json", action="store_true", help="machine-readable report")
     parser.add_argument("--quiet", action="store_true", help="no console output")
     args = parser.parse_args(argv)
@@ -1356,8 +1722,9 @@ def main(argv=None):
         m = "auto-fix"
     else:
         m = "check"
-    return run_preflight(mode=m, json_out=args.json, quiet=args.quiet,
-                         ensure_upload=args.ensure_upload)
+    return run_preflight(
+        mode=m, json_out=args.json, quiet=args.quiet, ensure_upload=args.ensure_upload
+    )
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@
 This module proposes conservative clip windows around transcript segments. It
 never claims to predict virality and never changes the source timestamps.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,8 +33,9 @@ def _number(value: Any, field: str) -> float:
     return result
 
 
-def suggest_moment_window(segment: dict[str, Any], *, lead_in: float = 2.5,
-                          tail_out: float = 3.5) -> dict[str, Any]:
+def suggest_moment_window(
+    segment: dict[str, Any], *, lead_in: float = 2.5, tail_out: float = 3.5
+) -> dict[str, Any]:
     """Return a copy with a reviewable padded window, or a clear missing-time flag."""
     lead_in = _number(lead_in, "lead_in")
     tail_out = _number(tail_out, "tail_out")
@@ -70,12 +72,16 @@ def suggest_moment_window(segment: dict[str, Any], *, lead_in: float = 2.5,
     return item
 
 
-def analyze_moments(segments: list[dict[str, Any]], *, lead_in: float = 2.5,
-                    tail_out: float = 3.5) -> dict[str, Any]:
+def analyze_moments(
+    segments: list[dict[str, Any]], *, lead_in: float = 2.5, tail_out: float = 3.5
+) -> dict[str, Any]:
     if not isinstance(segments, list):
         raise TypeError("segments must be a list")
-    annotated = [suggest_moment_window(s, lead_in=lead_in, tail_out=tail_out)
-                 for s in segments if isinstance(s, dict)]
+    annotated = [
+        suggest_moment_window(s, lead_in=lead_in, tail_out=tail_out)
+        for s in segments
+        if isinstance(s, dict)
+    ]
     return {
         "schema_version": 1,
         "engine": "OUSSAMA Viral Moment Intelligence",
@@ -83,14 +89,22 @@ def analyze_moments(segments: list[dict[str, Any]], *, lead_in: float = 2.5,
         "segments": annotated,
         "summary": {
             "input_count": len(segments),
-            "annotated_count": sum(s.get("moment_window", {}).get("status") == "suggested" for s in annotated),
-            "needs_timestamps_count": sum(s.get("moment_window", {}).get("status") == "needs_timestamps" for s in annotated),
+            "annotated_count": sum(
+                s.get("moment_window", {}).get("status") == "suggested"
+                for s in annotated
+            ),
+            "needs_timestamps_count": sum(
+                s.get("moment_window", {}).get("status") == "needs_timestamps"
+                for s in annotated
+            ),
         },
     }
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Suggest contextual windows around transcript moments")
+    parser = argparse.ArgumentParser(
+        description="Suggest contextual windows around transcript moments"
+    )
     parser.add_argument("input", type=Path, help="JSON list or object with segments")
     parser.add_argument("--output", type=Path, default=Path("viral_moments.json"))
     parser.add_argument("--lead-in", type=float, default=2.5)
@@ -101,7 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         segments = payload.get("segments", []) if isinstance(payload, dict) else payload
         result = analyze_moments(segments, lead_in=args.lead_in, tail_out=args.tail_out)
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        args.output.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         print(json.dumps(result["summary"], ensure_ascii=False))
         return 0
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:

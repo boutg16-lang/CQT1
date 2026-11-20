@@ -1,67 +1,70 @@
-
 import cv2
 import numpy as np
 
 try:
     import mediapipe as mp
+
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     mp = None
     MEDIAPIPE_AVAILABLE = False
 
+
 def crop_and_resize_single_face(frame, face):
-        frame_height, frame_width = frame.shape[:2]
+    frame_height, frame_width = frame.shape[:2]
 
-        x, y, w, h = face
-        face_center_x = x + w // 2
-        face_center_y = y + h // 2
+    x, y, w, h = face
+    face_center_x = x + w // 2
+    face_center_y = y + h // 2
 
-        # Cálculo da proporção desejada (9:16)
-        target_aspect_ratio = 9 / 16
+    # Cálculo da proporção desejada (9:16)
+    target_aspect_ratio = 9 / 16
 
-        # Cálculo da área de corte para evitar barras pretas
-        if frame_width / frame_height > target_aspect_ratio:
-            new_width = int(frame_height * target_aspect_ratio)
-            new_height = frame_height
-        else:
-            new_width = frame_width
-            new_height = int(frame_width / target_aspect_ratio)
+    # Cálculo da área de corte para evitar barras pretas
+    if frame_width / frame_height > target_aspect_ratio:
+        new_width = int(frame_height * target_aspect_ratio)
+        new_height = frame_height
+    else:
+        new_width = frame_width
+        new_height = int(frame_width / target_aspect_ratio)
 
-        # Garantir que o corte esteja dentro dos limites
-        crop_x = max(0, min(face_center_x - new_width // 2, frame_width - new_width))
-        crop_y = max(0, min(face_center_y - new_height // 2, frame_height - new_height))
-        crop_x2 = crop_x + new_width
-        crop_y2 = crop_y + new_height
+    # Garantir que o corte esteja dentro dos limites
+    crop_x = max(0, min(face_center_x - new_width // 2, frame_width - new_width))
+    crop_y = max(0, min(face_center_y - new_height // 2, frame_height - new_height))
+    crop_x2 = crop_x + new_width
+    crop_y2 = crop_y + new_height
 
-        # Recorte e redimensionamento para 1080x1920 (9:16)
-        crop_img = frame[crop_y:crop_y2, crop_x:crop_x2]
-        resized = cv2.resize(crop_img, (1080, 1920), interpolation=cv2.INTER_AREA)
+    # Recorte e redimensionamento para 1080x1920 (9:16)
+    crop_img = frame[crop_y:crop_y2, crop_x:crop_x2]
+    resized = cv2.resize(crop_img, (1080, 1920), interpolation=cv2.INTER_AREA)
 
-        return resized
+    return resized
+
 
 def resize_with_padding(frame):
-        frame_height, frame_width = frame.shape[:2]
-        target_aspect_ratio = 9 / 16
+    frame_height, frame_width = frame.shape[:2]
+    target_aspect_ratio = 9 / 16
 
-        if frame_width / frame_height > target_aspect_ratio:
-            new_width = frame_width
-            new_height = int(frame_width / target_aspect_ratio)
-        else:
-            new_height = frame_height
-            new_width = int(frame_height * target_aspect_ratio)
+    if frame_width / frame_height > target_aspect_ratio:
+        new_width = frame_width
+        new_height = int(frame_width / target_aspect_ratio)
+    else:
+        new_height = frame_height
+        new_width = int(frame_height * target_aspect_ratio)
 
-        # Criação de uma tela preta
-        result = np.zeros((new_height, new_width, 3), dtype=np.uint8)
+    # Criação de uma tela preta
+    result = np.zeros((new_height, new_width, 3), dtype=np.uint8)
 
-        # Cálculo das margens
-        pad_top = (new_height - frame_height) // 2
-        pad_left = (new_width - frame_width) // 2
+    # Cálculo das margens
+    pad_top = (new_height - frame_height) // 2
+    pad_left = (new_width - frame_width) // 2
 
-        # Colocar o frame original na tela
-        result[pad_top:pad_top+frame_height, pad_left:pad_left+frame_width] = frame
+    # Colocar o frame original na tela
+    result[pad_top : pad_top + frame_height, pad_left : pad_left + frame_width] = frame
 
-        # Redimensionar para as dimensões finais
-        return cv2.resize(result, (1080, 1920), interpolation=cv2.INTER_AREA)
+    # Redimensionar para as dimensões finais
+    return cv2.resize(result, (1080, 1920), interpolation=cv2.INTER_AREA)
+
 
 def detect_face_or_body(frame, face_detection, face_mesh, pose):
     # Converter a imagem para RGB
@@ -84,7 +87,7 @@ def detect_face_or_body(frame, face_detection, face_mesh, pose):
         width = int(bbox.width * frame.shape[1])
         height = int(bbox.height * frame.shape[0])
         detections.append((x_min, y_min, width, height))
-    
+
     # Usar landmarks do face mesh se disponível
     if results_face_mesh.multi_face_landmarks:
         landmarks = results_face_mesh.multi_face_landmarks[0].landmark
@@ -119,7 +122,7 @@ def crop_center_zoom(frame):
     """
     frame_height, frame_width = frame.shape[:2]
     target_aspect_ratio = 9 / 16
-    
+
     # Calculate crop dimensions to FILL the target ratio
     if frame_width / frame_height > target_aspect_ratio:
         # Source is wider than target (e.g. 16:9 source, 9:16 target) -> Crop Width
@@ -129,16 +132,15 @@ def crop_center_zoom(frame):
         # Source is taller than target -> Crop Height
         new_width = frame_width
         new_height = int(frame_width / target_aspect_ratio)
-        
+
     start_x = (frame_width - new_width) // 2
     start_y = (frame_height - new_height) // 2
-    
+
     # Ensure bounds
     start_x = max(0, start_x)
     start_y = max(0, start_y)
-    
-    crop_img = frame[start_y:start_y+new_height, start_x:start_x+new_width]
-    
+
+    crop_img = frame[start_y : start_y + new_height, start_x : start_x + new_width]
+
     # Resize to final 1080x1920
     return cv2.resize(crop_img, (1080, 1920), interpolation=cv2.INTER_AREA)
-

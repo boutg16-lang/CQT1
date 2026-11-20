@@ -127,8 +127,14 @@ def test_secure_file_is_created_with_restricted_permissions(tmp_path):
 
 
 def test_set_keys_caps_at_three(tmp_path):
-    set_keys([KEY_A, KEY_B, KEY_C, KEY_D], passphrase=PASSPHRASE, base_dir=str(tmp_path))
-    assert get_keys(passphrase=PASSPHRASE, base_dir=str(tmp_path)) == [KEY_A, KEY_B, KEY_C]
+    set_keys(
+        [KEY_A, KEY_B, KEY_C, KEY_D], passphrase=PASSPHRASE, base_dir=str(tmp_path)
+    )
+    assert get_keys(passphrase=PASSPHRASE, base_dir=str(tmp_path)) == [
+        KEY_A,
+        KEY_B,
+        KEY_C,
+    ]
 
 
 def test_set_keys_requires_a_passphrase(tmp_path):

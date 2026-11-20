@@ -9,11 +9,13 @@ gracefully. WhisperX's own model-shrinking also cannot help a VAD-stage or
 system-RAM failure — the real rescue is the lightweight faster-whisper
 backend (CTranslate2 streams audio, uses its own Silero VAD, no pyannote).
 """
+
 import os
 
 from scripts import oom_guard, transcribe_video, transcription_fallback
 
 # --- OOM detection ----------------------------------------------------------
+
 
 def test_oom_guard_matches_torch_bad_allocation():
     assert oom_guard._looks_like_oom(RuntimeError("bad allocation"))
@@ -33,11 +35,13 @@ def test_oom_guard_still_ignores_unrelated_errors():
     assert not oom_guard._looks_like_oom(RuntimeError("expected scalar type Long"))
     assert not oom_guard._looks_like_oom(ValueError("Invalid model size"))
 
+
 def test_oom_guard_matches_ctranslate2_mkl_malloc():
     # Real-world traceback from faster-whisper model load on Windows (v7.33):
     # RuntimeError: mkl_malloc: failed to allocate memory
     assert oom_guard._looks_like_oom(
-        RuntimeError("mkl_malloc: failed to allocate memory"))
+        RuntimeError("mkl_malloc: failed to allocate memory")
+    )
 
 
 def test_oom_guard_mkl_malloc_triggers_model_downgrade(tmp_path):
@@ -50,8 +54,12 @@ def test_oom_guard_mkl_malloc_triggers_model_downgrade(tmp_path):
         return ("srt", "tsv")
 
     srt, tsv = oom_guard.transcribe_with_fallback(
-        "x.mp4", "large-v3-turbo", str(tmp_path),
-        transcribe_fn=fake_transcribe, verbose=False)
+        "x.mp4",
+        "large-v3-turbo",
+        str(tmp_path),
+        transcribe_fn=fake_transcribe,
+        verbose=False,
+    )
     assert (srt, tsv) == ("srt", "tsv")
     assert calls[0] == "large-v3-turbo"
     assert calls[-1] != "large-v3-turbo"
@@ -60,10 +68,12 @@ def test_oom_guard_mkl_malloc_triggers_model_downgrade(tmp_path):
 def test_is_memory_error_same_coverage_in_transcribe_video():
     assert transcribe_video._is_memory_error(RuntimeError("bad allocation"))
     assert transcribe_video._is_memory_error(
-        RuntimeError("Unable to allocate 1.2 GiB for an array"))
+        RuntimeError("Unable to allocate 1.2 GiB for an array")
+    )
     assert transcribe_video._is_memory_error(MemoryError())
     assert transcribe_video._is_memory_error(
-        RuntimeError("mkl_malloc: failed to allocate memory"))
+        RuntimeError("mkl_malloc: failed to allocate memory")
+    )
     assert not transcribe_video._is_memory_error(RuntimeError("boom"))
 
 
@@ -89,7 +99,8 @@ def test_auto_device_retries_same_model_on_cpu_when_cudnn_is_missing(monkeypatch
         transcribe_video, "whisperx", SimpleNamespace(load_model=fake_load_model)
     )
     monkeypatch.setattr(
-        transcribe_video, "_run_with_heartbeat",
+        transcribe_video,
+        "_run_with_heartbeat",
         lambda message, operation, **kwargs: operation(),
     )
     monkeypatch.setattr(transcribe_video, "_release_cuda_memory", lambda **kwargs: None)
@@ -117,7 +128,8 @@ def test_explicit_cuda_does_not_silently_fall_back_to_cpu(monkeypatch):
         transcribe_video, "whisperx", SimpleNamespace(load_model=fake_load_model)
     )
     monkeypatch.setattr(
-        transcribe_video, "_run_with_heartbeat",
+        transcribe_video,
+        "_run_with_heartbeat",
         lambda message, operation, **kwargs: operation(),
     )
 
@@ -132,6 +144,7 @@ def test_explicit_cuda_does_not_silently_fall_back_to_cpu(monkeypatch):
 
 
 # --- faster-whisper rescue --------------------------------------------------
+
 
 def _write_outputs_fake(result, srt_path, tsv_path, json_path):
     for path in (srt_path, tsv_path, json_path):
@@ -148,21 +161,28 @@ def test_via_fallback_writes_outputs_and_cache(tmp_path, monkeypatch):
 
     calls = {}
     monkeypatch.setattr(
-        transcription_fallback, "transcribe",
+        transcription_fallback,
+        "transcribe",
         lambda input_file, model_name, device="auto", progress=None: (
-            calls.update({"input_file": input_file, "model": model_name,
-                          "device": device}),
+            calls.update(
+                {"input_file": input_file, "model": model_name, "device": device}
+            ),
             {"segments": [], "language": "ar", "backend": "faster-whisper"},
-        )[1])
+        )[1],
+    )
     monkeypatch.setattr(transcription_fallback, "write_outputs", _write_outputs_fake)
     saved = {}
     monkeypatch.setattr(
-        transcribe_video, "_save_transcription_cache",
-        lambda cache_path, input_file, model_name, srt_file, tsv_file, json_file,
-               device="auto": saved.update({"_": True}))
+        transcribe_video,
+        "_save_transcription_cache",
+        lambda cache_path, input_file, model_name, srt_file, tsv_file, json_file, device="auto": (
+            saved.update({"_": True})
+        ),
+    )
 
     out = transcribe_video._transcribe_via_fallback(
-        "input.mp4", "large-v3-turbo", project, srt, tsv, data, cache, "cuda")
+        "input.mp4", "large-v3-turbo", project, srt, tsv, data, cache, "cuda"
+    )
 
     assert out == (srt, tsv)
     assert calls["model"] == "large-v3-turbo"
@@ -174,13 +194,21 @@ def test_via_fallback_writes_outputs_and_cache(tmp_path, monkeypatch):
 def test_via_fallback_propagates_when_backend_missing(monkeypatch):
     def missing(*a, **k):
         raise ImportError(
-            "faster-whisper is not installed; install requirements-transcribe-fallback.txt")
+            "faster-whisper is not installed; install requirements-transcribe-fallback.txt"
+        )
 
     monkeypatch.setattr(transcription_fallback, "transcribe", missing)
     try:
         transcribe_video._transcribe_via_fallback(
-            "in.mp4", "large-v3-turbo", "proj",
-            "proj/in.srt", "proj/in.tsv", "proj/in.json", "proj/cache.json", "auto")
+            "in.mp4",
+            "large-v3-turbo",
+            "proj",
+            "proj/in.srt",
+            "proj/in.tsv",
+            "proj/in.json",
+            "proj/cache.json",
+            "auto",
+        )
     except ImportError as exc:
         assert "faster-whisper" in str(exc)
     else:  # pragma: no cover - the call must raise

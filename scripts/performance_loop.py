@@ -6,6 +6,7 @@ Analytics numbers, and produces `performance_insights.json` + a human-readable
 console summary: which clip traits actually correlate with views and retention.
 Pure stdlib + optional googleapiclient — never mutates any pipeline decision.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -38,8 +39,13 @@ MAX_WINDOW_DAYS = 365
 
 # Segment features copied into publish events (see publish_panel.record).
 FEATURE_KEYS = (
-    "duration", "hook_strength", "narrative_completeness", "clarity_score",
-    "novelty_score", "selection_score", "title_quality_score",
+    "duration",
+    "hook_strength",
+    "narrative_completeness",
+    "clarity_score",
+    "novelty_score",
+    "selection_score",
+    "title_quality_score",
 )
 
 
@@ -85,8 +91,9 @@ def _load_retention_cache(project_folder: str) -> dict[str, Any]:
 def _save_retention_cache(project_folder: str, cache: dict[str, Any]) -> None:
     path = os.path.join(project_folder, RETENTION_CACHE_NAME)
     try:
-        fd, temporary = tempfile.mkstemp(prefix=".retention-", suffix=".tmp",
-                                         dir=os.path.dirname(path))
+        fd, temporary = tempfile.mkstemp(
+            prefix=".retention-", suffix=".tmp", dir=os.path.dirname(path)
+        )
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(cache, handle, ensure_ascii=False)
         os.replace(temporary, path)
@@ -94,10 +101,12 @@ def _save_retention_cache(project_folder: str, cache: dict[str, Any]) -> None:
         logger.debug("Could not persist the retention curve cache.", exc_info=True)
 
 
-def attach_retention_curves(metrics: dict[str, dict[str, Any]],
-                            project_folder: str | None,
-                            video_ids: list[str],
-                            fetcher=None) -> dict[str, dict[str, Any]]:
+def attach_retention_curves(
+    metrics: dict[str, dict[str, Any]],
+    project_folder: str | None,
+    video_ids: list[str],
+    fetcher=None,
+) -> dict[str, dict[str, Any]]:
     """Attach per-clip retention summaries, cached by video for a few days.
 
     YouTube needs one report call per video for the elapsed-time curve, so the
@@ -121,9 +130,14 @@ def attach_retention_curves(metrics: dict[str, dict[str, Any]],
             break
         seen += 1
         entry = cache.get(video_id) if isinstance(cache.get(video_id), dict) else {}
-        summary = entry.get("summary") if isinstance(entry.get("summary"), dict) else None
+        summary = (
+            entry.get("summary") if isinstance(entry.get("summary"), dict) else None
+        )
         try:
-            fresh = summary is not None and (now - float(entry.get("fetched_ts") or 0)) < ttl
+            fresh = (
+                summary is not None
+                and (now - float(entry.get("fetched_ts") or 0)) < ttl
+            )
         except (TypeError, ValueError):
             fresh = False
         if fresh:
@@ -132,15 +146,15 @@ def attach_retention_curves(metrics: dict[str, dict[str, Any]],
         try:
             curve = fetcher(video_id)
         except Exception as exc:  # API/quota/OAuth: keep the rest of the report
-            logger.debug("Retention curve unavailable for %s (%s).",
-                         video_id, type(exc).__name__)
+            logger.debug(
+                "Retention curve unavailable for %s (%s).", video_id, type(exc).__name__
+            )
             continue
         summary = (curve or {}).get("summary") if isinstance(curve, dict) else None
         if not isinstance(summary, dict):
             continue
         metrics[video_id]["retention_curve"] = summary
-        cache[video_id] = {"summary": summary, "fetched_ts": now,
-                           "fetched_at": _now()}
+        cache[video_id] = {"summary": summary, "fetched_ts": now, "fetched_at": _now()}
         changed = True
     if changed:
         _save_retention_cache(project_folder, cache)
@@ -184,7 +198,9 @@ def _published_videos(project_folder: str) -> list[dict[str, Any]]:
     """Published events enriched with segment features from the scorecard."""
     segments = {}
     try:
-        with open(os.path.join(project_folder, "risk_scorecard.json"), "r", encoding="utf-8") as fh:
+        with open(
+            os.path.join(project_folder, "risk_scorecard.json"), "r", encoding="utf-8"
+        ) as fh:
             scorecard = json.load(fh)
         for entry in scorecard.get("segments", []) or []:
             if isinstance(entry, dict):
@@ -192,8 +208,10 @@ def _published_videos(project_folder: str) -> list[dict[str, Any]]:
     except FileNotFoundError:
         logger.debug("No risk scorecard is available for performance enrichment.")
     except (OSError, UnicodeError, ValueError, TypeError, AttributeError) as exc:
-        logger.warning("Could not read risk scorecard (%s); using publish history only.",
-                       type(exc).__name__)
+        logger.warning(
+            "Could not read risk scorecard (%s); using publish history only.",
+            type(exc).__name__,
+        )
     published = []
     for event in _read_history(project_folder):
         video_id = event.get("video_id")
@@ -203,28 +221,42 @@ def _published_videos(project_folder: str) -> list[dict[str, Any]]:
         match = re.search(r"#?(\d+)", str(event.get("video", "")))
         if match:
             entry = segments.get(int(match.group(1)), {}) or {}
-        features = {key: entry.get(key) for key in FEATURE_KEYS if entry.get(key) is not None}
+        features = {
+            key: entry.get(key) for key in FEATURE_KEYS if entry.get(key) is not None
+        }
         hour = _publish_hour(event.get("publish_at") or event.get("timestamp"))
         if hour is not None:
             features["publish_hour"] = hour
-        published.append({
-            "video_id": video_id,
-            "title": event.get("title", ""),
-            "platform": event.get("platform", "youtube"),
-            "published_at": event.get("timestamp"),
-            "features": features,
-            # Content markers recorded since v7.33.1 (publish_history.record
-            # extra): hashtags/topic/angle/hook_type + derived title styles.
-            "content": _content_markers(event),
-        })
+        published.append(
+            {
+                "video_id": video_id,
+                "title": event.get("title", ""),
+                "platform": event.get("platform", "youtube"),
+                "published_at": event.get("timestamp"),
+                "features": features,
+                # Content markers recorded since v7.33.1 (publish_history.record
+                # extra): hashtags/topic/angle/hook_type + derived title styles.
+                "content": _content_markers(event),
+            }
+        )
     return published
 
 
 _QUESTION_SUFFIXES = ("?", "؟")
-_ARABIC_HOOK_WORDS = ("كيف", "كيفاش", "علاش", "شنو", "لماذا", "طريقة",
-                      "أفضل", "سر", "خطأ", "جديد", "شحال")
-_LATIN_HOOK_WORDS = ("how", "why", "best", "secret", "mistake", "trick",
-                     "tips", "top")
+_ARABIC_HOOK_WORDS = (
+    "كيف",
+    "كيفاش",
+    "علاش",
+    "شنو",
+    "لماذا",
+    "طريقة",
+    "أفضل",
+    "سر",
+    "خطأ",
+    "جديد",
+    "شحال",
+)
+_LATIN_HOOK_WORDS = ("how", "why", "best", "secret", "mistake", "trick", "tips", "top")
 
 
 def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
@@ -234,10 +266,14 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
     question = any(ch in title for ch in ("؟", "?"))
     has_number = any(ch.isdigit() for ch in title)
     hook_word = any(w in lowered for w in _LATIN_HOOK_WORDS) or any(
-        w in title for w in _ARABIC_HOOK_WORDS)
+        w in title for w in _ARABIC_HOOK_WORDS
+    )
     hashtags_raw = str(event.get("hashtags") or "").strip()
-    hashtag_count = len([h for h in re.split(r"[,;\s]+", hashtags_raw)
-                         if h.strip().lstrip("#")]) if hashtags_raw else 0
+    hashtag_count = (
+        len([h for h in re.split(r"[,;\s]+", hashtags_raw) if h.strip().lstrip("#")])
+        if hashtags_raw
+        else 0
+    )
     return {
         "topic": str(event.get("topic") or "").strip(),
         "angle": str(event.get("angle") or "").strip(),
@@ -249,31 +285,42 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fetch_real_metrics(video_ids: list[str],
-                        project_folder: str | None = None) -> dict[str, dict[str, Any]]:
+def _fetch_real_metrics(
+    video_ids: list[str], project_folder: str | None = None
+) -> dict[str, dict[str, Any]]:
     """Pull views/retention via scripts.analytics. Empty when unavailable."""
     try:
         from scripts import analytics as analytics_mod
+
         ya, yt = analytics_mod._build_services()
     except Exception:
         return {}
     metrics: dict[str, dict[str, float]] = {}
     start, end = analytics_mod._date_range(_window_days())
     for index in range(0, len(video_ids), 40):
-        chunk = video_ids[index:index + 40]
+        chunk = video_ids[index : index + 40]
         # Analytics filters: commas separate multiple values of ONE dimension
         # (video==a,b,c); semicolons separate DIFFERENT dimensions
         # (video==a;country==IT). Semicolon-joining IDs produced an invalid
         # filter and silently returned zero rows for every batch.
         filters = "video==" + ",".join(chunk)
         try:
-            resp = ya.reports().query(
-                ids="channel==MINE", startDate=start, endDate=end,
-                metrics=("views,averageViewDuration,averageViewPercentage,"
-                         "likes,shares,subscribersGained"),
-                dimensions="video", filters=filters,
-                maxResults=40,
-            ).execute()
+            resp = (
+                ya.reports()
+                .query(
+                    ids="channel==MINE",
+                    startDate=start,
+                    endDate=end,
+                    metrics=(
+                        "views,averageViewDuration,averageViewPercentage,"
+                        "likes,shares,subscribersGained"
+                    ),
+                    dimensions="video",
+                    filters=filters,
+                    maxResults=40,
+                )
+                .execute()
+            )
         except Exception:
             continue
         for row in resp.get("rows", []) or []:
@@ -289,9 +336,13 @@ def _fetch_real_metrics(video_ids: list[str],
             }
     if metrics and project_folder:
         attach_retention_curves(
-            metrics, project_folder, video_ids,
+            metrics,
+            project_folder,
+            video_ids,
             fetcher=lambda vid: analytics_mod.fetch_retention_curve(
-                ya, vid, _window_days()))
+                ya, vid, _window_days()
+            ),
+        )
     return metrics
 
 
@@ -317,8 +368,7 @@ def _ranks(values: list[float]) -> list[float]:
     index = 0
     while index < len(order):
         end = index
-        while (end + 1 < len(order)
-               and values[order[end + 1]] == values[order[index]]):
+        while end + 1 < len(order) and values[order[end + 1]] == values[order[index]]:
             end += 1
         rank = (index + end) / 2.0 + 1.0
         for position in range(index, end + 1):
@@ -335,8 +385,7 @@ def _spearman(pairs: list[tuple[float, float]]) -> float | None:
     question the editor actually cares about: "do higher-scoring clips tend
     to rank higher?", not "does one clip dwarf the rest?".
     """
-    points = [(float(x), float(y)) for x, y in pairs
-              if x is not None and y is not None]
+    points = [(float(x), float(y)) for x, y in pairs if x is not None and y is not None]
     if len(points) < 3:
         return None
     xs = [p[0] for p in points]
@@ -344,8 +393,12 @@ def _spearman(pairs: list[tuple[float, float]]) -> float | None:
     return _pearson(list(zip(_ranks(xs), _ranks(ys), strict=False)))
 
 
-def _spearman_ci(pairs: list[tuple[float, float]], *,
-                 iterations: int = 1200, confidence: float = 0.90):
+def _spearman_ci(
+    pairs: list[tuple[float, float]],
+    *,
+    iterations: int = 1200,
+    confidence: float = 0.90,
+):
     """Deterministic bootstrap confidence interval for Spearman's rho.
 
     A point estimate from five clips is not evidence. The 90% percentile
@@ -353,8 +406,7 @@ def _spearman_ci(pairs: list[tuple[float, float]], *,
     correlation keep its sign if we resample the clips we have?" If the
     interval contains zero, the report says so and no weight moves.
     """
-    points = [(float(x), float(y)) for x, y in pairs
-              if x is not None and y is not None]
+    points = [(float(x), float(y)) for x, y in pairs if x is not None and y is not None]
     if len(points) < 4:
         return (None, None)
     rng = random.Random(0xC071)
@@ -413,16 +465,19 @@ def _retention_curve_insights(measured: list[dict[str, Any]]) -> dict[str, Any] 
         return None
 
     def _avg(key):
-        values = [float(curve[key]) for _item, curve in rows
-                  if curve.get(key) is not None]
+        values = [
+            float(curve[key]) for _item, curve in rows if curve.get(key) is not None
+        ]
         return round(statistics.fmean(values), 4) if values else None
 
-    drops = [(item, curve) for item, curve in rows
-             if curve.get("max_drop_at") is not None]
+    drops = [
+        (item, curve) for item, curve in rows if curve.get("max_drop_at") is not None
+    ]
     worst = {}
     if drops:
         worst_item, worst_curve = max(
-            drops, key=lambda pair: float(pair[1].get("max_drop_pct") or 0.0))
+            drops, key=lambda pair: float(pair[1].get("max_drop_pct") or 0.0)
+        )
         duration = worst_item.get("features", {}).get("duration")
         drop_at = worst_curve.get("max_drop_at")
         worst = {
@@ -443,8 +498,9 @@ def _retention_curve_insights(measured: list[dict[str, Any]]) -> dict[str, Any] 
     }
 
 
-def _best_hours(measured: list[dict[str, Any]], *, min_samples: int = 2,
-                top: int = 3) -> list[int]:
+def _best_hours(
+    measured: list[dict[str, Any]], *, min_samples: int = 2, top: int = 3
+) -> list[int]:
     """Hours whose clips averaged the most views (needs min_samples each)."""
     by_hour: dict[int, list[float]] = {}
     for item in measured:
@@ -453,27 +509,32 @@ def _best_hours(measured: list[dict[str, Any]], *, min_samples: int = 2,
         if hour is None or views is None:
             continue
         by_hour.setdefault(int(hour), []).append(float(views))
-    scored = [(sum(v) / len(v), h) for h, v in by_hour.items()
-              if len(v) >= min_samples]
+    scored = [(sum(v) / len(v), h) for h, v in by_hour.items() if len(v) >= min_samples]
     scored.sort(key=lambda pair: (-pair[0], pair[1]))
     return [h for _mean, h in scored[:top]]
 
 
 def _overall_avg_views(measured: list[dict[str, Any]]) -> float | None:
-    values = [float(item["metrics"]["views"])
-              for item in measured if (item.get("metrics") or {}).get("views") is not None]
+    values = [
+        float(item["metrics"]["views"])
+        for item in measured
+        if (item.get("metrics") or {}).get("views") is not None
+    ]
     return round(statistics.fmean(values), 1) if values else None
 
 
 def _overall_avg_retention(measured: list[dict[str, Any]]) -> float | None:
-    values = [float(item["metrics"]["retention"])
-              for item in measured
-              if (item.get("metrics") or {}).get("retention") is not None]
+    values = [
+        float(item["metrics"]["retention"])
+        for item in measured
+        if (item.get("metrics") or {}).get("retention") is not None
+    ]
     return round(statistics.fmean(values), 2) if values else None
 
 
-def _category_performance(measured: list[dict[str, Any]], field: str,
-                          *, min_samples: int = 2) -> list[dict[str, Any]]:
+def _category_performance(
+    measured: list[dict[str, Any]], field: str, *, min_samples: int = 2
+) -> list[dict[str, Any]]:
     """Per-value avg views + delta vs the overall average for one marker."""
     overall = _overall_avg_views(measured)
     if overall is None:
@@ -497,22 +558,28 @@ def _category_performance(measured: list[dict[str, Any]], field: str,
             continue
         average = statistics.fmean(values)
         delta_pct = round((average - overall) / overall * 100.0, 1) if overall else 0.0
-        row = {"value": value, "samples": len(values),
-               "avg_views": round(average, 1), "delta_pct": delta_pct}
+        row = {
+            "value": value,
+            "samples": len(values),
+            "avg_views": round(average, 1),
+            "delta_pct": delta_pct,
+        }
         retention_values = retention_buckets.get(value) or []
         if retention_values and overall_retention:
             retention_avg = statistics.fmean(retention_values)
             row["avg_retention"] = round(retention_avg, 2)
             row["delta_retention_pct"] = round(
-                (retention_avg - overall_retention) / overall_retention * 100.0, 1)
+                (retention_avg - overall_retention) / overall_retention * 100.0, 1
+            )
         results.append(row)
     # Winners first for display; the absolute delta is still visible.
     results.sort(key=lambda item: (-item["delta_pct"], item["value"]))
     return results
 
 
-def _style_performance(measured: list[dict[str, Any]], field: str,
-                       *, min_samples: int = 2) -> dict[str, Any] | None:
+def _style_performance(
+    measured: list[dict[str, Any]], field: str, *, min_samples: int = 2
+) -> dict[str, Any] | None:
     """Compare avg views when a boolean title style is present vs absent."""
     yes, no = [], []
     for item in measured:
@@ -526,22 +593,34 @@ def _style_performance(measured: list[dict[str, Any]], field: str,
     avg_yes = statistics.fmean(yes)
     avg_no = statistics.fmean(no)
     delta_pct = round((avg_yes - avg_no) / avg_no * 100.0, 1) if avg_no else 0.0
-    row = {"style": field, "samples_yes": len(yes), "samples_no": len(no),
-           "avg_views_yes": round(avg_yes, 1), "avg_views_no": round(avg_no, 1),
-           "delta_pct": delta_pct}
-    retention_yes = [float(item["metrics"]["retention"]) for item in measured
-                     if (item.get("content") or {}).get(field)
-                     and (item.get("metrics") or {}).get("retention") is not None]
-    retention_no = [float(item["metrics"]["retention"]) for item in measured
-                    if not (item.get("content") or {}).get(field)
-                    and (item.get("metrics") or {}).get("retention") is not None]
+    row = {
+        "style": field,
+        "samples_yes": len(yes),
+        "samples_no": len(no),
+        "avg_views_yes": round(avg_yes, 1),
+        "avg_views_no": round(avg_no, 1),
+        "delta_pct": delta_pct,
+    }
+    retention_yes = [
+        float(item["metrics"]["retention"])
+        for item in measured
+        if (item.get("content") or {}).get(field)
+        and (item.get("metrics") or {}).get("retention") is not None
+    ]
+    retention_no = [
+        float(item["metrics"]["retention"])
+        for item in measured
+        if not (item.get("content") or {}).get(field)
+        and (item.get("metrics") or {}).get("retention") is not None
+    ]
     if retention_yes and retention_no:
         avg_r_yes = statistics.fmean(retention_yes)
         avg_r_no = statistics.fmean(retention_no)
         row["avg_retention_yes"] = round(avg_r_yes, 2)
         row["avg_retention_no"] = round(avg_r_no, 2)
-        row["delta_retention_pct"] = round(
-            (avg_r_yes - avg_r_no) / avg_r_no * 100.0, 1) if avg_r_no else 0.0
+        row["delta_retention_pct"] = (
+            round((avg_r_yes - avg_r_no) / avg_r_no * 100.0, 1) if avg_r_no else 0.0
+        )
     return row
 
 
@@ -563,14 +642,22 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     if styles:
         styles.sort(key=lambda row: -abs(row["delta_pct"]))
         result["title_styles"] = styles
-    pairs = [(float((item.get("content") or {}).get("hashtag_count"))
-              if (item.get("content") or {}).get("hashtag_count") is not None else None,
-              float(item["metrics"]["views"]))
-             for item in measured if (item.get("metrics") or {}).get("views") is not None]
+    pairs = [
+        (
+            float((item.get("content") or {}).get("hashtag_count"))
+            if (item.get("content") or {}).get("hashtag_count") is not None
+            else None,
+            float(item["metrics"]["views"]),
+        )
+        for item in measured
+        if (item.get("metrics") or {}).get("views") is not None
+    ]
     hashtag_r = _corr(pairs)
     if hashtag_r is not None:
         result["hashtag_count_correlation"] = {
-            "r": hashtag_r, "strength": _strength(hashtag_r)}
+            "r": hashtag_r,
+            "strength": _strength(hashtag_r),
+        }
     return result
 
 
@@ -598,7 +685,8 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
     }
     if not published:
         report["insights"].append(
-            "No successful uploads with video IDs found in publish_history.jsonl yet.")
+            "No successful uploads with video IDs found in publish_history.jsonl yet."
+        )
         return report
 
     video_ids = [item["video_id"] for item in published]
@@ -611,22 +699,29 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
     if not measured:
         report["insights"].append(
             "Uploads found but YouTube Analytics returned no numbers yet "
-            "(OAuth not configured, or videos are too recent).")
+            "(OAuth not configured, or videos are too recent)."
+        )
         return report
 
     correlations = {}
     for feature in FEATURE_KEYS:
-        pairs = [(item["features"].get(feature), item["metrics"]["views"])
-                 for item in measured]
+        pairs = [
+            (item["features"].get(feature), item["metrics"]["views"])
+            for item in measured
+        ]
         value = _spearman(pairs)
         retention_pairs = [
             (item["features"].get(feature), item["metrics"].get("retention"))
-            for item in measured]
+            for item in measured
+        ]
         retention = _spearman(retention_pairs)
         hook_pairs = [
-            (item["features"].get(feature),
-             (item["metrics"].get("retention_curve") or {}).get("hook_ratio"))
-            for item in measured]
+            (
+                item["features"].get(feature),
+                (item["metrics"].get("retention_curve") or {}).get("hook_ratio"),
+            )
+            for item in measured
+        ]
         hook_retention = _spearman(hook_pairs)
         views_stats = _stat_block(pairs)
         retention_stats = _stat_block(retention_pairs)
@@ -636,10 +731,12 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
             "vs_retention": retention,
             "vs_hook_retention": hook_retention,
             "samples": len([1 for x, y in pairs if x is not None and y is not None]),
-            "retention_samples": len([1 for x, y in retention_pairs
-                                      if x is not None and y is not None]),
-            "hook_retention_samples": len([1 for x, y in hook_pairs
-                                           if x is not None and y is not None]),
+            "retention_samples": len(
+                [1 for x, y in retention_pairs if x is not None and y is not None]
+            ),
+            "hook_retention_samples": len(
+                [1 for x, y in hook_pairs if x is not None and y is not None]
+            ),
             "vs_views_ci": views_stats["ci"],
             "vs_retention_ci": retention_stats["ci"],
             "vs_hook_retention_ci": hook_stats["ci"],
@@ -655,8 +752,10 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         "views": "views inside the shared {}d window".format(_window_days()),
         "retention": "YouTube averageViewPercentage inside the same window",
         "correlation": "Spearman rank (robust to a single viral outlier)",
-        "significance": ("90% bootstrap CI over the measured clips; a weight "
-                         "shift requires the interval to exclude zero"),
+        "significance": (
+            "90% bootstrap CI over the measured clips; a weight "
+            "shift requires the interval to exclude zero"
+        ),
     }
 
     # Content-aware learning (v7.33.2): which hook types / angles / topics /
@@ -671,15 +770,25 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
                 direction = "+" if row["delta_pct"] >= 0 else ""
                 report["insights"].append(
                     "{}={}: avg {} views ({} vs overall, n={})".format(
-                        field, row["value"], row["avg_views"],
-                        "{}{}%".format(direction, row["delta_pct"]), row["samples"]))
+                        field,
+                        row["value"],
+                        row["avg_views"],
+                        "{}{}%".format(direction, row["delta_pct"]),
+                        row["samples"],
+                    )
+                )
         for row in content.get("title_styles") or []:
             direction = "+" if row["delta_pct"] >= 0 else ""
             report["insights"].append(
                 "{}: {} views vs {} without ({}%, n={} vs {})".format(
-                    _style_label(row["style"]), row["avg_views_yes"],
-                    row["avg_views_no"], "{}{}".format(direction, row["delta_pct"]),
-                    row["samples_yes"], row["samples_no"]))
+                    _style_label(row["style"]),
+                    row["avg_views_yes"],
+                    row["avg_views_no"],
+                    "{}{}".format(direction, row["delta_pct"]),
+                    row["samples_yes"],
+                    row["samples_no"],
+                )
+            )
         for field, rows in (content.get("categories") or {}).items():
             for row in rows[:3]:
                 if row.get("delta_retention_pct") is None:
@@ -687,14 +796,22 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
                 direction = "+" if row["delta_retention_pct"] >= 0 else ""
                 report["insights"].append(
                     "{}={} retention: {:.2f}% ({}% vs overall)".format(
-                        field, row["value"], row["avg_retention"],
-                        "{}{}".format(direction, row["delta_retention_pct"])))
+                        field,
+                        row["value"],
+                        row["avg_retention"],
+                        "{}{}".format(direction, row["delta_retention_pct"]),
+                    )
+                )
         hashtag = content.get("hashtag_count_correlation") or {}
         if hashtag.get("r") is not None and hashtag.get("strength") not in {
-                "negligible", "insufficient_data"}:
+            "negligible",
+            "insufficient_data",
+        }:
             report["insights"].append(
                 "hashtag count vs views: r={} ({})".format(
-                    hashtag["r"], hashtag["strength"]))
+                    hashtag["r"], hashtag["strength"]
+                )
+            )
 
     curve_summary = _retention_curve_insights(measured)
     if curve_summary:
@@ -707,28 +824,37 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
                     (curve_summary.get("avg_hook_ratio") or 0) * 100,
                     round((worst.get("max_drop_at") or 0) * 100),
                     worst.get("max_drop_pct"),
-                    curve_summary.get("samples", 0)))
+                    curve_summary.get("samples", 0),
+                )
+            )
         else:
             report["insights"].append(
                 "Retention curve: first 10% holds {:.1f}% on average; no sharp "
                 "drop detected ({} curves).".format(
                     (curve_summary.get("avg_hook_ratio") or 0) * 100,
-                    curve_summary.get("samples", 0)))
+                    curve_summary.get("samples", 0),
+                )
+            )
         if (curve_summary.get("avg_hook_ratio") or 1.0) < 0.85:
             report["insights"].append(
                 "Hook warning: the first 10% loses {:.1f}% of viewers — "
                 "strengthen the opening line and the first visual.".format(
-                    (1.0 - curve_summary["avg_hook_ratio"]) * 100))
+                    (1.0 - curve_summary["avg_hook_ratio"]) * 100
+                )
+            )
 
     best_hours = _best_hours(measured)
     if best_hours:
         report["best_hours"] = best_hours
         report["insights"].append(
             "Measured best publish hours (local time): {} — from {} measured clips.".format(
-                ", ".join(str(h) for h in best_hours), len(measured)))
+                ", ".join(str(h) for h in best_hours), len(measured)
+            )
+        )
 
     for feature, result in sorted(
-            correlations.items(), key=lambda kv: -(abs(kv[1]["vs_views"] or 0))):
+        correlations.items(), key=lambda kv: -(abs(kv[1]["vs_views"] or 0))
+    ):
         value = result["vs_views"]
         if value is None or result["strength"] in {"negligible", "insufficient_data"}:
             continue
@@ -736,31 +862,44 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         report["insights"].append(
             "{}: clips with {} {} {} get {} views "
             "(rho={}, {} — Spearman rank, not causation; {} samples).".format(
-                result["strength"].upper(), feature, "↑" if value > 0 else "↓",
-                "more" if value > 0 else "fewer", direction, value,
-                result["strength"], len(measured)))
+                result["strength"].upper(),
+                feature,
+                "↑" if value > 0 else "↓",
+                "more" if value > 0 else "fewer",
+                direction,
+                value,
+                result["strength"],
+                len(measured),
+            )
+        )
     for feature, result in sorted(
-            correlations.items(),
-            key=lambda kv: -(abs(kv[1].get("vs_retention") or 0))):
+        correlations.items(), key=lambda kv: -(abs(kv[1].get("vs_retention") or 0))
+    ):
         value = result.get("vs_retention")
         if value is None or _strength(value) in {"negligible", "insufficient_data"}:
             continue
         report["insights"].append(
             "{}: {} retention vs {} (rho={}, Spearman, n={}).".format(
-                feature, "higher" if value > 0 else "lower",
-                "viewer hold" if value > 0 else "drop-off", value,
-                result.get("retention_samples", 0)))
+                feature,
+                "higher" if value > 0 else "lower",
+                "viewer hold" if value > 0 else "drop-off",
+                value,
+                result.get("retention_samples", 0),
+            )
+        )
     if not report["insights"]:
         report["insights"].append(
             "Metrics present but no feature shows a meaningful correlation yet "
-            "— publish more clips to build signal.")
+            "— publish more clips to build signal."
+        )
     return report
 
 
 def write_report(project_folder: str, report: dict[str, Any]) -> str:
     path = os.path.join(os.path.abspath(os.fspath(project_folder)), REPORT_NAME)
-    fd, temporary = tempfile.mkstemp(prefix=".perf-", suffix=".tmp",
-                                     dir=os.path.dirname(path))
+    fd, temporary = tempfile.mkstemp(
+        prefix=".perf-", suffix=".tmp", dir=os.path.dirname(path)
+    )
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump(report, handle, ensure_ascii=False, indent=2)
     os.replace(temporary, path)
@@ -774,9 +913,11 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
         "# دروس أداء القناة — Channel performance lessons",
         "",
         "- النافذة المقاسة: {} يوماً (نفس النافذة لكل المقاطع).".format(
-            report.get("window_days") or _window_days()),
+            report.get("window_days") or _window_days()
+        ),
         "- المنشور: {} · المقاس: {}.".format(
-            report.get("published_count", 0), report.get("with_metrics", 0)),
+            report.get("published_count", 0), report.get("with_metrics", 0)
+        ),
         "- الارتباط: Spearman rank — لا يقلبه مقطع واحد بمليون مشاهدة.",
         "",
     ]
@@ -784,17 +925,24 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
     if correlations:
         lines.append("## ارتباط الخصائص")
         for feature, row in sorted(
-                correlations.items(),
-                key=lambda kv: -(abs(kv[1].get("vs_views") or 0))):
+            correlations.items(), key=lambda kv: -(abs(kv[1].get("vs_views") or 0))
+        ):
             ci = row.get("vs_views_ci")
             extra = ""
             if ci:
                 extra = " · CI [{}, {}]".format(ci[0], ci[1])
             if row.get("vs_views_significant") is False:
                 extra += " · غير دال"
-            lines.append("- `{}`: views rho={} ({}) · retention rho={} · n={}{}".format(
-                feature, row.get("vs_views"), row.get("strength"),
-                row.get("vs_retention"), row.get("samples", 0), extra))
+            lines.append(
+                "- `{}`: views rho={} ({}) · retention rho={} · n={}{}".format(
+                    feature,
+                    row.get("vs_views"),
+                    row.get("strength"),
+                    row.get("vs_retention"),
+                    row.get("samples", 0),
+                    extra,
+                )
+            )
         lines.append("")
     content = report.get("content_insights") or {}
     categories = content.get("categories") or {}
@@ -806,11 +954,19 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
                 if row.get("delta_retention_pct") is not None:
                     extra = " · احتفاظ {}{}%".format(
                         "+" if row["delta_retention_pct"] >= 0 else "",
-                        row["delta_retention_pct"])
-                lines.append("- {}={} · متوسط {} مشاهدة ({}{}%) · n={}{}".format(
-                    field, row.get("value"), row.get("avg_views"),
-                    "+" if row.get("delta_pct", 0) >= 0 else "",
-                    row.get("delta_pct"), row.get("samples"), extra))
+                        row["delta_retention_pct"],
+                    )
+                lines.append(
+                    "- {}={} · متوسط {} مشاهدة ({}{}%) · n={}{}".format(
+                        field,
+                        row.get("value"),
+                        row.get("avg_views"),
+                        "+" if row.get("delta_pct", 0) >= 0 else "",
+                        row.get("delta_pct"),
+                        row.get("samples"),
+                        extra,
+                    )
+                )
         lines.append("")
     if report.get("best_hours"):
         lines.append("## أفضل ساعات النشر (محلي)")
@@ -820,64 +976,99 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
     if curve:
         lines.append("## منحنى الاحتفاظ")
         lines.append("- المقاطع ذات المنحنى: {}.".format(curve.get("samples")))
-        lines.append("- أول 10%: {:.1f}% · المنتصف: {:.1f}% · النهاية: {:.1f}%.".format(
-            (curve.get("avg_hook_ratio") or 0) * 100,
-            (curve.get("avg_mid_ratio") or 0) * 100,
-            (curve.get("avg_end_ratio") or 0) * 100))
+        lines.append(
+            "- أول 10%: {:.1f}% · المنتصف: {:.1f}% · النهاية: {:.1f}%.".format(
+                (curve.get("avg_hook_ratio") or 0) * 100,
+                (curve.get("avg_mid_ratio") or 0) * 100,
+                (curve.get("avg_end_ratio") or 0) * 100,
+            )
+        )
         worst = curve.get("worst") or {}
         if worst:
             where = ""
             if worst.get("drop_seconds") is not None:
                 where = " (≈{} ثانية)".format(worst["drop_seconds"])
-            lines.append("- أكبر هبوط: عند {}% من المقطع{} بخصم {} نقطة — «{}».".format(
-                round((worst.get("max_drop_at") or 0) * 100), where,
-                worst.get("max_drop_pct"), worst.get("title") or worst.get("video_id")))
+            lines.append(
+                "- أكبر هبوط: عند {}% من المقطع{} بخصم {} نقطة — «{}».".format(
+                    round((worst.get("max_drop_at") or 0) * 100),
+                    where,
+                    worst.get("max_drop_pct"),
+                    worst.get("title") or worst.get("video_id"),
+                )
+            )
         else:
             lines.append("- لا هبوط حاد في المنحنيات المقاسة.")
         if (curve.get("avg_hook_ratio") or 1.0) < 0.85:
-            lines.append("- ⚠️ الخطاف يخسر {:.1f}% في أول 10% — قوِّ أول جملة وأول لقطة.".format(
-                (1.0 - curve["avg_hook_ratio"]) * 100))
+            lines.append(
+                "- ⚠️ الخطاف يخسر {:.1f}% في أول 10% — قوِّ أول جملة وأول لقطة.".format(
+                    (1.0 - curve["avg_hook_ratio"]) * 100
+                )
+            )
         lines.append("")
 
     try:
         from scripts import performance_weights
+
         weights = performance_weights.load_weights(
-            os.path.abspath(os.fspath(project_folder)))
+            os.path.abspath(os.fspath(project_folder))
+        )
         if weights.get("basis") == "performance_insights":
             lines.append("## ما تغيّر في الاختيار")
-            lines.append("- الثقة: {} (n={}).".format(
-                weights.get("confidence"), weights.get("samples")))
+            lines.append(
+                "- الثقة: {} (n={}).".format(
+                    weights.get("confidence"), weights.get("samples")
+                )
+            )
             for shift in weights.get("shifted") or []:
-                lines.append("- {} → {}: rho={} · إزاحة {}".format(
-                    shift.get("feature"), shift.get("component"),
-                    shift.get("r"), shift.get("shift")))
+                lines.append(
+                    "- {} → {}: rho={} · إزاحة {}".format(
+                        shift.get("feature"),
+                        shift.get("component"),
+                        shift.get("r"),
+                        shift.get("shift"),
+                    )
+                )
             if weights.get("title_boost"):
                 lines.append("- دفعة العنوان: {}".format(weights["title_boost"]))
             if weights.get("duration_bonus"):
                 lines.append("- دفعة المدة: {}".format(weights["duration_bonus"]))
             if weights.get("needed_samples"):
-                lines.append("- يحتاج {} مقطعاً مقاساً إضافياً لثقة كاملة.".format(
-                    weights["needed_samples"]))
+                lines.append(
+                    "- يحتاج {} مقطعاً مقاساً إضافياً لثقة كاملة.".format(
+                        weights["needed_samples"]
+                    )
+                )
             if weights.get("suppressed"):
                 lines.append("- إزاحات لم تُطبَّق (فترة الثقة تشمل الصفر):")
                 for item in weights["suppressed"]:
-                    lines.append("  - {} (rho={}).".format(
-                        item.get("component"), item.get("r")))
+                    lines.append(
+                        "  - {} (rho={}).".format(item.get("component"), item.get("r"))
+                    )
             lines.append("")
             lines.append("## التوصيات للجولة القادمة")
             for shift in weights.get("shifted") or []:
                 direction = "ارفع" if float(shift.get("shift") or 0) > 0 else "اخفض"
-                lines.append("- {} وزن «{}» (rho={}).".format(
-                    direction, shift.get("component"), shift.get("r")))
+                lines.append(
+                    "- {} وزن «{}» (rho={}).".format(
+                        direction, shift.get("component"), shift.get("r")
+                    )
+                )
             if weights.get("title_boost"):
-                lines.append("- {}".format(
-                    "قدّم نمط العنوان الأفضل أداءً (دفعة موجبة)."
-                    if weights["title_boost"] > 0
-                    else "قلّل النمط الحالي للعناوين (دفعة سالبة)."))
+                lines.append(
+                    "- {}".format(
+                        "قدّم نمط العنوان الأفضل أداءً (دفعة موجبة)."
+                        if weights["title_boost"] > 0
+                        else "قلّل النمط الحالي للعناوين (دفعة سالبة)."
+                    )
+                )
             if weights.get("duration_bonus"):
-                lines.append("- {}".format(
-                    "فضّل مقاطع أطول قليلاً." if weights["duration_bonus"] > 0
-                    else "فضّل مقاطع أقصر."))
+                lines.append(
+                    "- {}".format(
+                        "فضّل مقاطع أطول قليلاً."
+                        if weights["duration_bonus"] > 0
+                        else "فضّل مقاطع أقصر."
+                    )
+                )
             lines.append("")
     except Exception:
         pass
@@ -886,8 +1077,9 @@ def write_markdown(project_folder: str, report: dict[str, Any]) -> str:
         lines.extend("- " + str(item) for item in report["insights"])
         lines.append("")
     lines.append("_تم التوليد: {}_".format(report.get("generated_at", _now())))
-    fd, temporary = tempfile.mkstemp(prefix=".perf-md-", suffix=".tmp",
-                                     dir=os.path.dirname(path))
+    fd, temporary = tempfile.mkstemp(
+        prefix=".perf-md-", suffix=".tmp", dir=os.path.dirname(path)
+    )
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines).strip() + "\n")
     os.replace(temporary, path)
@@ -943,19 +1135,20 @@ def auto_refresh(project_folder: str, *, force: bool = False) -> dict[str, Any]:
     due = os.path.exists(os.path.join(folder, DUE_NAME))
     published = _published_videos(folder)
     if not published:
-        return {"refreshed": False, "reason": "no_published_videos",
-                "report": previous}
+        return {"refreshed": False, "reason": "no_published_videos", "report": previous}
     if not force and not due and previous:
         try:
-            age_hours = ((datetime.now(timezone.utc).timestamp()
-                          - os.path.getmtime(report_path)) / 3600.0)
+            age_hours = (
+                datetime.now(timezone.utc).timestamp() - os.path.getmtime(report_path)
+            ) / 3600.0
             history_path = os.path.join(folder, HISTORY_NAME)
-            history_age = (os.path.getmtime(history_path)
-                           if os.path.exists(history_path) else 0.0)
+            history_age = (
+                os.path.getmtime(history_path) if os.path.exists(history_path) else 0.0
+            )
             if age_hours < _refresh_ttl_hours() and (
-                    not history_age or os.path.getmtime(report_path) >= history_age):
-                return {"refreshed": False, "reason": "fresh",
-                        "report": previous}
+                not history_age or os.path.getmtime(report_path) >= history_age
+            ):
+                return {"refreshed": False, "reason": "fresh", "report": previous}
         except OSError:
             pass
     report = analyze(folder, fetch_live=True)
@@ -964,8 +1157,11 @@ def auto_refresh(project_folder: str, *, force: bool = False) -> dict[str, Any]:
     except (TypeError, ValueError):
         previous_metrics = 0
     if report.get("with_metrics", 0) == 0 and previous_metrics > 0:
-        return {"refreshed": False, "reason": "kept_previous_metrics",
-                "report": previous}
+        return {
+            "refreshed": False,
+            "reason": "kept_previous_metrics",
+            "report": previous,
+        }
     report_path = write_report(folder, report)
     markdown_path = write_markdown(folder, report)
     if report.get("with_metrics", 0) > 0:
@@ -973,33 +1169,54 @@ def auto_refresh(project_folder: str, *, force: bool = False) -> dict[str, Any]:
             os.remove(os.path.join(folder, DUE_NAME))
         except OSError:
             pass
-    return {"refreshed": True, "reason": "updated", "report": report,
-            "path": report_path, "markdown": markdown_path}
+    return {
+        "refreshed": True,
+        "reason": "updated",
+        "report": report,
+        "path": report_path,
+        "markdown": markdown_path,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Link real YouTube outcomes to clip features (performance loop)")
+        description="Link real YouTube outcomes to clip features (performance loop)"
+    )
     parser.add_argument("--project", required=True)
-    parser.add_argument("--offline", action="store_true",
-                        help="Skip YouTube Analytics fetch; analyze local data only")
-    parser.add_argument("--auto", action="store_true",
-                        help="Refresh only when stale or marked due (respects the TTL)")
-    parser.add_argument("--force", action="store_true",
-                        help="Refresh even when the cached report is fresh")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Skip YouTube Analytics fetch; analyze local data only",
+    )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Refresh only when stale or marked due (respects the TTL)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Refresh even when the cached report is fresh",
+    )
     args = parser.parse_args(argv)
     if args.auto and not args.offline:
         status = auto_refresh(args.project, force=args.force)
         report = status.get("report") or {}
-        print("performance auto-refresh: {} ({})".format(
-            status.get("reason"), status.get("path") or "no report"))
+        print(
+            "performance auto-refresh: {} ({})".format(
+                status.get("reason"), status.get("path") or "no report"
+            )
+        )
     else:
         report = analyze(args.project, fetch_live=not args.offline)
         path = write_report(args.project, report)
         write_markdown(args.project, report)
         print("performance insights → {}".format(path))
-    print("published: {} · with metrics: {}".format(
-        report["published_count"], report["with_metrics"]))
+    print(
+        "published: {} · with metrics: {}".format(
+            report["published_count"], report["with_metrics"]
+        )
+    )
     for insight in report["insights"]:
         print("  • {}".format(insight))
     return 0

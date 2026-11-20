@@ -5,6 +5,7 @@ The end-to-end path is exercised with REAL FFmpeg: init → add generated
 recordings → status → license-gated calibrate → thresholds file that
 ``scripts.audio_qc`` actually consumes.
 """
+
 import json
 import shutil
 import subprocess
@@ -13,17 +14,30 @@ import pytest
 
 from scripts import audio_qc_corpus as corpus
 
-pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None,
-                                reason="ffmpeg required")
+pytestmark = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None, reason="ffmpeg required"
+)
 
 
 def _tone(path, *, frequency=440.0, duration=4.0, volume=0.5):
     """A short 'recording' WAV, distinct enough per clip for calibration."""
-    subprocess.run([
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i",
-        "sine=frequency={}:sample_rate=44100,volume={}".format(frequency, volume),
-        "-t", str(duration), str(path)], check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency={}:sample_rate=44100,volume={}".format(frequency, volume),
+            "-t",
+            str(duration),
+            str(path),
+        ],
+        check=True,
+    )
     return str(path)
 
 
@@ -31,22 +45,27 @@ def _tone(path, *, frequency=440.0, duration=4.0, volume=0.5):
 # Manifest / licensing
 # ---------------------------------------------------------------------------
 
+
 def test_init_writes_manifest(tmp_path):
     manifest = corpus.init_corpus(
-        str(tmp_path / "c"), source="Own recordings", license_id="own-recording")
+        str(tmp_path / "c"), source="Own recordings", license_id="own-recording"
+    )
     assert manifest["license"]["id"] == "own-recording"
-    on_disk = json.loads((tmp_path / "c" / corpus.MANIFEST_NAME)
-                         .read_text(encoding="utf-8"))
+    on_disk = json.loads(
+        (tmp_path / "c" / corpus.MANIFEST_NAME).read_text(encoding="utf-8")
+    )
     assert on_disk["source"]["name"] == "Own recordings"
 
 
 def test_custom_license_requires_a_note(tmp_path):
     with pytest.raises(SystemExit):
-        corpus.init_corpus(str(tmp_path / "c"), source="Somewhere",
-                           license_id="custom")
+        corpus.init_corpus(str(tmp_path / "c"), source="Somewhere", license_id="custom")
     manifest = corpus.init_corpus(
-        str(tmp_path / "c2"), source="Somewhere", license_id="custom",
-        license_note="Permission granted by the author in writing")
+        str(tmp_path / "c2"),
+        source="Somewhere",
+        license_id="custom",
+        license_note="Permission granted by the author in writing",
+    )
     assert manifest["license"]["note"]
 
 
@@ -54,8 +73,11 @@ def test_cc_by_requires_attribution(tmp_path):
     with pytest.raises(SystemExit):
         corpus.init_corpus(str(tmp_path / "c"), source="CV", license_id="cc-by-4.0")
     manifest = corpus.init_corpus(
-        str(tmp_path / "c2"), source="CV", license_id="cc-by-4.0",
-        attribution="Some contributor")
+        str(tmp_path / "c2"),
+        source="CV",
+        license_id="cc-by-4.0",
+        attribution="Some contributor",
+    )
     assert manifest["license"]["attribution"] == "Some contributor"
 
 
@@ -71,6 +93,7 @@ def test_calibrate_refuses_unlicensed_corpus(tmp_path):
 # Clip normalisation
 # ---------------------------------------------------------------------------
 
+
 def test_add_normalises_to_canonical_mp4(tmp_path):
     corpus.init_corpus(str(tmp_path / "c"), source="Own", license_id="own-recording")
     wav = _tone(str(tmp_path / "take.wav"))
@@ -81,6 +104,7 @@ def test_add_normalises_to_canonical_mp4(tmp_path):
     assert clip.suffix == ".mp4"
 
     from scripts import media_validation
+
     probe = media_validation.probe_media(str(clip))
     assert probe["ok"] and probe["audio"] is not None
     assert probe["duration"] > 0
@@ -104,6 +128,7 @@ def test_add_reports_failures_without_dying(tmp_path):
 # Common Voice import
 # ---------------------------------------------------------------------------
 
+
 def _fake_cv_export(tmp_path, clips=3):
     cv = tmp_path / "cv_ar"
     (cv / "clips").mkdir(parents=True)
@@ -113,9 +138,10 @@ def _fake_cv_export(tmp_path, clips=3):
         _tone(str(cv / "clips" / name), frequency=330 + index * 60, duration=3)
         rows.append(name)
     (cv / "validated.tsv").write_text(
-        "client_id\tpath\tsentence\n" +
-        "".join("u{}\t{}\tجملة تجريبية\n".format(i, n) for i, n in enumerate(rows)),
-        encoding="utf-8")
+        "client_id\tpath\tsentence\n"
+        + "".join("u{}\t{}\tجملة تجريبية\n".format(i, n) for i, n in enumerate(rows)),
+        encoding="utf-8",
+    )
     return str(cv)
 
 
@@ -136,11 +162,15 @@ def test_import_common_voice_uses_cc0_manifest_and_validated_rows(tmp_path):
 # Status + end-to-end calibration
 # ---------------------------------------------------------------------------
 
+
 def _seed_corpus(tmp_path, count=5):
-    corpus.init_corpus(str(tmp_path / "corpus"), source="Own", license_id="own-recording")
+    corpus.init_corpus(
+        str(tmp_path / "corpus"), source="Own", license_id="own-recording"
+    )
     sources = [
-        _tone(str(tmp_path / "rec{}.wav".format(i)),
-              frequency=380 + i * 40, duration=4.0)
+        _tone(
+            str(tmp_path / "rec{}.wav".format(i)), frequency=380 + i * 40, duration=4.0
+        )
         for i in range(count)
     ]
     corpus.add_clips(str(tmp_path / "corpus"), sources)
@@ -178,8 +208,12 @@ def test_end_to_end_calibration_produces_usable_thresholds(tmp_path):
 
 def test_cli_flow(tmp_path, capsys):
     corpus_dir = str(tmp_path / "c")
-    assert corpus.main(["init", corpus_dir, "--source", "Own",
-                        "--license", "own-recording"]) == 0
+    assert (
+        corpus.main(
+            ["init", corpus_dir, "--source", "Own", "--license", "own-recording"]
+        )
+        == 0
+    )
     wav = _tone(str(tmp_path / "a.wav"))
     assert corpus.main(["add", corpus_dir, wav]) == 0
     assert corpus.main(["status", corpus_dir, "--json"]) in (0, 2)

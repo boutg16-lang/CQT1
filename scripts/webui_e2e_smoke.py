@@ -66,35 +66,62 @@ def _launch_webui(out_dir: str, url: str, timeout: float) -> subprocess.Popen:
     log_path = os.path.join(out_dir, "webui.log")
     log = open(log_path, "w", encoding="utf-8")
     proc = subprocess.Popen(
-        [sys.executable, "-c",
-         "from webui.app import _launch; import sys; sys.exit(_launch(['--preflight', 'off']))"],
-        stdout=log, stderr=subprocess.STDOUT, env=env,
+        [
+            sys.executable,
+            "-c",
+            "from webui.app import _launch; import sys; sys.exit(_launch(['--preflight', 'off']))",
+        ],
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        env=env,
     )
     print(f"[webui-e2e] launched WebUI (pid {proc.pid}) → {log_path}")
     if not _wait_for_http(url, timeout):
         proc.terminate()
-        raise SystemExit(f"[webui-e2e] WebUI did not answer at {url} within {timeout:.0f}s "
-                         f"(see {log_path})")
+        raise SystemExit(
+            f"[webui-e2e] WebUI did not answer at {url} within {timeout:.0f}s "
+            f"(see {log_path})"
+        )
     return proc
 
 
-def run(url: str, out_dir: str, *, headless: bool = True, tab_timeout_ms: int = 20000,
-        max_tabs: int = 20) -> dict:
+def run(
+    url: str,
+    out_dir: str,
+    *,
+    headless: bool = True,
+    tab_timeout_ms: int = 20000,
+    max_tabs: int = 20,
+) -> dict:
     from playwright.sync_api import sync_playwright  # local import: optional dependency
 
     os.makedirs(out_dir, exist_ok=True)
     console_errors: list[dict] = []
     page_errors: list[str] = []
     tabs: list[dict] = []
-    report: dict = {"url": url, "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "headless": headless, "ok": False, "checks": {}}
+    report: dict = {
+        "url": url,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "headless": headless,
+        "ok": False,
+        "checks": {},
+    }
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome", headless=headless,
-                                    args=["--no-sandbox", "--disable-dev-shm-usage"])
+        browser = p.chromium.launch(
+            channel="chrome",
+            headless=headless,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         page = browser.new_page(viewport={"width": 1440, "height": 900})
-        page.on("console", lambda msg: console_errors.append({"type": msg.type, "text": msg.text})
-                if msg.type == "error" else None)
+        page.on(
+            "console",
+            lambda msg: (
+                console_errors.append({"type": msg.type, "text": msg.text})
+                if msg.type == "error"
+                else None
+            ),
+        )
         page.on("pageerror", lambda exc: page_errors.append(str(exc)))
 
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -137,7 +164,8 @@ def run(url: str, out_dir: str, *, headless: bool = True, tab_timeout_ms: int = 
     report["checks"]["no_page_errors"] = not page_errors
     report["ok"] = bool(
         report["checks"].get("gradio_container")
-        and not console_errors and not page_errors
+        and not console_errors
+        and not page_errors
         and all(t.get("clicked") for t in tabs)
     )
 
@@ -160,39 +188,56 @@ def _write_markdown(report: dict, path: str) -> None:
         "",
     ]
     if report.get("console_errors"):
-        lines += ["## Console errors", ""] + [f"- {e['text'][:300]}" for e in report["console_errors"]]
+        lines += ["## Console errors", ""] + [
+            f"- {e['text'][:300]}" for e in report["console_errors"]
+        ]
     if report.get("page_errors"):
-        lines += ["", "## Page errors", ""] + [f"- {e[:300]}" for e in report["page_errors"]]
+        lines += ["", "## Page errors", ""] + [
+            f"- {e[:300]}" for e in report["page_errors"]
+        ]
     if report.get("tabs"):
         lines += ["", "## Tabs", ""] + [
             f"- {'✅' if t.get('clicked') else '❌'} {t.get('label') or t['index']}"
-            for t in report["tabs"]]
+            for t in report["tabs"]
+        ]
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Browser-driven WebUI smoke test.")
-    parser.add_argument("--url", default=DEFAULT_URL, help="WebUI URL (default %(default)s)")
-    parser.add_argument("--out", default=DEFAULT_OUT, help="Output directory (default %(default)s)")
-    parser.add_argument("--launch", action="store_true", help="Launch the WebUI before testing")
+    parser.add_argument(
+        "--url", default=DEFAULT_URL, help="WebUI URL (default %(default)s)"
+    )
+    parser.add_argument(
+        "--out", default=DEFAULT_OUT, help="Output directory (default %(default)s)"
+    )
+    parser.add_argument(
+        "--launch", action="store_true", help="Launch the WebUI before testing"
+    )
     parser.add_argument("--headed", action="store_true", help="Show the browser window")
-    parser.add_argument("--launch-timeout", type=float, default=180.0, help="Seconds to wait for boot")
+    parser.add_argument(
+        "--launch-timeout", type=float, default=180.0, help="Seconds to wait for boot"
+    )
     parser.add_argument("--max-tabs", type=int, default=20)
     args = parser.parse_args(argv)
 
     try:
         import playwright  # noqa: F401
     except ImportError:
-        print("[webui-e2e] Playwright is not installed. Run:\n"
-              "    pip install playwright", file=sys.stderr)
+        print(
+            "[webui-e2e] Playwright is not installed. Run:\n    pip install playwright",
+            file=sys.stderr,
+        )
         return 2
 
     proc = None
     if args.launch:
         proc = _launch_webui(args.out, args.url, args.launch_timeout)
     try:
-        report = run(args.url, args.out, headless=not args.headed, max_tabs=args.max_tabs)
+        report = run(
+            args.url, args.out, headless=not args.headed, max_tabs=args.max_tabs
+        )
     except SystemExit as exc:
         return 3 if proc is not None else int(exc.code or 3)
     finally:
@@ -203,8 +248,10 @@ def main(argv=None) -> int:
             except Exception:
                 proc.kill()
 
-    print(f"[webui-e2e] {'OK' if report['ok'] else 'FAILED'} — report: "
-          f"{os.path.join(args.out, 'report.md')}")
+    print(
+        f"[webui-e2e] {'OK' if report['ok'] else 'FAILED'} — report: "
+        f"{os.path.join(args.out, 'report.md')}"
+    )
     return 0 if report["ok"] else 1
 
 

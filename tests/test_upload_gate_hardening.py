@@ -49,33 +49,42 @@ def _write_publish_ready_evidence(project):
         "recommended_title": "Short clip",
     }
     _write(project, ug.VIRAL_SEGMENTS_FILE, {"segments": [segment]})
-    _write(project, ug.SAFETY_REPORT, {
-        "mode": "censor",
-        "segments": [{**clip, "status": "censor"}],
-    })
+    _write(
+        project,
+        ug.SAFETY_REPORT,
+        {
+            "mode": "censor",
+            "segments": [{**clip, "status": "censor"}],
+        },
+    )
 
 
 def _write_verified_censor_evidence(project):
-    _write(project, ug.CENSOR_MAP, {
-        "mode": "censor",
-        "segments": {
-            "0": {
-                "title": "Short clip",
-                "start_time": 10.0,
-                "end_time": 20.0,
-                "video_censored": True,
-                "subtitle_masked": 2,
-                "muted_words": 2,
-                "spans": [{"term": "slur", "start": 1.0, "end": 1.2}],
-            }
+    _write(
+        project,
+        ug.CENSOR_MAP,
+        {
+            "mode": "censor",
+            "segments": {
+                "0": {
+                    "title": "Short clip",
+                    "start_time": 10.0,
+                    "end_time": 20.0,
+                    "video_censored": True,
+                    "subtitle_masked": 2,
+                    "muted_words": 2,
+                    "spans": [{"term": "slur", "start": 1.0, "end": 1.2}],
+                }
+            },
+            "errors": [],
         },
-        "errors": [],
-    })
+    )
 
 
 # ---------------------------------------------------------------------------
 # 1. content_guard failure must fail closed
 # ---------------------------------------------------------------------------
+
 
 class TestContentGuardUnavailableFailsClosed:
     def test_guard_exception_blocks_the_upload(self, tmp_path, monkeypatch):
@@ -84,17 +93,25 @@ class TestContentGuardUnavailableFailsClosed:
 
         monkeypatch.setattr(content_guard, "assess_clip", boom)
         verdict = ug.check_clip(
-            str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"])
+            str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"]
+        )
 
         assert verdict["allowed"] is False
         reason = next(
-            (r for r in verdict["reasons"] if r["source"] == "content_guard_unavailable"),
+            (
+                r
+                for r in verdict["reasons"]
+                if r["source"] == "content_guard_unavailable"
+            ),
             None,
         )
         assert reason is not None, verdict["reasons"]
         assert reason["severity"] == "high"
         assert "registry is locked by another process" in reason["detail"]
-        assert "registry is locked by another process" in verdict["content_guard"]["evidence"]["error"]
+        assert (
+            "registry is locked by another process"
+            in verdict["content_guard"]["evidence"]["error"]
+        )
 
     def test_gate_upload_refuses_when_guard_raises(self, tmp_path, monkeypatch):
         def boom(*_args, **_kwargs):
@@ -102,14 +119,23 @@ class TestContentGuardUnavailableFailsClosed:
 
         monkeypatch.setattr(content_guard, "assess_clip", boom)
         with pytest.raises(ug.UploadGateError):
-            ug.gate_upload(str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"])
+            ug.gate_upload(
+                str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"]
+            )
 
     def test_guard_success_unchanged(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(content_guard, "assess_clip", lambda *a, **k: {
-            "allowed": True, "reasons": [], "evidence": {},
-        })
+        monkeypatch.setattr(
+            content_guard,
+            "assess_clip",
+            lambda *a, **k: {
+                "allowed": True,
+                "reasons": [],
+                "evidence": {},
+            },
+        )
         verdict = ug.check_clip(
-            str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"])
+            str(tmp_path), 0, "A clean title", "A clean caption", ["shorts"]
+        )
         assert verdict["allowed"] is True
 
 
@@ -117,18 +143,26 @@ class TestContentGuardUnavailableFailsClosed:
 # 2. censor status must not bypass a semantic manual-review verdict
 # ---------------------------------------------------------------------------
 
+
 class TestCensorDoesNotBypassSemanticReview:
     def test_censor_with_semantic_review_is_refused(self, tmp_path):
         _write_publish_ready_evidence(tmp_path)
         _write_verified_censor_evidence(tmp_path)
         safety = {
             "mode": "censor",
-            "segments": [{
-                "index": 0, "title": "Short clip",
-                "start_time": 10.0, "end_time": 20.0,
-                "status": "censor",
-                "semantic": {"action": "review", "explanation": "contextual policy risk"},
-            }],
+            "segments": [
+                {
+                    "index": 0,
+                    "title": "Short clip",
+                    "start_time": 10.0,
+                    "end_time": 20.0,
+                    "status": "censor",
+                    "semantic": {
+                        "action": "review",
+                        "explanation": "contextual policy risk",
+                    },
+                }
+            ],
         }
         _write(tmp_path, ug.SAFETY_REPORT, safety)
 
@@ -152,14 +186,21 @@ class TestCensorDoesNotBypassSemanticReview:
 # 3. TikTok / Instagram uploaders accept the generic keyword set
 # ---------------------------------------------------------------------------
 
+
 class TestSocialUploaderConstructors:
     @pytest.mark.parametrize("uploader_cls", [ug.TikTokUploader, ug.InstagramUploader])
     def test_accepts_generic_uploader_kwargs(self, tmp_path, uploader_cls):
         uploader = uploader_cls(
-            str(tmp_path), dry_run=True, extra_rules_path=None, video_url=None,
-            music_gate="block", client_secrets_path="/tmp/secrets.json",
-            token_path="/tmp/token.json", privacy_status="private",
-            publish_at=None, oauth_full_access=True,
+            str(tmp_path),
+            dry_run=True,
+            extra_rules_path=None,
+            video_url=None,
+            music_gate="block",
+            client_secrets_path="/tmp/secrets.json",
+            token_path="/tmp/token.json",
+            privacy_status="private",
+            publish_at=None,
+            oauth_full_access=True,
         )
         assert uploader.music_gate == "block"
         assert uploader.client_secrets_path == "/tmp/secrets.json"
@@ -170,17 +211,30 @@ class TestSocialUploaderConstructors:
     @pytest.mark.parametrize("uploader_cls", [ug.TikTokUploader, ug.InstagramUploader])
     def test_positional_video_url_still_works(self, tmp_path, uploader_cls):
         uploader = uploader_cls(
-            str(tmp_path), True, None, "https://example.com/clip.mp4")
+            str(tmp_path), True, None, "https://example.com/clip.mp4"
+        )
         assert uploader.video_url == "https://example.com/clip.mp4"
         assert uploader.dry_run is True
 
     @pytest.mark.parametrize("platform", ["tiktok", "instagram"])
     def test_cli_upload_reaches_gate_without_typeerror(self, tmp_path, platform):
         proc = subprocess.run(
-            [sys.executable, "-m", "scripts.upload_gate",
-             "--project", str(tmp_path), "--upload", platform,
-             "--title", "A clean title", "--caption", "A clean caption"],
-            cwd=REPO_ROOT, capture_output=True, text=True,
+            [
+                sys.executable,
+                "-m",
+                "scripts.upload_gate",
+                "--project",
+                str(tmp_path),
+                "--upload",
+                platform,
+                "--title",
+                "A clean title",
+                "--caption",
+                "A clean caption",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
         )
         combined = proc.stdout + proc.stderr
         assert "TypeError" not in combined, combined
@@ -192,10 +246,20 @@ class TestSocialUploaderConstructors:
         # Reaching the OAuth setup path (a clean RuntimeError / success) proves
         # construction with the full generic kwarg set no longer raises TypeError.
         proc = subprocess.run(
-            [sys.executable, "-m", "scripts.upload_gate",
-             "--project", str(tmp_path), "--auth", platform,
-             "--music-gate", "warn"],
-            cwd=REPO_ROOT, capture_output=True, text=True,
+            [
+                sys.executable,
+                "-m",
+                "scripts.upload_gate",
+                "--project",
+                str(tmp_path),
+                "--auth",
+                platform,
+                "--music-gate",
+                "warn",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
         )
         combined = proc.stdout + proc.stderr
         assert "TypeError" not in combined, combined
@@ -205,6 +269,7 @@ class TestSocialUploaderConstructors:
 # ---------------------------------------------------------------------------
 # 4. privacy resolution (YT_PRIVACY must be visible to every guard)
 # ---------------------------------------------------------------------------
+
 
 class TestEffectivePrivacy:
     def test_defaults_to_private(self, monkeypatch):
@@ -241,13 +306,22 @@ class TestEffectivePrivacy:
         video.write_bytes(b"fake video")
         _write_publish_ready_evidence(tmp_path)
         # Make the clip clean for the live gate.
-        _write(tmp_path, ug.SAFETY_REPORT, {
-            "mode": "block",
-            "segments": [{
-                "index": 0, "title": "Short clip",
-                "start_time": 10.0, "end_time": 20.0, "status": "safe",
-            }],
-        })
+        _write(
+            tmp_path,
+            ug.SAFETY_REPORT,
+            {
+                "mode": "block",
+                "segments": [
+                    {
+                        "index": 0,
+                        "title": "Short clip",
+                        "start_time": 10.0,
+                        "end_time": 20.0,
+                        "status": "safe",
+                    }
+                ],
+            },
+        )
 
         captured = {}
 

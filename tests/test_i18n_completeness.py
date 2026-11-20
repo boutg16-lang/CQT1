@@ -50,7 +50,8 @@ def test_arabic_is_actually_arabic():
     """ar_SA values should be Arabic (or intentional proper nouns)."""
     allowed_untranslated = {"main", "Gemini", "G4F", "Unknown_Video"}
     untranslated = [
-        k for k in EN
+        k
+        for k in EN
         if AR.get(k) == k and k not in allowed_untranslated and not ARABIC_RE.search(k)
     ]
     assert untranslated == [], f"ar_SA untranslated keys: {untranslated[:10]}"

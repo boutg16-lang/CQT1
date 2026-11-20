@@ -11,13 +11,19 @@ def _patch_state(monkeypatch, tmp_path):
     monkeypatch.setattr(zo_client, "STATE_DIR", tmp_path / "state")
     monkeypatch.setattr(zo_client, "STATE_FILE", tmp_path / "state" / "session.json")
     monkeypatch.setattr(zo_client, "SCREENSHOT_FILE", tmp_path / "state" / "latest.jpg")
-    monkeypatch.setattr(zo_client, "CONTROL_TOKEN_FILE", tmp_path / "state" / "control.token")
+    monkeypatch.setattr(
+        zo_client, "CONTROL_TOKEN_FILE", tmp_path / "state" / "control.token"
+    )
 
 
 def test_old_pairing_deadline_does_not_expire_persistent_session(monkeypatch, tmp_path):
     _patch_state(monkeypatch, tmp_path)
     zo_client._save_state(
-        {"session_id": "test-session", "agent_token": "private-agent-token", "expires_at": time.time() - 1}
+        {
+            "session_id": "test-session",
+            "agent_token": "private-agent-token",
+            "expires_at": time.time() - 1,
+        }
     )
 
     assert zo_client._read_state()["session_id"] == "test-session"
@@ -57,7 +63,11 @@ def test_start_shows_pairing_code_but_never_agent_token(monkeypatch, tmp_path, c
 def test_screenshot_is_saved_without_printing_base64(monkeypatch, tmp_path, capsys):
     _patch_state(monkeypatch, tmp_path)
     zo_client._save_state(
-        {"session_id": "test-session", "agent_token": "private-agent-token", "expires_at": time.time() + 900}
+        {
+            "session_id": "test-session",
+            "agent_token": "private-agent-token",
+            "expires_at": time.time() + 900,
+        }
     )
     image = b"jpeg-test-content"
     monkeypatch.setattr(
@@ -80,11 +90,19 @@ def test_screenshot_is_saved_without_printing_base64(monkeypatch, tmp_path, caps
 def test_stop_removes_session_state_and_screenshot(monkeypatch, tmp_path):
     _patch_state(monkeypatch, tmp_path)
     zo_client._save_state(
-        {"session_id": "test-session", "agent_token": "private-agent-token", "expires_at": time.time() + 900}
+        {
+            "session_id": "test-session",
+            "agent_token": "private-agent-token",
+            "expires_at": time.time() + 900,
+        }
     )
     zo_client.SCREENSHOT_FILE.write_bytes(b"image")
     stopped = []
-    monkeypatch.setattr(zo_client, "stop_session", lambda session_id, token: stopped.append((session_id, token)))
+    monkeypatch.setattr(
+        zo_client,
+        "stop_session",
+        lambda session_id, token: stopped.append((session_id, token)),
+    )
 
     assert zo_client._stop() == 0
     assert stopped == [("test-session", "private-agent-token")]

@@ -18,9 +18,19 @@ FFMPEG = shutil.which("ffmpeg")
 
 def _make_video(path, seconds=4, pattern="testsrc", size="160x160"):
     cmd = [
-        FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "{}=size={}:duration={}".format(pattern, size, seconds),
-        "-pix_fmt", "yuv420p", "-c:v", "libx264",
+        FFMPEG,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "{}=size={}:duration={}".format(pattern, size, seconds),
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        "libx264",
         str(path),
     ]
     subprocess.run(cmd, check=True, capture_output=True)
@@ -29,6 +39,7 @@ def _make_video(path, seconds=4, pattern="testsrc", size="160x160"):
 # ---------------------------------------------------------------------------
 # dHash / frame similarity
 # ---------------------------------------------------------------------------
+
 
 class TestFrameSimilarity:
     @pytest.mark.skipif(not FFMPEG, reason="ffmpeg not available")
@@ -50,8 +61,12 @@ class TestFrameSimilarity:
         assert sim is not None and sim <= 60.0
 
     def test_missing_file_returns_none(self, tmp_path):
-        assert rs.frame_similarity(str(tmp_path / "nope.mp4"),
-                                   str(tmp_path / "nope2.mp4"), [0.5]) is None
+        assert (
+            rs.frame_similarity(
+                str(tmp_path / "nope.mp4"), str(tmp_path / "nope2.mp4"), [0.5]
+            )
+            is None
+        )
 
     def test_independent_timestamps_compare_clip_to_source_window(self, monkeypatch):
         calls = []
@@ -71,10 +86,24 @@ class TestLetterbox:
     def test_pillarboxed_video_detected(self, tmp_path):
         # 160x160 content centered inside a 320x160 canvas → side bars
         v = tmp_path / "pb.mp4"
-        cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
-               "-f", "lavfi", "-i", "testsrc=size=160x160:duration=3",
-               "-vf", "pad=320:160:80:0:black", "-pix_fmt", "yuv420p",
-               "-c:v", "libx264", str(v)]
+        cmd = [
+            FFMPEG,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=160x160:duration=3",
+            "-vf",
+            "pad=320:160:80:0:black",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+            str(v),
+        ]
         subprocess.run(cmd, check=True, capture_output=True)
         assert rs._letterbox_ratio(str(v), 1.5) >= 0.3
 
@@ -89,13 +118,14 @@ class TestLetterbox:
 # Text signals
 # ---------------------------------------------------------------------------
 
+
 class TestProfanityWindow:
     def test_profanity_inside_first7(self):
         segment = {"start_time": 10.0, "end_time": 20.0}
         words = [
             {"word": "مرحبا", "start": 10.0, "end": 10.4},
             {"word": "يا", "start": 11.0, "end": 11.2},
-            {"word": "كلب", "start": 11.2, "end": 11.8},   # medium harassment
+            {"word": "كلب", "start": 11.2, "end": 11.8},  # medium harassment
             {"word": "متابعة", "start": 18.0, "end": 18.5},
         ]
         any_off, profanity = rs.profanity_in_first_seconds(segment, words)
@@ -113,14 +143,17 @@ class TestProfanityWindow:
 
     def test_clean_text(self):
         segment = {"start_time": 0.0, "end_time": 10.0}
-        words = [{"word": "طبخ", "start": 0.0, "end": 0.5},
-                 {"word": "سفر", "start": 1.0, "end": 1.5}]
+        words = [
+            {"word": "طبخ", "start": 0.0, "end": 0.5},
+            {"word": "سفر", "start": 1.0, "end": 1.5},
+        ]
         assert rs.profanity_in_first_seconds(segment, words) == (False, [])
 
 
 # ---------------------------------------------------------------------------
 # Segment scoring
 # ---------------------------------------------------------------------------
+
 
 class TestScoreSegment:
     def test_no_videos_reuse_zero_text_scored(self, tmp_path):
@@ -149,7 +182,9 @@ class TestScoreSegment:
             "status": "manual_review",
             "semantic": {"action": "review", "category": "context_required"},
         }
-        entry = rs.score_segment(segment, 0, str(project), [], None, safety_entry=safety_entry)
+        entry = rs.score_segment(
+            segment, 0, str(project), [], None, safety_entry=safety_entry
+        )
         assert entry["axes"]["text"]["semantic_policy"] == 75
         assert entry["axes"]["text"]["hate_speech"] == 75
         assert entry["overall"] == "high"
@@ -159,17 +194,20 @@ class TestScoreSegment:
 # Project analysis + gate
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyzeProject:
     def _project(self, tmp_path, segments):
         project = tmp_path / "proj"
         project.mkdir()
         (project / "viral_segments.txt").write_text(
-            json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8")
+            json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8"
+        )
         return str(project)
 
     def test_graceful_without_videos(self, tmp_path):
-        project = self._project(tmp_path, [
-            {"title": "نظيف", "start_time": 0.0, "end_time": 30.0}])
+        project = self._project(
+            tmp_path, [{"title": "نظيف", "start_time": 0.0, "end_time": 30.0}]
+        )
         report = rs.analyze_project(project)
         assert report["summary"]["total"] == 1
         assert report["summary"]["low"] == 1
@@ -187,29 +225,46 @@ class TestAnalyzeProject:
 
         segments = [{"title": "منسوخ", "start_time": 0.0, "end_time": 4.0}]
         (project / "viral_segments.txt").write_text(
-            json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8")
+            json.dumps({"segments": segments}, ensure_ascii=False), encoding="utf-8"
+        )
 
         report = rs.analyze_project(str(project), gate_threshold=70.0)
         entry = report["segments"][0]
         assert entry["axes"]["reuse"]["score"] >= 70.0
         assert len(report["blocked"]) == 1
         # the gate blacklist file was written
-        blacklist = json.loads((project / rs.PUBLISH_BLOCKLIST_FILENAME).read_text(encoding="utf-8"))
+        blacklist = json.loads(
+            (project / rs.PUBLISH_BLOCKLIST_FILENAME).read_text(encoding="utf-8")
+        )
         assert blacklist["blocked"][0]["title"] == "منسوخ"
 
     def test_gate_threshold_logic(self):
         # pure-logic check via analyze_project on entries without videos
         # (reuse stays 0, but a first-7s violence word pushes overall high)
         import tempfile
+
         with tempfile.TemporaryDirectory() as d:
             project = os.path.join(d, "p")
             os.makedirs(project)
             segments = [{"title": "خطير", "start_time": 0.0, "end_time": 10.0}]
-            with open(os.path.join(project, "viral_segments.txt"), "w", encoding="utf-8") as f:
+            with open(
+                os.path.join(project, "viral_segments.txt"), "w", encoding="utf-8"
+            ) as f:
                 json.dump({"segments": segments}, f, ensure_ascii=False)
             with open(os.path.join(project, "input.json"), "w", encoding="utf-8") as f:
-                json.dump({"segments": [{"start": 0, "end": 10, "words": [
-                    {"word": "اذبحهم", "start": 2.0, "end": 2.5}]}]}, f, ensure_ascii=False)
+                json.dump(
+                    {
+                        "segments": [
+                            {
+                                "start": 0,
+                                "end": 10,
+                                "words": [{"word": "اذبحهم", "start": 2.0, "end": 2.5}],
+                            }
+                        ]
+                    },
+                    f,
+                    ensure_ascii=False,
+                )
             report = rs.analyze_project(project)
             assert len(report["blocked"]) == 1
 
@@ -217,20 +272,49 @@ class TestAnalyzeProject:
 def test_build_scorecard_html_shape():
     """v6.16: readable HTML report (functional completeness)."""
     report = {
-        "summary": {"total": 2, "low": 1, "medium": 0, "high": 1, "danger": 0,
-                    "blocked_for_publish": 1},
+        "summary": {
+            "total": 2,
+            "low": 1,
+            "medium": 0,
+            "high": 1,
+            "danger": 0,
+            "blocked_for_publish": 1,
+        },
         "segments": [
-            {"index": 0, "title": "كلب لطيف", "overall": "low", "overall_score": 12.0,
-             "axes": {"text": {"first7s": {"score": 5}}, "reuse": {"similarity": 0.1},
-                      "visual": {"score": 0}}},
-            {"index": 1, "title": "مقطع خطير", "overall": "high", "overall_score": 78.0,
-             "axes": {"text": {"first7s": {"score": 65}}, "reuse": {"similarity": 0.85},
-                      "visual": {"score": 0}}},
+            {
+                "index": 0,
+                "title": "كلب لطيف",
+                "overall": "low",
+                "overall_score": 12.0,
+                "axes": {
+                    "text": {"first7s": {"score": 5}},
+                    "reuse": {"similarity": 0.1},
+                    "visual": {"score": 0},
+                },
+            },
+            {
+                "index": 1,
+                "title": "مقطع خطير",
+                "overall": "high",
+                "overall_score": 78.0,
+                "axes": {
+                    "text": {"first7s": {"score": 65}},
+                    "reuse": {"similarity": 0.85},
+                    "visual": {"score": 0},
+                },
+            },
         ],
         "blocked": [
-            {"index": 1, "title": "مقطع خطير", "overall": "high",
-             "axes": {"text": {"first7s": {"score": 65}}, "reuse": {"similarity": 0.85},
-                      "visual": {"score": 0}}},
+            {
+                "index": 1,
+                "title": "مقطع خطير",
+                "overall": "high",
+                "axes": {
+                    "text": {"first7s": {"score": 65}},
+                    "reuse": {"similarity": 0.85},
+                    "visual": {"score": 0},
+                },
+            },
         ],
     }
     html = rs.build_scorecard_html(report)

@@ -24,8 +24,10 @@ def _inject_googleapiclient(monkeypatch):
             calls["media_body"] = media_body
 
         def execute(self):
-            return {"kind": "youtube#thumbnailSetResponse",
-                    "items": [{"videoId": calls["video_id"]}]}
+            return {
+                "kind": "youtube#thumbnailSetResponse",
+                "items": [{"videoId": calls["video_id"]}],
+            }
 
     class FakeThumbnails:
         def set(self, videoId=None, media_body=None):
@@ -70,6 +72,7 @@ def test_attach_thumbnail_requires_existing_file(tmp_path, monkeypatch):
     uploader = YouTubeUploader(str(project))
     monkeypatch.setattr(uploader, "_load_or_create_token", lambda: object())
     import pytest
+
     with pytest.raises(ValueError):
         uploader.attach_thumbnail("ABC123", os.path.join(str(project), "missing.png"))
     assert calls["video_id"] is None

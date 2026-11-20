@@ -22,28 +22,48 @@ import re
 import subprocess
 
 DEFAULT_FILLERS = {
-    "um", "uh", "ah", "er", "err", "hmm", "mm", "mhm", "emm", "uhh", "umm",
-    "euh", "euhh", "aah",
+    "um",
+    "uh",
+    "ah",
+    "er",
+    "err",
+    "hmm",
+    "mm",
+    "mhm",
+    "emm",
+    "uhh",
+    "umm",
+    "euh",
+    "euhh",
+    "aah",
 }
-MIN_SILENCE = 0.40        # silence shorter than this is left alone
-MIN_FILLER_SPAN = 0.25    # filler runs shorter than this are left alone
-MAX_CUT = 4.0             # never remove more than this at once
-PADDING = 0.10            # extend filler spans by this margin on each side
-MIN_KEEP = 0.35           # never leave a gap shorter than this between kept speech
+MIN_SILENCE = 0.40  # silence shorter than this is left alone
+MIN_FILLER_SPAN = 0.25  # filler runs shorter than this are left alone
+MAX_CUT = 4.0  # never remove more than this at once
+PADDING = 0.10  # extend filler spans by this margin on each side
+MIN_KEEP = 0.35  # never leave a gap shorter than this between kept speech
 
 
 # ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
+
 def detect_silences(video_path, threshold_db=-35.0, min_duration=MIN_SILENCE):
     """Return [(start, end, duration), ...] via ffmpeg silencedetect."""
     if not os.path.exists(video_path):
         return []
     cmd = [
-        "ffmpeg", "-hide_banner", "-nostats", "-i", video_path,
-        "-af", "silencedetect=noise={}dB:d={}".format(threshold_db, min_duration),
-        "-f", "null", "-",
+        "ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        video_path,
+        "-af",
+        "silencedetect=noise={}dB:d={}".format(threshold_db, min_duration),
+        "-f",
+        "null",
+        "-",
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
@@ -80,17 +100,25 @@ def load_words(subs_json_path):
         if seg_words:
             for w in seg_words:
                 try:
-                    words.append({"word": str(w.get("word", "")).lower(),
-                                  "start": float(w.get("start", 0)),
-                                  "end": float(w.get("end", 0))})
+                    words.append(
+                        {
+                            "word": str(w.get("word", "")).lower(),
+                            "start": float(w.get("start", 0)),
+                            "end": float(w.get("end", 0)),
+                        }
+                    )
                 except Exception:
                     continue
         else:
             # no word-level data → approximate the whole segment as one word
             try:
-                words.append({"word": str(seg.get("text", "")).lower(),
-                              "start": float(seg.get("start", 0)),
-                              "end": float(seg.get("end", 0))})
+                words.append(
+                    {
+                        "word": str(seg.get("text", "")).lower(),
+                        "start": float(seg.get("start", 0)),
+                        "end": float(seg.get("end", 0)),
+                    }
+                )
             except Exception:
                 continue
     words.sort(key=lambda w: w["start"])
@@ -135,17 +163,35 @@ def find_filler_spans(words, fillers=None):
 def _probe_duration(video_path):
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         return float(res.stdout.strip())
     except Exception:
         return None
 
 
-def plan_cuts(silences, filler_spans, duration=None,
-              min_silence=MIN_SILENCE, min_filler_span=MIN_FILLER_SPAN,
-              max_cut=MAX_CUT, padding=PADDING, min_keep=MIN_KEEP):
+def plan_cuts(
+    silences,
+    filler_spans,
+    duration=None,
+    min_silence=MIN_SILENCE,
+    min_filler_span=MIN_FILLER_SPAN,
+    max_cut=MAX_CUT,
+    padding=PADDING,
+    min_keep=MIN_KEEP,
+):
     """Merge silences + fillers into safe cut intervals.
 
     Rules:
@@ -190,12 +236,26 @@ def plan_cuts(silences, filler_spans, duration=None,
 # Applying
 # ---------------------------------------------------------------------------
 
+
 def _has_audio_stream(video_path):
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a",
-             "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         return bool(res.stdout.strip())
     except Exception:
         return True
@@ -211,39 +271,73 @@ def apply_jump_cuts(video_path, out_path, cuts, audio=True):
     if not cuts or not os.path.exists(video_path):
         if os.path.exists(video_path):
             import shutil
+
             shutil.copy2(video_path, out_path)
         return 0.0
 
     expr_parts = ["between(t,{:.3f},{:.3f})".format(s, e) for s, e in cuts]
     sel = "not(" + "+".join(expr_parts) + ")"
     if audio and _has_audio_stream(video_path):
-        fc = ("[0:v]select='{}',setpts=N/FRAME_RATE/TB[v];"
-              "[0:a]aselect='{}',asetpts=N/SR/TB[a]").format(sel, sel)
+        fc = (
+            "[0:v]select='{}',setpts=N/FRAME_RATE/TB[v];"
+            "[0:a]aselect='{}',asetpts=N/SR/TB[a]"
+        ).format(sel, sel)
         maps = ["-map", "[v]", "-map", "[a]"]
     else:
         fc = "[0:v]select='{}',setpts=N/FRAME_RATE/TB[v]".format(sel)
         maps = ["-map", "[v]"]
 
-    cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", video_path,
-        "-filter_complex", fc,
-    ] + maps + [
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
-        out_path,
-    ]
+    cmd = (
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            video_path,
+            "-filter_complex",
+            fc,
+        ]
+        + maps
+        + [
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-movflags",
+            "+faststart",
+            out_path,
+        ]
+    )
     subprocess.run(cmd, check=True, capture_output=True, timeout=1200)
     return round(removed, 3)
 
 
-def process_file(video_path, subs_json=None, out_path=None,
-                 threshold_db=-35.0, min_silence=MIN_SILENCE, fillers=None,
-                 max_cut=MAX_CUT):
+def process_file(
+    video_path,
+    subs_json=None,
+    out_path=None,
+    threshold_db=-35.0,
+    min_silence=MIN_SILENCE,
+    fillers=None,
+    max_cut=MAX_CUT,
+):
     """Full pipeline for one clip. Returns a report dict (never raises)."""
-    report = {"video": os.path.basename(video_path), "ok": False,
-              "cuts": [], "removed": 0.0}
+    report = {
+        "video": os.path.basename(video_path),
+        "ok": False,
+        "cuts": [],
+        "removed": 0.0,
+    }
     if out_path is None:
         out_path = video_path
     try:
@@ -251,43 +345,68 @@ def process_file(video_path, subs_json=None, out_path=None,
         silences = detect_silences(video_path, threshold_db, min_silence)
         words = load_words(subs_json) if subs_json else []
         filler_spans = find_filler_spans(words, fillers)
-        cuts = plan_cuts(silences, filler_spans, duration=duration,
-                         max_cut=max_cut)
+        cuts = plan_cuts(silences, filler_spans, duration=duration, max_cut=max_cut)
         removed = apply_jump_cuts(video_path, out_path, cuts)
-        report.update({"ok": True, "cuts": cuts, "removed": removed,
-                       "silences": len(silences), "fillers": len(filler_spans)})
+        report.update(
+            {
+                "ok": True,
+                "cuts": cuts,
+                "removed": removed,
+                "silences": len(silences),
+                "fillers": len(filler_spans),
+            }
+        )
     except Exception as e:
         report["error"] = str(e)
         if os.path.exists(video_path) and out_path != video_path:
             import shutil
+
             shutil.copy2(video_path, out_path)  # fail-safe: keep original
     return report
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="ViralCutter jump cuts (silence/filler removal).")
+
+    parser = argparse.ArgumentParser(
+        description="ViralCutter jump cuts (silence/filler removal)."
+    )
     parser.add_argument("--video", required=True)
-    parser.add_argument("--subs", default=None, help="subs/*_processed.json with word timings")
+    parser.add_argument(
+        "--subs", default=None, help="subs/*_processed.json with word timings"
+    )
     parser.add_argument("--out", default=None)
     parser.add_argument("--threshold", type=float, default=-35.0)
     parser.add_argument("--min-silence", type=float, default=MIN_SILENCE)
     parser.add_argument("--max-cut", type=float, default=MAX_CUT)
-    parser.add_argument("--fillers", default=None, help="comma-separated extra filler words")
+    parser.add_argument(
+        "--fillers", default=None, help="comma-separated extra filler words"
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     fillers = None
     if args.fillers:
-        fillers = DEFAULT_FILLERS | {f.strip().lower() for f in args.fillers.split(",") if f.strip()}
-    report = process_file(args.video, args.subs, args.out,
-                          threshold_db=args.threshold, min_silence=args.min_silence,
-                          fillers=fillers, max_cut=args.max_cut)
+        fillers = DEFAULT_FILLERS | {
+            f.strip().lower() for f in args.fillers.split(",") if f.strip()
+        }
+    report = process_file(
+        args.video,
+        args.subs,
+        args.out,
+        threshold_db=args.threshold,
+        min_silence=args.min_silence,
+        fillers=fillers,
+        max_cut=args.max_cut,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print("{}: {} cuts, {:.2f}s removed".format(
-            report["video"], len(report.get("cuts", [])), report.get("removed", 0.0)))
+        print(
+            "{}: {} cuts, {:.2f}s removed".format(
+                report["video"], len(report.get("cuts", [])), report.get("removed", 0.0)
+            )
+        )
     return 0 if report["ok"] else 1
 
 

@@ -64,12 +64,15 @@ def build_review_prompt(clips):
         text = (c.get("text") or "").strip()
         if len(text) > 1500:
             text = text[:1500] + " …"
-        payload = json.dumps({
-            "index": c.get("index"),
-            "title": c.get("title", ""),
-            "caption": str(c.get("caption", ""))[:1500],
-            "transcript": text,
-        }, ensure_ascii=False)
+        payload = json.dumps(
+            {
+                "index": c.get("index"),
+                "title": c.get("title", ""),
+                "caption": str(c.get("caption", ""))[:1500],
+                "transcript": text,
+            },
+            ensure_ascii=False,
+        )
         lines.append("CLIP {} DATA: {}".format(c.get("index"), payload))
     return REVIEW_PROMPT_TEMPLATE.format(clips="\n".join(lines))
 
@@ -97,7 +100,11 @@ def parse_review_response(response_text):
                 continue
             verdicts = {}
             for item in obj:
-                if not isinstance(item, dict) or "index" not in item or type(item.get("violation")) is not bool:
+                if (
+                    not isinstance(item, dict)
+                    or "index" not in item
+                    or type(item.get("violation")) is not bool
+                ):
                     verdicts = {}
                     break
                 try:
@@ -127,10 +134,15 @@ def validate_review_verdicts(clips, verdicts):
         try:
             clip_indices.append(int(clip["index"]))
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("AI safety review input has an invalid clip index") from exc
+            raise ValueError(
+                "AI safety review input has an invalid clip index"
+            ) from exc
         if not str(clip.get("text") or "").strip():
-            raise ValueError("AI safety review input is missing transcript text for clip {}".format(
-                clip_indices[-1]))
+            raise ValueError(
+                "AI safety review input is missing transcript text for clip {}".format(
+                    clip_indices[-1]
+                )
+            )
     expected = set(clip_indices)
     if len(expected) != len(clip_indices):
         raise ValueError("AI safety review input contains duplicate clip indices")
@@ -142,20 +154,28 @@ def validate_review_verdicts(clips, verdicts):
             index = int(key)
         except (TypeError, ValueError) as exc:
             raise ValueError("AI safety review returned an invalid clip index") from exc
-        if index in normalized or not isinstance(verdict, dict) or type(verdict.get("violation")) is not bool:
+        if (
+            index in normalized
+            or not isinstance(verdict, dict)
+            or type(verdict.get("violation")) is not bool
+        ):
             raise ValueError("AI safety review returned a malformed verdict")
         reason = verdict.get("reason", "")
         if not isinstance(reason, str):
             raise ValueError("AI safety review returned a malformed reason")
         normalized[index] = {"violation": verdict["violation"], "reason": reason[:300]}
     if set(normalized) != expected:
-        raise ValueError("AI safety review was incomplete: expected {} clip verdicts, got {}".format(
-            len(expected), len(normalized)))
+        raise ValueError(
+            "AI safety review was incomplete: expected {} clip verdicts, got {}".format(
+                len(expected), len(normalized)
+            )
+        )
     return normalized
 
 
-def record_review_status(project_folder, *, requested, status, backend,
-                         reviewed_clips=None, flagged=None):
+def record_review_status(
+    project_folder, *, requested, status, backend, reviewed_clips=None, flagged=None
+):
     """Persist contextual-review coverage and verdicts in the safety report."""
     path = os.path.join(project_folder, "safety_report.json")
     try:
@@ -169,8 +189,13 @@ def record_review_status(project_folder, *, requested, status, backend,
     report["ai_review_status"] = str(status)
     report["ai_review_backend"] = str(backend or "unknown")[:80]
     report["ai_reviewed_clips"] = [
-        {key: clip[key] for key in ("index", "title", "start_time", "end_time") if key in clip}
-        for clip in (reviewed_clips or []) if isinstance(clip, dict)
+        {
+            key: clip[key]
+            for key in ("index", "title", "start_time", "end_time")
+            if key in clip
+        }
+        for clip in (reviewed_clips or [])
+        if isinstance(clip, dict)
     ]
     if flagged is not None:
         report["ai_review"] = flagged
@@ -197,14 +222,21 @@ def review_with_openai_moderation(clips, api_key, model_name=None, timeout=45):
     """
     if not str(api_key or "").strip():
         raise RuntimeError("OPENAI_API_KEY is required for openai-moderation")
-    model = model_name if model_name in {"omni-moderation-latest", "omni-moderation-2024-09-26"} else "omni-moderation-latest"
+    model = (
+        model_name
+        if model_name in {"omni-moderation-latest", "omni-moderation-2024-09-26"}
+        else "omni-moderation-latest"
+    )
     inputs = []
     for clip in clips:
         title = str(clip.get("title") or "").strip()
         text = str(clip.get("text") or "").strip()
         caption = str(clip.get("caption") or "").strip()
-        inputs.append("Title: {}\nDescription: {}\nTranscript: {}".format(
-            title, caption[:1500], text))
+        inputs.append(
+            "Title: {}\nDescription: {}\nTranscript: {}".format(
+                title, caption[:1500], text
+            )
+        )
     request_body = json.dumps({"model": model, "input": inputs}).encode("utf-8")
     request = urllib.request.Request(
         "https://api.openai.com/v1/moderations",
@@ -225,7 +257,11 @@ def review_with_openai_moderation(clips, api_key, model_name=None, timeout=45):
         if not isinstance(result, dict):
             raise ValueError("OpenAI moderation returned an invalid result")
         categories = result.get("categories") or {}
-        hits = [name for name in OPENAI_MODERATION_CATEGORIES if categories.get(name) is True]
+        hits = [
+            name
+            for name in OPENAI_MODERATION_CATEGORIES
+            if categories.get(name) is True
+        ]
         verdicts[int(clip.get("index", 0))] = {
             "violation": bool(hits),
             "reason": "OpenAI moderation: {}".format(", ".join(hits)) if hits else "",
@@ -240,17 +276,21 @@ def review_segments(clips, ai_backend, api_key=None, model_name=None):
     prompt = build_review_prompt(clips)
     try:
         from scripts import create_viral_segments
+
         if ai_backend == "gemini":
             response = create_viral_segments.call_gemini(
-                prompt, api_key,
-                model_name=model_name or DEFAULT_GEMINI_MODEL)
+                prompt, api_key, model_name=model_name or DEFAULT_GEMINI_MODEL
+            )
             verdicts = parse_review_response(response)
         elif ai_backend == "g4f":
             response = create_viral_segments.call_g4f(
-                prompt, model_name=model_name or "gpt-4o-mini")
+                prompt, model_name=model_name or "gpt-4o-mini"
+            )
             verdicts = parse_review_response(response)
         elif ai_backend == "openai-moderation":
-            verdicts = review_with_openai_moderation(clips, api_key, model_name=model_name)
+            verdicts = review_with_openai_moderation(
+                clips, api_key, model_name=model_name
+            )
         else:
             return None
         return validate_review_verdicts(clips, verdicts)
@@ -270,14 +310,18 @@ def apply_ai_review(segments, clips, verdicts, mode):
     for pos, seg in enumerate(segments):
         verdict = verdicts.get(pos) or verdicts.get(str(pos))
         if verdict and verdict.get("violation"):
-            report.append({
-                "index": pos,
-                "title": seg.get("title", ""),
-                "start_time": seg.get("start_time"),
-                "end_time": seg.get("end_time"),
-                "status": "ai_blocked" if mode in ("block", "censor") else "ai_flagged",
-                "reason": verdict.get("reason", ""),
-            })
+            report.append(
+                {
+                    "index": pos,
+                    "title": seg.get("title", ""),
+                    "start_time": seg.get("start_time"),
+                    "end_time": seg.get("end_time"),
+                    "status": "ai_blocked"
+                    if mode in ("block", "censor")
+                    else "ai_flagged",
+                    "reason": verdict.get("reason", ""),
+                }
+            )
             if mode in ("block", "censor"):
                 continue  # drop the segment
             seg = dict(seg)

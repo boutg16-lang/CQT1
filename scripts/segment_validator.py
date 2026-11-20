@@ -48,23 +48,47 @@ _DUPLICATE_CODES = ("semantic_duplicate", "temporal_duplicate")
 # Safety status vocabularies (case-insensitive exact match on the normalized
 # value). Anything else — including absent — is "unknown" and passes.
 _SAFETY_BLOCKED = frozenset({"blocked", "rejected", "fail", "failed", "unsafe"})
-_SAFETY_CLEAN = frozenset({"ok", "safe", "passed", "pass", "clean", "approved", "allow", "allowed"})
+_SAFETY_CLEAN = frozenset(
+    {"ok", "safe", "passed", "pass", "clean", "approved", "allow", "allowed"}
+)
 
 # Title validation status vocabularies.
 _TITLE_VERIFIED = frozenset({"verified", "ok", "valid", "pass", "passed", "approved"})
-_TITLE_REVIEW = frozenset({"review", "needs_review", "needs review", "warning", "warn", "uncertain", "pending"})
-_TITLE_REJECTED = frozenset({"rejected", "reject", "failed", "fail", "invalid", "blocked"})
+_TITLE_REVIEW = frozenset(
+    {
+        "review",
+        "needs_review",
+        "needs review",
+        "warning",
+        "warn",
+        "uncertain",
+        "pending",
+    }
+)
+_TITLE_REJECTED = frozenset(
+    {"rejected", "reject", "failed", "fail", "invalid", "blocked"}
+)
 
 # Truncation markers inside ``quality_flags``. Matching is a case-insensitive
 # substring test, deliberately liberal because the flags are free text written
 # by several stages over time.
 _WORD_TRUNCATION_MARKERS = (
-    "mid word", "mid-word", "mid_word", "midword",
-    "word_boundary", "word boundary", "word-boundary",
+    "mid word",
+    "mid-word",
+    "mid_word",
+    "midword",
+    "word_boundary",
+    "word boundary",
+    "word-boundary",
 )
 _SENTENCE_TRUNCATION_MARKERS = (
-    "mid_sentence", "mid-sentence", "mid sentence", "midsentence",
-    "ends_incomplete", "ends incomplete", "dangling",
+    "mid_sentence",
+    "mid-sentence",
+    "mid sentence",
+    "midsentence",
+    "ends_incomplete",
+    "ends incomplete",
+    "dangling",
 )
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -76,6 +100,7 @@ _BOUNDS_EPSILON = 1e-6
 # ---------------------------------------------------------------------------
 # Small coercion helpers (all total: they never raise)
 # ---------------------------------------------------------------------------
+
 
 def _finite_number(value):
     """Return ``value`` as a finite float, or ``None`` when it is not numeric.
@@ -240,7 +265,9 @@ def _title_status(validation):
     if validation.get("contains_hallucinated_fact"):
         return "rejected"
     if "matches_transcript" in validation:
-        if validation.get("excessive_clickbait") or not validation.get("matches_transcript"):
+        if validation.get("excessive_clickbait") or not validation.get(
+            "matches_transcript"
+        ):
             return "review"
         return "verified"
     return "review"
@@ -285,11 +312,15 @@ def _invalid_segment_result(index, value):
     """Structured result for a non-dict entry encountered by the batch API."""
     return {
         "ok": False,
-        "errors": [_issue(
-            "invalid_segment",
-            "entry {} is not a segment dict (got {})".format(index, type(value).__name__),
-            "segment",
-        )],
+        "errors": [
+            _issue(
+                "invalid_segment",
+                "entry {} is not a segment dict (got {})".format(
+                    index, type(value).__name__
+                ),
+                "segment",
+            )
+        ],
         "warnings": [],
         "checks": _base_checks(),
         "duration": None,
@@ -300,10 +331,18 @@ def _invalid_segment_result(index, value):
 # Public API
 # ---------------------------------------------------------------------------
 
-def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf"),
-                           media_duration=None, transcript_text=None,
-                           require_title=True, min_lexical_words=3,
-                           max_edge_silence=2.0):
+
+def validate_final_segment(
+    segment,
+    *,
+    min_duration=0.0,
+    max_duration=float("inf"),
+    media_duration=None,
+    transcript_text=None,
+    require_title=True,
+    min_lexical_words=3,
+    max_edge_silence=2.0,
+):
     """Validate one final segment dict and return a structured verdict.
 
     ``ok`` is True only when ``errors`` is empty; warnings never fail a clip.
@@ -341,21 +380,27 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
     end_time = _time_seconds(end_raw)
 
     if not start_present:
-        errors.append(_issue("missing_start_time", "segment has no start_time", "start_time"))
+        errors.append(
+            _issue("missing_start_time", "segment has no start_time", "start_time")
+        )
     elif start_time is None:
-        errors.append(_issue(
-            "invalid_start_time",
-            "start_time is not a finite number: {!r}".format(start_raw),
-            "start_time",
-        ))
+        errors.append(
+            _issue(
+                "invalid_start_time",
+                "start_time is not a finite number: {!r}".format(start_raw),
+                "start_time",
+            )
+        )
     if not end_present:
         errors.append(_issue("missing_end_time", "segment has no end_time", "end_time"))
     elif end_time is None:
-        errors.append(_issue(
-            "invalid_end_time",
-            "end_time is not a finite number: {!r}".format(end_raw),
-            "end_time",
-        ))
+        errors.append(
+            _issue(
+                "invalid_end_time",
+                "end_time is not a finite number: {!r}".format(end_raw),
+                "end_time",
+            )
+        )
 
     checks["start_time_numeric"] = start_time is not None
     checks["end_time_numeric"] = end_time is not None
@@ -367,17 +412,23 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
         checks["end_after_start"] = end_time > start_time
         checks["positive_duration"] = duration > 0
         if end_time <= start_time:
-            errors.append(_issue(
-                "end_not_after_start",
-                "end_time ({:.3f}s) must be after start_time ({:.3f}s)".format(end_time, start_time),
-                "end_time",
-            ))
+            errors.append(
+                _issue(
+                    "end_not_after_start",
+                    "end_time ({:.3f}s) must be after start_time ({:.3f}s)".format(
+                        end_time, start_time
+                    ),
+                    "end_time",
+                )
+            )
         if duration <= 0:
-            errors.append(_issue(
-                "non_positive_duration",
-                "segment duration must be positive, got {:.3f}s".format(duration),
-                "duration",
-            ))
+            errors.append(
+                _issue(
+                    "non_positive_duration",
+                    "segment duration must be positive, got {:.3f}s".format(duration),
+                    "duration",
+                )
+            )
 
     # --- min / max duration -----------------------------------------------
     if duration is not None:
@@ -390,24 +441,34 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
             transcript_limited = bool(data.get("transcript_limited"))
             if duration < min_value:
                 if transcript_limited:
-                    warnings.append(_issue(
-                        "duration_below_min_transcript_limited",
-                        "duration {:.2f}s is below the minimum {:.2f}s but the transcript "
-                        "is the limit".format(duration, min_value),
-                        "duration",
-                    ))
+                    warnings.append(
+                        _issue(
+                            "duration_below_min_transcript_limited",
+                            "duration {:.2f}s is below the minimum {:.2f}s but the transcript "
+                            "is the limit".format(duration, min_value),
+                            "duration",
+                        )
+                    )
                 else:
-                    errors.append(_issue(
-                        "duration_below_min",
-                        "duration {:.2f}s is below the minimum {:.2f}s".format(duration, min_value),
-                        "duration",
-                    ))
+                    errors.append(
+                        _issue(
+                            "duration_below_min",
+                            "duration {:.2f}s is below the minimum {:.2f}s".format(
+                                duration, min_value
+                            ),
+                            "duration",
+                        )
+                    )
             if duration > max_value:
-                errors.append(_issue(
-                    "duration_above_max",
-                    "duration {:.2f}s exceeds the maximum {:.2f}s".format(duration, max_value),
-                    "duration",
-                ))
+                errors.append(
+                    _issue(
+                        "duration_above_max",
+                        "duration {:.2f}s exceeds the maximum {:.2f}s".format(
+                            duration, max_value
+                        ),
+                        "duration",
+                    )
+                )
 
     # --- media bounds (only when a positive media duration is known) ------
     media_value = _finite_number(media_duration)
@@ -419,24 +480,33 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
             checks["within_media_bounds"] = bounds_ok
             if not bounds_ok:
                 field = "start_time" if start_time < 0 else "end_time"
-                errors.append(_issue(
-                    "out_of_media_bounds",
-                    "segment [{:.3f}s, {:.3f}s] is outside media bounds [0s, {:.3f}s]".format(
-                        start_time, end_time, media_value),
-                    field,
-                ))
+                errors.append(
+                    _issue(
+                        "out_of_media_bounds",
+                        "segment [{:.3f}s, {:.3f}s] is outside media bounds [0s, {:.3f}s]".format(
+                            start_time, end_time, media_value
+                        ),
+                        field,
+                    )
+                )
 
     # --- transcript --------------------------------------------------------
     text = _resolve_transcript(data, transcript_text)
     checks["transcript_present"] = bool(text.strip())
     if not checks["transcript_present"]:
-        errors.append(_issue("empty_transcript", "segment has no transcript text", "transcript_text"))
+        errors.append(
+            _issue(
+                "empty_transcript", "segment has no transcript text", "transcript_text"
+            )
+        )
     elif len(_normalized_tokens(text)) < min_words:
-        warnings.append(_issue(
-            "short_transcript",
-            "transcript has fewer than {} usable word(s)".format(min_words),
-            "transcript_text",
-        ))
+        warnings.append(
+            _issue(
+                "short_transcript",
+                "transcript has fewer than {} usable word(s)".format(min_words),
+                "transcript_text",
+            )
+        )
 
     # --- truncation --------------------------------------------------------
     analysis = _as_dict(data.get("window_analysis"))
@@ -450,40 +520,58 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
             labeled.append("starts_mid_sentence")
         if ends_mid:
             labeled.append("ends_mid_sentence")
-        errors.append(_issue(
-            "sentence_truncation",
-            "segment is truncated mid-sentence at the {} edge(s)".format(", ".join(labeled)),
-            "window_analysis",
-        ))
+        errors.append(
+            _issue(
+                "sentence_truncation",
+                "segment is truncated mid-sentence at the {} edge(s)".format(
+                    ", ".join(labeled)
+                ),
+                "window_analysis",
+            )
+        )
     elif _flags_contain(flags, _SENTENCE_TRUNCATION_MARKERS):
         sentence_truncation = True
-        errors.append(_issue(
-            "sentence_truncation",
-            "quality flag reports a mid-sentence/dangling boundary: {}".format(
-                "; ".join(flag for flag in flags
-                          if _flags_contain([flag], _SENTENCE_TRUNCATION_MARKERS))),
-            "quality_flags",
-        ))
+        errors.append(
+            _issue(
+                "sentence_truncation",
+                "quality flag reports a mid-sentence/dangling boundary: {}".format(
+                    "; ".join(
+                        flag
+                        for flag in flags
+                        if _flags_contain([flag], _SENTENCE_TRUNCATION_MARKERS)
+                    )
+                ),
+                "quality_flags",
+            )
+        )
 
     word_truncation = _flags_contain(flags, _WORD_TRUNCATION_MARKERS)
     if word_truncation:
-        errors.append(_issue(
-            "word_truncation",
-            "quality flag reports a word-boundary cut: {}".format(
-                "; ".join(flag for flag in flags
-                          if _flags_contain([flag], _WORD_TRUNCATION_MARKERS))),
-            "quality_flags",
-        ))
+        errors.append(
+            _issue(
+                "word_truncation",
+                "quality flag reports a word-boundary cut: {}".format(
+                    "; ".join(
+                        flag
+                        for flag in flags
+                        if _flags_contain([flag], _WORD_TRUNCATION_MARKERS)
+                    )
+                ),
+                "quality_flags",
+            )
+        )
 
     checks["no_sentence_truncation"] = not sentence_truncation
     checks["no_word_truncation"] = not word_truncation
 
     if analysis.get("ends_incomplete") is True:
-        warnings.append(_issue(
-            "incomplete_ending",
-            "segment ends on an incomplete phrase (preposition/conjunction)",
-            "window_analysis",
-        ))
+        warnings.append(
+            _issue(
+                "incomplete_ending",
+                "segment ends on an incomplete phrase (preposition/conjunction)",
+                "window_analysis",
+            )
+        )
 
     # --- edge silence ------------------------------------------------------
     leading = _finite_number(analysis.get("leading_silence"))
@@ -494,19 +582,30 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
     excessive = [name for name, value in edge_values.items() if value > edge_limit]
     if excessive:
         checks["edge_silence_ok"] = False
-        errors.append(_issue(
-            "excessive_edge_silence",
-            "edge silence exceeds {:.2f}s: {}".format(
-                edge_limit, ", ".join("{}={:.2f}s".format(name, edge_values[name]) for name in excessive)),
-            excessive[0],
-        ))
+        errors.append(
+            _issue(
+                "excessive_edge_silence",
+                "edge silence exceeds {:.2f}s: {}".format(
+                    edge_limit,
+                    ", ".join(
+                        "{}={:.2f}s".format(name, edge_values[name])
+                        for name in excessive
+                    ),
+                ),
+                excessive[0],
+            )
+        )
     for name, value in edge_values.items():
         if edge_limit > 0 and edge_limit / 2.0 < value <= edge_limit:
-            warnings.append(_issue(
-                "edge_silence_warning",
-                "edge silence is close to the limit: {}={:.2f}s".format(name, value),
-                name,
-            ))
+            warnings.append(
+                _issue(
+                    "edge_silence_warning",
+                    "edge silence is close to the limit: {}={:.2f}s".format(
+                        name, value
+                    ),
+                    name,
+                )
+            )
 
     # --- title -------------------------------------------------------------
     title_validation = _resolve_title_validation(data)
@@ -514,33 +613,43 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
     checks["title_status"] = title_status
     if require_title:
         if title_status == "missing":
-            errors.append(_issue(
-                "title_missing",
-                "segment has no title validation data",
-                "title_validation",
-            ))
+            errors.append(
+                _issue(
+                    "title_missing",
+                    "segment has no title validation data",
+                    "title_validation",
+                )
+            )
         elif title_status == "rejected":
-            errors.append(_issue(
-                "title_rejected",
-                "title was rejected: {}".format("; ".join(_title_reasons(title_validation))),
-                "title_validation",
-            ))
+            errors.append(
+                _issue(
+                    "title_rejected",
+                    "title was rejected: {}".format(
+                        "; ".join(_title_reasons(title_validation))
+                    ),
+                    "title_validation",
+                )
+            )
         elif title_status == "review":
-            warnings.append(_issue(
-                "title_needs_review",
-                "title is factual enough to keep but flagged for human review",
-                "title_validation",
-            ))
+            warnings.append(
+                _issue(
+                    "title_needs_review",
+                    "title is factual enough to keep but flagged for human review",
+                    "title_validation",
+                )
+            )
 
     # --- safety ------------------------------------------------------------
     safety_ok = _resolve_safety(data)
     checks["safety_ok"] = safety_ok
     if safety_ok is False:
-        errors.append(_issue(
-            "safety_blocked",
-            "segment was blocked by the safety stage",
-            "safety_status",
-        ))
+        errors.append(
+            _issue(
+                "safety_blocked",
+                "segment was blocked by the safety stage",
+                "safety_status",
+            )
+        )
 
     # --- duplication -------------------------------------------------------
     duplicate_of = data.get("duplicate_of")
@@ -549,17 +658,21 @@ def validate_final_segment(segment, *, min_duration=0.0, max_duration=float("inf
     )
     temporal_duplicate = _is_true(data.get("temporal_duplicate"))
     if semantic_duplicate:
-        errors.append(_issue(
-            "semantic_duplicate",
-            "segment is a semantic duplicate of an already selected clip",
-            "semantic_duplicate",
-        ))
+        errors.append(
+            _issue(
+                "semantic_duplicate",
+                "segment is a semantic duplicate of an already selected clip",
+                "semantic_duplicate",
+            )
+        )
     if temporal_duplicate:
-        errors.append(_issue(
-            "temporal_duplicate",
-            "segment duplicates the time window of an already selected clip",
-            "temporal_duplicate",
-        ))
+        errors.append(
+            _issue(
+                "temporal_duplicate",
+                "segment duplicates the time window of an already selected clip",
+                "temporal_duplicate",
+            )
+        )
     checks["duplicate_ok"] = not (semantic_duplicate or temporal_duplicate)
 
     return {
@@ -619,12 +732,21 @@ def is_publishable_segment(segment, **kwargs):
 # Fatal error codes: the window itself cannot be exported at all. Everything
 # else (truncation forced by max_duration, edge silence, title needing review,
 # safety/duplicate flags) is a manual-review signal, not a discard reason.
-FATAL_ERROR_CODES = frozenset({
-    "missing_start_time", "missing_end_time", "invalid_start_time",
-    "invalid_end_time", "end_not_after_start", "non_positive_duration",
-    "duration_below_min", "duration_above_max", "out_of_media_bounds",
-    "empty_transcript", "safety_blocked",
-})
+FATAL_ERROR_CODES = frozenset(
+    {
+        "missing_start_time",
+        "missing_end_time",
+        "invalid_start_time",
+        "invalid_end_time",
+        "end_not_after_start",
+        "non_positive_duration",
+        "duration_below_min",
+        "duration_above_max",
+        "out_of_media_bounds",
+        "empty_transcript",
+        "safety_blocked",
+    }
+)
 
 
 def annotate_segment_validation(payload, **kwargs):
@@ -654,10 +776,10 @@ def annotate_segment_validation(payload, **kwargs):
         # only ever set (setdefault), so a segment could never leave review
         # even after its title/window was fixed.
         approved = _is_true(copy.get("manual_review_approved"))
-        needs_review = (not report["ok"]
-                        or _is_true(copy.get("title_review_required")))
-        fatal = [item for item in report["errors"]
-                 if item.get("code") in FATAL_ERROR_CODES]
+        needs_review = not report["ok"] or _is_true(copy.get("title_review_required"))
+        fatal = [
+            item for item in report["errors"] if item.get("code") in FATAL_ERROR_CODES
+        ]
         if approved:
             # Approval clears editorial REVIEW, never a structural fatality.
             # An out-of-media window or a missing end_time cannot be made
@@ -665,7 +787,8 @@ def annotate_segment_validation(payload, **kwargs):
             needs_review = False
         copy["requires_review"] = bool(needs_review)
         copy["publish_blocked_reason"] = (
-            "manual_review_required" if needs_review else "")
+            "manual_review_required" if needs_review else ""
+        )
         copy["export_blocked"] = bool(fatal)
         new_segments.append(copy)
     annotated["segments"] = new_segments
@@ -684,11 +807,16 @@ def publish_block_reasons(segment, **kwargs):
     if segment.get("export_blocked"):
         reasons.append("export_blocked")
     if segment.get("requires_review") or segment.get("title_review_required"):
-        reasons.append(segment.get("publish_blocked_reason") or "manual_review_required")
+        reasons.append(
+            segment.get("publish_blocked_reason") or "manual_review_required"
+        )
     report = validate_final_segment(segment, **kwargs)
     if not report["ok"]:
-        fatal = [item.get("code") for item in report["errors"]
-                 if item.get("code") in FATAL_ERROR_CODES]
+        fatal = [
+            item.get("code")
+            for item in report["errors"]
+            if item.get("code") in FATAL_ERROR_CODES
+        ]
         if fatal:
             reasons.extend(fatal)
         elif "manual_review_required" not in reasons:

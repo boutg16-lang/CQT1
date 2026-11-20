@@ -88,12 +88,17 @@ def run_tournament(
     mutated; the ranking carries copies annotated with Elo stats.
     """
     count = len(items)
-    entries = [{
-        "index": index,
-        "item": items[index],
-        "rating": INITIAL_RATING,
-        "wins": 0, "losses": 0, "draws": 0,
-    } for index in range(count)]
+    entries = [
+        {
+            "index": index,
+            "item": items[index],
+            "rating": INITIAL_RATING,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+        }
+        for index in range(count)
+    ]
     total_rounds = _default_rounds(count) if rounds is None else max(0, int(rounds))
 
     rng = random.Random(seed)
@@ -112,7 +117,8 @@ def run_tournament(
             verdict = verdict if verdict in ("a", "b", "draw") else "draw"
             score_a = {"a": 1.0, "b": 0.0, "draw": 0.5}[verdict]
             entry_a["rating"], entry_b["rating"] = _updated(
-                entry_a["rating"], entry_b["rating"], score_a)
+                entry_a["rating"], entry_b["rating"], score_a
+            )
             if verdict == "a":
                 entry_a["wins"] += 1
                 entry_b["losses"] += 1
@@ -129,15 +135,18 @@ def run_tournament(
         "rounds": total_rounds,
         "pairings": pairings,
         "seed": seed,
-        "ranking": [{
-            "rank": position + 1,
-            "index": entry["index"],
-            "elo": round(entry["rating"], 1),
-            "wins": entry["wins"],
-            "losses": entry["losses"],
-            "draws": entry["draws"],
-            "item": entry["item"],
-        } for position, entry in enumerate(ranking)],
+        "ranking": [
+            {
+                "rank": position + 1,
+                "index": entry["index"],
+                "elo": round(entry["rating"], 1),
+                "wins": entry["wins"],
+                "losses": entry["losses"],
+                "draws": entry["draws"],
+                "item": entry["item"],
+            }
+            for position, entry in enumerate(ranking)
+        ],
     }
 
 
@@ -164,6 +173,7 @@ def llm_judge(
 ) -> Judge:
     """Build a pairwise judge backed by an LLM. Unreadable answers are
     scored as a draw — a confused judge must not corrupt the bracket."""
+
     def judge(a: Dict[str, Any], b: Dict[str, Any]) -> str:
         prompt = _JUDGE_PROMPT.format(
             title_a=a.get("recommended_title") or a.get("title") or "",
@@ -185,6 +195,7 @@ def llm_judge(
         if "B" in answer and "A" not in answer:
             return "b"
         return "draw"
+
     return judge
 
 
@@ -201,16 +212,28 @@ def score_judge(a: Dict[str, Any], b: Dict[str, Any]) -> str:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Swiss Elo tournament over a project's candidate clips.")
-    parser.add_argument("--project", required=True, help="Project folder with viral_segments.txt")
-    parser.add_argument("--backend", default="score", choices=["score", "gemini", "g4f"],
-                        help="judge: offline score comparison or an LLM backend")
-    parser.add_argument("--top", type=int, default=10, help="candidates entering the bracket")
-    parser.add_argument("--rounds", type=int, default=None, help="override Swiss round count")
+        description="Swiss Elo tournament over a project's candidate clips."
+    )
+    parser.add_argument(
+        "--project", required=True, help="Project folder with viral_segments.txt"
+    )
+    parser.add_argument(
+        "--backend",
+        default="score",
+        choices=["score", "gemini", "g4f"],
+        help="judge: offline score comparison or an LLM backend",
+    )
+    parser.add_argument(
+        "--top", type=int, default=10, help="candidates entering the bracket"
+    )
+    parser.add_argument(
+        "--rounds", type=int, default=None, help="override Swiss round count"
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args(argv)
 
     from webui import segments_review
+
     segments = segments_review.load_segments(args.project)
     if not segments:
         print("[elo] no segments found in {}".format(args.project))
@@ -224,13 +247,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         judge: Judge = score_judge
     else:
         from scripts.editor_review import _load_llm
+
         judge = llm_judge(_load_llm(args.backend))
 
     result = run_tournament(candidates, judge, rounds=args.rounds, seed=args.seed)
     for row in result["ranking"]:
         title = row["item"].get("recommended_title") or row["item"].get("title") or ""
-        print("#{rank}  Elo {elo:>6}  W{wins}/L{losses}/D{draws}  {title}".format(
-            title=str(title)[:60], **row))
+        print(
+            "#{rank}  Elo {elo:>6}  W{wins}/L{losses}/D{draws}  {title}".format(
+                title=str(title)[:60], **row
+            )
+        )
 
     report_path = os.path.join(args.project, RANKING_FILENAME)
     serialisable = dict(result)
@@ -246,8 +273,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 __all__ = [
-    "INITIAL_RATING", "K_FACTOR", "RANKING_FILENAME", "llm_judge",
-    "main", "run_tournament", "score_judge",
+    "INITIAL_RATING",
+    "K_FACTOR",
+    "RANKING_FILENAME",
+    "llm_judge",
+    "main",
+    "run_tournament",
+    "score_judge",
 ]
 
 

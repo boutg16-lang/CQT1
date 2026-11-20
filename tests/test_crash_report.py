@@ -130,8 +130,9 @@ class TestLogCrash:
         assert len(log.read_text(encoding="utf-8").splitlines()) == 2
 
     def test_unwritable_path_does_not_raise(self):
-        entry = crash_report.log_crash("x", ValueError("boom"),
-                                       log_path="/nonexistent-dir-xyz/crash.log")
+        entry = crash_report.log_crash(
+            "x", ValueError("boom"), log_path="/nonexistent-dir-xyz/crash.log"
+        )
         assert entry["stage"] == "x"
 
 
@@ -162,29 +163,42 @@ class TestSendCrash:
             assert req.headers.get("Content-type") == "application/json"
             json.loads(req.data.decode("utf-8"))  # payload must be valid JSON
             return _FakeResponse(status)
+
         return fake
 
     def test_success_status_returns_true(self, monkeypatch):
-        monkeypatch.setattr(crash_report.urllib.request, "urlopen",
-                            self._fake_urlopen(200))
-        assert crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x") is True
+        monkeypatch.setattr(
+            crash_report.urllib.request, "urlopen", self._fake_urlopen(200)
+        )
+        assert (
+            crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x")
+            is True
+        )
 
     def test_error_status_returns_false(self, monkeypatch):
-        monkeypatch.setattr(crash_report.urllib.request, "urlopen",
-                            self._fake_urlopen(500))
-        assert crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x") is False
+        monkeypatch.setattr(
+            crash_report.urllib.request, "urlopen", self._fake_urlopen(500)
+        )
+        assert (
+            crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x")
+            is False
+        )
 
     def test_urlopen_failure_returns_false(self, monkeypatch):
         def boom(_req, timeout=None):
             raise ConnectionError("refused")
 
         monkeypatch.setattr(crash_report.urllib.request, "urlopen", boom)
-        assert crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x") is False
+        assert (
+            crash_report.send_crash({"stage": "x"}, endpoint="http://localhost:9/x")
+            is False
+        )
 
     def test_endpoint_from_env(self, monkeypatch):
         monkeypatch.setenv("VIRALCUTTER_CRASH_ENDPOINT", "http://localhost:9/x")
-        monkeypatch.setattr(crash_report.urllib.request, "urlopen",
-                            self._fake_urlopen(201))
+        monkeypatch.setattr(
+            crash_report.urllib.request, "urlopen", self._fake_urlopen(201)
+        )
         assert crash_report.send_crash({"stage": "x"}) is True
 
 
@@ -192,7 +206,9 @@ class TestReport:
     def test_no_opt_in_logs_only(self, tmp_path, monkeypatch):
         monkeypatch.delenv("VIRALCUTTER_CRASH_REPORT", raising=False)
         sent = []
-        monkeypatch.setattr(crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True)
+        monkeypatch.setattr(
+            crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True
+        )
         log = tmp_path / "crash_report.log"
         entry = crash_report.report("cut", ValueError("boom"), log_path=str(log))
         assert sent == []
@@ -203,7 +219,9 @@ class TestReport:
     def test_opt_in_values_send(self, tmp_path, monkeypatch, value):
         monkeypatch.setenv("VIRALCUTTER_CRASH_REPORT", value)
         sent = []
-        monkeypatch.setattr(crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True)
+        monkeypatch.setattr(
+            crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True
+        )
         crash_report.report("cut", ValueError("boom"), log_path=str(tmp_path / "l.log"))
         assert len(sent) == 1
 
@@ -211,25 +229,35 @@ class TestReport:
     def test_opt_out_values_do_not_send(self, tmp_path, monkeypatch, value):
         monkeypatch.setenv("VIRALCUTTER_CRASH_REPORT", value)
         sent = []
-        monkeypatch.setattr(crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True)
+        monkeypatch.setattr(
+            crash_report, "send_crash", lambda e, endpoint=None: sent.append(e) or True
+        )
         crash_report.report("cut", ValueError("boom"), log_path=str(tmp_path / "l.log"))
         assert sent == []
 
     def test_endpoint_argument_forwarded(self, tmp_path, monkeypatch):
         monkeypatch.setenv("VIRALCUTTER_CRASH_REPORT", "1")
         seen = {}
-        monkeypatch.setattr(crash_report, "send_crash",
-                            lambda e, endpoint=None: seen.setdefault("endpoint", endpoint) or True)
-        crash_report.report("cut", ValueError("boom"), log_path=str(tmp_path / "l.log"),
-                            endpoint="http://example.invalid/x")
+        monkeypatch.setattr(
+            crash_report,
+            "send_crash",
+            lambda e, endpoint=None: seen.setdefault("endpoint", endpoint) or True,
+        )
+        crash_report.report(
+            "cut",
+            ValueError("boom"),
+            log_path=str(tmp_path / "l.log"),
+            endpoint="http://example.invalid/x",
+        )
         assert seen["endpoint"] == "http://example.invalid/x"
 
 
 class TestMain:
     def test_main_prints_entry_and_returns_zero(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(sys, "argv", ["crash_report", "--stage", "cli",
-                                          "--message", "oops"])
+        monkeypatch.setattr(
+            sys, "argv", ["crash_report", "--stage", "cli", "--message", "oops"]
+        )
         assert crash_report.main() == 0
         entry = json.loads(capsys.readouterr().out)
         assert entry["stage"] == "cli"
@@ -239,7 +267,10 @@ class TestMain:
     def test_main_send_flag_sets_opt_in(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("VIRALCUTTER_CRASH_ENDPOINT", raising=False)
-        monkeypatch.setattr(sys, "argv", ["crash_report", "--stage", "cli",
-                                          "--message", "oops", "--send"])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["crash_report", "--stage", "cli", "--message", "oops", "--send"],
+        )
         assert crash_report.main() == 0
         assert os.environ.get("VIRALCUTTER_CRASH_REPORT") == "1"

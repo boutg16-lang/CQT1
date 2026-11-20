@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 Face = Dict[str, Any]
 
+
 def audio_activity_change(is_talking, audio_level, decay, has_audio=True):
     """Frame-level activity delta fusing mouth motion with audio energy.
 
@@ -54,7 +55,7 @@ class ActiveSpeakerSelector:
         self.current_center: Optional[Tuple[float, float]] = None
         self.current_track_id: Optional[int] = None
         self.current_score = 0.0
-        self.last_switch_frame = -10**9
+        self.last_switch_frame = -(10**9)
         self.missing_frames = 0
 
     @staticmethod
@@ -108,10 +109,12 @@ class ActiveSpeakerSelector:
         self.current_center = None
         self.current_track_id = None
         self.current_score = 0.0
-        self.last_switch_frame = -10**9
+        self.last_switch_frame = -(10**9)
         self.missing_frames = 0
 
-    def select(self, faces: List[Face], frame_index: int = 0) -> Tuple[Optional[Face], bool]:
+    def select(
+        self, faces: List[Face], frame_index: int = 0
+    ) -> Tuple[Optional[Face], bool]:
         """Return ``(active_face, switched)`` for the current frame.
 
         Track IDs are preferred over centre distance. A missing active face is
@@ -129,7 +132,11 @@ class ActiveSpeakerSelector:
         current = None
         if self.current_track_id is not None:
             current = next(
-                (face for face in faces if self._track_id(face) == self.current_track_id),
+                (
+                    face
+                    for face in faces
+                    if self._track_id(face) == self.current_track_id
+                ),
                 None,
             )
         if current is None and self.current_center is not None:
@@ -137,12 +144,18 @@ class ActiveSpeakerSelector:
                 faces,
                 key=lambda face: self._distance({"center": self.current_center}, face),
             )
-            if self._distance({"center": self.current_center}, candidate) <= self.max_jump:
+            if (
+                self._distance({"center": self.current_center}, candidate)
+                <= self.max_jump
+            ):
                 current = candidate
 
         if current is None:
             self.missing_frames += 1
-            if self.missing_frames <= self.lost_grace_frames and self.current_center is not None:
+            if (
+                self.missing_frames <= self.lost_grace_frames
+                and self.current_center is not None
+            ):
                 return best, False
             self._remember(best, frame_index, switched=True)
             return best, True
@@ -172,7 +185,9 @@ class ActiveSpeakerSelector:
         self.current_score = current_score
         return current, False
 
-    def reorder(self, faces: List[Face], frame_index: int = 0) -> Tuple[List[Face], bool]:
+    def reorder(
+        self, faces: List[Face], frame_index: int = 0
+    ) -> Tuple[List[Face], bool]:
         """Return faces with the selected speaker first and stable others."""
         faces = list(faces or [])
         selected, switched = self.select(faces, frame_index)

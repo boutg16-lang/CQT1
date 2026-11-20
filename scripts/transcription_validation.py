@@ -1,4 +1,5 @@
 """Validation and safe repair helpers for transcription artifacts."""
+
 from __future__ import annotations
 
 import csv
@@ -50,7 +51,9 @@ def read_srt_entries(path):
         start = parse_timestamp(start_raw)
         end = parse_timestamp(end_raw)
         text_lines = [line for line in lines if line != timing and not line.isdigit()]
-        entries.append({"start": start, "end": end, "text": normalize_text(" ".join(text_lines))})
+        entries.append(
+            {"start": start, "end": end, "text": normalize_text(" ".join(text_lines))}
+        )
     return entries
 
 
@@ -66,7 +69,9 @@ def read_tsv_entries(path):
                 end = float(row.get("end", ""))
             except (TypeError, ValueError):
                 continue
-            rows.append({"start": start, "end": end, "text": normalize_text(row.get("text"))})
+            rows.append(
+                {"start": start, "end": end, "text": normalize_text(row.get("text"))}
+            )
     return rows
 
 
@@ -98,7 +103,9 @@ def validate_entries(entries, *, min_entries=1):
 def _atomic_write(path, text):
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=".transcription.", suffix=".tmp", dir=directory)
+    fd, temporary = tempfile.mkstemp(
+        prefix=".transcription.", suffix=".tmp", dir=directory
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
@@ -118,9 +125,7 @@ def _format_timestamp(seconds):
     hours, remainder = divmod(milliseconds, 3_600_000)
     minutes, remainder = divmod(remainder, 60_000)
     seconds_value, millis = divmod(remainder, 1000)
-    return "{:02d}:{:02d}:{:02d},{:03d}".format(
-        hours, minutes, seconds_value, millis
-    )
+    return "{:02d}:{:02d}:{:02d},{:03d}".format(hours, minutes, seconds_value, millis)
 
 
 def _repair_srt(path):
@@ -131,7 +136,9 @@ def _repair_srt(path):
         # Do not rewrite a mixed file whose surviving cues have malformed
         # timestamps. Keep that defect visible to validate_transcription so
         # the caller can clear the checkpoint and re-transcribe safely.
-        if any(entry.get("start") is None or entry.get("end") is None for entry in kept):
+        if any(
+            entry.get("start") is None or entry.get("end") is None for entry in kept
+        ):
             return 0
         blocks = []
         for index, entry in enumerate(kept, 1):
@@ -157,7 +164,11 @@ def _repair_tsv(path):
         text_index = [item.strip().lower() for item in header].index("text")
     except ValueError:
         return 0
-    kept = [row for row in rows[1:] if len(row) > text_index and normalize_text(row[text_index])]
+    kept = [
+        row
+        for row in rows[1:]
+        if len(row) > text_index and normalize_text(row[text_index])
+    ]
     removed = len(rows[1:]) - len(kept)
     if removed:
         output = io.StringIO(newline="")
@@ -178,7 +189,8 @@ def _repair_json(path):
         return 0
     segments = data["segments"]
     kept = [
-        segment for segment in segments
+        segment
+        for segment in segments
         if not isinstance(segment, dict) or normalize_text(segment.get("text"))
     ]
     removed = len(segments) - len(kept)
@@ -225,13 +237,16 @@ def validate_transcription(srt_path=None, tsv_path=None):
     if not srt_entries:
         report["errors"].insert(
             0,
-            "SRT unavailable; TSV fallback used" if tsv_entries else "SRT and TSV unavailable",
+            "SRT unavailable; TSV fallback used"
+            if tsv_entries
+            else "SRT and TSV unavailable",
         )
         # A TSV fallback is valid when it contains entries; the informational
         # fallback message is not a validation failure.
         if tsv_entries:
             report["errors"] = [
-                error for error in report["errors"]
+                error
+                for error in report["errors"]
                 if error != "SRT unavailable; TSV fallback used"
             ]
     report["ok"] = not report["errors"]

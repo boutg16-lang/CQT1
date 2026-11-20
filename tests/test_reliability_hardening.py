@@ -44,8 +44,12 @@ from webui.render_queue import RenderQueue
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     """No real credentials from the host environment may leak into tests."""
-    for var in ("GEMINI_API_KEY", "VIRALCUTTER_GEMINI_KEY", "VIRALCUTTER_GEMINI_KEYS",
-                "VIRALCUTTER_CONFIG_PASSPHRASE"):
+    for var in (
+        "GEMINI_API_KEY",
+        "VIRALCUTTER_GEMINI_KEY",
+        "VIRALCUTTER_GEMINI_KEYS",
+        "VIRALCUTTER_CONFIG_PASSPHRASE",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -53,13 +57,15 @@ def _clean_env(monkeypatch):
 # 1. settings_store — unique temp files + restrictive permissions
 # ---------------------------------------------------------------------------
 
+
 def test_save_webui_prefs_concurrent_writers_keep_valid_json(tmp_path):
     errors = []
 
     def writer(index):
         for _ in range(30):
             ok, err = settings_store.save_webui_prefs(
-                {"writer": index, "blob": "x" * 256}, base_dir=str(tmp_path))
+                {"writer": index, "blob": "x" * 256}, base_dir=str(tmp_path)
+            )
             if not ok:
                 errors.append(err)
 
@@ -72,7 +78,7 @@ def test_save_webui_prefs_concurrent_writers_keep_valid_json(tmp_path):
     assert errors == []
     raw = (tmp_path / settings_store.WEBUI_PREFS_FILE).read_text(encoding="utf-8")
     assert raw.rstrip().endswith("}")  # no trailing garbage after the JSON
-    data = json.loads(raw)             # the loader must not silently reset
+    data = json.loads(raw)  # the loader must not silently reset
     assert isinstance(data, dict)
     assert data["blob"] == "x" * 256
     assert settings_store.load_webui_prefs(base_dir=str(tmp_path))["blob"] == "x" * 256
@@ -90,7 +96,8 @@ def test_save_ui_settings_concurrent_writers_keep_valid_json(tmp_path, monkeypat
                 api_key="AIza_FAKE_NOT_A_REAL_KEY",
                 ai_model="gemini-2.5-flash",
                 chunk_size=20000 + index,
-                base_dir=str(tmp_path))
+                base_dir=str(tmp_path),
+            )
             if not ok:
                 errors.append(err)
 
@@ -106,16 +113,18 @@ def test_save_ui_settings_concurrent_writers_keep_valid_json(tmp_path, monkeypat
     secure_json = (tmp_path / "api_config.secure.json").read_text(encoding="utf-8")
     assert "AIza_FAKE_NOT_A_REAL_KEY" not in secure_json
     # The stored key must still be readable (a corrupt file resets everything).
-    assert settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"] == \
-        "AIza_FAKE_NOT_A_REAL_KEY"
+    assert (
+        settings_store.load_ui_settings(base_dir=str(tmp_path))["api_key"]
+        == "AIza_FAKE_NOT_A_REAL_KEY"
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits only")
 def test_save_ui_settings_uses_owner_only_permissions(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     ok, err = settings_store.save_ui_settings(
-        ai_backend="gemini", api_key="AIza_FAKE_NOT_A_REAL_KEY",
-        base_dir=str(tmp_path))
+        ai_backend="gemini", api_key="AIza_FAKE_NOT_A_REAL_KEY", base_dir=str(tmp_path)
+    )
     assert ok, err
     for filename in ("api_config.json", "api_config.secure.json"):
         mode = stat.S_IMODE(os.stat(tmp_path / filename).st_mode)
@@ -126,13 +135,19 @@ def test_save_ui_settings_uses_owner_only_permissions(tmp_path, monkeypatch):
 # 2. render_queue — malformed state must not crash the WebUI
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("payload", [
-    '{"jobs": [1, 2, 3]}',
-    '{"jobs": "abc"}',
-    '{"jobs": 5}',
-    '{"jobs": {"a": 5}}',
-])
-def test_render_queue_survives_malformed_jobs_and_preserves_corrupt_file(tmp_path, payload):
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"jobs": [1, 2, 3]}',
+        '{"jobs": "abc"}',
+        '{"jobs": 5}',
+        '{"jobs": {"a": 5}}',
+    ],
+)
+def test_render_queue_survives_malformed_jobs_and_preserves_corrupt_file(
+    tmp_path, payload
+):
     path = tmp_path / "queue.json"
     path.write_text(payload, encoding="utf-8")
 
@@ -147,6 +162,7 @@ def test_render_queue_survives_malformed_jobs_and_preserves_corrupt_file(tmp_pat
 # ---------------------------------------------------------------------------
 # 3. render_queue — stop()/start() must leave live workers
 # ---------------------------------------------------------------------------
+
 
 def test_render_queue_restart_after_stop_still_runs_new_jobs(tmp_path):
     path = tmp_path / "restart.json"
@@ -179,9 +195,11 @@ def test_render_queue_restart_after_stop_still_runs_new_jobs(tmp_path):
 # 4. checkpoint — corrupt version + concurrent read-modify-write
 # ---------------------------------------------------------------------------
 
+
 def test_checkpoint_corrupt_version_degrades_gracefully(tmp_path):
     (tmp_path / checkpoint.CHECKPOINT_FILENAME).write_text(
-        json.dumps({"version": "abc", "stages": {}}), encoding="utf-8")
+        json.dumps({"version": "abc", "stages": {}}), encoding="utf-8"
+    )
 
     # None of these may raise; the docstring promises a broken checkpoint
     # cannot crash the pipeline.
@@ -214,6 +232,7 @@ def test_checkpoint_concurrent_marks_preserve_all_stages(tmp_path):
 # ---------------------------------------------------------------------------
 # 5. render_queue — jobs stuck in "retrying" must recover
 # ---------------------------------------------------------------------------
+
 
 def test_render_queue_recovers_retrying_job_on_load_and_runs(tmp_path):
     path = tmp_path / "retrying.json"
@@ -251,6 +270,7 @@ def test_render_queue_resume_all_requeues_retrying_jobs(tmp_path):
 # 6. media_validation — ffprobe "size": "N/A"
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX shell stub")
 def test_probe_media_handles_na_size(tmp_path, monkeypatch):
     media = tmp_path / "clip.mp4"
@@ -265,7 +285,8 @@ def test_probe_media_handles_na_size(tmp_path, monkeypatch):
         '"width": 1920, "height": 1080, "r_frame_rate": "30/1"}, '
         '{"index": 1, "codec_type": "audio", "codec_name": "aac"}]}\n'
         "EOF\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     stub.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
 
@@ -283,13 +304,17 @@ def test_probe_media_handles_na_size(tmp_path, monkeypatch):
 # 7. crash_report — no credentials in sanitized output
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("secret", [
-    "AIza_FAKE_NOT_A_REAL_KEY",
-    "eyJ" + "a" * 20 + "." + "b" * 20 + "." + "c" * 20,
-    "supersecrettoken",
-    "hunter2",
-    "sk-livesecretkeyvalue0123456789",
-])
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "AIza_FAKE_NOT_A_REAL_KEY",
+        "eyJ" + "a" * 20 + "." + "b" * 20 + "." + "c" * 20,
+        "supersecrettoken",
+        "hunter2",
+        "sk-livesecretkeyvalue0123456789",
+    ],
+)
 def test_sanitize_redacts_credentials(secret):
     message = (
         "call https://generativelanguage.googleapis.com/v1beta/models?key={secret} "
@@ -308,8 +333,9 @@ def test_sanitize_redacts_windows_path_with_spaces():
 
 
 def test_collect_does_not_expose_credentials():
-    exc = RuntimeError("download failed: https://x/y?key=AIza_FAKE_NOT_A_REAL_KEY "
-                       "token=topsecretvalue")
+    exc = RuntimeError(
+        "download failed: https://x/y?key=AIza_FAKE_NOT_A_REAL_KEY token=topsecretvalue"
+    )
     entry = crash_report._collect("cut", exc)
     assert "AIza_FAKE_NOT_A_REAL_KEY" not in entry["error"]
     assert "topsecretvalue" not in entry["error"]
@@ -319,6 +345,7 @@ def test_collect_does_not_expose_credentials():
 # 8. project_store — path containment (relative + symlink escapes)
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_project_input_rejects_relative_escape(tmp_path):
     root = tmp_path / "VIRALS"
     project = root / "proj"
@@ -326,7 +353,8 @@ def test_resolve_project_input_rejects_relative_escape(tmp_path):
     outside = tmp_path / "secret.mp4"
     outside.write_bytes(b"secret")
     (project / project_store.MANIFEST_NAME).write_text(
-        json.dumps({"source": {"path": "../secret.mp4"}}), encoding="utf-8")
+        json.dumps({"source": {"path": "../secret.mp4"}}), encoding="utf-8"
+    )
 
     assert project_store.resolve_project_input(str(project)) is None
 
@@ -338,10 +366,14 @@ def test_resolve_project_input_rejects_absolute_escape(tmp_path):
     outside = tmp_path / "secret.mp4"
     outside.write_bytes(b"secret")
     (project / project_store.MANIFEST_NAME).write_text(
-        json.dumps({"source": {"path": str(outside)}}), encoding="utf-8")
+        json.dumps({"source": {"path": str(outside)}}), encoding="utf-8"
+    )
 
     assert project_store.resolve_project_input(str(project)) is None
-    assert project_store.resolve_project_input(str(project), allowed_root=str(root)) is None
+    assert (
+        project_store.resolve_project_input(str(project), allowed_root=str(root))
+        is None
+    )
 
 
 def test_resolve_project_input_rejects_symlink_escape(tmp_path):
@@ -353,7 +385,8 @@ def test_resolve_project_input_rejects_symlink_escape(tmp_path):
     link = project / "input_link.mp4"
     link.symlink_to(outside)
     (project / project_store.MANIFEST_NAME).write_text(
-        json.dumps({"source": {"path": "input_link.mp4"}}), encoding="utf-8")
+        json.dumps({"source": {"path": "input_link.mp4"}}), encoding="utf-8"
+    )
 
     assert project_store.resolve_project_input(str(project)) is None
 
@@ -364,10 +397,15 @@ def test_resolve_project_input_allows_explicit_external_reference(tmp_path):
     project.mkdir(parents=True)
     source = tmp_path / "recording.mp4"
     source.write_bytes(b"video")
-    (project / project_store.MANIFEST_NAME).write_text(json.dumps({
-        "source": {"path": str(source), "managed": False},
-        "settings": {"storage": "external_reference"},
-    }), encoding="utf-8")
+    (project / project_store.MANIFEST_NAME).write_text(
+        json.dumps(
+            {
+                "source": {"path": str(source), "managed": False},
+                "settings": {"storage": "external_reference"},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     assert project_store.resolve_project_input(str(project)) == os.path.realpath(source)
 
@@ -387,6 +425,7 @@ def test_safe_project_path_rejects_symlink_escape(tmp_path):
 # 9. pipeline_engine — non-serialisable result is still a success
 # ---------------------------------------------------------------------------
 
+
 class _Opaque:
     def __init__(self, value):
         self.value = value
@@ -396,8 +435,9 @@ def test_pipeline_records_success_for_non_serialisable_result(tmp_path):
     state_path = tmp_path / "run.json"
     engine = PipelineEngine(state_path)
     engine.register("odd", lambda context, results: _Opaque(1), retries=1)
-    engine.register("downstream", lambda context, results: {"values": {1, 2, 3}},
-                    deps=["odd"])
+    engine.register(
+        "downstream", lambda context, results: {"values": {1, 2, 3}}, deps=["odd"]
+    )
 
     result = engine.run()
 
@@ -408,7 +448,10 @@ def test_pipeline_records_success_for_non_serialisable_result(tmp_path):
     # a later save must not fail on the stored value
     engine.register("extra", lambda context, results: "ok")
     engine.run(targets=["extra"])
-    assert json.loads(state_path.read_text(encoding="utf-8"))["stages"]["extra"]["status"] == "success"
+    assert (
+        json.loads(state_path.read_text(encoding="utf-8"))["stages"]["extra"]["status"]
+        == "success"
+    )
 
 
 def test_pipeline_json_safe_helper_falls_back_to_repr():

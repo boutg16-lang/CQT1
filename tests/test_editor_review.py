@@ -24,11 +24,28 @@ def test_build_prompt_lists_every_candidate():
 
 
 def test_parse_response_tolerates_fences_and_prose():
-    response = "أكيد! هذه المراجعة:\n```json\n" + json.dumps({"reviews": [
-        {"id": "c0", "verdict": "keep", "hook_score": 88, "reason": "خطاف قوي"},
-        {"id": "c1", "verdict": "reject", "title_verdict": "oversells",
-         "reason": "العنوان يعد بما لا يوجد"},
-    ]}) + "\n```\nانتهى."
+    response = (
+        "أكيد! هذه المراجعة:\n```json\n"
+        + json.dumps(
+            {
+                "reviews": [
+                    {
+                        "id": "c0",
+                        "verdict": "keep",
+                        "hook_score": 88,
+                        "reason": "خطاف قوي",
+                    },
+                    {
+                        "id": "c1",
+                        "verdict": "reject",
+                        "title_verdict": "oversells",
+                        "reason": "العنوان يعد بما لا يوجد",
+                    },
+                ]
+            }
+        )
+        + "\n```\nانتهى."
+    )
     reviews = editor_review.parse_editor_response(response)
     assert len(reviews) == 2
     assert reviews[0]["verdict"] == "keep"
@@ -37,14 +54,22 @@ def test_parse_response_tolerates_fences_and_prose():
 
 
 def test_parse_response_drops_invalid_reviews():
-    response = json.dumps({"reviews": [
-        {"id": "c0", "verdict": "maybe"},            # unknown verdict
-        {"id": "", "verdict": "keep"},               # no id
-        {"verdict": "keep"},                         # missing id
-        "garbage",                                   # not a dict
-        {"id": "c2", "verdict": "trim", "trim_start": "oops",
-         "hook_score": 900},                         # bad values dropped
-    ]})
+    response = json.dumps(
+        {
+            "reviews": [
+                {"id": "c0", "verdict": "maybe"},  # unknown verdict
+                {"id": "", "verdict": "keep"},  # no id
+                {"verdict": "keep"},  # missing id
+                "garbage",  # not a dict
+                {
+                    "id": "c2",
+                    "verdict": "trim",
+                    "trim_start": "oops",
+                    "hook_score": 900,
+                },  # bad values dropped
+            ]
+        }
+    )
     reviews = editor_review.parse_editor_response(response)
     assert len(reviews) == 1
     assert reviews[0]["id"] == "c2"
@@ -62,8 +87,13 @@ def test_apply_verdicts_keep_trim_reject():
     segments = [_segment(0), _segment(1), _segment(2)]
     reviews = [
         {"id": "c0", "verdict": "keep", "hook_score": 90.0},
-        {"id": "c1", "verdict": "trim", "trim_start": 130.0, "trim_end": 160.0,
-         "reason": "اللحظة تبدأ متأخرة"},
+        {
+            "id": "c1",
+            "verdict": "trim",
+            "trim_start": 130.0,
+            "trim_end": 160.0,
+            "reason": "اللحظة تبدأ متأخرة",
+        },
         {"id": "c2", "verdict": "reject", "reason": "بلا payoff"},
     ]
     result = editor_review.apply_editor_reviews(segments, reviews)
@@ -82,7 +112,12 @@ def test_apply_verdicts_keep_trim_reject():
     # rejected segments stay in the payload — deletion is the caller's call
     assert len(annotated) == 3
     assert result["summary"] == {
-        "reviewed": 3, "keep": 1, "trim": 1, "reject": 1, "title_warnings": 0}
+        "reviewed": 3,
+        "keep": 1,
+        "trim": 1,
+        "reject": 1,
+        "title_warnings": 0,
+    }
     # input segments were not mutated
     assert "editor_review" not in segments[1]
 
@@ -92,8 +127,8 @@ def test_trim_is_clamped_inside_original_window():
     reviews = [{"id": "c0", "verdict": "trim", "trim_start": 0.0, "trim_end": 9999.0}]
     result = editor_review.apply_editor_reviews(segments, reviews)
     entry = result["segments"][0]
-    assert entry["start_time"] == 10.0   # clamped to original start
-    assert entry["end_time"] == 70.0     # clamped to original end
+    assert entry["start_time"] == 10.0  # clamped to original start
+    assert entry["end_time"] == 70.0  # clamped to original end
     assert entry["editor_review"]["verdict"] == "trim"
 
 
@@ -129,12 +164,14 @@ def test_editor_review_segments_end_to_end_with_fake_llm():
         for index in range(7):
             if "المقطع c{}".format(index) in prompt:
                 verdict = "keep" if index % 2 == 0 else "reject"
-                reviews.append({"id": "c{}".format(index), "verdict": verdict,
-                                "reason": "سبب"})
+                reviews.append(
+                    {"id": "c{}".format(index), "verdict": verdict, "reason": "سبب"}
+                )
         return json.dumps({"reviews": reviews})
 
     result = editor_review.editor_review_segments(
-        segments, fake_llm, batch_size=3, max_candidates=7)
+        segments, fake_llm, batch_size=3, max_candidates=7
+    )
     summary = result["summary"]
     assert len(calls) == 3  # ceil(7 / 3)
     assert summary["candidates"] == 7

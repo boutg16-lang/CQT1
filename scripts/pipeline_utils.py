@@ -18,7 +18,12 @@ import json
 import logging
 import os
 
-BASE_VERBOSE = os.getenv("VIRALCUTTER_VERBOSE", "").strip().lower() in {"1", "true", "yes", "on"}
+BASE_VERBOSE = os.getenv("VIRALCUTTER_VERBOSE", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 RUNTIME_VERBOSE = BASE_VERBOSE
 
 logger = logging.getLogger(__name__)
@@ -45,7 +50,8 @@ def emit_progress(stage, percent, message):
 #
 TEMP_SUBTITLE_CONFIG = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "temp_subtitle_config.json")
+    "temp_subtitle_config.json",
+)
 
 
 def cleanup_temp_files():
@@ -53,8 +59,9 @@ def cleanup_temp_files():
         if os.path.exists(TEMP_SUBTITLE_CONFIG):
             os.remove(TEMP_SUBTITLE_CONFIG)
     except OSError as exc:
-        logger.warning("Could not remove temporary subtitle settings (%s).",
-                       type(exc).__name__)
+        logger.warning(
+            "Could not remove temporary subtitle settings (%s).", type(exc).__name__
+        )
 
 
 atexit.register(cleanup_temp_files)
@@ -65,11 +72,11 @@ atexit.register(cleanup_temp_files)
 # Cores no formato BGR (Blue-Green-Red) para o ASS
 COLORS = {
     "red": "0000FF",  # Red
-    "yellow": "00FFFF",   # Yellow
-    "green": "00FF00",     # Green
-    "white": "FFFFFF",    # White
-    "black": "000000",     # Black
-    "grey": "808080",     # Grey
+    "yellow": "00FFFF",  # Yellow
+    "green": "00FF00",  # Green
+    "white": "FFFFFF",  # White
+    "black": "000000",  # Black
+    "grey": "808080",  # Grey
 }
 
 

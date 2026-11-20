@@ -33,7 +33,10 @@ from scripts.segment_fingerprints import (
 # (monolith split, step 1). Re-exported here so existing import paths
 # (``from scripts.create_viral_segments import clean_json_response``)
 # keep working unchanged.
-from scripts.segment_json import _extract_segments_json, clean_json_response  # noqa: F401
+from scripts.segment_json import (  # noqa: F401
+    _extract_segments_json,
+    clean_json_response,
+)
 from scripts.segment_titles import (
     _ARABIC_ORTHOGRAPHY_TABLE,  # noqa: F401  (re-exported for backward compatibility)
     _choose_recommended_title,
@@ -46,6 +49,7 @@ from scripts.segment_titles import (
 
 logger = logging.getLogger(__name__)
 
+
 def _purge_broken_asyncio() -> None:
     """Drop a half-initialized asyncio left in sys.modules by a failed import.
 
@@ -56,6 +60,7 @@ def _purge_broken_asyncio() -> None:
     """
     for name in [n for n in sys.modules if n == "asyncio" or n.startswith("asyncio.")]:
         del sys.modules[name]
+
 
 try:
     from scripts import performance_weights
@@ -98,6 +103,7 @@ try:
         title_factual,
         transcript_window,
     )
+
     HAS_CLIP_QUALITY = True
 except Exception:
     clip_scoring = title_factual = transcript_window = segment_validator = None
@@ -133,6 +139,7 @@ except Exception:
 
 try:
     import g4f
+
     HAS_G4F = True
 except Exception:
     _purge_broken_asyncio()
@@ -140,6 +147,7 @@ except Exception:
 
 try:
     from llama_cpp import Llama
+
     HAS_LLAMA_CPP = True
 except Exception:
     _purge_broken_asyncio()
@@ -155,23 +163,24 @@ def preprocess_transcript_for_ai(segments):
 
     full_text = ""
     last_tag_time = -100  # Force first tag
-    
+
     # Try to start with (0s) based on first segment
-    first_start = segments[0].get('start', 0)
+    first_start = segments[0].get("start", 0)
     full_text += f"({int(first_start)}s) "
     last_tag_time = first_start
 
     for seg in segments:
-        text = seg.get('text', '').strip()
-        end_time = seg.get('end', 0)
-        
+        text = seg.get("text", "").strip()
+        end_time = seg.get("end", 0)
+
         full_text += text + " "
-        
+
         if end_time - last_tag_time >= 4:
             full_text += f"({int(end_time)}s) "
             last_tag_time = end_time
 
     return full_text.strip()
+
 
 def _gemini_generate(model_name, prompt, api_key):
     """Generate via whichever Gemini SDK is installed. Returns text."""
@@ -187,10 +196,18 @@ def _gemini_generate(model_name, prompt, api_key):
 def _is_key_error(error_str):
     """True when the Gemini failure is a key/auth problem, not a transient one."""
     low = error_str.lower()
-    return any(token in low for token in (
-        "api key not valid", "api_key_invalid", "permission_denied",
-        "401", "403", "unauthenticated", "invalid api key",
-    ))
+    return any(
+        token in low
+        for token in (
+            "api key not valid",
+            "api_key_invalid",
+            "permission_denied",
+            "401",
+            "403",
+            "unauthenticated",
+            "invalid api key",
+        )
+    )
 
 
 _GEMINI_KEY_CURSOR = 0
@@ -226,7 +243,8 @@ def call_gemini(prompt, api_key, model_name=DEFAULT_GEMINI_MODEL):
             "Gemini SDK is not installed. Install one of:\n"
             "    pip install google-generativeai   (classic)\n"
             "    pip install google-genai          (new SDK)\n"
-            "or re-run install_dependencies.bat / install_linux.sh which install them.")
+            "or re-run install_dependencies.bat / install_linux.sh which install them."
+        )
 
     keys = _ordered_gemini_keys(_normalise_gemini_keys(api_key))
     if not keys:
@@ -242,107 +260,145 @@ def call_gemini(prompt, api_key, model_name=DEFAULT_GEMINI_MODEL):
             except Exception as e:
                 last_error = e
                 error_str = str(e)
-                quota_error = "429" in error_str or "quota exceeded" in error_str.lower()
+                quota_error = (
+                    "429" in error_str or "quota exceeded" in error_str.lower()
+                )
                 if quota_error:
                     if key_index < len(keys) - 1:
-                        print("[Gemini] Key quota reached; switching to the next configured key.", flush=True)
+                        print(
+                            "[Gemini] Key quota reached; switching to the next configured key.",
+                            flush=True,
+                        )
                         break
                     wait_time = base_wait * (attempt + 1)
                     match = re.search(r"retry in (\d+(\.\d+)?)s", error_str)
                     if match:
                         wait_time = float(match.group(1)) + 5.0
-                    print(f"[429] Quota exceeded. Waiting {wait_time:.2f}s before retry {attempt+1}/{max_retries}...", flush=True)
+                    print(
+                        f"[429] Quota exceeded. Waiting {wait_time:.2f}s before retry {attempt + 1}/{max_retries}...",
+                        flush=True,
+                    )
                     time.sleep(wait_time)
                     continue
                 lower_error = error_str.lower()
-                if "404" in error_str and any(marker in lower_error for marker in
-                                              ("not_found", "not found", "not supported",
-                                               "not available", "retired", "shut down")):
+                if "404" in error_str and any(
+                    marker in lower_error
+                    for marker in (
+                        "not_found",
+                        "not found",
+                        "not supported",
+                        "not available",
+                        "retired",
+                        "shut down",
+                    )
+                ):
                     raise RuntimeError(
                         "Gemini model {!r} is unavailable (HTTP 404). Choose a supported model in "
-                        "WebUI settings or set gemini.model in api_config.json; current default: {}."
-                        .format(model_name, DEFAULT_GEMINI_MODEL)) from e
+                        "WebUI settings or set gemini.model in api_config.json; current default: {}.".format(
+                            model_name, DEFAULT_GEMINI_MODEL
+                        )
+                    ) from e
                 if _is_key_error(error_str):
                     if key_index < len(keys) - 1:
-                        print("[Gemini] Invalid key; switching to the next configured key.", flush=True)
+                        print(
+                            "[Gemini] Invalid key; switching to the next configured key.",
+                            flush=True,
+                        )
                         break
                     raise RuntimeError(
                         "Gemini API key error (API key not valid): check the configured key(s) at "
-                        "aistudio.google.com/apikey. مفتاح Gemini غير صالح.") from e
+                        "aistudio.google.com/apikey. مفتاح Gemini غير صالح."
+                    ) from e
                 print(f"Gemini API error (non-fatal, returning empty): {e}")
                 return "{}"
 
-    raise RuntimeError("Gemini API failed after trying the configured key(s).") from last_error
+    raise RuntimeError(
+        "Gemini API failed after trying the configured key(s)."
+    ) from last_error
+
 
 def call_g4f(prompt, model_name="gpt-4o-mini"):
     if not HAS_G4F:
-        raise ImportError("A biblioteca 'g4f' não está instalada. Instale com: pip install g4f")
-    
+        raise ImportError(
+            "A biblioteca 'g4f' não está instalada. Instale com: pip install g4f"
+        )
+
     max_retries = 3
     base_wait = 5
-    
+
     for attempt in range(max_retries):
         try:
             response = g4f.ChatCompletion.create(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
             )
-            
+
             if isinstance(response, dict):
-                if 'error' in response:
+                if "error" in response:
                     raise Exception(f"API Error: {response['error']}")
-                if 'choices' in response and isinstance(response['choices'], list):
-                    if len(response['choices']) > 0:
-                         content = response['choices'][0].get('message', {}).get('content', '')
-                         if content:
-                             return content
+                if "choices" in response and isinstance(response["choices"], list):
+                    if len(response["choices"]) > 0:
+                        content = (
+                            response["choices"][0].get("message", {}).get("content", "")
+                        )
+                        if content:
+                            return content
                 if not response:
-                     raise ValueError("Empty Dict response")
+                    raise ValueError("Empty Dict response")
 
                 return json.dumps(response)
 
             if not response:
-                print(f"[WARN] G4F retornou resposta vazia. Tentativa {attempt+1}/{max_retries}")
+                print(
+                    f"[WARN] G4F retornou resposta vazia. Tentativa {attempt + 1}/{max_retries}"
+                )
                 time.sleep(base_wait)
                 continue
-            
+
             if isinstance(response, str):
                 return response
 
             try:
                 return json.dumps(response, ensure_ascii=False)
             except (TypeError, ValueError) as exc:
-                logger.debug("G4F response is not JSON-serializable: %s", type(exc).__name__)
+                logger.debug(
+                    "G4F response is not JSON-serializable: %s", type(exc).__name__
+                )
                 return str(response)
-            
+
         except Exception as e:
-            print(f"[WARN] Erro na API do G4F (Tentativa {attempt+1}/{max_retries}): {e}")
+            print(
+                f"[WARN] Erro na API do G4F (Tentativa {attempt + 1}/{max_retries}): {e}"
+            )
             if attempt < max_retries - 1:
-                wait_time = base_wait * (2 ** attempt)
+                wait_time = base_wait * (2**attempt)
                 time.sleep(wait_time)
-            
+
     print(f"Falha crítica após {max_retries} tentativas no G4F.")
     return "{}"
+
 
 def _parse_tsv_transcript(tsv_path):
     """Parse a WhisperX TSV (header + rows of start_ms<TAB>end_ms<TAB>text)."""
     segments = []
     try:
-        with open(tsv_path, 'r', encoding='utf-8') as f:
+        with open(tsv_path, "r", encoding="utf-8") as f:
             lines = f.readlines()[1:]  # skip header
             for line in lines:
-                parts = line.strip().split('\t')
+                parts = line.strip().split("\t")
                 if len(parts) >= 3:
                     try:
                         start_ms = float(parts[0])
                         end_ms = float(parts[1])
                     except (TypeError, ValueError):
                         continue
-                    segments.append({
-                        'start': start_ms / 1000.0,
-                        'end': end_ms / 1000.0,
-                        'text': parts[2],
-                    })
+                    segments.append(
+                        {
+                            "start": start_ms / 1000.0,
+                            "end": end_ms / 1000.0,
+                            "text": parts[2],
+                        }
+                    )
     except Exception as e:
         print("Error parsing TSV {}: {}".format(tsv_path, e))
     return segments
@@ -352,20 +408,23 @@ def _parse_srt_transcript(srt_path):
     """Parse a standard SRT file into transcript segments."""
     segments = []
     try:
-        with open(srt_path, 'r', encoding='utf-8') as f:
+        with open(srt_path, "r", encoding="utf-8") as f:
             srt_content = f.read()
-        pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*)', re.DOTALL)
+        pattern = re.compile(
+            r"(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*)",
+            re.DOTALL,
+        )
         matches = pattern.findall(srt_content)
 
         def srt_time_to_seconds(t_str):
-            h, m, s = t_str.replace(',', '.').split(':')
+            h, m, s = t_str.replace(",", ".").split(":")
             return int(h) * 3600 + int(m) * 60 + float(s)
 
         for m in matches:
             start_sec = srt_time_to_seconds(m[1])
             end_sec = srt_time_to_seconds(m[2])
-            text = m[3].replace('\n', ' ')
-            segments.append({'start': start_sec, 'end': end_sec, 'text': text})
+            text = m[3].replace("\n", " ")
+            segments.append({"start": start_sec, "end": end_sec, "text": text})
     except Exception as e:
         print("Error parsing SRT {}: {}".format(srt_path, e))
     return segments
@@ -378,11 +437,13 @@ def load_transcript(project_folder):
     their original basename (transcription artifacts are not named input.*),
     so older projects must still be processable.
     """
-    input_tsv = os.path.join(project_folder, 'input.tsv')
-    input_srt = os.path.join(project_folder, 'input.srt')
+    input_tsv = os.path.join(project_folder, "input.tsv")
+    input_srt = os.path.join(project_folder, "input.srt")
 
     # Try to load TSV first (more reliable time)
-    transcript_segments = _parse_tsv_transcript(input_tsv) if os.path.exists(input_tsv) else []
+    transcript_segments = (
+        _parse_tsv_transcript(input_tsv) if os.path.exists(input_tsv) else []
+    )
 
     # Fallback to SRT parser if TSV empty/failed
     if not transcript_segments and os.path.exists(input_srt):
@@ -397,15 +458,19 @@ def load_transcript(project_folder):
             candidates = []
         for name in candidates:
             lower = name.lower()
-            if lower.endswith('.tsv') and not lower.startswith('input.'):
-                transcript_segments = _parse_tsv_transcript(os.path.join(project_folder, name))
+            if lower.endswith(".tsv") and not lower.startswith("input."):
+                transcript_segments = _parse_tsv_transcript(
+                    os.path.join(project_folder, name)
+                )
                 if transcript_segments:
                     break
         if not transcript_segments:
             for name in candidates:
                 lower = name.lower()
-                if lower.endswith('.srt') and not lower.startswith('input.'):
-                    transcript_segments = _parse_srt_transcript(os.path.join(project_folder, name))
+                if lower.endswith(".srt") and not lower.startswith("input."):
+                    transcript_segments = _parse_srt_transcript(
+                        os.path.join(project_folder, name)
+                    )
                     if transcript_segments:
                         break
 
@@ -414,8 +479,9 @@ def load_transcript(project_folder):
 
     # Defensive ordering: the timestamp-matching and speech-block logic assume
     # chronological lines; a muxed/edited SRT can arrive out of order.
-    transcript_segments.sort(key=lambda s: float(s.get('start', 0.0) or 0.0))
+    transcript_segments.sort(key=lambda s: float(s.get("start", 0.0) or 0.0))
     return transcript_segments
+
 
 def _bounded_score(value, default=0.0):
     try:
@@ -472,13 +538,19 @@ def quality_gate_config() -> dict:
     * ``VIRALCUTTER_MIN_HOOK`` / ``VIRALCUTTER_MIN_NARRATIVE`` /
       ``VIRALCUTTER_MIN_CLARITY`` override the individual floors.
     """
+
     def _env_float(name: str, default: float) -> float:
         try:
             return float(os.getenv(name, "").strip())
         except (TypeError, ValueError):
             return default
+
     enabled = os.getenv("VIRALCUTTER_QUALITY_GATE", "1").strip().lower() not in {
-        "0", "false", "no", "off"}
+        "0",
+        "false",
+        "no",
+        "off",
+    }
     return {
         "enabled": enabled,
         "min": {
@@ -523,12 +595,20 @@ def apply_quality_gate(segments, config=None) -> tuple[list, list]:
                 reasons.append("{} invalid (non-finite)".format(component))
                 continue
             if value < float(floor):
-                label = {"hook_strength": "hook", "narrative_completeness": "narrative",
-                         "clarity_score": "clarity"}.get(component, component)
+                label = {
+                    "hook_strength": "hook",
+                    "narrative_completeness": "narrative",
+                    "clarity_score": "clarity",
+                }.get(component, component)
                 reasons.append("{} {:.0f}<{}".format(label, value, float(floor)))
         if reasons:
-            dropped.append({"title": str(seg.get("title") or "Untitled"),
-                            "index": index, "reasons": reasons})
+            dropped.append(
+                {
+                    "title": str(seg.get("title") or "Untitled"),
+                    "index": index,
+                    "reasons": reasons,
+                }
+            )
         else:
             kept.append(seg)
     return kept, dropped
@@ -540,29 +620,46 @@ def _selection_score(segment, weights=None):
         segment = {}
     if isinstance(weights, dict) and isinstance(weights.get("weights"), dict):
         weights = weights["weights"]
-    defaults = getattr(performance_weights, "DEFAULT_WEIGHTS", {
-        "virality": 0.10, "hook": 0.20, "completeness": 0.20,
-        "clarity": 0.15, "novelty": 0.15, "title": 0.20,
-    })
+    defaults = getattr(
+        performance_weights,
+        "DEFAULT_WEIGHTS",
+        {
+            "virality": 0.10,
+            "hook": 0.20,
+            "completeness": 0.20,
+            "clarity": 0.15,
+            "novelty": 0.15,
+            "title": 0.20,
+        },
+    )
     supplied = weights if isinstance(weights, dict) and weights else defaults
     components = ("virality", "hook", "completeness", "clarity", "novelty", "title")
     raw_weights = {}
     for name in components:
         try:
-            raw_weights[name] = max(0.0, min(1.0, float(supplied.get(name, defaults[name]))))
+            raw_weights[name] = max(
+                0.0, min(1.0, float(supplied.get(name, defaults[name])))
+            )
         except (TypeError, ValueError):
             raw_weights[name] = float(defaults[name])
     max_virality_weight = getattr(performance_weights, "MAX_VIRALITY_WEIGHT", 0.10)
     virality_weight = min(raw_weights["virality"], max_virality_weight)
-    editorial_total = sum(raw_weights[name] for name in components if name != "virality")
+    editorial_total = sum(
+        raw_weights[name] for name in components if name != "virality"
+    )
     if editorial_total <= 0.0:
         raw_weights = dict(defaults)
-        editorial_total = sum(raw_weights[name] for name in components if name != "virality")
+        editorial_total = sum(
+            raw_weights[name] for name in components if name != "virality"
+        )
     weights = {"virality": virality_weight}
-    weights.update({
-        name: raw_weights[name] * (1.0 - virality_weight) / editorial_total
-        for name in components if name != "virality"
-    })
+    weights.update(
+        {
+            name: raw_weights[name] * (1.0 - virality_weight) / editorial_total
+            for name in components
+            if name != "virality"
+        }
+    )
 
     neutral = getattr(performance_weights, "LEGACY_NEUTRAL_SCORE", 50.0)
     virality = _bounded_score(segment.get("score"), 0)
@@ -571,10 +668,14 @@ def _selection_score(segment, weights=None):
     clarity = _bounded_score(segment.get("clarity_score"), neutral)
     novelty = _bounded_score(segment.get("novelty_score"), neutral)
     title = _bounded_score(segment.get("title_quality_score"), neutral)
-    value = (weights["virality"] * virality + weights["hook"] * hook
-             + weights["completeness"] * completeness
-             + weights["clarity"] * clarity + weights["novelty"] * novelty
-             + weights["title"] * title)
+    value = (
+        weights["virality"] * virality
+        + weights["hook"] * hook
+        + weights["completeness"] * completeness
+        + weights["clarity"] * clarity
+        + weights["novelty"] * novelty
+        + weights["title"] * title
+    )
     return round(max(0.0, min(100.0, value)), 1), {
         "virality": round(virality, 1),
         "hook": round(hook, 1),
@@ -593,8 +694,9 @@ def _rank_segments_with_diversity(segments, limit=None):
     text is available, partial semantic overlap receives a bounded penalty even
     if the candidates have no topic/angle labels.
     """
-    remaining = [candidate for candidate in (segments or [])
-                 if isinstance(candidate, dict)]
+    remaining = [
+        candidate for candidate in (segments or []) if isinstance(candidate, dict)
+    ]
     ranked = []
     topic_counts = {}
     for candidate in remaining:
@@ -607,13 +709,21 @@ def _rank_segments_with_diversity(segments, limit=None):
             topic = str(candidate.get("topic") or "").strip().lower()
             angle = str(candidate.get("angle") or "").strip().lower()
             repeat_penalty = topic_counts.get(topic, 0) * 8.0 if topic else 0.0
-            angle_penalty = 3.0 if angle and any(
-                str(item.get("angle") or "").strip().lower() == angle for item in ranked[-3:]
-            ) else 0.0
+            angle_penalty = (
+                3.0
+                if angle
+                and any(
+                    str(item.get("angle") or "").strip().lower() == angle
+                    for item in ranked[-3:]
+                )
+                else 0.0
+            )
             semantic_penalty = 0.0
             candidate_text = str(candidate.get("transcript_text") or "").strip()
-            if (transcript_window is not None
-                    and len(candidate_text.split()) >= transcript_window.MIN_SEMANTIC_WORDS):
+            if (
+                transcript_window is not None
+                and len(candidate_text.split()) >= transcript_window.MIN_SEMANTIC_WORDS
+            ):
                 for prior in ranked[-5:]:
                     prior_text = str(prior.get("transcript_text") or "").strip()
                     if len(prior_text.split()) < transcript_window.MIN_SEMANTIC_WORDS:
@@ -621,9 +731,12 @@ def _rank_segments_with_diversity(segments, limit=None):
                     if _windows_are_near_duplicates(candidate, prior):
                         continue
                     similarity = _pair_similarity(
-                        candidate, prior, candidate_text, prior_text)
+                        candidate, prior, candidate_text, prior_text
+                    )
                     if similarity >= 0.45:
-                        semantic_penalty = max(semantic_penalty, min(6.0, (similarity - 0.35) * 10.0))
+                        semantic_penalty = max(
+                            semantic_penalty, min(6.0, (similarity - 0.35) * 10.0)
+                        )
             # v7.52: graded temporal-overlap penalty. The duplicate gate has
             # already removed >=40% overlaps; among the survivors, a candidate
             # that still shares footage with an earlier pick (e.g. 0.39) is
@@ -634,9 +747,12 @@ def _rank_segments_with_diversity(segments, limit=None):
                 ratio = _window_overlap_ratio(candidate, prior)
                 if ratio > 0.0:
                     temporal_penalty = max(temporal_penalty, min(10.0, ratio * 25.0))
-            adjustment = (repeat_penalty + angle_penalty + semantic_penalty
-                          + temporal_penalty)
-            value = _as_float(candidate.get("selection_score", candidate.get("score", 0)))
+            adjustment = (
+                repeat_penalty + angle_penalty + semantic_penalty + temporal_penalty
+            )
+            value = _as_float(
+                candidate.get("selection_score", candidate.get("score", 0))
+            )
             value -= adjustment
             if value > best_value:
                 best_index, best_value = index, value
@@ -677,8 +793,10 @@ def _pair_similarity(left, right, left_text, right_text):
         right_vector = right.get("_embedding") if isinstance(right, dict) else None
         if left_vector and right_vector:
             try:
-                return max(0.0, min(1.0, semantic_embeddings.similarity(
-                    left_vector, right_vector)))
+                return max(
+                    0.0,
+                    min(1.0, semantic_embeddings.similarity(left_vector, right_vector)),
+                )
             except Exception:
                 pass
     if transcript_window is None:
@@ -707,14 +825,27 @@ def deduplicate_segments(segments, semantic_threshold=None):
     )
     unique = []
     for candidate in ordered:
-        if not isinstance(candidate, dict) or "start_time" not in candidate or "end_time" not in candidate:
+        if (
+            not isinstance(candidate, dict)
+            or "start_time" not in candidate
+            or "end_time" not in candidate
+        ):
             continue
-        if any(_windows_are_near_duplicates(candidate, existing) for existing in unique):
-            print("[DEBUG] Dropping duplicate source window: {}".format(candidate.get("title", "Untitled")))
+        if any(
+            _windows_are_near_duplicates(candidate, existing) for existing in unique
+        ):
+            print(
+                "[DEBUG] Dropping duplicate source window: {}".format(
+                    candidate.get("title", "Untitled")
+                )
+            )
             continue
         if _is_semantic_duplicate(candidate, unique, semantic_threshold):
-            print("[DEBUG] Dropping semantically duplicate clip (same idea): {}".format(
-                candidate.get("title", "Untitled")))
+            print(
+                "[DEBUG] Dropping semantically duplicate clip (same idea): {}".format(
+                    candidate.get("title", "Untitled")
+                )
+            )
             continue
         unique.append(candidate)
     return _rank_segments_with_diversity(unique)
@@ -742,7 +873,9 @@ def _is_semantic_duplicate(candidate, existing, threshold=None):
         threshold = transcript_window.semantic_duplicate_threshold()
     for other in existing:
         other_text = str(other.get("transcript_text") or "").strip()
-        other_min = 3 if other.get("_embedding") else transcript_window.MIN_SEMANTIC_WORDS
+        other_min = (
+            3 if other.get("_embedding") else transcript_window.MIN_SEMANTIC_WORDS
+        )
         if not other_text or len(other_text.split()) < other_min:
             continue
         candidate_vector = candidate.get("_embedding")
@@ -751,16 +884,21 @@ def _is_semantic_duplicate(candidate, existing, threshold=None):
             # Keep the stated-number guard: two clips that quote different
             # amounts are different facts even if the wording is similar.
             try:
-                if transcript_window._number_set(candidate_text) != \
-                        transcript_window._number_set(other_text):
+                if transcript_window._number_set(
+                    candidate_text
+                ) != transcript_window._number_set(other_text):
                     continue
             except Exception:
                 pass
-            if _pair_similarity(candidate, other, candidate_text, other_text) >= threshold:
+            if (
+                _pair_similarity(candidate, other, candidate_text, other_text)
+                >= threshold
+            ):
                 return True
             continue
         is_dup, _sim = transcript_window.are_semantic_duplicates(
-            candidate_text, other_text, threshold)
+            candidate_text, other_text, threshold
+        )
         if is_dup:
             return True
     return False
@@ -795,19 +933,27 @@ def window_duplicate_config():
     * ``VIRALCUTTER_WINDOW_DUP_SHIFT`` — shift in seconds for the rule above
       (default 2.0).
     """
+
     def _env(name, default, lo, hi):
         try:
             value = float(os.getenv(name, "").strip())
         except (TypeError, ValueError):
             return default
         return max(lo, min(hi, value))
+
     return {
-        "overlap": _env("VIRALCUTTER_WINDOW_DUP_OVERLAP",
-                        WINDOW_DUP_OVERLAP_DEFAULT, 0.1, 1.0),
-        "shift_overlap": _env("VIRALCUTTER_WINDOW_SHIFT_DUP_OVERLAP",
-                              WINDOW_SHIFT_DUP_OVERLAP_DEFAULT, 0.1, 1.0),
-        "shift_seconds": _env("VIRALCUTTER_WINDOW_DUP_SHIFT",
-                              WINDOW_SHIFT_EPSILON_DEFAULT, 0.0, 60.0),
+        "overlap": _env(
+            "VIRALCUTTER_WINDOW_DUP_OVERLAP", WINDOW_DUP_OVERLAP_DEFAULT, 0.1, 1.0
+        ),
+        "shift_overlap": _env(
+            "VIRALCUTTER_WINDOW_SHIFT_DUP_OVERLAP",
+            WINDOW_SHIFT_DUP_OVERLAP_DEFAULT,
+            0.1,
+            1.0,
+        ),
+        "shift_seconds": _env(
+            "VIRALCUTTER_WINDOW_DUP_SHIFT", WINDOW_SHIFT_EPSILON_DEFAULT, 0.0, 60.0
+        ),
     }
 
 
@@ -851,8 +997,10 @@ def _windows_are_near_duplicates(left, right):
     config = window_duplicate_config()
     if overlap_ratio >= config["overlap"]:
         return True
-    return (abs(left_start - right_start) <= config["shift_seconds"]
-            and overlap_ratio >= config["shift_overlap"])
+    return (
+        abs(left_start - right_start) <= config["shift_seconds"]
+        and overlap_ratio >= config["shift_overlap"]
+    )
 
 
 # A pause of this length (seconds) between transcript lines marks a
@@ -884,8 +1032,7 @@ def _speech_blocks(transcript_segments):
     blocks = []
     if not transcript_segments:
         return blocks
-    ordered = sorted(
-        transcript_segments, key=lambda s: float(s.get("start", 0.0)))
+    ordered = sorted(transcript_segments, key=lambda s: float(s.get("start", 0.0)))
     block_start = float(ordered[0].get("start", 0.0))
     block_end = float(ordered[0].get("end", block_start))
     for seg in ordered[1:]:
@@ -924,11 +1071,15 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments, words=Non
     end_time = max(start_time + 0.1, float(end_time))
     if not transcript_segments:
         return start_time, end_time
-    ordered = sorted(transcript_segments, key=lambda item: float(item.get("start", 0.0)))
+    ordered = sorted(
+        transcript_segments, key=lambda item: float(item.get("start", 0.0))
+    )
     blocks = []
     if words and transcript_window is not None:
         try:
-            units = transcript_window.split_sentence_units(transcript_segments, words=words)
+            units = transcript_window.split_sentence_units(
+                transcript_segments, words=words
+            )
             blocks = [(float(unit["start"]), float(unit["end"])) for unit in units]
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning("Could not snap using word timings: %s", type(exc).__name__)
@@ -959,7 +1110,10 @@ def snap_segment_boundaries(start_time, end_time, transcript_segments, words=Non
             break
         if start_time <= block_end:
             block_is_sentence = (block_end - block_start) <= MAX_SENTENCE_BLOCK_SECONDS
-            if block_is_sentence and start_time - block_start <= MAX_BOUNDARY_SHIFT_SECONDS:
+            if (
+                block_is_sentence
+                and start_time - block_start <= MAX_BOUNDARY_SHIFT_SECONDS
+            ):
                 snapped_start = block_start
             else:
                 line_start = _nearest_line_start(MAX_BOUNDARY_SHIFT_SECONDS)
@@ -1038,8 +1192,15 @@ def _has_any_anchor(segment):
 # v7.41 — boundary policy helpers: text recovery, media duration, extension
 # ---------------------------------------------------------------------------
 
-def _align_text_time(transcript_segments, target_text, search_start_idx, *,
-                     allow_same=True, min_similarity=0.55):
+
+def _align_text_time(
+    transcript_segments,
+    target_text,
+    search_start_idx,
+    *,
+    allow_same=True,
+    min_similarity=0.55,
+):
     """Fuzzy-align ``target_text`` to a transcript line.
 
     Mirrors the alignment used for the main start/end matching (the AI often
@@ -1056,14 +1217,19 @@ def _align_text_time(transcript_segments, target_text, search_start_idx, *,
     start_at = int(search_start_idx) + (0 if allow_same else 1)
     for index in range(max(0, start_at), limit):
         similarity = _text_similarity(
-            target, _normalized_match_text(transcript_segments[index].get("text")))
+            target, _normalized_match_text(transcript_segments[index].get("text"))
+        )
         if similarity > best_similarity:
             best_similarity, best_index = similarity, index
         if best_similarity >= 0.999:
             break
     if best_index == -1 or best_similarity < min_similarity:
         return None
-    return best_index, float(transcript_segments[best_index].get("start", 0.0)), best_similarity
+    return (
+        best_index,
+        float(transcript_segments[best_index].get("start", 0.0)),
+        best_similarity,
+    )
 
 
 def _recover_reversed_window(seg, transcript_segments, anchor_idx):
@@ -1082,7 +1248,9 @@ def _recover_reversed_window(seg, transcript_segments, anchor_idx):
     if start_hit is None:
         return None
     start_index, start_time, _ = start_hit
-    end_hit = _align_text_time(transcript_segments, end_text, start_index, allow_same=True)
+    end_hit = _align_text_time(
+        transcript_segments, end_text, start_index, allow_same=True
+    )
     if end_hit is None:
         return None
     end_index, _end_start, _ = end_hit
@@ -1107,13 +1275,25 @@ def probe_media_duration(path):
             return None
         import shutil
         import subprocess
+
         if shutil.which("ffprobe") is None:
             return None
         completed = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=nw=1:nk=1", str(path)],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30,
-            check=False)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=nw=1:nk=1",
+                str(path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
         if completed.returncode != 0:
             return None
         value = float(completed.stdout.decode("utf-8", "replace").strip())
@@ -1150,18 +1330,28 @@ def _contextually_connected(base_text, added_text, max_gap=1.5, gap=None):
             if float(gap) <= float(max_gap):
                 return True
         except (TypeError, ValueError, OverflowError) as exc:
-            logger.debug("Ignoring malformed transcript gap (%s); using text overlap.",
-                         type(exc).__name__)
-    base_tokens = {token for token in _normalized_match_text(base_text).split()
-                   if len(token) >= 3}
-    added_tokens = {token for token in _normalized_match_text(added_text).split()
-                    if len(token) >= 3}
+            logger.debug(
+                "Ignoring malformed transcript gap (%s); using text overlap.",
+                type(exc).__name__,
+            )
+    base_tokens = {
+        token for token in _normalized_match_text(base_text).split() if len(token) >= 3
+    }
+    added_tokens = {
+        token for token in _normalized_match_text(added_text).split() if len(token) >= 3
+    }
     return bool(base_tokens & added_tokens)
 
 
-def _extend_to_min_duration(start_time, end_time, min_duration,
-                            transcript_segments, transcript_start,
-                            transcript_end, max_duration):
+def _extend_to_min_duration(
+    start_time,
+    end_time,
+    min_duration,
+    transcript_segments,
+    transcript_start,
+    transcript_end,
+    max_duration,
+):
     """Sentence-aware recovery for a window shorter than ``min_duration``.
 
     Searches neighbouring sentence units and accepts the FIRST expansion
@@ -1224,8 +1414,10 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         unit_end = float(unit["end"])
         if unit_end <= end_time - 0.05:
             continue
-        new_end = min(max(_bounded_end(unit_end), start_time + min_duration),
-                      float(transcript_end))
+        new_end = min(
+            max(_bounded_end(unit_end), start_time + min_duration),
+            float(transcript_end),
+        )
         if new_end - start_time < min_duration - 0.01:
             continue
         if new_end - start_time > float(max_duration) + 0.01:
@@ -1237,8 +1429,7 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         # reaching PAST it (into another unit / silence) requires real added
         # speech that is contextually connected. Otherwise the "extension"
         # would just append dead air or unrelated material.
-        extends_sentence = (unit_start <= end_time + 0.05
-                            and new_end <= unit_end + 0.01)
+        extends_sentence = unit_start <= end_time + 0.05 and new_end <= unit_end + 0.01
         if not extends_sentence and not added:
             continue
         gap = unit_start - end_time
@@ -1250,8 +1441,10 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         unit_end = float(unit["end"])
         if unit_start >= start_time + 0.05:
             continue
-        new_start = max(min(_bounded_start(unit_start), end_time - min_duration),
-                        float(transcript_start))
+        new_start = max(
+            min(_bounded_start(unit_start), end_time - min_duration),
+            float(transcript_start),
+        )
         if end_time - new_start < min_duration - 0.01:
             continue
         if end_time - new_start > float(max_duration) + 0.01:
@@ -1259,8 +1452,9 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
         if new_start >= start_time - 0.01:
             continue
         added = _transcript_text_between(transcript_segments, new_start, start_time)
-        extends_sentence = (unit_end >= start_time - 0.05
-                            and new_start >= unit_start - 0.01)
+        extends_sentence = (
+            unit_end >= start_time - 0.05 and new_start >= unit_start - 0.01
+        )
         if not extends_sentence and not added:
             continue
         gap = start_time - unit_end
@@ -1276,8 +1470,11 @@ def _extend_to_min_duration(start_time, end_time, min_duration,
     except (TypeError, ValueError):
         full_span = 0.0
     if 0.0 < full_span <= min_duration + 0.05:
-        return (float(transcript_start), float(transcript_end),
-                "min_duration_full_transcript")
+        return (
+            float(transcript_start),
+            float(transcript_end),
+            "min_duration_full_transcript",
+        )
     return None
 
 
@@ -1293,16 +1490,25 @@ LOW_SPEECH_COVERAGE = 0.35
 # Final-validator error codes that make a window unexportable. Everything
 # else (mid-sentence truncation forced by max_duration, edge silence, a title
 # needing review, safety/duplicate flags) is surfaced as a review flag.
-FATAL_VALIDATION_CODES = frozenset({
-    "missing_start_time", "missing_end_time", "invalid_start_time",
-    "invalid_end_time", "end_not_after_start", "non_positive_duration",
-    "duration_below_min", "duration_above_max", "out_of_media_bounds",
-    "empty_transcript",
-})
+FATAL_VALIDATION_CODES = frozenset(
+    {
+        "missing_start_time",
+        "missing_end_time",
+        "invalid_start_time",
+        "invalid_end_time",
+        "end_not_after_start",
+        "non_positive_duration",
+        "duration_below_min",
+        "duration_above_max",
+        "out_of_media_bounds",
+        "empty_transcript",
+    }
+)
 
 
-def _transcript_is_limiting(start_time, end_time, min_duration,
-                            transcript_start, transcript_end):
+def _transcript_is_limiting(
+    start_time, end_time, min_duration, transcript_start, transcript_end
+):
     """True only when the SOURCE has no more material for this clip.
 
     A short window is defensible when the whole transcript is already shorter
@@ -1352,9 +1558,15 @@ def _validate_segment_window(start_time, end_time, min_duration, analysis):
         return rejected, flags
 
     duration = end_time - start_time
-    transcript_limited = bool(isinstance(analysis, dict) and analysis.get("transcript_limited"))
+    transcript_limited = bool(
+        isinstance(analysis, dict) and analysis.get("transcript_limited")
+    )
     if duration < float(min_duration) and not transcript_limited:
-        rejected.append("duration {:.2f}s below minimum {:.2f}s".format(duration, float(min_duration)))
+        rejected.append(
+            "duration {:.2f}s below minimum {:.2f}s".format(
+                duration, float(min_duration)
+            )
+        )
 
     if not isinstance(analysis, dict) or not analysis:
         rejected.append("insufficient transcript text inside window")
@@ -1362,15 +1574,24 @@ def _validate_segment_window(start_time, end_time, min_duration, analysis):
 
     word_count = int(analysis.get("word_count") or 0)
     if word_count < MIN_WINDOW_WORDS:
-        rejected.append("insufficient transcript text: {} word(s) inside window".format(word_count))
+        rejected.append(
+            "insufficient transcript text: {} word(s) inside window".format(word_count)
+        )
 
     coverage = float(analysis.get("speech_coverage") or 0.0)
     if analysis.get("text") and coverage < REJECT_SPEECH_COVERAGE:
-        rejected.append("excessive silence: speech covers {:.0%} of the window".format(coverage))
+        rejected.append(
+            "excessive silence: speech covers {:.0%} of the window".format(coverage)
+        )
     elif analysis.get("text") and coverage < LOW_SPEECH_COVERAGE:
         flags.append("low speech density: {:.0%} of the window".format(coverage))
 
-    strict = os.getenv("VIRALCUTTER_STRICT_BOUNDARIES", "").strip().lower() in {"1", "true", "yes", "on"}
+    strict = os.getenv("VIRALCUTTER_STRICT_BOUNDARIES", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if analysis.get("starts_mid_sentence"):
         message = "starts mid-sentence"
         (rejected if strict else flags).append(message)
@@ -1383,9 +1604,13 @@ def _validate_segment_window(start_time, end_time, min_duration, analysis):
         message = "ends on an incomplete phrase (preposition/conjunction)"
         (rejected if strict else flags).append(message)
     if float(analysis.get("leading_silence") or 0.0) > 1.5:
-        flags.append("leading silence {:.1f}s".format(float(analysis.get("leading_silence"))))
+        flags.append(
+            "leading silence {:.1f}s".format(float(analysis.get("leading_silence")))
+        )
     if float(analysis.get("trailing_silence") or 0.0) > 1.5:
-        flags.append("trailing silence {:.1f}s".format(float(analysis.get("trailing_silence"))))
+        flags.append(
+            "trailing silence {:.1f}s".format(float(analysis.get("trailing_silence")))
+        )
     return rejected, flags
 
 
@@ -1395,7 +1620,11 @@ def _completion_status(analysis):
         return "incomplete"
     if analysis.get("complete"):
         return "complete"
-    if analysis.get("ends_incomplete") or analysis.get("starts_mid_sentence") or analysis.get("ends_mid_sentence"):
+    if (
+        analysis.get("ends_incomplete")
+        or analysis.get("starts_mid_sentence")
+        or analysis.get("ends_mid_sentence")
+    ):
         return "partial"
     return "complete"
 
@@ -1407,12 +1636,21 @@ def _title_validation_signal(segment_entry, lexical_relevance):
     status = str(validation.get("status") or "").strip().lower()
     if not status:
         return round(lexical, 1), "legacy"
-    status_score = {"verified": 100.0, "review": 55.0, "rejected": 0.0}.get(status, 40.0)
+    status_score = {"verified": 100.0, "review": 55.0, "rejected": 0.0}.get(
+        status, 40.0
+    )
     return round(0.65 * lexical + 0.35 * status_score, 1), status
 
 
-def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_relevance_ratio=0.0,
-                           repetition_penalty=0.0, safety_penalty=0.0):
+def _compute_factor_scores(
+    segment_entry,
+    analysis,
+    *,
+    edge_match=1.0,
+    title_relevance_ratio=0.0,
+    repetition_penalty=0.0,
+    safety_penalty=0.0,
+):
     """The 12-factor 0-100 score set for one candidate (v7.41).
 
     Genuine AI self-evaluations are preferred for the editorial factors;
@@ -1439,19 +1677,29 @@ def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_rel
         "hook_strength": _genuine(
             "hook_strength",
             clip_scoring.hook_strength_heuristic(
-                first_sentence, fallback=clip_scoring.NEUTRAL_SCORE)),
+                first_sentence, fallback=clip_scoring.NEUTRAL_SCORE
+            ),
+        ),
         "standalone_context": clip_scoring.standalone_context_score(analysis),
         "emotional_value": clip_scoring.emotional_value_heuristic(window_text),
         "information_density": clip_scoring.information_density_score(
-            (analysis or {}).get("word_count") or 0, duration,
-            (analysis or {}).get("unique_ratio")),
+            (analysis or {}).get("word_count") or 0,
+            duration,
+            (analysis or {}).get("unique_ratio"),
+        ),
         "narrative_completeness": clip_scoring.narrative_completeness_score(analysis),
         "boundary_quality": clip_scoring.boundary_quality_score(analysis),
-        "transcript_alignment": clip_scoring.transcript_alignment_score(analysis, edge_match),
+        "transcript_alignment": clip_scoring.transcript_alignment_score(
+            analysis, edge_match
+        ),
         "audio_quality": clip_scoring.audio_quality_proxy(analysis),
         "visual_quality": clip_scoring.visual_quality_score(segment_entry),
-        "title_relevance": _title_validation_signal(segment_entry, title_relevance_ratio)[0],
-        "repetition_penalty": round(max(0.0, min(100.0, float(repetition_penalty or 0.0))), 1),
+        "title_relevance": _title_validation_signal(
+            segment_entry, title_relevance_ratio
+        )[0],
+        "repetition_penalty": round(
+            max(0.0, min(100.0, float(repetition_penalty or 0.0))), 1
+        ),
         "safety_penalty": round(max(0.0, min(100.0, float(safety_penalty or 0.0))), 1),
     }
     # narrative_completeness (genuine AI eval) strengthens the narrative
@@ -1459,15 +1707,22 @@ def _compute_factor_scores(segment_entry, analysis, *, edge_match=1.0, title_rel
     if segment_entry.get("narrative_completeness") is not None:
         factors["narrative_completeness"] = round(
             0.6 * factors["narrative_completeness"]
-            + 0.4 * _bounded_score(
+            + 0.4
+            * _bounded_score(
                 segment_entry.get("narrative_completeness"),
-                factors["narrative_completeness"]), 1)
+                factors["narrative_completeness"],
+            ),
+            1,
+        )
     if segment_entry.get("clarity_score") is not None:
         factors["standalone_context"] = round(
             0.6 * factors["standalone_context"]
-            + 0.4 * _bounded_score(
-                segment_entry.get("clarity_score"),
-                factors["standalone_context"]), 1)
+            + 0.4
+            * _bounded_score(
+                segment_entry.get("clarity_score"), factors["standalone_context"]
+            ),
+            1,
+        )
     return factors
 
 
@@ -1490,7 +1745,14 @@ def _apply_semantic_repetition_penalties(segments, weights=None):
     if transcript_window is None or not segments:
         return
     texts = [str(seg.get("transcript_text") or "") for seg in segments]
-    if sum(1 for text in texts if len(text.split()) >= transcript_window.MIN_SEMANTIC_WORDS) < 2:
+    if (
+        sum(
+            1
+            for text in texts
+            if len(text.split()) >= transcript_window.MIN_SEMANTIC_WORDS
+        )
+        < 2
+    ):
         return
     threshold = transcript_window.semantic_duplicate_threshold()
     slope = transcript_window.repetition_penalty_slope()
@@ -1507,7 +1769,8 @@ def _apply_semantic_repetition_penalties(segments, weights=None):
             if _windows_are_near_duplicates(candidate, segments[prior]):
                 continue
             similarity = _pair_similarity(
-                candidate, segments[prior], texts[index], texts[prior])
+                candidate, segments[prior], texts[index], texts[prior]
+            )
             if similarity >= threshold:
                 worst = max(worst, slope)
             elif similarity >= lower_bound:
@@ -1520,14 +1783,24 @@ def _apply_semantic_repetition_penalties(segments, weights=None):
             # penalty changes the base, then add it back after recomputing.
             nudge = 0.0
             if clip_scoring is not None:
-                nudge = (_as_float(candidate.get("selection_score"))
-                         - clip_scoring.compute_final_score(factors, weights))
+                nudge = _as_float(
+                    candidate.get("selection_score")
+                ) - clip_scoring.compute_final_score(factors, weights)
             factors["repetition_penalty"] = round(
-                max(float(factors.get("repetition_penalty") or 0.0), worst), 1)
+                max(float(factors.get("repetition_penalty") or 0.0), worst), 1
+            )
             candidate["score_breakdown"] = factors
             if clip_scoring is not None:
-                candidate["selection_score"] = round(max(0.0, min(100.0,
-                    clip_scoring.compute_final_score(factors, weights) + nudge)), 1)
+                candidate["selection_score"] = round(
+                    max(
+                        0.0,
+                        min(
+                            100.0,
+                            clip_scoring.compute_final_score(factors, weights) + nudge,
+                        ),
+                    ),
+                    1,
+                )
 
 
 def _editor_review_call(ai_mode, api_key, model_name):
@@ -1540,25 +1813,52 @@ def _editor_review_call(ai_mode, api_key, model_name):
     if _editor_review_module is None:
         return None
     if os.environ.get("VIRALCUTTER_EDITOR_REVIEW", "").strip().lower() not in (
-            "1", "true", "yes", "on"):
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
         return None
     if ai_mode == "gemini":
+
         def review_call(prompt):
             return call_gemini(prompt, api_key, model_name=model_name)
+
         return review_call
     if ai_mode == "g4f":
+
         def review_call(prompt):
             return call_g4f(prompt, model_name=model_name)
+
         return review_call
     if ai_mode == "openai" and openai_compat is not None:
+
         def review_call(prompt):
             return openai_compat.chat(prompt, model=model_name)
+
         return review_call
-    print("[editor-review] no review call for backend '{}' — pass disabled".format(ai_mode))
+    print(
+        "[editor-review] no review call for backend '{}' — pass disabled".format(
+            ai_mode
+        )
+    )
     return None
 
 
-def process_segments(raw_segments, transcript_segments, min_duration, max_duration, output_count=None, snap_to_boundaries=True, project_folder=None, media_duration=None, editor_review_llm=None, llm_config=None, allow_auto_embeddings=False, selection_meta=None):
+def process_segments(
+    raw_segments,
+    transcript_segments,
+    min_duration,
+    max_duration,
+    output_count=None,
+    snap_to_boundaries=True,
+    project_folder=None,
+    media_duration=None,
+    editor_review_llm=None,
+    llm_config=None,
+    allow_auto_embeddings=False,
+    selection_meta=None,
+):
     """
     Aligns raw AI segments (with reference tags) to actual transcript timestamps.
     Applies constraints, validation, and deduplication.
@@ -1577,7 +1877,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     are applied, rejects are moved to ``editor_rejected``. Fail-open: a
     review error never blocks the pipeline.
     """
-    
+
     all_segments = list(raw_segments)
     tempo_minimo = min_duration
     tempo_maximo = max_duration
@@ -1601,7 +1901,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # refinement snap cut points to exact word edges; empty list → the
     # segment-level fallback path is used unchanged.
     word_timings = _load_word_timings(project_folder)
-    
+
     # Use the capped, explainable score before transcript alignment so raw
     # model virality estimates cannot decide which duplicate survives.
     all_segments.sort(key=lambda item: _selection_score(item)[0], reverse=True)
@@ -1611,32 +1911,42 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # window can be anchored, so return the empty result shape callers
     # already handle instead of crashing on a raw min() of an empty sequence.
     if not transcript_segments:
-        print("[WARN] Empty transcript — no segment can be anchored; "
-              "returning no clips.")
+        print(
+            "[WARN] Empty transcript — no segment can be anchored; returning no clips."
+        )
         return {"segments": []}
     processed_segments = []
-    transcript_start_time = min(float(item.get("start", 0.0)) for item in transcript_segments)
-    transcript_end_time = max(float(item.get("end", item.get("start", 0.0))) for item in transcript_segments)
+    transcript_start_time = min(
+        float(item.get("start", 0.0)) for item in transcript_segments
+    )
+    transcript_end_time = max(
+        float(item.get("end", item.get("start", 0.0))) for item in transcript_segments
+    )
     if transcript_end_time <= transcript_start_time:
         raise ValueError("Transcript timestamps must contain a positive duration.")
-    
+
     print(f"[DEBUG] Matching {len(all_segments)} raw segments to timestamps...")
-    
+
     for seg in all_segments:
         if not _has_any_anchor(seg):
-            print(f"[WARN] Skipping unanchorable segment (no start/end time or start/end text): "
-                  f"'{seg.get('title', 'Untitled')}' — nothing to align, window would be fabricated.")
+            print(
+                f"[WARN] Skipping unanchorable segment (no start/end time or start/end text): "
+                f"'{seg.get('title', 'Untitled')}' — nothing to align, window would be fabricated."
+            )
             continue
         try:
             # 1. Parse Reference Time
-            ref_time_str = seg.get('start_time_ref')
+            ref_time_str = seg.get("start_time_ref")
             # Some providers return numeric start_time instead of the
             # documented ``start_time_ref``. Never silently convert that case
             # to (0s), otherwise every title is cut from the first seconds.
             # ``(0s)`` is the model's documented "no timestamp found"
             # sentinel, so it must not count as a real anchor either.
             has_reliable_ref = ref_time_str not in (None, "", "(0s)")
-            if ref_time_str in (None, "", "(0s)") and seg.get("start_time") not in (None, ""):
+            if ref_time_str in (None, "", "(0s)") and seg.get("start_time") not in (
+                None,
+                "",
+            ):
                 ref_time_str = seg.get("start_time")
                 has_reliable_ref = True
             ref_time_val = _parse_segment_time(ref_time_str, default=0.0)
@@ -1645,18 +1955,18 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             anchor_idx = 0
             min_diff = 999999
             for i, s in enumerate(transcript_segments):
-                diff = abs(s['start'] - ref_time_val)
+                diff = abs(s["start"] - ref_time_val)
                 if diff < min_diff:
                     min_diff = diff
                     anchor_idx = i
-                if s['start'] > ref_time_val + 10: 
+                if s["start"] > ref_time_val + 10:
                     break
-            
+
             # Backtrack only for the TEXT SEARCH window. The anchor line is
             # kept separately: using the backtracked index as the cut point
             # started clips ~5 lines (up to 50 s) before the model's moment.
             start_idx = max(0, anchor_idx - 5)
-            
+
             # 2-3. Prefer explicit numeric timestamps. They are the only
             # reliable identity when an LLM returns several different titles
             # for the same transcript phrase. Text matching remains a fallback
@@ -1664,13 +1974,15 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             explicit_start = seg.get("start_time") not in (None, "")
             explicit_end = seg.get("end_time") not in (None, "")
             if explicit_start:
-                final_start_time = _parse_segment_time(seg.get("start_time"), default=ref_time_val)
+                final_start_time = _parse_segment_time(
+                    seg.get("start_time"), default=ref_time_val
+                )
                 match_start_idx = start_idx
             else:
                 # Fuzzy alignment: the AI often paraphrases or slightly alters
                 # the transcript wording, so exact containment fails and the
                 # segment used to fall back to the wrong cut point.
-                start_text_target = _normalized_match_text(seg.get('start_text'))
+                start_text_target = _normalized_match_text(seg.get("start_text"))
                 final_start_time = -1
                 match_start_idx = -1
                 search_limit = min(len(transcript_segments), start_idx + 50)
@@ -1678,13 +1990,14 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 for i in range(start_idx, search_limit):
                     similarity = _text_similarity(
                         start_text_target,
-                        _normalized_match_text(transcript_segments[i]['text']))
+                        _normalized_match_text(transcript_segments[i]["text"]),
+                    )
                     if similarity > best_similarity:
                         best_similarity, best_index = similarity, i
                     if best_similarity >= 0.999:
                         break
                 if start_text_target and best_similarity >= 0.55:
-                    final_start_time = transcript_segments[best_index]['start']
+                    final_start_time = transcript_segments[best_index]["start"]
                     match_start_idx = best_index
                 if final_start_time == -1 and start_text_target:
                     # The paraphrase may sit outside the local window (or the
@@ -1692,45 +2005,63 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     # before giving up; a fabricated head-of-video window is
                     # never an acceptable fallback.
                     global_hit = _align_text_time(
-                        transcript_segments, start_text_target, 0)
+                        transcript_segments, start_text_target, 0
+                    )
                     if global_hit is not None:
                         match_start_idx = global_hit[0]
                         final_start_time = global_hit[1]
-                if final_start_time == -1 and not has_reliable_ref \
-                        and not start_text_target \
-                        and seg.get("end_time") not in (None, ""):
+                if (
+                    final_start_time == -1
+                    and not has_reliable_ref
+                    and not start_text_target
+                    and seg.get("end_time") not in (None, "")
+                ):
                     # A numeric end is a documented anchor on its own: derive
                     # the start from the minimum duration and the nearest line.
                     end_anchor = _parse_segment_time(seg.get("end_time"), 0.0)
-                    final_start_time = max(transcript_start_time,
-                                           end_anchor - tempo_minimo)
+                    final_start_time = max(
+                        transcript_start_time, end_anchor - tempo_minimo
+                    )
                     match_start_idx = min(
                         range(len(transcript_segments)),
-                        key=lambda i: abs(float(transcript_segments[i].get("start", 0.0))
-                                          - final_start_time),
-                        default=0)
+                        key=lambda i: abs(
+                            float(transcript_segments[i].get("start", 0.0))
+                            - final_start_time
+                        ),
+                        default=0,
+                    )
                 if final_start_time == -1:
                     if not has_reliable_ref:
-                        print("[WARN] Skipping candidate '{}': no reliable "
-                              "start anchor (missing ref and unmatched "
-                              "start_text).".format(seg.get('title', 'Untitled')))
+                        print(
+                            "[WARN] Skipping candidate '{}': no reliable "
+                            "start anchor (missing ref and unmatched "
+                            "start_text).".format(seg.get("title", "Untitled"))
+                        )
                         continue
-                    final_start_time = transcript_segments[anchor_idx]['start'] if anchor_idx < len(transcript_segments) else ref_time_val
+                    final_start_time = (
+                        transcript_segments[anchor_idx]["start"]
+                        if anchor_idx < len(transcript_segments)
+                        else ref_time_val
+                    )
                     match_start_idx = anchor_idx
 
             if explicit_end:
                 final_end_time = _parse_segment_time(
-                    seg.get("end_time"), default=final_start_time + tempo_minimo)
+                    seg.get("end_time"), default=final_start_time + tempo_minimo
+                )
             else:
-                end_text_target = _normalized_match_text(seg.get('end_text'))
+                end_text_target = _normalized_match_text(seg.get("end_text"))
                 final_end_time = -1
                 if match_start_idx != -1 and end_text_target:
-                    search_end_limit = min(len(transcript_segments), match_start_idx + 200)
+                    search_end_limit = min(
+                        len(transcript_segments), match_start_idx + 200
+                    )
                     best_index, best_similarity = -1, 0.0
                     for i in range(match_start_idx, search_end_limit):
                         similarity = _text_similarity(
                             end_text_target,
-                            _normalized_match_text(transcript_segments[i]['text']))
+                            _normalized_match_text(transcript_segments[i]["text"]),
+                        )
                         if similarity > best_similarity:
                             best_similarity, best_index = similarity, i
                         if best_similarity >= 0.999:
@@ -1746,15 +2077,16 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                         for i in range(match_start_idx + 1, search_end_limit):
                             similarity = _text_similarity(
                                 end_text_target,
-                                _normalized_match_text(transcript_segments[i]['text']))
+                                _normalized_match_text(transcript_segments[i]["text"]),
+                            )
                             if similarity > later_similarity:
                                 later_similarity, later_index = similarity, i
                             if later_similarity >= 0.999:
                                 break
                         if later_index != -1 and later_similarity >= 0.55:
-                            final_end_time = transcript_segments[later_index]['end']
+                            final_end_time = transcript_segments[later_index]["end"]
                     elif best_similarity >= 0.55:
-                        final_end_time = transcript_segments[best_index]['end']
+                        final_end_time = transcript_segments[best_index]["end"]
                 if final_end_time == -1:
                     final_end_time = final_start_time + tempo_minimo
 
@@ -1764,16 +2096,26 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # that is not reliable, reject the candidate with reason
             # "reversed_window" instead of guessing.
             if final_end_time < final_start_time:
-                recovered = _recover_reversed_window(seg, transcript_segments, start_idx)
+                recovered = _recover_reversed_window(
+                    seg, transcript_segments, start_idx
+                )
                 if recovered is not None:
                     final_start_time, final_end_time = recovered
-                    print("[WARN] Reversed window for '{}': recovered from text anchors "
-                          "to [{:.2f}, {:.2f}].".format(
-                              seg.get('title', 'Untitled'), final_start_time, final_end_time))
+                    print(
+                        "[WARN] Reversed window for '{}': recovered from text anchors "
+                        "to [{:.2f}, {:.2f}].".format(
+                            seg.get("title", "Untitled"),
+                            final_start_time,
+                            final_end_time,
+                        )
+                    )
                 else:
-                    print("[WARN] Rejecting candidate '{}': reversed_window "
-                          "(end < start and no reliable text recovery).".format(
-                              seg.get('title', 'Untitled')))
+                    print(
+                        "[WARN] Rejecting candidate '{}': reversed_window "
+                        "(end < start and no reliable text recovery).".format(
+                            seg.get("title", "Untitled")
+                        )
+                    )
                     continue
 
             # Keep explicit or text-matched windows inside the actual transcript.
@@ -1790,8 +2132,12 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             if raw_start_time > media_end:
                 final_start_time = max(transcript_start_time, media_end - tempo_minimo)
             else:
-                final_start_time = min(max(raw_start_time, transcript_start_time), media_end)
-            final_end_time = min(max(float(final_end_time), final_start_time + 0.1), media_end)
+                final_start_time = min(
+                    max(raw_start_time, transcript_start_time), media_end
+                )
+            final_end_time = min(
+                max(float(final_end_time), final_start_time + 0.1), media_end
+            )
 
             # Calculate Duration
             duration = final_end_time - final_start_time
@@ -1803,17 +2149,27 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # window stays short and is marked transcript_limited below.
             if duration < tempo_minimo:
                 expanded = _extend_to_min_duration(
-                    final_start_time, final_end_time, tempo_minimo,
-                    transcript_segments, transcript_start_time, media_end, tempo_maximo)
+                    final_start_time,
+                    final_end_time,
+                    tempo_minimo,
+                    transcript_segments,
+                    transcript_start_time,
+                    media_end,
+                    tempo_maximo,
+                )
                 if expanded is not None:
                     final_start_time, final_end_time, extension_note = expanded
                     duration = final_end_time - final_start_time
-                    print(f"[DEBUG] Segment extended to satisfy min duration via "
-                          f"sentence boundary ({extension_note}): {duration:.2f}s.")
+                    print(
+                        f"[DEBUG] Segment extended to satisfy min duration via "
+                        f"sentence boundary ({extension_note}): {duration:.2f}s."
+                    )
 
             # Validate Duration (Max)
             if duration > tempo_maximo:
-                print(f"[WARN] Segmento excede max duration ({duration:.2f}s > {tempo_maximo}s). Cortando para {tempo_maximo}s.")
+                print(
+                    f"[WARN] Segmento excede max duration ({duration:.2f}s > {tempo_maximo}s). Cortando para {tempo_maximo}s."
+                )
                 final_end_time = min(final_start_time + tempo_maximo, media_end)
                 duration = final_end_time - final_start_time
 
@@ -1832,10 +2188,17 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 refinement_notes.append(extension_note)
             if snap_to_boundaries:
                 snapped_start, snapped_end = snap_segment_boundaries(
-                    final_start_time, final_end_time, transcript_segments, words=word_timings)
+                    final_start_time,
+                    final_end_time,
+                    transcript_segments,
+                    words=word_timings,
+                )
                 if snapped_start >= 0 and (snapped_end - snapped_start) >= tempo_minimo:
                     if (snapped_end - snapped_start) <= tempo_maximo:
-                        if (snapped_start, snapped_end) != (final_start_time, final_end_time):
+                        if (snapped_start, snapped_end) != (
+                            final_start_time,
+                            final_end_time,
+                        ):
                             refinement_notes.append("sentence_boundary_snap")
                         final_start_time = snapped_start
                         final_end_time = snapped_end
@@ -1854,17 +2217,30 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 # pre/post-roll. Duration limits and media bounds are
                 # re-enforced inside.
                 if transcript_window is not None:
-                    refined_start, refined_end, refine_notes = transcript_window.refine_boundaries(
-                        final_start_time, final_end_time, transcript_segments,
-                        words=word_timings,
-                        min_duration=tempo_minimo,
-                        max_duration=tempo_maximo,
-                        transcript_start=transcript_start_time,
-                        transcript_end=media_end)
+                    refined_start, refined_end, refine_notes = (
+                        transcript_window.refine_boundaries(
+                            final_start_time,
+                            final_end_time,
+                            transcript_segments,
+                            words=word_timings,
+                            min_duration=tempo_minimo,
+                            max_duration=tempo_maximo,
+                            transcript_start=transcript_start_time,
+                            transcript_end=media_end,
+                        )
+                    )
                     refinement_notes.extend(refine_notes)
-                    if (refined_end - refined_start) >= tempo_minimo or duration < tempo_minimo:
-                        if (refined_start, refined_end) != (final_start_time, final_end_time):
-                            final_start_time, final_end_time = refined_start, refined_end
+                    if (
+                        refined_end - refined_start
+                    ) >= tempo_minimo or duration < tempo_minimo:
+                        if (refined_start, refined_end) != (
+                            final_start_time,
+                            final_end_time,
+                        ):
+                            final_start_time, final_end_time = (
+                                refined_start,
+                                refined_end,
+                            )
                             duration = final_end_time - final_start_time
                     if "refinement_reverted_max_duration" in refine_notes:
                         refinement_notes.append("boundary_conflict_max_duration")
@@ -1874,9 +2250,12 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # inside a word when word-level timings are available.
             if word_timings and transcript_window is not None:
                 word_start, word_end = transcript_window.snap_edges_to_words(
-                    final_start_time, final_end_time, word_timings)
-                if ((word_start, word_end) != (final_start_time, final_end_time)
-                        and 0 < (word_end - word_start) <= tempo_maximo + 0.01):
+                    final_start_time, final_end_time, word_timings
+                )
+                if (word_start, word_end) != (
+                    final_start_time,
+                    final_end_time,
+                ) and 0 < (word_end - word_start) <= tempo_maximo + 0.01:
                     final_start_time, final_end_time = word_start, word_end
                     duration = final_end_time - final_start_time
                     refinement_notes.append("word_boundary_snap")
@@ -1894,62 +2273,82 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     duration = final_end_time - final_start_time
                     refinement_notes.append("media_bounds_clamp")
                 else:
-                    final_start_time, final_end_time = validated_start_time, validated_end_time
+                    final_start_time, final_end_time = (
+                        validated_start_time,
+                        validated_end_time,
+                    )
                     duration = final_end_time - final_start_time
                     refinement_notes.append("refinement_reverted_media_bounds")
 
             # Construct Final Segment
-            hashtags = seg.get('hashtags', [])
+            hashtags = seg.get("hashtags", [])
             if isinstance(hashtags, str):
-                hashtags = [h.strip().lstrip('#') for h in re.split(r'[,\s]+', hashtags) if h.strip()]
+                hashtags = [
+                    h.strip().lstrip("#")
+                    for h in re.split(r"[,\s]+", hashtags)
+                    if h.strip()
+                ]
             # Title relevance is measured against the words ACTUALLY inside
             # the final cut window (not only the LLM's own start/end/caption,
             # which can hallucinate). Explicit numeric windows still benefit:
             # their window words are the real ones. When the LLM already
             # shipped an explicit recommended_title it is kept verbatim.
             window_text = _window_text_from_transcript(
-                transcript_segments, final_start_time, final_end_time, words=word_timings)
-            recommended = seg.get('recommended_title') or _choose_recommended_title(seg, window_text=window_text)
+                transcript_segments,
+                final_start_time,
+                final_end_time,
+                words=word_timings,
+            )
+            recommended = seg.get("recommended_title") or _choose_recommended_title(
+                seg, window_text=window_text
+            )
             segment_entry = {
-                "title": seg.get('title', 'Viral Segment'),
+                "title": seg.get("title", "Viral Segment"),
                 "start_time": final_start_time,
                 "end_time": final_end_time,
-                "hook": seg.get('title', ''),
-                "reasoning": seg.get('reasoning', ''),
-                "score": seg.get('score', 0),
+                "hook": seg.get("title", ""),
+                "reasoning": seg.get("reasoning", ""),
+                "score": seg.get("score", 0),
                 "duration": duration,
-                "caption": seg.get('caption', ''),
-                "topic": seg.get('topic', ''),
-                "angle": seg.get('angle', ''),
-                "hook_type": seg.get('hook_type', ''),
+                "caption": seg.get("caption", ""),
+                "topic": seg.get("topic", ""),
+                "angle": seg.get("angle", ""),
+                "hook_type": seg.get("hook_type", ""),
                 # v7.41: a missing editorial self-evaluation is stored as None
                 # — NEVER back-filled with the general virality score, which
                 # would silently present the model's own hype as a verified
                 # measurement. Deterministic heuristics rank the candidate;
                 # quality_status says whether the AI score was genuine.
-                "hook_strength": seg.get('hook_strength'),
-                "narrative_completeness": seg.get('narrative_completeness'),
-                "clarity_score": seg.get('clarity_score'),
-                "novelty_score": seg.get('novelty_score'),
+                "hook_strength": seg.get("hook_strength"),
+                "narrative_completeness": seg.get("narrative_completeness"),
+                "clarity_score": seg.get("clarity_score"),
+                "novelty_score": seg.get("novelty_score"),
                 "hashtags": hashtags,
                 # A/B titles/captions (Roadmap 5.3): kept when the AI
                 # returned them, otherwise fall back to the main title.
                 # An empty list is honest: the topic ``title`` is not an
                 # alternative title, and duplicating it made A/B testing a
                 # no-op. Validated alternatives replace this below.
-                "alt_titles": seg.get('alt_titles') or [],
-                "alt_captions": seg.get('alt_captions') or [seg.get('caption', '')],
+                "alt_titles": seg.get("alt_titles") or [],
+                "alt_captions": seg.get("alt_captions") or [seg.get("caption", "")],
                 "recommended_title": recommended,
                 "title_quality_score": _title_quality_score(recommended),
-                "window_fingerprint": _segment_window_fingerprint(final_start_time, final_end_time),
+                "window_fingerprint": _segment_window_fingerprint(
+                    final_start_time, final_end_time
+                ),
             }
             # Transparency: when the AI shipped no self-evaluation for the
             # editorial components, the values above stay None and the
             # candidate is marked UNVERIFIED (not silently trusted).
-            _component_keys = ("hook_strength", "narrative_completeness",
-                               "clarity_score", "novelty_score")
-            missing_components = [key for key in _component_keys
-                                  if seg.get(key) is None]
+            _component_keys = (
+                "hook_strength",
+                "narrative_completeness",
+                "clarity_score",
+                "novelty_score",
+            )
+            missing_components = [
+                key for key in _component_keys if seg.get(key) is None
+            ]
             if missing_components:
                 segment_entry["quality_missing"] = True
                 segment_entry["missing_components"] = missing_components
@@ -1964,24 +2363,41 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 # limit", and must be rejected rather than exported.
                 segment_entry["under_min"] = True
                 segment_entry["transcript_limited"] = _transcript_is_limiting(
-                    final_start_time, final_end_time, tempo_minimo,
-                    transcript_start_time, media_end)
+                    final_start_time,
+                    final_end_time,
+                    tempo_minimo,
+                    transcript_start_time,
+                    media_end,
+                )
 
             # --- v7.40: exact-window analysis, validation, factual titles ---
             if transcript_window is not None:
                 analysis = transcript_window.analyze_window(
-                    transcript_segments, final_start_time, final_end_time,
-                    words=word_timings)
+                    transcript_segments,
+                    final_start_time,
+                    final_end_time,
+                    words=word_timings,
+                )
             else:
-                analysis = {"text": window_text, "word_count": len(window_text.split()),
-                            "speech_coverage": 1.0, "complete": True}
-            analysis["transcript_limited"] = bool(segment_entry.get("transcript_limited"))
+                analysis = {
+                    "text": window_text,
+                    "word_count": len(window_text.split()),
+                    "speech_coverage": 1.0,
+                    "complete": True,
+                }
+            analysis["transcript_limited"] = bool(
+                segment_entry.get("transcript_limited")
+            )
 
             rejected_reasons, quality_flags = _validate_segment_window(
-                final_start_time, final_end_time, tempo_minimo, analysis)
+                final_start_time, final_end_time, tempo_minimo, analysis
+            )
             if rejected_reasons:
-                print("[WARN] Segment '{}' rejected: {}".format(
-                    seg.get('title', 'Untitled'), "; ".join(rejected_reasons)))
+                print(
+                    "[WARN] Segment '{}' rejected: {}".format(
+                        seg.get("title", "Untitled"), "; ".join(rejected_reasons)
+                    )
+                )
                 continue
 
             raw_window_text = str(analysis.get("text") or "")
@@ -1992,8 +2408,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # Boundary-repair notes are kept for audit; only the ones that
             # mean "the ideal snap conflicted with the duration budget" become
             # quality flags (spec B.8).
-            conflict_flags = [note for note in refinement_notes
-                              if "reverted" in note or "conflict" in note]
+            conflict_flags = [
+                note
+                for note in refinement_notes
+                if "reverted" in note or "conflict" in note
+            ]
             segment_entry["quality_flags"] = quality_flags + conflict_flags
             segment_entry["boundary_notes"] = list(refinement_notes)
             segment_entry["rejected_reasons"] = []
@@ -2015,11 +2434,17 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 # reject a "whole video" framing on a short clip.
                 total_span = max(0.001, transcript_end_time - transcript_start_time)
                 clip_ratio = max(0.0, min(1.0, duration / total_span))
-                content_language = title_factual.detect_content_language(raw_window_text)
+                content_language = title_factual.detect_content_language(
+                    raw_window_text
+                )
                 title_data = title_factual.build_title_data(
-                    recommended, segment_entry.get("alt_titles") or [],
-                    raw_window_text, analysis, content_language,
-                    clip_ratio=clip_ratio)
+                    recommended,
+                    segment_entry.get("alt_titles") or [],
+                    raw_window_text,
+                    analysis,
+                    content_language,
+                    clip_ratio=clip_ratio,
+                )
                 primary_title = str(title_data.get("primary_title") or "").strip()
                 if primary_title and primary_title != recommended:
                     # The validator may choose a VERIFIED alternative even
@@ -2031,13 +2456,17 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     title_data["llm_title_replaced"] = recommended
                     segment_entry["recommended_title"] = primary_title
                     segment_entry["title_quality_score"] = _title_quality_score(
-                        primary_title)
+                        primary_title
+                    )
                 segment_entry["title_data"] = title_data
-                segment_entry["title_validation"] = title_data.get("title_validation") or {}
+                segment_entry["title_validation"] = (
+                    title_data.get("title_validation") or {}
+                )
                 # Only factually validated alternatives may be offered to the
                 # reviewer/publisher; a hallucinated A/B title is dropped.
                 validated_alts = [
-                    item.get("text") for item in (title_data.get("alternative_titles") or [])
+                    item.get("text")
+                    for item in (title_data.get("alternative_titles") or [])
                     if item.get("text")
                 ]
                 # Always replace the raw LLM list: a rejected A/B title must
@@ -2052,13 +2481,14 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # cannot be auto-published: they go to manual review instead of
             # being silently shipped.
             if segment_entry.get("quality_status") == "unverified" and (
-                    segment_entry.get("completion_status") != "complete"
-                    or conflict_flags):
+                segment_entry.get("completion_status") != "complete" or conflict_flags
+            ):
                 segment_entry["requires_review"] = True
             if segment_entry.get("title_review_required"):
                 segment_entry["requires_review"] = True
             segment_entry["publish_blocked_reason"] = (
-                "manual_review_required" if segment_entry.get("requires_review") else "")
+                "manual_review_required" if segment_entry.get("requires_review") else ""
+            )
             segment_entry["_analysis_cache"] = analysis
             processed_segments.append(segment_entry)
 
@@ -2071,10 +2501,16 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # read it from the project that owns these clips — os.getcwd() used to
     # silently miss it for CLI/WebUI runs.
     weights_folder = project_folder or os.getcwd()
-    perf_weights = performance_weights.load_weights(weights_folder) if performance_weights else None
+    perf_weights = (
+        performance_weights.load_weights(weights_folder)
+        if performance_weights
+        else None
+    )
     selection_weights = clip_scoring.load_selection_weights() if clip_scoring else None
     for candidate in processed_segments:
-        candidate["selection_score"], candidate["selection_breakdown"] = _selection_score(candidate, perf_weights)
+        candidate["selection_score"], candidate["selection_breakdown"] = (
+            _selection_score(candidate, perf_weights)
+        )
         # v7.41: the 12-factor editorial score becomes the primary selection
         # score. The legacy six-component breakdown above is kept for
         # backwards compatibility (review UI, performance learning), and the
@@ -2083,16 +2519,24 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         if clip_scoring is not None and analysis is not None:
             window_text = candidate.get("transcript_text") or ""
             title_relevance_ratio = _title_content_relevance(
-                candidate.get("recommended_title", ""), candidate,
-                window_text=window_text)
+                candidate.get("recommended_title", ""),
+                candidate,
+                window_text=window_text,
+            )
             explicit_edges = 1.0
             factors = _compute_factor_scores(
-                candidate, analysis, edge_match=explicit_edges,
-                title_relevance_ratio=title_relevance_ratio)
+                candidate,
+                analysis,
+                edge_match=explicit_edges,
+                title_relevance_ratio=title_relevance_ratio,
+            )
             candidate["score_breakdown"] = factors
-            candidate["title_selection_status"] = _title_validation_signal(candidate, title_relevance_ratio)[1]
+            candidate["title_selection_status"] = _title_validation_signal(
+                candidate, title_relevance_ratio
+            )[1]
             candidate["selection_score"] = clip_scoring.compute_final_score(
-                factors, selection_weights)
+                factors, selection_weights
+            )
             candidate["selection_version"] = clip_scoring.SCORING_VERSION
         if perf_weights:
             # Bounded outcome-driven nudges learned from the channel's own
@@ -2101,13 +2545,27 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             # so editorial ranking is never dominated by a thin sample.
             duration_bonus = float(perf_weights.get("duration_bonus", 0.0) or 0.0)
             title_boost = float(perf_weights.get("title_boost", 0.0) or 0.0)
-            candidate["selection_score"] = round(max(0.0, min(100.0,
-                float(candidate["selection_score"]) + duration_bonus + title_boost)), 1)
-            candidate["selection_breakdown"]["performance_basis"] = perf_weights.get("basis", "defaults")
+            candidate["selection_score"] = round(
+                max(
+                    0.0,
+                    min(
+                        100.0,
+                        float(candidate["selection_score"])
+                        + duration_bonus
+                        + title_boost,
+                    ),
+                ),
+                1,
+            )
+            candidate["selection_breakdown"]["performance_basis"] = perf_weights.get(
+                "basis", "defaults"
+            )
             if abs(title_boost) > 1e-9:
                 candidate["selection_breakdown"]["title_boost"] = round(title_boost, 4)
             if abs(duration_bonus) > 1e-9:
-                candidate["selection_breakdown"]["duration_bonus"] = round(duration_bonus, 4)
+                candidate["selection_breakdown"]["duration_bonus"] = round(
+                    duration_bonus, 4
+                )
             # v7.33.3 — content-style learning: segments whose hook_type /
             # angle / topic / title style measured best on THIS channel get a
             # bounded bonus (performance_weights.style_bonuses).
@@ -2115,27 +2573,42 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             if style_map and performance_weights is not None:
                 style_bonus = performance_weights.style_bonus_for(candidate, style_map)
                 if abs(style_bonus) > 1e-9:
-                    candidate["selection_score"] = round(max(0.0, min(100.0,
-                        float(candidate["selection_score"]) + style_bonus)), 1)
-                    candidate["selection_breakdown"]["style_bonus"] = round(style_bonus, 2)
-                    candidate["selection_breakdown"]["style_basis"] = style_map.get("basis", "content_insights")
+                    candidate["selection_score"] = round(
+                        max(
+                            0.0,
+                            min(
+                                100.0, float(candidate["selection_score"]) + style_bonus
+                            ),
+                        ),
+                        1,
+                    )
+                    candidate["selection_breakdown"]["style_bonus"] = round(
+                        style_bonus, 2
+                    )
+                    candidate["selection_breakdown"]["style_basis"] = style_map.get(
+                        "basis", "content_insights"
+                    )
 
     # Optional embedding pass: one batched request for every unique window
     # text, attached to the candidate for de-duplication and repetition
     # penalties. Failure is non-fatal — the lexical path stays in place.
     if semantic_embeddings is not None and processed_segments:
         try:
-            texts = [str(candidate.get("transcript_text") or "")
-                     for candidate in processed_segments]
+            texts = [
+                str(candidate.get("transcript_text") or "")
+                for candidate in processed_segments
+            ]
             vectors = semantic_embeddings.embed_texts(
-                texts, config=llm_config,
-                allow_auto=allow_auto_embeddings)
+                texts, config=llm_config, allow_auto=allow_auto_embeddings
+            )
             if vectors:
                 for candidate, vector in zip(processed_segments, vectors, strict=False):
                     candidate["_embedding"] = vector
                 embeddings_used = semantic_embeddings.model_name(llm_config)
-                print("[DEBUG] Embedded {} clip windows for semantic similarity "
-                      "(model: {}).".format(len(vectors), embeddings_used))
+                print(
+                    "[DEBUG] Embedded {} clip windows for semantic similarity "
+                    "(model: {}).".format(len(vectors), embeddings_used)
+                )
         except Exception as exc:
             print("[WARN] Embedding pass skipped: {}".format(type(exc).__name__))
 
@@ -2147,7 +2620,8 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # clip and make deduplication keep the weaker paraphrase.
     processed_segments.sort(
         key=lambda candidate: float(candidate.get("selection_score") or 0.0),
-        reverse=True)
+        reverse=True,
+    )
     _apply_semantic_repetition_penalties(processed_segments, selection_weights)
 
     # v7.40: optional editorial floor — a thin video yields FEWER clips
@@ -2157,24 +2631,34 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         if floor > 0.0:
             before = len(processed_segments)
             processed_segments = [
-                candidate for candidate in processed_segments
-                if float(candidate.get("selection_score", 0.0) or 0.0) >= floor]
+                candidate
+                for candidate in processed_segments
+                if float(candidate.get("selection_score", 0.0) or 0.0) >= floor
+            ]
             dropped_floor = before - len(processed_segments)
             if dropped_floor:
-                print("[WARN] Editorial floor {:.0f}: dropped {} weak candidate(s); "
-                      "returning fewer, stronger clips.".format(floor, dropped_floor))
+                print(
+                    "[WARN] Editorial floor {:.0f}: dropped {} weak candidate(s); "
+                    "returning fewer, stronger clips.".format(floor, dropped_floor)
+                )
 
     # Editorial quality gate: drop candidates whose *genuine* self-evaluated
     # hook/narrative/clarity sit below the floor (weak clips lose the viewer
     # in the first seconds). Unverified (quality_missing) candidates are kept.
     gated, dropped = apply_quality_gate(processed_segments)
     for drop in dropped:
-        print("[WARN] Quality gate dropped '{}' — {}. Choose stronger moments "
-              "or raise the AI's editorial standards.".format(
-                  drop.get("title"), ", ".join(drop.get("reasons", []))))
+        print(
+            "[WARN] Quality gate dropped '{}' — {}. Choose stronger moments "
+            "or raise the AI's editorial standards.".format(
+                drop.get("title"), ", ".join(drop.get("reasons", []))
+            )
+        )
     if dropped:
-        print("[WARN] Quality gate: kept {} of {} candidates (dropped {}).".format(
-            len(gated), len(processed_segments), len(dropped)))
+        print(
+            "[WARN] Quality gate: kept {} of {} candidates (dropped {}).".format(
+                len(gated), len(processed_segments), len(dropped)
+            )
+        )
     processed_segments = gated
 
     # Deduplication: keep one title for each substantially identical source window.
@@ -2182,7 +2666,9 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     print(f"[DEBUG] Finished processing. {len(all_segments)} segments valid.")
 
     if output_count and len(all_segments) > output_count:
-        print(f"Filtrando os top {output_count} segmentos de {len(all_segments)} candidatos encontrados nos chunks.")
+        print(
+            f"Filtrando os top {output_count} segmentos de {len(all_segments)} candidatos encontrados nos chunks."
+        )
         all_segments = _rank_segments_with_diversity(all_segments, output_count)
     else:
         all_segments = _rank_segments_with_diversity(all_segments)
@@ -2204,9 +2690,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
             "schema_version": SEGMENTS_SCHEMA_VERSION,
             "scoring_version": clip_scoring.SCORING_VERSION,
             "title_schema_version": getattr(
-                title_factual, "TITLE_VALIDATION_SCHEMA_VERSION", "legacy"),
+                title_factual, "TITLE_VALIDATION_SCHEMA_VERSION", "legacy"
+            ),
             "prompt_version": prompt_version_fingerprint(),
-            "weights": selection_weights or dict(clip_scoring.DEFAULT_SELECTION_WEIGHTS),
+            "weights": selection_weights
+            or dict(clip_scoring.DEFAULT_SELECTION_WEIGHTS),
             "weights_fingerprint": selection_weights_fingerprint(),
             "transcript_fingerprint": transcript_fingerprint(transcript_segments),
         }
@@ -2226,8 +2714,8 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # reason to discard the best available window.
     validated_segments = []
     validation_errors = []
-    for index, seg in enumerate(final_result['segments']):
-        if 'start_time' not in seg:
+    for index, seg in enumerate(final_result["segments"]):
+        if "start_time" not in seg:
             continue
         if segment_validator is not None:
             report = segment_validator.validate_final_segment(
@@ -2238,17 +2726,27 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 require_title=False,
             )
             seg["final_validation"] = report
-            fatal = [item for item in report.get("errors", [])
-                     if item.get("code") in FATAL_VALIDATION_CODES]
+            fatal = [
+                item
+                for item in report.get("errors", [])
+                if item.get("code") in FATAL_VALIDATION_CODES
+            ]
             if not report.get("ok") and fatal:
-                validation_errors.append({
-                    "index": index,
-                    "title": str(seg.get("title") or seg.get("recommended_title") or ""),
-                    "errors": fatal,
-                })
-                print("[WARN] Final validator rejected '{}': {}".format(
-                    seg.get("title", "Untitled"),
-                    "; ".join(str(item.get("message")) for item in fatal)))
+                validation_errors.append(
+                    {
+                        "index": index,
+                        "title": str(
+                            seg.get("title") or seg.get("recommended_title") or ""
+                        ),
+                        "errors": fatal,
+                    }
+                )
+                print(
+                    "[WARN] Final validator rejected '{}': {}".format(
+                        seg.get("title", "Untitled"),
+                        "; ".join(str(item.get("message")) for item in fatal),
+                    )
+                )
                 continue
             if not report.get("ok"):
                 seg["requires_review"] = True
@@ -2270,7 +2768,11 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         _hook_analyzer = None
     if _hook_analyzer is not None and validated_segments:
         _autotrim = os.environ.get("VIRALCUTTER_HOOK_AUTOTRIM", "").strip().lower() in (
-            "1", "true", "yes", "on")
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
         for seg in validated_segments:
             try:
                 seg["opening_analysis"] = _hook_analyzer.analyze_segment_opening(seg)
@@ -2283,10 +2785,13 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                     continue
                 _start = float(seg.get("start_time") or 0.0)
                 _end = float(seg.get("end_time") or 0.0)
-                _words = [w for w in (word_timings or [])
-                          if isinstance(w, dict)
-                          and float(w.get("start") or 0.0) >= _start - 0.05
-                          and float(w.get("end") or 0.0) <= _end + 0.05]
+                _words = [
+                    w
+                    for w in (word_timings or [])
+                    if isinstance(w, dict)
+                    and float(w.get("start") or 0.0) >= _start - 0.05
+                    and float(w.get("end") or 0.0) <= _end + 0.05
+                ]
                 _words.sort(key=lambda w: float(w.get("start") or 0.0))
                 _plan = _hook_analyzer.leading_filler_trim(_words)
                 if not _plan:
@@ -2301,17 +2806,22 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
                 seg["duration"] = round(_end - _new_start, 2)
                 if transcript_window is not None:
                     _analysis = transcript_window.analyze_window(
-                        transcript_segments, _new_start, _end)
+                        transcript_segments, _new_start, _end
+                    )
                     _new_text = str(
-                        _analysis.get("text") or seg.get("transcript_text") or "")
+                        _analysis.get("text") or seg.get("transcript_text") or ""
+                    )
                     # the coarse transcript still covers the cut-off filler —
                     # drop exactly the trimmed leading tokens so the stored
                     # text matches the real opening of the cut
                     _new_text = _hook_analyzer.drop_leading_filler_tokens(
-                        _new_text, _plan["trim_words"])
+                        _new_text, _plan["trim_words"]
+                    )
                     seg["transcript_text"] = _new_text
                     _first = re.split(r"[.!؟?\n]+", _new_text, maxsplit=1)
-                    seg["hook_text"] = (_first[0] if _first else _new_text).strip() or _new_text
+                    seg["hook_text"] = (
+                        _first[0] if _first else _new_text
+                    ).strip() or _new_text
                 seg["opening_analysis"] = _hook_analyzer.analyze_segment_opening(seg)
                 seg["opening_analysis"]["auto_trimmed"] = True
             except Exception:
@@ -2322,25 +2832,43 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
     # export list into final_result["editor_rejected"] — marked and
     # auditable, never silently deleted). Fail-open: a review error leaves
     # the validated selection exactly as it was.
-    if editor_review_llm is not None and _editor_review_module is not None and validated_segments:
+    if (
+        editor_review_llm is not None
+        and _editor_review_module is not None
+        and validated_segments
+    ):
         try:
             _review = _editor_review_module.editor_review_segments(
-                validated_segments, editor_review_llm)
+                validated_segments, editor_review_llm
+            )
             validated_segments = [
-                seg for seg in _review["segments"]
-                if (seg.get("editor_review") or {}).get("verdict") != "reject"]
+                seg
+                for seg in _review["segments"]
+                if (seg.get("editor_review") or {}).get("verdict") != "reject"
+            ]
             _rejected = [
-                seg for seg in _review["segments"]
-                if (seg.get("editor_review") or {}).get("verdict") == "reject"]
+                seg
+                for seg in _review["segments"]
+                if (seg.get("editor_review") or {}).get("verdict") == "reject"
+            ]
             if _rejected:
                 final_result["editor_rejected"] = _rejected
             final_result["editor_review_summary"] = _review["summary"]
-            print("[editor-review] reviewed={} keep={} trim={} reject={} errors={}".format(
-                _review["summary"].get("reviewed", 0), _review["summary"].get("keep", 0),
-                _review["summary"].get("trim", 0), _review["summary"].get("reject", 0),
-                len(_review["summary"].get("errors", []))))
+            print(
+                "[editor-review] reviewed={} keep={} trim={} reject={} errors={}".format(
+                    _review["summary"].get("reviewed", 0),
+                    _review["summary"].get("keep", 0),
+                    _review["summary"].get("trim", 0),
+                    _review["summary"].get("reject", 0),
+                    len(_review["summary"].get("errors", [])),
+                )
+            )
         except Exception as _review_error:
-            print("[editor-review] skipped ({}): selection left untouched".format(_review_error))
+            print(
+                "[editor-review] skipped ({}): selection left untouched".format(
+                    _review_error
+                )
+            )
 
     # v7.52 — final distinctness guard. The main dedup runs before the video
     # is cut, but the opt-in hook auto-trim and the editor-in-chief review can
@@ -2352,21 +2880,27 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
         distinct = []
         for seg in validated_segments:
             if any(_windows_are_near_duplicates(seg, kept) for kept in distinct):
-                print("[WARN] Dropping retitled duplicate of an earlier clip: "
-                      "'{}' ({:.1f}-{:.1f}s shares footage with a clip already "
-                      "selected).".format(
-                          seg.get("title", "Untitled"),
-                          float(seg.get("start_time") or 0.0),
-                          float(seg.get("end_time") or 0.0)))
+                print(
+                    "[WARN] Dropping retitled duplicate of an earlier clip: "
+                    "'{}' ({:.1f}-{:.1f}s shares footage with a clip already "
+                    "selected).".format(
+                        seg.get("title", "Untitled"),
+                        float(seg.get("start_time") or 0.0),
+                        float(seg.get("end_time") or 0.0),
+                    )
+                )
                 continue
             distinct.append(seg)
         if len(distinct) != len(validated_segments):
-            print("[WARN] Distinctness guard: kept {} of {} validated clips "
-                  "(duplicate footage removed).".format(
-                      len(distinct), len(validated_segments)))
+            print(
+                "[WARN] Distinctness guard: kept {} of {} validated clips "
+                "(duplicate footage removed).".format(
+                    len(distinct), len(validated_segments)
+                )
+            )
         validated_segments = distinct
 
-    final_result['segments'] = validated_segments
+    final_result["segments"] = validated_segments
     if validation_errors:
         final_result["validation_errors"] = validation_errors
 
@@ -2375,7 +2909,9 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
 
 def _selection_readiness(segment):
     """Return the safest user-facing state for a selected clip."""
-    title_status = str((segment.get("title_validation") or {}).get("status") or "").lower()
+    title_status = str(
+        (segment.get("title_validation") or {}).get("status") or ""
+    ).lower()
     if title_status == "rejected":
         return "blocked"
     if segment.get("requires_review") or segment.get("publish_blocked_reason"):
@@ -2392,21 +2928,32 @@ def _selection_readiness(segment):
 def _selection_explanation(segment):
     """Expose the evidence behind ranking so review is not a black box."""
     factors = segment.get("score_breakdown") or segment.get("selection_breakdown") or {}
-    positive = [(name, float(value)) for name, value in factors.items()
-                if name not in {"repetition_penalty", "safety_penalty"}
-                and isinstance(value, (int, float))]
+    positive = [
+        (name, float(value))
+        for name, value in factors.items()
+        if name not in {"repetition_penalty", "safety_penalty"}
+        and isinstance(value, (int, float))
+    ]
     positive.sort(key=lambda item: (-item[1], item[0]))
-    penalties = {name: round(float(factors.get(name) or 0.0), 1)
-                 for name in ("repetition_penalty", "safety_penalty")
-                 if factors.get(name)}
+    penalties = {
+        name: round(float(factors.get(name) or 0.0), 1)
+        for name in ("repetition_penalty", "safety_penalty")
+        if factors.get(name)
+    }
     return {
         "rank_score": round(float(segment.get("selection_score") or 0.0), 1),
-        "top_factors": [{"name": name, "score": round(value, 1)}
-                        for name, value in positive[:3]],
+        "top_factors": [
+            {"name": name, "score": round(value, 1)} for name, value in positive[:3]
+        ],
         "penalties": penalties,
-        "diversity_adjustment": round(float(segment.get("diversity_adjustment") or 0.0), 1),
-        "title_status": str(segment.get("title_selection_status") or
-                              (segment.get("title_validation") or {}).get("status") or "legacy"),
+        "diversity_adjustment": round(
+            float(segment.get("diversity_adjustment") or 0.0), 1
+        ),
+        "title_status": str(
+            segment.get("title_selection_status")
+            or (segment.get("title_validation") or {}).get("status")
+            or "legacy"
+        ),
         "readiness": _selection_readiness(segment),
     }
 
@@ -2442,10 +2989,12 @@ def finalize_top_segments(segments, requested_count):
 
     # Both sorts are stable, so equal keys keep the original list order.
     ranked.sort(key=lambda item: _as_float(item.get("candidate_rank")))
-    legacy.sort(key=lambda item: (
-        -_as_float(item.get("selection_score")),
-        -_as_float(item.get("score")),
-    ))
+    legacy.sort(
+        key=lambda item: (
+            -_as_float(item.get("selection_score")),
+            -_as_float(item.get("score")),
+        )
+    )
     return (ranked + legacy)[:count]
 
 
@@ -2482,7 +3031,6 @@ def segment_captions(segment):
             seen.add(c.lower())
             out.append(c)
     return out or [""]
-
 
 
 LANG_NAMES = {
@@ -2534,7 +3082,19 @@ def _safe_chunk_size(chunk_size_arg, default):
     return value if value > 0 else default
 
 
-def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode="manual", api_key=None, project_folder="tmp", chunk_size_arg=None, model_name_arg=None, title_language="auto"):
+def create(
+    num_segments,
+    viral_mode,
+    themes,
+    tempo_minimo,
+    tempo_maximo,
+    ai_mode="manual",
+    api_key=None,
+    project_folder="tmp",
+    chunk_size_arg=None,
+    model_name_arg=None,
+    title_language="auto",
+):
     quantidade_de_virals = max(1, int(num_segments or 1))
     # Ask for spare candidates so safety filtering and de-duplication can still
     # leave the user with the requested number of safe, distinct clips.
@@ -2549,8 +3109,8 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
 
     # Load Config and Prompt
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(base_dir, 'api_config.json')
-    prompt_path = os.path.join(base_dir, 'prompt.txt')
+    config_path = os.path.join(base_dir, "api_config.json")
+    prompt_path = os.path.join(base_dir, "prompt.txt")
 
     config = {
         "selected_api": "gemini",
@@ -2559,32 +3119,36 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
             "api_keys": [],
             "key_mode": "auto",
             "model": DEFAULT_GEMINI_MODEL,
-            "chunk_size": 15000
+            "chunk_size": 15000,
         },
-        "g4f": {
-            "model": "gpt-4o-mini",
-            "chunk_size": 2000
-        },
+        "g4f": {"model": "gpt-4o-mini", "chunk_size": 2000},
         "openai": {
             "base_url": "http://localhost:11434/v1",
             "api_key": "",
             "model": "llama3.1",
             "chunk_size": 12000,
             "embedding_model": "bge-m3",
-            "embeddings": False
-        }
+            "embeddings": False,
+        },
     }
 
     if os.path.exists(config_path):
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 loaded_config = json.load(f)
-                if "gemini" in loaded_config: config["gemini"].update(loaded_config["gemini"])
-                config["gemini"]["api_keys"] = config["gemini"].get("api_keys") or ([config["gemini"].get("api_key")] if config["gemini"].get("api_key") else [])
-                if "g4f" in loaded_config: config["g4f"].update(loaded_config["g4f"])
+                if "gemini" in loaded_config:
+                    config["gemini"].update(loaded_config["gemini"])
+                config["gemini"]["api_keys"] = config["gemini"].get("api_keys") or (
+                    [config["gemini"].get("api_key")]
+                    if config["gemini"].get("api_key")
+                    else []
+                )
+                if "g4f" in loaded_config:
+                    config["g4f"].update(loaded_config["g4f"])
                 if isinstance(loaded_config.get("openai"), dict):
                     config["openai"].update(loaded_config["openai"])
-                if "selected_api" in loaded_config: config["selected_api"] = loaded_config["selected_api"]
+                if "selected_api" in loaded_config:
+                    config["selected_api"] = loaded_config["selected_api"]
         except Exception as e:
             print(f"Erro ao ler api_config.json: {e}")
 
@@ -2592,7 +3156,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
     current_chunk_size = 15000
     model_name = ""
     router = None
-    
+
     if ai_mode == "gemini":
         cfg_chunk = config["gemini"].get("chunk_size", 15000)
         current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
@@ -2600,8 +3164,11 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         requested_model = model_name_arg if model_name_arg else cfg_model
         model_name = resolve_gemini_model(requested_model)
         if str(requested_model or "").strip() != model_name:
-            print("[WARN] Unsupported Gemini model {!r}; using {}. Update the model in settings."
-                  .format(requested_model, model_name))
+            print(
+                "[WARN] Unsupported Gemini model {!r}; using {}. Update the model in settings.".format(
+                    requested_model, model_name
+                )
+            )
         env_raw = os.getenv("VIRALCUTTER_GEMINI_KEYS", "").strip()
         env_keys = []
         if env_raw:
@@ -2609,7 +3176,11 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
                 parsed = json.loads(env_raw)
                 env_keys = parsed if isinstance(parsed, list) else []
             except Exception:
-                env_keys = [item.strip() for item in re.split(r"[,;\n]+", env_raw) if item.strip()]
+                env_keys = [
+                    item.strip()
+                    for item in re.split(r"[,;\n]+", env_raw)
+                    if item.strip()
+                ]
         configured_keys = config["gemini"].get("api_keys") or []
         if env_keys:
             api_key = env_keys[:3]
@@ -2617,7 +3188,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
             api_key = configured_keys[:3]
         elif not api_key:
             api_key = config["gemini"].get("api_key", "")
-            
+
     elif ai_mode == "g4f":
         cfg_chunk = config["g4f"].get("chunk_size", 2000)
         current_chunk_size = _safe_chunk_size(chunk_size_arg, cfg_chunk)
@@ -2630,21 +3201,26 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
             return {"segments": []}
         try:
             from scripts.secure_config import resolve_api_keys
+
             _gemini_keys = resolve_api_keys(warn=False)
         except Exception:
             _gemini_keys = []
         _gemini_model = resolve_gemini_model(
-            config["gemini"].get("model") or DEFAULT_GEMINI_MODEL)
+            config["gemini"].get("model") or DEFAULT_GEMINI_MODEL
+        )
         _candidates = ai_autorouter.detect(config)
         if not _candidates:
-            print("[ERRO] No AI provider found. Start Ollama, add a Gemini key, "
-                  "or choose a backend explicitly. Checked: OpenAI-compatible "
-                  "servers, Gemini, g4f.")
+            print(
+                "[ERRO] No AI provider found. Start Ollama, add a Gemini key, "
+                "or choose a backend explicitly. Checked: OpenAI-compatible "
+                "servers, Gemini, g4f."
+            )
             return {"segments": []}
 
         def _auto_openai(candidate, prompt):
-            return openai_compat.chat(prompt, model=candidate.model,
-                                      config=candidate.config)
+            return openai_compat.chat(
+                prompt, model=candidate.model, config=candidate.config
+            )
 
         def _auto_gemini(candidate, prompt):
             return call_gemini(prompt, _gemini_keys, model_name=candidate.model)
@@ -2652,11 +3228,14 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         def _auto_g4f(candidate, prompt):
             return call_g4f(prompt, model_name=candidate.model)
 
-        router = ai_autorouter.AutoRouter(_candidates, {
-            "openai": _auto_openai,
-            "gemini": _auto_gemini,
-            "g4f": _auto_g4f,
-        })
+        router = ai_autorouter.AutoRouter(
+            _candidates,
+            {
+                "openai": _auto_openai,
+                "gemini": _auto_gemini,
+                "g4f": _auto_g4f,
+            },
+        )
         current_chunk_size = router.chunk_size
         model_name = router.model
         print("[auto] provider chain: " + ai_autorouter.describe(_candidates))
@@ -2667,11 +3246,12 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         # The explicit CLI/UI model wins, then api_config, then the provider's
         # default. Base URL and key are resolved by openai_compat from env and
         # api_config (the key is never taken from argv).
-        model_name = (model_name_arg
-                      or str(config["openai"].get("model") or "").strip())
+        model_name = model_name_arg or str(config["openai"].get("model") or "").strip()
         if openai_compat is None:
-            print("[ERRO] OpenAI-compatible backend requested but the client "
-                  "module is unavailable.")
+            print(
+                "[ERRO] OpenAI-compatible backend requested but the client "
+                "module is unavailable."
+            )
             return {"segments": []}
 
     elif ai_mode == "local":
@@ -2680,7 +3260,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
 
     system_prompt_template = ""
     if os.path.exists(prompt_path):
-        with open(prompt_path, 'r', encoding='utf-8') as f:
+        with open(prompt_path, "r", encoding="utf-8") as f:
             system_prompt_template = f.read()
     else:
         print("Aviso: prompt.txt não encontrado. Usando prompt interno.")
@@ -2694,8 +3274,7 @@ TRANSCRIPT:
 OUTPUT JSON ONLY:
 {json_template}"""
 
-
-    json_template = '''
+    json_template = """
             { "segments" :
                 [
                     {
@@ -2719,7 +3298,7 @@ OUTPUT JSON ONLY:
                     }
                 ]
             }
-        '''
+        """
 
     # Chunking
     chunk_size = int(current_chunk_size)
@@ -2728,17 +3307,19 @@ OUTPUT JSON ONLY:
     # 30k-char transcript produced ~30k LLM calls. Cap at a quarter chunk and
     # guarantee at least half-chunk forward progress.
     overlap_size = max(200, min(int(chunk_size * 0.1), max(1, chunk_size // 4)))
-    
+
     chunks = []
     start = 0
     content_len = len(content)
 
-    print(f"[DEBUG] Chunking content (Size: {content_len}) with Chunk Size: {chunk_size} and Overlap: {overlap_size}")
+    print(
+        f"[DEBUG] Chunking content (Size: {content_len}) with Chunk Size: {chunk_size} and Overlap: {overlap_size}"
+    )
 
     while start < content_len:
         end = min(start + chunk_size, content_len)
         if end < content_len:
-            last_space = content.rfind(' ', start, end)
+            last_space = content.rfind(" ", start, end)
             if last_space != -1 and last_space > start:
                 end = last_space
         chunk_text = content[start:end]
@@ -2749,7 +3330,7 @@ OUTPUT JSON ONLY:
         next_start = max(start + max(1, chunk_size // 2), end - overlap_size)
         if next_start >= end:
             next_start = end
-        safe_space = content.rfind(' ', start, next_start)
+        safe_space = content.rfind(" ", start, next_start)
         if safe_space != -1:
             start = safe_space + 1
         else:
@@ -2764,8 +3345,8 @@ OUTPUT JSON ONLY:
     for i, chunk in enumerate(chunks):
         context_instruction = ""
         if len(chunks) > 1:
-            context_instruction = f"Part {i+1} of {len(chunks)}. "
-        
+            context_instruction = f"Part {i + 1} of {len(chunks)}. "
+
         try:
             prompt = system_prompt_template.format(
                 context_instruction=context_instruction,
@@ -2774,7 +3355,7 @@ OUTPUT JSON ONLY:
                 max_duration=tempo_maximo,
                 transcript_chunk=chunk,
                 json_template=json_template,
-                amount=candidate_target
+                amount=candidate_target,
             )
         except KeyError:
             prompt = system_prompt_template
@@ -2792,14 +3373,18 @@ OUTPUT JSON ONLY:
     try:
         full_prompt_path = os.path.join(project_folder, "prompt_full.txt")
         full_prompt = system_prompt_template
-        full_prompt = full_prompt.replace("{context_instruction}", "Full Video Transcript Analysis")
-        full_prompt = full_prompt.replace("{virality_instruction}", virality_instruction)
+        full_prompt = full_prompt.replace(
+            "{context_instruction}", "Full Video Transcript Analysis"
+        )
+        full_prompt = full_prompt.replace(
+            "{virality_instruction}", virality_instruction
+        )
         full_prompt = full_prompt.replace("{min_duration}", str(tempo_minimo))
         full_prompt = full_prompt.replace("{max_duration}", str(tempo_maximo))
-        full_prompt = full_prompt.replace("{transcript_chunk}", content) 
+        full_prompt = full_prompt.replace("{transcript_chunk}", content)
         full_prompt = full_prompt.replace("{json_template}", json_template)
         full_prompt = full_prompt.replace("{amount}", str(quantidade_de_virals))
-        
+
         full_prompt += language_instruction(title_language)
         with open(full_prompt_path, "w", encoding="utf-8") as f:
             f.write(full_prompt)
@@ -2813,25 +3398,26 @@ OUTPUT JSON ONLY:
     local_llm_instance = None
     if ai_mode == "local":
         if not HAS_LLAMA_CPP:
-            print("Error: llama-cpp-python not installed. Please install it to use Local mode.")
+            print(
+                "Error: llama-cpp-python not installed. Please install it to use Local mode."
+            )
             return {"segments": []}
-            
-        models_dir = os.path.join(base_dir, 'models')
+
+        models_dir = os.path.join(base_dir, "models")
         model_path = os.path.join(models_dir, model_name)
         if not os.path.exists(model_path):
-             if os.path.exists(model_name):
-                 model_path = model_name
-             else:
-                 print(f"Error: Model not found at {model_path}")
-                 return {"segments": []}
-        
-        print(f"[INFO] Loading Local Model: {os.path.basename(model_path)} (This may take a while)...")
+            if os.path.exists(model_name):
+                model_path = model_name
+            else:
+                print(f"Error: Model not found at {model_path}")
+                return {"segments": []}
+
+        print(
+            f"[INFO] Loading Local Model: {os.path.basename(model_path)} (This may take a while)..."
+        )
         try:
             local_llm_instance = Llama(
-                model_path=model_path,
-                n_gpu_layers=-1, 
-                n_ctx=8192,
-                verbose=False
+                model_path=model_path, n_gpu_layers=-1, n_ctx=8192, verbose=False
             )
         except Exception as e:
             print(f"Failed to load model: {e}")
@@ -2839,90 +3425,115 @@ OUTPUT JSON ONLY:
 
     for i, prompt in enumerate(output_texts):
         response_text = ""
-        manual_prompt_path = os.path.join(project_folder, f"prompt_part_{i+1}.txt")
+        manual_prompt_path = os.path.join(project_folder, f"prompt_part_{i + 1}.txt")
         try:
             with open(manual_prompt_path, "w", encoding="utf-8") as f:
                 f.write(prompt)
         except Exception as e:
             print(f"[ERRO] Falha ao salvar prompt.txt: {e}")
-        
+
         if ai_mode == "manual":
             print(f"\n[INFO] O prompt foi salvo em: {manual_prompt_path}")
-            print("\n" + "="*60)
-            print(f"CHUNK {i+1}/{len(output_texts)}")
-            print("="*60)
-            print("COPIE O PROMPT ABAIXO (OU DO ARQUIVO GERADO) E COLE NA SUA IA PREFERIDA:")
+            print("\n" + "=" * 60)
+            print(f"CHUNK {i + 1}/{len(output_texts)}")
+            print("=" * 60)
+            print(
+                "COPIE O PROMPT ABAIXO (OU DO ARQUIVO GERADO) E COLE NA SUA IA PREFERIDA:"
+            )
             print("-" * 20)
             print(prompt)
             print("-" * 20)
-            print("="*60)
+            print("=" * 60)
             print("Cole o JSON de resposta abaixo e pressione ENTER.")
-            print("Dica: Se o JSON tiver múltiplas linhas, tente colar tudo de uma vez ou minificado.")
-            print("Se preferir, digite 'file' para ler de um arquivo 'tmp/response.json'.")
-            
+            print(
+                "Dica: Se o JSON tiver múltiplas linhas, tente colar tudo de uma vez ou minificado."
+            )
+            print(
+                "Se preferir, digite 'file' para ler de um arquivo 'tmp/response.json'."
+            )
+
             user_input = input("JSON ou 'file': ")
-            
-            if user_input.lower() == 'file':
+
+            if user_input.lower() == "file":
                 try:
-                    response_json_path = os.path.join(project_folder, 'response.json')
-                    with open(response_json_path, 'r', encoding='utf-8') as rf:
+                    response_json_path = os.path.join(project_folder, "response.json")
+                    with open(response_json_path, "r", encoding="utf-8") as rf:
                         response_text = rf.read()
                 except FileNotFoundError:
                     print(f"Arquivo {response_json_path} não encontrado.")
             else:
                 response_text = user_input
-                if response_text.strip().startswith("{") and not response_text.strip().endswith("}"):
-                    print("Parece incompleto. Cole o resto e dê Enter (ou Ctrl+C para cancelar):")
+                if response_text.strip().startswith(
+                    "{"
+                ) and not response_text.strip().endswith("}"):
+                    print(
+                        "Parece incompleto. Cole o resto e dê Enter (ou Ctrl+C para cancelar):"
+                    )
                     try:
-                        rest = sys.stdin.read() 
+                        rest = sys.stdin.read()
                         response_text += rest
                     except (OSError, UnicodeError) as exc:
-                        logger.warning("Could not read the remainder of manual model input: %s",
-                                       type(exc).__name__)
+                        logger.warning(
+                            "Could not read the remainder of manual model input: %s",
+                            type(exc).__name__,
+                        )
 
         elif ai_mode == "gemini":
-            print(f"Enviando chunk {i+1} para o Gemini (Model: {model_name})...")
+            print(f"Enviando chunk {i + 1} para o Gemini (Model: {model_name})...")
             response_text = call_gemini(prompt, api_key, model_name=model_name)
         elif ai_mode == "g4f":
-            print(f"Enviando chunk {i+1} para o G4F (Model: {model_name})...")
+            print(f"Enviando chunk {i + 1} para o G4F (Model: {model_name})...")
             response_text = call_g4f(prompt, model_name=model_name)
         elif ai_mode == "openai":
-            print("Sending chunk {}/{} to the OpenAI-compatible provider (model: {})...".format(
-                i + 1, len(output_texts), model_name))
+            print(
+                "Sending chunk {}/{} to the OpenAI-compatible provider (model: {})...".format(
+                    i + 1, len(output_texts), model_name
+                )
+            )
             try:
                 response_text = openai_compat.chat(
-                    prompt, model=model_name, config=config)
+                    prompt, model=model_name, config=config
+                )
             except openai_compat.OpenAICompatError as exc:
                 print("[ERRO] OpenAI-compatible provider failed: {}".format(exc))
                 response_text = "{}"
         elif ai_mode == "auto":
             try:
                 response_text = router.chat(prompt)
-                print("Chunk {}/{} answered by {}.".format(
-                    i + 1, len(output_texts),
-                    router.used.describe() if router.used else "auto"))
+                print(
+                    "Chunk {}/{} answered by {}.".format(
+                        i + 1,
+                        len(output_texts),
+                        router.used.describe() if router.used else "auto",
+                    )
+                )
             except Exception as exc:
                 print("[ERRO] Automatic routing failed: {}".format(exc))
                 response_text = "{}"
         elif ai_mode == "local" and local_llm_instance:
-            print(f"Processing chunk {i+1} with Local LLM...")
+            print(f"Processing chunk {i + 1} with Local LLM...")
             try:
                 output = local_llm_instance.create_chat_completion(
                     messages=[
-                        {"role": "system", "content": "You are a helpful assistant that outputs only JSON."},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant that outputs only JSON.",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     max_tokens=4096,
-                    temperature=0.7
+                    temperature=0.7,
                 )
-                response_text = output['choices'][0]['message']['content']
+                response_text = output["choices"][0]["message"]["content"]
             except Exception as e:
                 print(f"Error evaluating local model: {e}")
                 response_text = "{}"
 
         # --- Save RAW Response for Debugging ---
         try:
-            raw_response_path = os.path.join(project_folder, f"response_raw_part_{i+1}.txt")
+            raw_response_path = os.path.join(
+                project_folder, f"response_raw_part_{i + 1}.txt"
+            )
             with open(raw_response_path, "w", encoding="utf-8") as f:
                 f.write(response_text)
             print(f"[DEBUG] Raw response saved to: {raw_response_path}")
@@ -2947,23 +3558,26 @@ OUTPUT JSON ONLY:
         "ai_model": model_name,
     }
     if ai_mode == "auto" and router is not None:
-        selection_meta["ai_chain"] = [candidate.describe()
-                                      for candidate in router.candidates]
-        selection_meta["ai_used"] = (router.used.describe()
-                                     if router.used else "")
+        selection_meta["ai_chain"] = [
+            candidate.describe() for candidate in router.candidates
+        ]
+        selection_meta["ai_used"] = router.used.describe() if router.used else ""
     return process_segments(
-        all_raw_segments, 
-        transcript_segments, 
-        tempo_minimo, 
-        tempo_maximo, 
+        all_raw_segments,
+        transcript_segments,
+        tempo_minimo,
+        tempo_maximo,
         output_count=candidate_target,
         project_folder=project_folder,
         editor_review_llm=(
-            router.chat if ai_mode == "auto" and router is not None
+            router.chat
+            if ai_mode == "auto"
+            and router is not None
             and os.environ.get("VIRALCUTTER_EDITOR_REVIEW", "").strip().lower()
             in ("1", "true", "yes", "on")
             and _editor_review_module is not None
-            else _editor_review_call(ai_mode, api_key, model_name)),
+            else _editor_review_call(ai_mode, api_key, model_name)
+        ),
         llm_config=config,
         allow_auto_embeddings=ai_mode in {"openai", "auto"},
         selection_meta=selection_meta,

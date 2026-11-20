@@ -20,6 +20,7 @@ These tests pin the contract:
 * if the workflow still references the legacy name → the spec must keep
   emitting it under GitHub Actions.
 """
+
 import re
 from pathlib import Path
 

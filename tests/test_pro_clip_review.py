@@ -48,11 +48,15 @@ def test_review_report_is_written_atomically(tmp_path):
     )
     path = write_report(str(tmp_path / "review.json"), report)
     assert (tmp_path / "review.json").is_file()
-    assert '"schema_version": 1' in (tmp_path / "review.json").read_text(encoding="utf-8")
+    assert '"schema_version": 1' in (tmp_path / "review.json").read_text(
+        encoding="utf-8"
+    )
     assert path.endswith("review.json")
     assert report["publish_allowed"] is False
     assert report["human_signoff_required"] is True
-    assert report["automated_checks_passed"] == (report["status"] == "approved_for_human_signoff")
+    assert report["automated_checks_passed"] == (
+        report["status"] == "approved_for_human_signoff"
+    )
 
 
 def test_unavailable_ocr_requires_review_for_video(monkeypatch, tmp_path):
@@ -60,14 +64,23 @@ def test_unavailable_ocr_requires_review_for_video(monkeypatch, tmp_path):
 
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"placeholder")
-    monkeypatch.setattr(ocr_safety, "analyze_video", lambda *args, **kwargs: {
-        "available": False, "status": "unavailable", "action": "allow",
-        "reason": "tesseract_not_installed", "frames": [],
-    })
+    monkeypatch.setattr(
+        ocr_safety,
+        "analyze_video",
+        lambda *args, **kwargs: {
+            "available": False,
+            "status": "unavailable",
+            "action": "allow",
+            "reason": "tesseract_not_installed",
+            "frames": [],
+        },
+    )
     report = review_clip(
         transcript="شرح المتحدث القرار وأسبابه بالتفصيل",
         title="شرح القرار وأسبابه بالتفصيل",
-        video_path=str(video), language="ar", run_media_qc=False,
+        video_path=str(video),
+        language="ar",
+        run_media_qc=False,
     )
     assert report["ocr"]["action"] == "review"
     assert report["status"] == "review"
@@ -79,20 +92,39 @@ def test_media_quality_block_prevents_publish(monkeypatch, tmp_path):
 
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"placeholder")
-    monkeypatch.setattr(ocr_safety, "analyze_video", lambda *args, **kwargs: {
-                            "available": True, "status": "scanned", "action": "allow",
-                            "frames": [], "text": "",
-                        })
-    monkeypatch.setattr(media_validation, "validate_media_file", lambda *args, **kwargs: {
-        "ok": False, "errors": ["missing audio stream"],
-    })
-    monkeypatch.setattr(audio_qc, "analyze_file", lambda *args, **kwargs: {
-        "ok": False, "status": "block", "issues": [],
-    })
+    monkeypatch.setattr(
+        ocr_safety,
+        "analyze_video",
+        lambda *args, **kwargs: {
+            "available": True,
+            "status": "scanned",
+            "action": "allow",
+            "frames": [],
+            "text": "",
+        },
+    )
+    monkeypatch.setattr(
+        media_validation,
+        "validate_media_file",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "errors": ["missing audio stream"],
+        },
+    )
+    monkeypatch.setattr(
+        audio_qc,
+        "analyze_file",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "status": "block",
+            "issues": [],
+        },
+    )
     report = review_clip(
         transcript="شرح المتحدث القرار وأسبابه بالتفصيل",
         title="شرح القرار وأسبابه بالتفصيل",
-        video_path=str(video), language="ar",
+        video_path=str(video),
+        language="ar",
     )
     assert report["media_quality"]["action"] == "block"
     assert report["status"] == "blocked"
@@ -105,7 +137,9 @@ def test_skipped_video_checks_require_manual_review(tmp_path):
     report = review_clip(
         transcript="شرح المتحدث القرار وأسبابه بالتفصيل",
         title="شرح القرار وأسبابه بالتفصيل",
-        video_path=str(video), language="ar", scan_ocr=False,
+        video_path=str(video),
+        language="ar",
+        scan_ocr=False,
         run_media_qc=False,
     )
     assert report["ocr"]["status"] == "skipped"

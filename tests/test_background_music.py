@@ -32,7 +32,8 @@ def test_find_music_file_explicit_missing_falls_through(tmp_path):
     song = folder / "a.wav"
     song.write_bytes(b"x")
     found = background_music.find_music_file(
-        str(tmp_path / "nope.mp3"), project_folder=str(tmp_path))
+        str(tmp_path / "nope.mp3"), project_folder=str(tmp_path)
+    )
     assert found == str(song)
 
 
@@ -64,8 +65,12 @@ def test_find_music_file_accepts_all_audio_extensions(tmp_path):
 
 
 def test_find_music_file_returns_none_when_nothing_exists(tmp_path):
-    assert background_music.find_music_file(
-        str(tmp_path / "nope.mp3"), project_folder=str(tmp_path)) is None
+    assert (
+        background_music.find_music_file(
+            str(tmp_path / "nope.mp3"), project_folder=str(tmp_path)
+        )
+        is None
+    )
 
 
 def test_find_music_file_uses_local_music_folder(tmp_path, monkeypatch):
@@ -127,8 +132,10 @@ def _make_music(tmp_path):
 
 def test_apply_missing_video_reports_not_ok(tmp_path):
     report = background_music.apply_background_music(
-        str(tmp_path / "gone.mp4"), str(tmp_path / "song.mp3"),
-        str(tmp_path / "out.mp4"))
+        str(tmp_path / "gone.mp4"),
+        str(tmp_path / "song.mp3"),
+        str(tmp_path / "out.mp4"),
+    )
     assert report["ok"] is False
     assert not (tmp_path / "out.mp4").exists()
 
@@ -137,7 +144,8 @@ def test_apply_missing_music_copies_clip_unchanged(tmp_path):
     clip = _make_clip(tmp_path)
     out = tmp_path / "out.mp4"
     report = background_music.apply_background_music(
-        str(clip), str(tmp_path / "gone.mp3"), str(out))
+        str(clip), str(tmp_path / "gone.mp3"), str(out)
+    )
     assert report["ok"] is True
     assert report["skipped"] == "no music file found"
     assert out.read_bytes() == b"video-bytes"
@@ -161,8 +169,7 @@ def test_apply_ffprobe_failure_copies_and_errors(tmp_path, monkeypatch):
         raise OSError("ffprobe missing")
 
     _stub_run(monkeypatch, boom)
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(out))
+    report = background_music.apply_background_music(str(clip), str(music), str(out))
     assert report["ok"] is False
     assert "ffprobe" in report["error"]
     assert out.read_bytes() == b"video-bytes"
@@ -173,8 +180,7 @@ def test_apply_no_audio_stream_copies_clip(tmp_path, monkeypatch):
     music = _make_music(tmp_path)
     out = tmp_path / "out.mp4"
     _stub_run(monkeypatch, lambda *a, **k: _FakeResult(stdout=""))
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(out))
+    report = background_music.apply_background_music(str(clip), str(music), str(out))
     assert report["ok"] is True
     assert report["skipped"] == "clip has no audio stream"
     assert out.read_bytes() == b"video-bytes"
@@ -193,8 +199,7 @@ def test_apply_happy_path_builds_ducking_command(tmp_path, monkeypatch):
         return _FakeResult()
 
     _stub_run(monkeypatch, fake_run)
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(out))
+    report = background_music.apply_background_music(str(clip), str(music), str(out))
     assert report["ok"] is True
     assert report["music"] == "song.mp3"
     assert report["duck"] == {"threshold": 0.02, "ratio": 10}
@@ -225,8 +230,13 @@ def test_apply_clamps_volume_threshold_and_ratio(tmp_path, monkeypatch):
 
     _stub_run(monkeypatch, fake_run)
     report = background_music.apply_background_music(
-        str(clip), str(music), str(out),
-        music_volume=0.9, duck_threshold=5.0, duck_ratio=99)
+        str(clip),
+        str(music),
+        str(out),
+        music_volume=0.9,
+        duck_threshold=5.0,
+        duck_ratio=99,
+    )
     assert report["ok"] is True
     cmd = [c for c in cmds if c[0] == "ffmpeg"][0]
     fc = cmd[cmd.index("-filter_complex") + 1]
@@ -250,8 +260,13 @@ def test_apply_clamps_tiny_values_up(tmp_path, monkeypatch):
 
     _stub_run(monkeypatch, fake_run)
     report = background_music.apply_background_music(
-        str(clip), str(music), str(out),
-        music_volume=0.001, duck_threshold=0.0, duck_ratio=0.1)
+        str(clip),
+        str(music),
+        str(out),
+        music_volume=0.001,
+        duck_threshold=0.0,
+        duck_ratio=0.1,
+    )
     assert report["ok"] is True
     cmd = [c for c in cmds if c[0] == "ffmpeg"][0]
     fc = cmd[cmd.index("-filter_complex") + 1]
@@ -271,8 +286,7 @@ def test_apply_ffmpeg_failure_falls_back_to_copy(tmp_path, monkeypatch):
         raise subprocess.CalledProcessError(1, cmd, stderr=b"boom")
 
     _stub_run(monkeypatch, fake_run)
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(out))
+    report = background_music.apply_background_music(str(clip), str(music), str(out))
     assert report["ok"] is False
     assert "error" in report
     assert out.read_bytes() == b"video-bytes"
@@ -284,8 +298,11 @@ def test_apply_ffmpeg_failure_falls_back_to_copy(tmp_path, monkeypatch):
 def test_main_json_reports_skipped_when_no_music(tmp_path, monkeypatch, capsys):
     clip = _make_clip(tmp_path)
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(sys, "argv", ["background_music.py", "--video", str(clip),
-                                      "--out", str(out), "--json"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["background_music.py", "--video", str(clip), "--out", str(out), "--json"],
+    )
     # Missing music is a safe copy-through, so main() reports success (0).
     assert background_music.main() == 0
     out_text = capsys.readouterr().out
@@ -299,8 +316,7 @@ def test_apply_same_file_no_music_succeeds_without_copy(tmp_path, monkeypatch):
     # failure. The copy is now skipped and the clip is left untouched.
     clip = _make_clip(tmp_path)
     calls = []
-    monkeypatch.setattr(background_music.shutil, "copy2",
-                        lambda *a: calls.append(a))
+    monkeypatch.setattr(background_music.shutil, "copy2", lambda *a: calls.append(a))
     report = background_music.apply_background_music(str(clip), None, str(clip))
     assert report["ok"] is True
     assert report["skipped"] == "no music file found"
@@ -312,8 +328,7 @@ def test_apply_same_file_no_music_succeeds_without_copy(tmp_path, monkeypatch):
 def test_apply_same_file_via_different_spelling_skips_copy(tmp_path, monkeypatch):
     clip = _make_clip(tmp_path)
     calls = []
-    monkeypatch.setattr(background_music.shutil, "copy2",
-                        lambda *a: calls.append(a))
+    monkeypatch.setattr(background_music.shutil, "copy2", lambda *a: calls.append(a))
     monkeypatch.chdir(tmp_path)
     report = background_music.apply_background_music("clip.mp4", None, "./clip.mp4")
     assert report["ok"] is True
@@ -325,11 +340,9 @@ def test_apply_same_file_no_audio_succeeds_without_copy(tmp_path, monkeypatch):
     clip = _make_clip(tmp_path)
     music = _make_music(tmp_path)
     calls = []
-    monkeypatch.setattr(background_music.shutil, "copy2",
-                        lambda *a: calls.append(a))
+    monkeypatch.setattr(background_music.shutil, "copy2", lambda *a: calls.append(a))
     _stub_run(monkeypatch, lambda *a, **k: _FakeResult(stdout=""))
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(clip))
+    report = background_music.apply_background_music(str(clip), str(music), str(clip))
     assert report["ok"] is True
     assert report["skipped"] == "clip has no audio stream"
     assert "error" not in report
@@ -341,15 +354,13 @@ def test_apply_same_file_probe_failure_keeps_error_without_copy(tmp_path, monkey
     clip = _make_clip(tmp_path)
     music = _make_music(tmp_path)
     calls = []
-    monkeypatch.setattr(background_music.shutil, "copy2",
-                        lambda *a: calls.append(a))
+    monkeypatch.setattr(background_music.shutil, "copy2", lambda *a: calls.append(a))
 
     def boom(*a, **k):
         raise OSError("ffprobe missing")
 
     _stub_run(monkeypatch, boom)
-    report = background_music.apply_background_music(
-        str(clip), str(music), str(clip))
+    report = background_music.apply_background_music(str(clip), str(music), str(clip))
     assert report["ok"] is False
     assert "ffprobe" in report["error"]
     assert calls == []

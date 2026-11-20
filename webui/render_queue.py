@@ -6,6 +6,7 @@ WebUI, CLI helpers, and tests. State is written atomically after every
 transition. A process restart re-queues jobs that were running when the
 process stopped; completed jobs remain available for the project library.
 """
+
 from __future__ import annotations
 
 import json
@@ -87,7 +88,8 @@ class RenderQueue:
             for job_id, data in records.items():
                 if not isinstance(data, dict):
                     raise ValueError(
-                        "queue job {!r} must be a JSON object".format(job_id))
+                        "queue job {!r} must be a JSON object".format(job_id)
+                    )
                 values = {k: v for k, v in data.items() if k in valid_fields}
                 values.setdefault("id", str(job_id))
                 values.setdefault("plan", {})
@@ -114,7 +116,9 @@ class RenderQueue:
                 corrupt_path = "{}.corrupt-{}".format(self.state_path, int(time.time()))
                 try:
                     os.replace(self.state_path, corrupt_path)
-                    self.load_warning += "؛ حُفظت النسخة التالفة في {}".format(corrupt_path)
+                    self.load_warning += "؛ حُفظت النسخة التالفة في {}".format(
+                        corrupt_path
+                    )
                 except OSError:
                     pass
 
@@ -125,10 +129,16 @@ class RenderQueue:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(
-                    {"version": 2, "updated": time.time(),
-                     "paused": self._paused,
-                     "jobs": {k: asdict(v) for k, v in self.jobs.items()}},
-                    f, ensure_ascii=False, indent=2, default=str,
+                    {
+                        "version": 2,
+                        "updated": time.time(),
+                        "paused": self._paused,
+                        "jobs": {k: asdict(v) for k, v in self.jobs.items()},
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
                 )
                 f.flush()
                 os.fsync(f.fileno())
@@ -371,7 +381,7 @@ class RenderQueue:
                 key=lambda job: job.finished or job.created or 0,
                 reverse=True,
             )
-            keep_ids = {job.id for job in terminal[:max(0, int(keep_terminal or 0))]}
+            keep_ids = {job.id for job in terminal[: max(0, int(keep_terminal or 0))]}
             removed = 0
             for job in list(terminal):
                 stamp = job.finished or job.created or 0
@@ -400,7 +410,9 @@ class RenderQueue:
             self._shutdown.clear()
             self._drain_work()
             self._threads = [
-                threading.Thread(target=self._worker, name="viralcutter-render-%d" % i, daemon=True)
+                threading.Thread(
+                    target=self._worker, name="viralcutter-render-%d" % i, daemon=True
+                )
                 for i in range(self.max_workers)
             ]
             for thread in self._threads:
@@ -488,8 +500,10 @@ class RenderQueue:
                 except Exception as exc:
                     with self._lock:
                         current = self.jobs[job_id]
-                        can_retry = (not current.cancel_requested and
-                                     current.attempts <= current.max_retries)
+                        can_retry = (
+                            not current.cancel_requested
+                            and current.attempts <= current.max_retries
+                        )
                         if can_retry:
                             current.status = "retrying"
                             current.error = str(exc)[:4000]
@@ -499,7 +513,9 @@ class RenderQueue:
                             if not self._paused:
                                 self._enqueue(job_id)
                         else:
-                            self.mark_failed(job_id, "{}\n{}".format(
-                                exc, traceback.format_exc(limit=6)))
+                            self.mark_failed(
+                                job_id,
+                                "{}\n{}".format(exc, traceback.format_exc(limit=6)),
+                            )
             finally:
                 self._work.task_done()

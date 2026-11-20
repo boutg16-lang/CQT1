@@ -25,15 +25,14 @@ class TestSpeechTurns:
         assert turns[0]["speaker"] == sd.SINGLE_SPEAKER
 
     def test_two_turns_separated_by_silence(self):
-        energies = ([0.5] * 24 + [0.01] * 60 +
-                    [0.5] * 24 + [0.01] * 60)
+        energies = [0.5] * 24 + [0.01] * 60 + [0.5] * 24 + [0.01] * 60
         turns = sd.detect_speech_turns(energies, fps=30)
         assert len(turns) == 2
         assert turns[1]["start"] == pytest.approx(2.8)
 
     def test_short_pauses_inside_turn_are_merged(self):
         # 0.3s gap (< 0.4s max_gap) inside speech is merged into one turn.
-        energies = ([0.5] * 30 + [0.01] * 9 + [0.5] * 30 + [0.01] * 60)
+        energies = [0.5] * 30 + [0.01] * 9 + [0.5] * 30 + [0.01] * 60
         turns = sd.detect_speech_turns(energies, fps=30)
         assert len(turns) == 1
         assert turns[0]["end"] == pytest.approx(2.3)
@@ -42,8 +41,7 @@ class TestSpeechTurns:
         energies = [0.01] * 90
         energies[30] = 0.9  # 1-frame click
         energies[31] = 0.9
-        assert sd.detect_speech_turns(energies, fps=30,
-                                      min_turn_seconds=0.8) == []
+        assert sd.detect_speech_turns(energies, fps=30, min_turn_seconds=0.8) == []
 
     def test_empty_or_silent_input(self):
         assert sd.detect_speech_turns([], fps=30) == []
@@ -76,12 +74,17 @@ class TestDiarizationFallbacks:
         assert sbc.patch_speechbrain_inspect_compat() is True
         lazy = FakeLazyModule()
         namespace = {"lazy": lazy}
-        exec(compile("has_file = hasattr(lazy, '__file__')", inspect.__file__, "exec"), namespace)
+        exec(
+            compile("has_file = hasattr(lazy, '__file__')", inspect.__file__, "exec"),
+            namespace,
+        )
 
         assert namespace["has_file"] is False
         assert lazy.attempts == 0
 
-    def test_speechbrain_lazy_import_still_loads_for_application_code(self, monkeypatch):
+    def test_speechbrain_lazy_import_still_loads_for_application_code(
+        self, monkeypatch
+    ):
         import inspect
         from types import ModuleType, SimpleNamespace
 
@@ -124,19 +127,22 @@ class TestDiarizationFallbacks:
 
     def test_load_segments_file(self, tmp_path):
         assert sd.load_segments_file(str(tmp_path)) is None
-        with open(os.path.join(str(tmp_path), "speaker_segments.json"),
-                  "w", encoding="utf-8") as handle:
+        with open(
+            os.path.join(str(tmp_path), "speaker_segments.json"), "w", encoding="utf-8"
+        ) as handle:
             import json
-            json.dump({"segments": [{"start": 0, "end": 5, "speaker": "A"}]},
-                      handle)
+
+            json.dump({"segments": [{"start": 0, "end": 5, "speaker": "A"}]}, handle)
         loaded = sd.load_segments_file(str(tmp_path))
         assert loaded == [{"start": 0, "end": 5, "speaker": "A"}]
 
 
 class TestVoiceFaceLink:
     def _link(self):
-        turns = [{"start": 0.0, "end": 10.0, "speaker": "A"},
-                 {"start": 10.0, "end": 20.0, "speaker": "B"}]
+        turns = [
+            {"start": 0.0, "end": 10.0, "speaker": "A"},
+            {"start": 10.0, "end": 20.0, "speaker": "B"},
+        ]
         return VoiceFaceLink(turns, seconds_per_frame=1.0 / 30.0)
 
     def test_speaker_at(self):
@@ -149,9 +155,9 @@ class TestVoiceFaceLink:
     def test_association_learns_whose_mouth_matches(self):
         link = self._link()
         # Track 1 opens its mouth only during speaker A; track 2 only in B.
-        for frame in range(0, 300):     # 0-10s
+        for frame in range(0, 300):  # 0-10s
             link.update(frame / 30.0, {1: True, 2: False})
-        for frame in range(300, 600):   # 10-20s
+        for frame in range(300, 600):  # 10-20s
             link.update(frame / 30.0, {1: False, 2: True})
         association = link.association()
         assert association[1]["A"] == 1.0
@@ -168,7 +174,9 @@ class TestVoiceFaceLink:
     def test_ambiguous_tracks_are_not_stolen(self):
         link = VoiceFaceLink(
             [{"start": 0.0, "end": 10.0, "speaker": "A"}],
-            min_confidence=0.1, margin=0.15)
+            min_confidence=0.1,
+            margin=0.15,
+        )
         # Both tracks talk half of A's turn → near-equal confidence.
         for frame in range(0, 300):
             link.update(frame / 30.0, {1: frame % 2 == 0, 2: frame % 2 == 1})
@@ -191,7 +199,7 @@ class TestApplyVoiceFaceLink:
             {"_track_id": 2, "activity_score": 5.0, "is_talking": False},
         ]
         _apply_voice_face_link(faces, link, 5.0)
-        assert faces[0]["activity_score"] == 7.0   # 5 + boost(2)
+        assert faces[0]["activity_score"] == 7.0  # 5 + boost(2)
         assert faces[1]["activity_score"] == 4.25  # 5 - penalty(0.75)
 
     def test_no_winner_means_no_change(self):

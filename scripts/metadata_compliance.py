@@ -48,44 +48,112 @@ MAX_METADATA_EMOJI = 3
 # Hashtag prefixes that are almost always policy-hostile for viral channels.
 BANNED_HASHTAG_TERMS = [
     # scams / gambling / money
-    "casino", "betting", "gamble", "gambling", "lottery", "freebitcoin",
-    "cryptogiveaway", "giveaway", "earnmoney", "makemoneyonline", "getrich",
-    "moneyscam", "doubledyourmoney", "bitcoinmining", "investmentguarantee",
+    "casino",
+    "betting",
+    "gamble",
+    "gambling",
+    "lottery",
+    "freebitcoin",
+    "cryptogiveaway",
+    "giveaway",
+    "earnmoney",
+    "makemoneyonline",
+    "getrich",
+    "moneyscam",
+    "doubledyourmoney",
+    "bitcoinmining",
+    "investmentguarantee",
     # adult content
-    "nsfw", "xxx", "porn", "sex", "adultcontent", "18plus",
+    "nsfw",
+    "xxx",
+    "porn",
+    "sex",
+    "adultcontent",
+    "18plus",
     # prohibited / regulated
-    "buyfollowers", "buysubscribers", "buyviews", "getviewsfast",
-    "hackedaccounts", "freeinstagram", "crackedsoftware", "keygen",
-    "drugs", "marijuanashop", "buymedicines", "steroids",
+    "buyfollowers",
+    "buysubscribers",
+    "buyviews",
+    "getviewsfast",
+    "hackedaccounts",
+    "freeinstagram",
+    "crackedsoftware",
+    "keygen",
+    "drugs",
+    "marijuanashop",
+    "buymedicines",
+    "steroids",
     # medical misinformation
-    "covidcure", "cancerremedy", "diabetescure", "weightlossmagic",
+    "covidcure",
+    "cancerremedy",
+    "diabetescure",
+    "weightlossmagic",
     # political manipulation / hate
-    "electionfraud", "rigged", "whitegenocide", "racistmemes",
+    "electionfraud",
+    "rigged",
+    "whitegenocide",
+    "racistmemes",
 ]
 
 # Phrase patterns → category, severity
 PATTERN_RULES = [
     # --- medical claims ---
-    (r"\b(cures?|treats?|heals?) (all|cancer|diabetes|covid|corona)\w*", "medical_claim", "high"),
-    (r"\b(cure|remedy|treatment)\b.{0,40}\b(guaranteed|100%|natural)\b", "medical_claim", "medium"),
-    (r"\b(no (more|need) (doctors?|medication)|stop (taking|needing) (pills|medicine))\b", "medical_claim", "medium"),
+    (
+        r"\b(cures?|treats?|heals?) (all|cancer|diabetes|covid|corona)\w*",
+        "medical_claim",
+        "high",
+    ),
+    (
+        r"\b(cure|remedy|treatment)\b.{0,40}\b(guaranteed|100%|natural)\b",
+        "medical_claim",
+        "medium",
+    ),
+    (
+        r"\b(no (more|need) (doctors?|medication)|stop (taking|needing) (pills|medicine))\b",
+        "medical_claim",
+        "medium",
+    ),
     # --- financial guarantees ---
-    (r"\b(make|earn|get) \$?\d+[kK]? (a|per|every) (day|week|hour)\b", "financial_claim", "medium"),
-    (r"\b(get rich|passive income|financial freedom)\b.{0,30}\b(guaranteed|overnight|without (work|effort))\b", "financial_claim", "high"),
-    (r"\b(guaranteed|100%)\b.{0,20}\b(profit|returns?|income|money)\b", "financial_claim", "high"),
+    (
+        r"\b(make|earn|get) \$?\d+[kK]? (a|per|every) (day|week|hour)\b",
+        "financial_claim",
+        "medium",
+    ),
+    (
+        r"\b(get rich|passive income|financial freedom)\b.{0,30}\b(guaranteed|overnight|without (work|effort))\b",
+        "financial_claim",
+        "high",
+    ),
+    (
+        r"\b(guaranteed|100%)\b.{0,20}\b(profit|returns?|income|money)\b",
+        "financial_claim",
+        "high",
+    ),
     # --- exaggerated clickbait ---
     (r"\byou won'?t believe\b", "clickbait", "low"),
-    (r"\b(they|this|the (truth|secret)) (hides?|don'?t want you to (know|see))\b", "clickbait", "low"),
+    (
+        r"\b(they|this|the (truth|secret)) (hides?|don'?t want you to (know|see))\b",
+        "clickbait",
+        "low",
+    ),
     (r"\b(shocking|mind[- ]blowing|insane|unbelievable)\b", "clickbait", "low"),
     (r"\b(100%|totally|absolutely) (free|real|true)\b", "clickbait", "low"),
     # --- engagement bait ---
     (r"\b(comment|type) (yes|no|done|below|me)\b", "engagement_bait", "low"),
     (r"\b(subscribe|follow|share) (or|else)\b", "engagement_bait", "medium"),
-    (r"\b(lIke|share|subscribe) this (video|post)\b.{0,20}\b(or (you'll|you will))", "engagement_bait", "medium"),
+    (
+        r"\b(lIke|share|subscribe) this (video|post)\b.{0,20}\b(or (you'll|you will))",
+        "engagement_bait",
+        "medium",
+    ),
     # --- deceptive / manipulative ---
     (r"\b(not (a )?(scam|clickbait))\b", "deceptive", "low"),
     (r"\b(leaked|hacked|secret) (video|footage|audio)\b", "deceptive", "medium"),
-    (r"\b(goes (viral|insane)|watch before (it'?s|it is) deleted)\b", "deceptive", "low"),
+    (
+        r"\b(goes (viral|insane)|watch before (it'?s|it is) deleted)\b",
+        "deceptive",
+        "low",
+    ),
     # --- Arabic exaggerated clickbait (MSA + Darija + Egyptian) ---
     # Arabic has no letter case, and _find_patterns() lowercases the text
     # before matching, so the plain phrase is written as-is. No \b word
@@ -93,21 +161,21 @@ PATTERN_RULES = [
     # are unreliable; the phrase itself is the signal (re.search substring).
     # Severity is low: exaggerated titles are advisory, like the English
     # clickbait rules above.
-    (r"لن تصدق", "clickbait", "low"),                      # you won't believe
-    (r"لن تتوقع", "clickbait", "low"),                     # you won't expect
-    (r"لن يصدق (أحد|احد)", "clickbait", "low"),            # no one will believe
-    (r"صادم", "clickbait", "low"),                         # shocking
-    (r"لا يفوتك", "clickbait", "low"),                     # don't miss it
-    (r"شاهد قبل الحذف", "clickbait", "low"),               # watch before it's gone
-    (r"الحقيقة التي يخفونها", "clickbait", "low"),         # the truth they hide
-    (r"ماشي تصدق", "clickbait", "low"),                    # Darija: you won't believe
-    (r"مش هتصدق", "clickbait", "low"),                     # Egyptian: you won't believe
-    (r"خطير جدا", "clickbait", "low"),                     # very dangerous
-    (r"ممنوع على الكبار", "clickbait", "low"),             # adults-only bait
+    (r"لن تصدق", "clickbait", "low"),  # you won't believe
+    (r"لن تتوقع", "clickbait", "low"),  # you won't expect
+    (r"لن يصدق (أحد|احد)", "clickbait", "low"),  # no one will believe
+    (r"صادم", "clickbait", "low"),  # shocking
+    (r"لا يفوتك", "clickbait", "low"),  # don't miss it
+    (r"شاهد قبل الحذف", "clickbait", "low"),  # watch before it's gone
+    (r"الحقيقة التي يخفونها", "clickbait", "low"),  # the truth they hide
+    (r"ماشي تصدق", "clickbait", "low"),  # Darija: you won't believe
+    (r"مش هتصدق", "clickbait", "low"),  # Egyptian: you won't believe
+    (r"خطير جدا", "clickbait", "low"),  # very dangerous
+    (r"ممنوع على الكبار", "clickbait", "low"),  # adults-only bait
     # --- Arabic engagement bait ---
     (r"اكتب (نعم|لا) في التعليقات", "engagement_bait", "low"),  # comment YES/NO below
-    (r"علق ب", "engagement_bait", "low"),                  # comment with ...
-    (r"اشترك في القناة", "engagement_bait", "low"),        # subscribe to the channel
+    (r"علق ب", "engagement_bait", "low"),  # comment with ...
+    (r"اشترك في القناة", "engagement_bait", "low"),  # subscribe to the channel
 ]
 
 # Hashtags are lower-cased before matching, so rules use lowercase here.
@@ -123,12 +191,15 @@ KEYWORD_STUFFING_THRESHOLD = 3
 # Rule loading (user-extensible, mirrors safety_terms.json pattern)
 # ---------------------------------------------------------------------------
 
+
 def _normalize_rules(rules):
     """Ensure every rule tuple has exactly 3 fields (pattern, category, severity)."""
     out = []
     for item in rules:
         if len(item) == 3:
-            out.append((item[0], item[1], item[2] if item[2] in SEVERITY_ORDER else "low"))
+            out.append(
+                (item[0], item[1], item[2] if item[2] in SEVERITY_ORDER else "low")
+            )
         else:
             continue
     return out
@@ -148,7 +219,8 @@ def load_extra_rules(path):
         patterns = data.get("patterns", [])
         if isinstance(patterns, list):
             extra["patterns"] = _normalize_rules(
-                [(str(p[0]), str(p[1]), str(p[2])) for p in patterns if len(p) >= 3])
+                [(str(p[0]), str(p[1]), str(p[2])) for p in patterns if len(p) >= 3]
+            )
         return extra or None
     except Exception:
         return None
@@ -158,6 +230,7 @@ def load_extra_rules(path):
 # Core checks
 # ---------------------------------------------------------------------------
 
+
 def _find_patterns(text, rules):
     """Return findings for every pattern rule matched in `text` (lower-cased)."""
     findings = []
@@ -165,11 +238,13 @@ def _find_patterns(text, rules):
     for pattern, category, severity in rules:
         try:
             if re.search(pattern, lowered):
-                findings.append({
-                    "category": category,
-                    "severity": severity,
-                    "matched": pattern,
-                })
+                findings.append(
+                    {
+                        "category": category,
+                        "severity": severity,
+                        "matched": pattern,
+                    }
+                )
         except re.error:
             continue
     return findings
@@ -181,7 +256,9 @@ def check_hashtags(hashtags, banned_terms=None, pattern_rules=None):
     if not hashtags:
         return True, findings
     if isinstance(hashtags, str):
-        hashtags = [h.strip().lstrip("#") for h in re.split(r"[,\s]+", hashtags) if h.strip()]
+        hashtags = [
+            h.strip().lstrip("#") for h in re.split(r"[,\s]+", hashtags) if h.strip()
+        ]
     banned = banned_terms if banned_terms is not None else BANNED_HASHTAG_TERMS
     rules = pattern_rules if pattern_rules is not None else HASHTAG_PATTERN_RULES
 
@@ -190,15 +267,19 @@ def check_hashtags(hashtags, banned_terms=None, pattern_rules=None):
         if not tag:
             continue
         if tag in banned:
-            findings.append({"category": "banned_hashtag", "severity": "high",
-                             "matched": "#" + tag})
+            findings.append(
+                {"category": "banned_hashtag", "severity": "high", "matched": "#" + tag}
+            )
             continue
         for pattern, category, severity in rules:
             if re.search(pattern, tag):
-                findings.append({"category": category, "severity": severity,
-                                 "matched": "#" + tag})
-    return (len([f for f in findings if SEVERITY_ORDER[f["severity"]] >= 2]) == 0,
-            findings)
+                findings.append(
+                    {"category": category, "severity": severity, "matched": "#" + tag}
+                )
+    return (
+        len([f for f in findings if SEVERITY_ORDER[f["severity"]] >= 2]) == 0,
+        findings,
+    )
 
 
 def _keyword_stuffing_findings(text):
@@ -208,16 +289,18 @@ def _keyword_stuffing_findings(text):
     tokens = re.findall(r"\w+", lowered)
     phrases = {}
     for i in range(len(tokens) - 2):
-        phrase = " ".join(tokens[i:i + 3])
+        phrase = " ".join(tokens[i : i + 3])
         if len(phrase) >= 8:  # ignore ultra-common short combos
             phrases[phrase] = phrases.get(phrase, 0) + 1
     for phrase, count in phrases.items():
         if count >= KEYWORD_STUFFING_THRESHOLD:
-            findings.append({
-                "category": "keyword_stuffing",
-                "severity": "low",
-                "matched": '"{}" x{}'.format(phrase, count),
-            })
+            findings.append(
+                {
+                    "category": "keyword_stuffing",
+                    "severity": "low",
+                    "matched": '"{}" x{}'.format(phrase, count),
+                }
+            )
     return findings
 
 
@@ -238,8 +321,12 @@ def check_metadata(title, caption, hashtags, extra_rules_path=None):
     banned = BANNED_HASHTAG_TERMS + (extra["hashtags"] if extra else [])
     pattern_rules = PATTERN_RULES + (extra["patterns"] if extra else [])
 
-    title_findings = _find_patterns(title, pattern_rules) + _keyword_stuffing_findings(title)
-    caption_findings = _find_patterns(caption, pattern_rules) + _keyword_stuffing_findings(caption)
+    title_findings = _find_patterns(title, pattern_rules) + _keyword_stuffing_findings(
+        title
+    )
+    caption_findings = _find_patterns(
+        caption, pattern_rules
+    ) + _keyword_stuffing_findings(caption)
     _, hashtag_findings = check_hashtags(hashtags, banned_terms=banned)
 
     all_findings = title_findings + caption_findings + hashtag_findings
@@ -275,8 +362,9 @@ def check_title_language(title, caption):
         "category": "language_mismatch",
         "severity": "low",
         "detail": "title script ({}) conflicts with caption script ({}) — "
-                  "viewers of the caption may not understand the shipped title".format(
-                      detect_text_script(title), detect_text_script(caption)),
+        "viewers of the caption may not understand the shipped title".format(
+            detect_text_script(title), detect_text_script(caption)
+        ),
     }
 
 
@@ -298,13 +386,16 @@ def metadata_axis(title, caption, hashtags, extra_rules_path=None):
 
     emoji_count = count_emoji(title or "") + count_emoji(caption or "")
     if emoji_count > MAX_METADATA_EMOJI:
-        findings.append({
-            "category": "excessive_emoji",
-            "severity": "low",
-            "detail": "title+caption contain {} emoji (> {}); some platforms "
-                      "demote or reject emoji-heavy metadata".format(
-                          emoji_count, MAX_METADATA_EMOJI),
-        })
+        findings.append(
+            {
+                "category": "excessive_emoji",
+                "severity": "low",
+                "detail": "title+caption contain {} emoji (> {}); some platforms "
+                "demote or reject emoji-heavy metadata".format(
+                    emoji_count, MAX_METADATA_EMOJI
+                ),
+            }
+        )
 
     score = {"low": 0, "medium": 40, "high": 80}[res["severity"]]
     return {
@@ -322,16 +413,25 @@ def summarize_metadata(res):
         return "metadata ok"
     parts = []
     for cat in sorted({f["category"] for f in res["findings"]}):
-        parts.append("{} x{}".format(cat, sum(1 for f in res["findings"] if f["category"] == cat)))
+        parts.append(
+            "{} x{}".format(
+                cat, sum(1 for f in res["findings"] if f["category"] == cat)
+            )
+        )
     return "metadata {}: {}".format(res["severity"], ", ".join(parts))
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="ViralCutter metadata compliance check.")
+
+    parser = argparse.ArgumentParser(
+        description="ViralCutter metadata compliance check."
+    )
     parser.add_argument("--title", default="", help="Video title")
     parser.add_argument("--caption", default="", help="Video caption/description")
-    parser.add_argument("--hashtags", default="", help="Comma-separated hashtags (with or without #)")
+    parser.add_argument(
+        "--hashtags", default="", help="Comma-separated hashtags (with or without #)"
+    )
     parser.add_argument("--extra-rules", default=None, help="Extra rules JSON file")
     parser.add_argument("--json", action="store_true", help="Print raw JSON report")
     args = parser.parse_args()

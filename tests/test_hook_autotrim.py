@@ -14,7 +14,8 @@ def _timed(text_words):
 
 def test_leading_filler_trim_returns_plan():
     plan = hook_analyzer.leading_filler_trim(
-        _timed(["يعني", "طيب", "القصة", "بدأت", "هنا"]))
+        _timed(["يعني", "طيب", "القصة", "بدأت", "هنا"])
+    )
     assert plan["trim_words"] == 2
     assert plan["filler_words"] == ["يعني", "طيب"]
     assert plan["new_start"] == 12.0
@@ -22,15 +23,13 @@ def test_leading_filler_trim_returns_plan():
 
 
 def test_leading_filler_trim_handles_punctuation_and_variants():
-    plan = hook_analyzer.leading_filler_trim(
-        _timed(["يعني،", "إيه", "الحل", "واضح"]))
+    plan = hook_analyzer.leading_filler_trim(_timed(["يعني،", "إيه", "الحل", "واضح"]))
     assert plan is not None
     assert plan["trim_words"] == 2
 
 
 def test_leading_filler_trim_rejects_non_filler_opening():
-    assert hook_analyzer.leading_filler_trim(
-        _timed(["ليش", "الناس", "تخاف"])) is None
+    assert hook_analyzer.leading_filler_trim(_timed(["ليش", "الناس", "تخاف"])) is None
 
 
 def test_leading_filler_trim_rejects_long_hesitation_run():
@@ -38,39 +37,61 @@ def test_leading_filler_trim_rejects_long_hesitation_run():
     assert hook_analyzer.leading_filler_trim(words, max_filler=4) is None
 
 
-
 def test_leading_filler_trim_rejects_invalid_or_non_finite_timestamps():
-    assert hook_analyzer.leading_filler_trim([
-        {"start": 1.0, "end": 1.4, "word": "يعني"},
-        {"start": float("nan"), "end": 2.0, "word": "الحل"},
-    ]) is None
-    assert hook_analyzer.leading_filler_trim([
-        {"start": 2.0, "end": 1.5, "word": "يعني"},
-        {"start": 2.1, "end": 2.5, "word": "الحل"},
-    ]) is None
+    assert (
+        hook_analyzer.leading_filler_trim(
+            [
+                {"start": 1.0, "end": 1.4, "word": "يعني"},
+                {"start": float("nan"), "end": 2.0, "word": "الحل"},
+            ]
+        )
+        is None
+    )
+    assert (
+        hook_analyzer.leading_filler_trim(
+            [
+                {"start": 2.0, "end": 1.5, "word": "يعني"},
+                {"start": 2.1, "end": 2.5, "word": "الحل"},
+            ]
+        )
+        is None
+    )
 
 
 def test_leading_filler_trim_rejects_out_of_order_word_timings():
-    assert hook_analyzer.leading_filler_trim([
-        {"start": 2.0, "end": 2.3, "word": "يعني"},
-        {"start": 1.8, "end": 2.4, "word": "الحل"},
-    ]) is None
+    assert (
+        hook_analyzer.leading_filler_trim(
+            [
+                {"start": 2.0, "end": 2.3, "word": "يعني"},
+                {"start": 1.8, "end": 2.4, "word": "الحل"},
+            ]
+        )
+        is None
+    )
 
 
 def test_leading_filler_trim_rejects_overlap_into_content_word():
-    assert hook_analyzer.leading_filler_trim([
-        {"start": 1.0, "end": 1.8, "word": "يعني"},
-        {"start": 1.6, "end": 2.0, "word": "الحل"},
-    ]) is None
+    assert (
+        hook_analyzer.leading_filler_trim(
+            [
+                {"start": 1.0, "end": 1.8, "word": "يعني"},
+                {"start": 1.6, "end": 2.0, "word": "الحل"},
+            ]
+        )
+        is None
+    )
 
 
 def test_leading_filler_trim_allows_small_alignment_rounding_overlap():
-    plan = hook_analyzer.leading_filler_trim([
-        {"start": 1.0, "end": 1.50, "word": "يعني"},
-        {"start": 1.47, "end": 1.90, "word": "الحل"},
-    ])
+    plan = hook_analyzer.leading_filler_trim(
+        [
+            {"start": 1.0, "end": 1.50, "word": "يعني"},
+            {"start": 1.47, "end": 1.90, "word": "الحل"},
+        ]
+    )
     assert plan is not None
     assert plan["new_start"] == 1.47
+
 
 def test_leading_filler_trim_rejects_all_filler():
     assert hook_analyzer.leading_filler_trim(_timed(["يعني", "طيب"])) is None
@@ -82,10 +103,15 @@ def test_leading_filler_trim_rejects_all_filler():
 # process_segments integration
 # ---------------------------------------------------------------------------
 
+
 def _transcript():
     return [
         {"start": 0.0, "end": 10.0, "text": "مقدمة عادية عن الموضوع"},
-        {"start": 11.0, "end": 25.0, "text": "يعني طيب ليش الناس تخاف من التغيير الكبير؟ الجواب صادم!"},
+        {
+            "start": 11.0,
+            "end": 25.0,
+            "text": "يعني طيب ليش الناس تخاف من التغيير الكبير؟ الجواب صادم!",
+        },
         {"start": 26.0, "end": 40.0, "text": "تفاصيل إضافية تكمّل القصة"},
         {"start": 45.0, "end": 60.0, "text": "خاتمة هادئة بلا لحظة قوية"},
     ]
@@ -99,16 +125,25 @@ def _raw():
 
 
 def _word_timings():
-    return _timed([
-        "يعني", "طيب", "ليش", "الناس", "تخاف", "من", "التغيير",
-    ]) + [{"start": 15.0, "end": 39.5, "word": "استمرار"}]
+    return _timed(
+        [
+            "يعني",
+            "طيب",
+            "ليش",
+            "الناس",
+            "تخاف",
+            "من",
+            "التغيير",
+        ]
+    ) + [{"start": 15.0, "end": 39.5, "word": "استمرار"}]
 
 
 def test_opening_analysis_attached_without_flag(tmp_path, monkeypatch):
     monkeypatch.delenv("VIRALCUTTER_HOOK_AUTOTRIM", raising=False)
     monkeypatch.setattr(cvs, "_load_word_timings", lambda folder: _word_timings())
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path))
+        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path)
+    )
     first = result["segments"][0]
     assert "opening_analysis" in first
     assert first["opening_analysis"]["opens_with_filler"] is True
@@ -119,7 +154,8 @@ def test_autotrim_removes_filler_prefix(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_HOOK_AUTOTRIM", "1")
     monkeypatch.setattr(cvs, "_load_word_timings", lambda folder: _word_timings())
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path))
+        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path)
+    )
     first = result["segments"][0]
     assert first["hook_trimmed_from"] == 11.0
     assert first["start_time"] == 12.0
@@ -136,33 +172,65 @@ def test_autotrim_respects_min_duration(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_HOOK_AUTOTRIM", "1")
     # The first non-filler word begins at 26.0, leaving less than the 15s
     # minimum; later words keep the fixture's WhisperX coverage realistic.
-    tail_words = ["المحتوى", "يتطلب", "استمرار", "وتخطيط", "واضح", "للعمل",
-                  "خطوة", "بخطوة", "حتى", "تكتمل", "الفكرة", "وتصل",
-                  "للنتيجة", "التي", "يريدها", "كل", "صانع", "محتوى",
-                  "في", "هذا", "المجال", "دون", "تسرع", "أو", "توقف."]
+    tail_words = [
+        "المحتوى",
+        "يتطلب",
+        "استمرار",
+        "وتخطيط",
+        "واضح",
+        "للعمل",
+        "خطوة",
+        "بخطوة",
+        "حتى",
+        "تكتمل",
+        "الفكرة",
+        "وتصل",
+        "للنتيجة",
+        "التي",
+        "يريدها",
+        "كل",
+        "صانع",
+        "محتوى",
+        "في",
+        "هذا",
+        "المجال",
+        "دون",
+        "تسرع",
+        "أو",
+        "توقف.",
+    ]
     timings = _timed(["يعني", "طيب"]) + [
         {"start": 26.0 + index * 0.5, "end": 26.45 + index * 0.5, "word": word}
         for index, word in enumerate(tail_words)
     ]
     monkeypatch.setattr(cvs, "_load_word_timings", lambda folder: timings)
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path))
+        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path)
+    )
     assert result["segments"][0]["start_time"] == 11.0
     assert "hook_trimmed_from" not in result["segments"][0]
 
 
 def test_autotrim_fail_open_on_broken_timings(tmp_path, monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_HOOK_AUTOTRIM", "1")
-    monkeypatch.setattr(cvs, "_load_word_timings",
-                        lambda folder: [{"start": 12.0, "end": 12.4, "word": None}])
+    monkeypatch.setattr(
+        cvs,
+        "_load_word_timings",
+        lambda folder: [{"start": 12.0, "end": 12.4, "word": None}],
+    )
     result = cvs.process_segments(
-        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path))
+        _raw(), _transcript(), 15, 90, project_folder=str(tmp_path)
+    )
     assert result["segments"][0]["start_time"] == 11.0  # untouched
 
 
 def test_drop_leading_filler_tokens_stops_at_content():
-    assert hook_analyzer.drop_leading_filler_tokens(
-        "يعني طيب ليش الناس تخاف؟", 4) == "ليش الناس تخاف؟"
-    assert hook_analyzer.drop_leading_filler_tokens(
-        "ليش الناس تخاف؟", 3) == "ليش الناس تخاف؟"
+    assert (
+        hook_analyzer.drop_leading_filler_tokens("يعني طيب ليش الناس تخاف؟", 4)
+        == "ليش الناس تخاف؟"
+    )
+    assert (
+        hook_analyzer.drop_leading_filler_tokens("ليش الناس تخاف؟", 3)
+        == "ليش الناس تخاف؟"
+    )
     assert hook_analyzer.drop_leading_filler_tokens("", 2) == ""

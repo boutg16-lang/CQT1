@@ -49,7 +49,9 @@ def test_write_outputs_creates_pipeline_compatible_files(tmp_path):
     assert json.loads(data.read_text(encoding="utf-8"))["backend"] == "faster-whisper"
 
 
-def test_transcribe_uses_faster_whisper_when_primary_stack_is_missing(monkeypatch, tmp_path):
+def test_transcribe_uses_faster_whisper_when_primary_stack_is_missing(
+    monkeypatch, tmp_path
+):
     class FakeModel:
         def __init__(self, model_name, device, compute_type):
             self.args = (model_name, device, compute_type)
@@ -57,9 +59,11 @@ def test_transcribe_uses_faster_whisper_when_primary_stack_is_missing(monkeypatc
         def transcribe(self, input_file, **kwargs):
             assert input_file.endswith("input.mp4")
             assert kwargs["vad_filter"] is True
-            return iter([
-                SimpleNamespace(start=0.0, end=2.0, text="نص تجريبي", words=[]),
-            ]), SimpleNamespace(language="ar")
+            return iter(
+                [
+                    SimpleNamespace(start=0.0, end=2.0, text="نص تجريبي", words=[]),
+                ]
+            ), SimpleNamespace(language="ar")
 
     fake_module = SimpleNamespace(__version__="1.2.0", WhisperModel=FakeModel)
     monkeypatch.setattr(transcribe_video, "whisperx", None)
@@ -69,17 +73,24 @@ def test_transcribe_uses_faster_whisper_when_primary_stack_is_missing(monkeypatc
     input_file.write_bytes(b"fake media")
 
     srt_file, tsv_file = transcribe_video.transcribe(
-        str(input_file), model_name="large-v3-turbo", project_folder=str(tmp_path), device="cpu"
+        str(input_file),
+        model_name="large-v3-turbo",
+        project_folder=str(tmp_path),
+        device="cpu",
     )
 
     assert srt_file.endswith("input.srt")
     assert tsv_file.endswith("input.tsv")
     assert "نص تجريبي" in (tmp_path / "input.srt").read_text(encoding="utf-8")
-    cache = json.loads((tmp_path / "transcription_cache.json").read_text(encoding="utf-8"))
+    cache = json.loads(
+        (tmp_path / "transcription_cache.json").read_text(encoding="utf-8")
+    )
     assert cache["model_name"] == "large-v3-turbo"
 
 
-def test_transcribe_fails_closed_when_both_backends_are_unavailable(monkeypatch, tmp_path):
+def test_transcribe_fails_closed_when_both_backends_are_unavailable(
+    monkeypatch, tmp_path
+):
     monkeypatch.setattr(transcribe_video, "whisperx", None)
     monkeypatch.setattr(transcribe_video, "torch", None)
     monkeypatch.setattr(transcription_fallback, "_module", lambda: None)

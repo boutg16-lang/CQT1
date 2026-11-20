@@ -15,10 +15,21 @@ def test_analyze_file_passes_with_measured_audio(tmp_path, monkeypatch):
 
     def fake_run(command, timeout=300):
         if command[0] == "ffprobe":
-            return _completed(stdout=json.dumps({
-                "streams": [{"codec_type": "video"}, {"codec_type": "audio", "sample_rate": "48000", "channels": 2}],
-                "format": {"duration": "30.0"},
-            }))
+            return _completed(
+                stdout=json.dumps(
+                    {
+                        "streams": [
+                            {"codec_type": "video"},
+                            {
+                                "codec_type": "audio",
+                                "sample_rate": "48000",
+                                "channels": 2,
+                            },
+                        ],
+                        "format": {"duration": "30.0"},
+                    }
+                )
+            )
         if "loudnorm=" in " ".join(command):
             return _completed(stderr=loudnorm)
         return _completed(stderr="silence_start: 0\nsilence_end: 0.2\n")
@@ -37,10 +48,14 @@ def test_analyze_file_blocks_missing_audio(tmp_path, monkeypatch):
     video.write_bytes(b"test")
 
     def fake_run(command, timeout=300):
-        return _completed(stdout=json.dumps({
-            "streams": [{"codec_type": "video"}],
-            "format": {"duration": "10"},
-        }))
+        return _completed(
+            stdout=json.dumps(
+                {
+                    "streams": [{"codec_type": "video"}],
+                    "format": {"duration": "10"},
+                }
+            )
+        )
 
     monkeypatch.setattr(audio_qc, "_run", fake_run)
     report = audio_qc.analyze_file(str(video))
@@ -56,10 +71,14 @@ def test_analyze_file_marks_bad_loudness_for_review(tmp_path, monkeypatch):
 
     def fake_run(command, timeout=300):
         if command[0] == "ffprobe":
-            return _completed(stdout=json.dumps({
-                "streams": [{"codec_type": "audio"}],
-                "format": {"duration": "20"},
-            }))
+            return _completed(
+                stdout=json.dumps(
+                    {
+                        "streams": [{"codec_type": "audio"}],
+                        "format": {"duration": "20"},
+                    }
+                )
+            )
         if "loudnorm=" in " ".join(command):
             return _completed(stderr=loudnorm)
         return _completed(stderr="")
@@ -82,10 +101,14 @@ def test_analyze_project_writes_atomic_report(tmp_path, monkeypatch):
 
     def fake_run(command, timeout=300):
         if command[0] == "ffprobe":
-            return _completed(stdout=json.dumps({
-                "streams": [{"codec_type": "audio"}],
-                "format": {"duration": "20"},
-            }))
+            return _completed(
+                stdout=json.dumps(
+                    {
+                        "streams": [{"codec_type": "audio"}],
+                        "format": {"duration": "20"},
+                    }
+                )
+            )
         if "loudnorm=" in " ".join(command):
             return _completed(stderr=loudnorm)
         return _completed(stderr="")
@@ -115,8 +138,11 @@ def test_webui_command_threads_audio_qc_options():
     from webui.pipeline import build_command
 
     command = build_command(
-        "main_improved.py", ["--project-path", "project"], segments=2,
-        audio_qc="off", audio_qc_gate="block",
+        "main_improved.py",
+        ["--project-path", "project"],
+        segments=2,
+        audio_qc="off",
+        audio_qc_gate="block",
     )
     assert command[command.index("--audio-qc") + 1] == "off"
     assert command[command.index("--audio-qc-gate") + 1] == "block"

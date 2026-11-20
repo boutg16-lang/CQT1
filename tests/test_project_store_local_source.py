@@ -14,7 +14,9 @@ def test_local_source_is_reference_only(tmp_path):
     )
 
     assert project_store.resolve_project_input(project) == str(source.resolve())
-    assert not (project and (tmp_path / "VIRALS" / "recording_01" / "input.mp4").exists())
+    assert not (
+        project and (tmp_path / "VIRALS" / "recording_01" / "input.mp4").exists()
+    )
     assert project_store.list_projects(virals)[0]["has_input"] is True
 
 

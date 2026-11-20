@@ -21,6 +21,7 @@ GROUNDED_TITLE = "كيف تكسب المال من الإنترنت"
 # Number extraction
 # ---------------------------------------------------------------------------
 
+
 def test_title_numbers_plain_digits():
     assert tf.title_numbers("ربحت 5000 دولار") == {"5000"}
 
@@ -65,23 +66,23 @@ def test_canonical_number_group_lengths():
 # hallucinated_facts / factual_accuracy_score / relevance
 # ---------------------------------------------------------------------------
 
+
 def test_hallucinated_facts_unsupported_number():
     assert tf.hallucinated_facts("ربحت 5000 دولار", WINDOW) == ["5000"]
 
 
 def test_hallucinated_facts_supported_number():
-    assert tf.hallucinated_facts("ربحت 5000 دولار",
-                                 "ربحت 5000 دولار من الإنترنت") == []
+    assert tf.hallucinated_facts("ربحت 5000 دولار", "ربحت 5000 دولار من الإنترنت") == []
 
 
 def test_hallucinated_facts_unsupported_latin_token():
     assert tf.hallucinated_facts("iPhone الجديد", "الجديد في عالم الهواتف") == [
-        "iphone"]
+        "iphone"
+    ]
 
 
 def test_hallucinated_facts_supported_latin_token():
-    assert tf.hallucinated_facts("iPhone الجديد",
-                                 "iPhone الجديد في عالم الهواتف") == []
+    assert tf.hallucinated_facts("iPhone الجديد", "iPhone الجديد في عالم الهواتف") == []
 
 
 def test_factual_accuracy_fully_grounded():
@@ -116,6 +117,7 @@ def test_transcript_relevance_full_and_none():
 # Component scores
 # ---------------------------------------------------------------------------
 
+
 def test_clarity_score_good_title():
     assert tf.clarity_score("كيف تكسب المال من الإنترنت؟") == 80.0
 
@@ -143,6 +145,7 @@ def test_curiosity_score_empty():
 
 def test_seo_score_delegates_to_seo_titles():
     from scripts import seo_titles
+
     expected = seo_titles.score_title(GROUNDED_TITLE)["score"]
     assert tf.seo_score(GROUNDED_TITLE) == float(expected)
 
@@ -177,9 +180,15 @@ def test_detect_content_language():
 def test_score_title_candidate_keys_and_range():
     result = tf.score_title_candidate(GROUNDED_TITLE, WINDOW)
     assert set(result) == {
-        "factual_accuracy_score", "transcript_relevance_score",
-        "clarity_score", "curiosity_score", "SEO_score",
-        "language_match_score", "clickbait_penalty", "final_title_score"}
+        "factual_accuracy_score",
+        "transcript_relevance_score",
+        "clarity_score",
+        "curiosity_score",
+        "SEO_score",
+        "language_match_score",
+        "clickbait_penalty",
+        "final_title_score",
+    }
     assert 0.0 <= result["final_title_score"] <= 100.0
     assert result["factual_accuracy_score"] == 100.0
 
@@ -192,6 +201,7 @@ def test_score_title_candidate_clickbait_penalty():
 # ---------------------------------------------------------------------------
 # validate_title / title_needs_replacement
 # ---------------------------------------------------------------------------
+
 
 def test_validate_title_grounded():
     result = tf.validate_title(GROUNDED_TITLE, WINDOW)
@@ -236,6 +246,7 @@ def test_title_needs_replacement_empty_window_cannot_disprove():
 # fallback_titles
 # ---------------------------------------------------------------------------
 
+
 def test_fallback_titles_first_last_and_question():
     analysis = {
         "text": "المال مهم جدا. العمل مهم أيضا. هل تعلم كيف؟",
@@ -277,9 +288,12 @@ def test_fallback_titles_max_count():
 # unsupported_claims / full-video scope
 # ---------------------------------------------------------------------------
 
+
 def test_unsupported_claims_superlative():
     assert tf.unsupported_claims("أفضل طريقة مجانا", "نتحدث عن طريقة") == [
-        "أفضل", "مجانًا"]
+        "أفضل",
+        "مجانًا",
+    ]
 
 
 def test_unsupported_claims_supported():
@@ -294,10 +308,10 @@ def test_unsupported_claims_unit_group():
 def test_unsupported_claims_unit_supported_by_any_variant():
     # Unit groups are per-currency: "ريال" is supported by "ريالات" (same
     # group), but NOT by "دولار" (a different currency group).
-    assert tf.unsupported_claims("ربحت 5000 ريال",
-                                 "ربحت 5000 ريالات من العمل") == []
-    assert tf.unsupported_claims("ربحت 5000 ريال",
-                                 "ربحت 5000 دولار من العمل") == ["ريال"]
+    assert tf.unsupported_claims("ربحت 5000 ريال", "ربحت 5000 ريالات من العمل") == []
+    assert tf.unsupported_claims("ربحت 5000 ريال", "ربحت 5000 دولار من العمل") == [
+        "ريال"
+    ]
 
 
 def test_detect_full_video_scope_needs_ratio():
@@ -305,22 +319,31 @@ def test_detect_full_video_scope_needs_ratio():
 
 
 def test_detect_full_video_scope_small_clip():
-    assert tf.detect_full_video_scope("كل الفيديو في دقيقة", WINDOW,
-                                      clip_ratio=0.3) is True
+    assert (
+        tf.detect_full_video_scope("كل الفيديو في دقيقة", WINDOW, clip_ratio=0.3)
+        is True
+    )
 
 
 def test_detect_full_video_scope_large_clip_or_in_window():
-    assert tf.detect_full_video_scope("كل الفيديو في دقيقة", WINDOW,
-                                      clip_ratio=0.6) is False
-    assert tf.detect_full_video_scope(
-        "كل الفيديو في دقيقة",
-        "هذا الفيديو يتحدث عن كل الفيديو في دقيقة",
-        clip_ratio=0.3) is False
+    assert (
+        tf.detect_full_video_scope("كل الفيديو في دقيقة", WINDOW, clip_ratio=0.6)
+        is False
+    )
+    assert (
+        tf.detect_full_video_scope(
+            "كل الفيديو في دقيقة",
+            "هذا الفيديو يتحدث عن كل الفيديو في دقيقة",
+            clip_ratio=0.3,
+        )
+        is False
+    )
 
 
 # ---------------------------------------------------------------------------
 # validate_title_vs_clip (v7.41 schema)
 # ---------------------------------------------------------------------------
+
 
 def test_validate_vs_clip_verified():
     result = tf.validate_title_vs_clip(GROUNDED_TITLE, WINDOW)
@@ -353,8 +376,7 @@ def test_validate_vs_clip_rejected_language_mismatch():
 
 def test_validate_vs_clip_review_partial_overlap():
     # Relevance 50 (2/4 tokens grounded) -> factual 50 < 60 -> review.
-    result = tf.validate_title_vs_clip("المال مهم والعمل والنجاح",
-                                       "المال مهم جدا")
+    result = tf.validate_title_vs_clip("المال مهم والعمل والنجاح", "المال مهم جدا")
     assert result["status"] == "review"
     assert result["matches_clip_transcript"] is True
 
@@ -389,7 +411,8 @@ def test_validate_vs_clip_review_soft_entity():
 
 def test_validate_vs_clip_llm_entailment_false_rejects():
     result = tf.validate_title_vs_clip(
-        GROUNDED_TITLE, WINDOW, llm_entailment=lambda t, w: False)
+        GROUNDED_TITLE, WINDOW, llm_entailment=lambda t, w: False
+    )
     assert result["status"] == "rejected"
     assert "llm_entailment_failed" in result["reasons"]
     assert result["checks"]["llm_entailment"] is False
@@ -397,21 +420,20 @@ def test_validate_vs_clip_llm_entailment_false_rejects():
 
 def test_validate_vs_clip_llm_entailment_none_or_raising_stands():
     result = tf.validate_title_vs_clip(
-        GROUNDED_TITLE, WINDOW, llm_entailment=lambda t, w: None)
+        GROUNDED_TITLE, WINDOW, llm_entailment=lambda t, w: None
+    )
     assert result["status"] == "verified"
 
     def _boom(title, window):
         raise RuntimeError("llm down")
 
-    result = tf.validate_title_vs_clip(
-        GROUNDED_TITLE, WINDOW, llm_entailment=_boom)
+    result = tf.validate_title_vs_clip(GROUNDED_TITLE, WINDOW, llm_entailment=_boom)
     assert result["status"] == "verified"
     assert result["checks"]["llm_entailment"] is None
 
 
 def test_validate_vs_clip_full_video_scope_rejects():
-    result = tf.validate_title_vs_clip("كل الفيديو في دقيقة", WINDOW,
-                                       clip_ratio=0.3)
+    result = tf.validate_title_vs_clip("كل الفيديو في دقيقة", WINDOW, clip_ratio=0.3)
     assert result["status"] == "rejected"
     assert "full_video_scope" in result["reasons"]
 
@@ -420,9 +442,9 @@ def test_validate_vs_clip_full_video_scope_rejects():
 # validate_all_title_candidates / build_title_data
 # ---------------------------------------------------------------------------
 
+
 def test_validate_all_candidates_primary_verified():
-    result = tf.validate_all_title_candidates(
-        GROUNDED_TITLE, ["المال مهم جدا"], WINDOW)
+    result = tf.validate_all_title_candidates(GROUNDED_TITLE, ["المال مهم جدا"], WINDOW)
     assert result["primary"]["validation"]["status"] == "verified"
     assert result["verified_available"] is True
     assert result["review_required"] is False
@@ -430,15 +452,15 @@ def test_validate_all_candidates_primary_verified():
 
 
 def test_validate_all_candidates_rejected_primary_kept_raw():
-    result = tf.validate_all_title_candidates(
-        "ربحت 5000 دولار", [], WINDOW)
+    result = tf.validate_all_title_candidates("ربحت 5000 دولار", [], WINDOW)
     assert result["primary"]["validation"]["status"] == "rejected"
     assert result["rejected"][0]["text"] == "ربحت 5000 دولار"
 
 
 def test_validate_all_candidates_dedupes_alternatives():
     result = tf.validate_all_title_candidates(
-        GROUNDED_TITLE, [GROUNDED_TITLE, GROUNDED_TITLE], WINDOW)
+        GROUNDED_TITLE, [GROUNDED_TITLE, GROUNDED_TITLE], WINDOW
+    )
     assert result["alternatives"] == []
 
 
@@ -446,7 +468,8 @@ def test_validate_all_candidates_nothing_verified_adds_fallback():
     # Primary is rejected (no overlap), but the transcript-derived fallback
     # verifies, so review is NOT required and the fallback is offered.
     result = tf.validate_all_title_candidates(
-        "الطقس جميل اليوم", [], "المال مهم جدا في حياتنا")
+        "الطقس جميل اليوم", [], "المال مهم جدا في حياتنا"
+    )
     assert result["primary"]["validation"]["status"] == "rejected"
     assert result["verified_available"] is True
     assert result["review_required"] is False
@@ -455,8 +478,7 @@ def test_validate_all_candidates_nothing_verified_adds_fallback():
 
 
 def test_build_title_data_verified_primary():
-    result = tf.build_title_data(
-        GROUNDED_TITLE, ["المال مهم جدا"], WINDOW, {})
+    result = tf.build_title_data(GROUNDED_TITLE, ["المال مهم جدا"], WINDOW, {})
     assert result["primary_title"] == GROUNDED_TITLE
     assert result["title_review_required"] is False
     assert result["fallback_used"] is False
@@ -464,11 +486,20 @@ def test_build_title_data_verified_primary():
     assert result["title_language"] == "ar"
     assert result["schema_version"] == "1.1"
     assert set(result) >= {
-        "primary_title", "title_language", "title_confidence",
-        "title_is_factual", "fallback_used", "title_scores",
-        "alternative_titles", "validation", "title_validation",
-        "validated_alternatives", "rejected_titles",
-        "title_review_required", "schema_version"}
+        "primary_title",
+        "title_language",
+        "title_confidence",
+        "title_is_factual",
+        "fallback_used",
+        "title_scores",
+        "alternative_titles",
+        "validation",
+        "title_validation",
+        "validated_alternatives",
+        "rejected_titles",
+        "title_review_required",
+        "schema_version",
+    }
 
 
 def test_build_title_data_all_rejected_uses_fallback():

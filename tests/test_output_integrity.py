@@ -46,17 +46,30 @@ def test_clear_downstream_artifacts_removes_generated_outputs_only(tmp_path):
 def test_cut_stops_pipeline_when_one_segment_fails(tmp_path, monkeypatch):
     source = tmp_path / "input.mp4"
     source.write_bytes(b"source")
-    response = {"segments": [{"start_time": 0, "end_time": 5}, {"start_time": 5, "end_time": 10}]}
+    response = {
+        "segments": [
+            {"start_time": 0, "end_time": 5},
+            {"start_time": 5, "end_time": 10},
+        ]
+    }
 
-    monkeypatch.setattr(cut_segments, "_detect_best_encoder", lambda: ("copy", "fast", []))
+    monkeypatch.setattr(
+        cut_segments, "_detect_best_encoder", lambda: ("copy", "fast", [])
+    )
     monkeypatch.setattr(
         cut_segments,
         "_process_segment",
-        lambda index, *args: {"ok": index == 0, "index": index, "error": "ffmpeg failed"},
+        lambda index, *args: {
+            "ok": index == 0,
+            "index": index,
+            "error": "ffmpeg failed",
+        },
     )
 
     try:
-        cut_segments.cut(response, project_folder=str(tmp_path), workers=1, source_video=str(source))
+        cut_segments.cut(
+            response, project_folder=str(tmp_path), workers=1, source_video=str(source)
+        )
     except RuntimeError as exc:
         assert "downstream stages were stopped" in str(exc)
     else:
@@ -79,11 +92,17 @@ def test_project_library_detects_final_polished_files(tmp_path):
 def test_atomic_write_json_replaces_complete_document(tmp_path):
     target = tmp_path / "viral_segments.txt"
     _atomic_write_json(str(target), {"segments": [{"start_time": 1, "end_time": 5}]})
-    assert json.loads(target.read_text(encoding="utf-8"))["segments"][0]["start_time"] == 1
+    assert (
+        json.loads(target.read_text(encoding="utf-8"))["segments"][0]["start_time"] == 1
+    )
     assert not list(tmp_path.glob(".viral_segments.*.tmp"))
 
 
 def test_save_viral_segments_overwrite_is_atomic_and_current(tmp_path):
-    save_viral_segments({"segments": [{"title": "new", "start_time": 10, "end_time": 20}]}, str(tmp_path), overwrite=True)
+    save_viral_segments(
+        {"segments": [{"title": "new", "start_time": 10, "end_time": 20}]},
+        str(tmp_path),
+        overwrite=True,
+    )
     data = json.loads((tmp_path / "viral_segments.txt").read_text(encoding="utf-8"))
     assert data["segments"][0]["title"] == "new"

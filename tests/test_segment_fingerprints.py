@@ -132,7 +132,9 @@ def test_window_fingerprint_stable_and_hex():
 
 def test_window_fingerprint_ignores_title_by_construction():
     # The window identity is only the (start, end) pair.
-    assert sf._segment_window_fingerprint(10.0, 20.0) == sf._segment_window_fingerprint(10, 20)
+    assert sf._segment_window_fingerprint(10.0, 20.0) == sf._segment_window_fingerprint(
+        10, 20
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -153,22 +155,34 @@ def test_manifest_fingerprint_deterministic():
 def test_manifest_fingerprint_ignores_titles():
     base = [{"start_time": 1.0, "end_time": 5.0, "title": "A"}]
     renamed = [{"start_time": 1.0, "end_time": 5.0, "title": "B"}]
-    assert sf.segments_manifest_fingerprint(base) == sf.segments_manifest_fingerprint(renamed)
+    assert sf.segments_manifest_fingerprint(base) == sf.segments_manifest_fingerprint(
+        renamed
+    )
 
 
 def test_manifest_fingerprint_sensitive_to_windows_and_order():
     one = [{"start_time": 1.0, "end_time": 5.0}]
     moved = [{"start_time": 1.5, "end_time": 5.0}]
-    assert sf.segments_manifest_fingerprint(one) != sf.segments_manifest_fingerprint(moved)
+    assert sf.segments_manifest_fingerprint(one) != sf.segments_manifest_fingerprint(
+        moved
+    )
     pair = [one[0], {"start_time": 10.0, "end_time": 12.0}]
-    assert sf.segments_manifest_fingerprint(pair) != sf.segments_manifest_fingerprint(list(reversed(pair)))
+    assert sf.segments_manifest_fingerprint(pair) != sf.segments_manifest_fingerprint(
+        list(reversed(pair))
+    )
 
 
 def test_manifest_fingerprint_skips_non_dicts_and_empty():
-    assert sf.segments_manifest_fingerprint(["nope", None, 42]) == sf.segments_manifest_fingerprint([])
-    assert sf.segments_manifest_fingerprint(None) == sf.segments_manifest_fingerprint([])
+    assert sf.segments_manifest_fingerprint(
+        ["nope", None, 42]
+    ) == sf.segments_manifest_fingerprint([])
+    assert sf.segments_manifest_fingerprint(None) == sf.segments_manifest_fingerprint(
+        []
+    )
     expected = hashlib.sha256(
-        json.dumps([], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            [], ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
     ).hexdigest()
     assert sf.segments_manifest_fingerprint([]) == expected
 
@@ -176,7 +190,9 @@ def test_manifest_fingerprint_skips_non_dicts_and_empty():
 def test_manifest_fingerprint_parses_arabic_timestamps():
     arabic = [{"start_time": "٩:٥٠", "end_time": "١٠:٠٥"}]
     plain = [{"start_time": 590.0, "end_time": 605.0}]
-    assert sf.segments_manifest_fingerprint(arabic) == sf.segments_manifest_fingerprint(plain)
+    assert sf.segments_manifest_fingerprint(arabic) == sf.segments_manifest_fingerprint(
+        plain
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +244,17 @@ def test_segments_source_fingerprint_reads_nested_value():
     assert sf.segments_source_fingerprint(data) == "abc123"
 
 
-@pytest.mark.parametrize("data", [None, {}, {"source_meta": None}, {"source_meta": {}}, {"source_meta": "x"}, "text"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        None,
+        {},
+        {"source_meta": None},
+        {"source_meta": {}},
+        {"source_meta": "x"},
+        "text",
+    ],
+)
 def test_segments_source_fingerprint_missing_returns_none(data):
     assert sf.segments_source_fingerprint(data) is None
 
@@ -249,7 +275,12 @@ def _cache(source_fp="video-v1", config_fp="config-v1", transcript_fp="transcrip
 
 
 def test_staleness_fresh_cache_returns_none():
-    assert sf.segment_cache_staleness_reason(_cache(), "video-v1", "config-v1", "transcript-v1") is None
+    assert (
+        sf.segment_cache_staleness_reason(
+            _cache(), "video-v1", "config-v1", "transcript-v1"
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -258,35 +289,70 @@ def test_staleness_fresh_cache_returns_none():
         (None, "video-v1", "config-v1", None, "invalid_cache"),
         ("text", "video-v1", "config-v1", None, "invalid_cache"),
         ({}, "video-v1", "config-v1", None, "missing_source_metadata"),
-        ({"source_meta": None}, "video-v1", "config-v1", None, "missing_source_metadata"),
-        (_cache(source_fp=None), "video-v1", "config-v1", None, "missing_source_fingerprint"),
+        (
+            {"source_meta": None},
+            "video-v1",
+            "config-v1",
+            None,
+            "missing_source_metadata",
+        ),
+        (
+            _cache(source_fp=None),
+            "video-v1",
+            "config-v1",
+            None,
+            "missing_source_fingerprint",
+        ),
         (_cache(), None, "config-v1", None, "current_source_unavailable"),
         (_cache(), "video-v2", "config-v1", None, "source_video_changed"),
-        (_cache(config_fp=None), "video-v1", "config-v1", None, "missing_config_fingerprint"),
+        (
+            _cache(config_fp=None),
+            "video-v1",
+            "config-v1",
+            None,
+            "missing_config_fingerprint",
+        ),
         (_cache(), "video-v1", None, None, "current_settings_unavailable"),
         (_cache(), "video-v1", "config-v2", None, "settings_changed"),
         (_cache(), "video-v1", "config-v1", None, "current_transcript_unavailable"),
-        (_cache(transcript_fp=None), "video-v1", "config-v1", "transcript-v1", "missing_transcript_fingerprint"),
+        (
+            _cache(transcript_fp=None),
+            "video-v1",
+            "config-v1",
+            "transcript-v1",
+            "missing_transcript_fingerprint",
+        ),
         (_cache(), "video-v1", "config-v1", "transcript-v2", "transcript_changed"),
     ],
 )
 def test_staleness_reasons(data, source, config, transcript, expected):
-    assert sf.segment_cache_staleness_reason(data, source, config, transcript) == expected
+    assert (
+        sf.segment_cache_staleness_reason(data, source, config, transcript) == expected
+    )
 
 
 def test_staleness_transcript_from_selection_config():
     cache = {"source_meta": {"source_video_fp": "video-v1", "config_fp": "config-v1"}}
     cache["selection_config"] = {"transcript_fingerprint": "transcript-v1"}
-    assert sf.segment_cache_staleness_reason(cache, "video-v1", "config-v1", "transcript-v1") is None
     assert (
-        sf.segment_cache_staleness_reason(cache, "video-v1", "config-v1", "transcript-v2")
+        sf.segment_cache_staleness_reason(
+            cache, "video-v1", "config-v1", "transcript-v1"
+        )
+        is None
+    )
+    assert (
+        sf.segment_cache_staleness_reason(
+            cache, "video-v1", "config-v1", "transcript-v2"
+        )
         == "transcript_changed"
     )
 
 
 def test_staleness_no_transcript_anywhere_is_fresh():
     cache = {"source_meta": {"source_video_fp": "video-v1", "config_fp": "config-v1"}}
-    assert sf.segment_cache_staleness_reason(cache, "video-v1", "config-v1", None) is None
+    assert (
+        sf.segment_cache_staleness_reason(cache, "video-v1", "config-v1", None) is None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +391,9 @@ def test_prompt_version_fingerprint_legacy_when_optional_modules_absent(monkeypa
         os.path.dirname(os.path.dirname(os.path.abspath(sf.__file__))), "prompt.txt"
     )
     template = open(prompt_path, encoding="utf-8").read()
-    payload = "{}|{}|{}|{}".format(sf.SEGMENTS_SCHEMA_VERSION, "legacy", "legacy", template)
+    payload = "{}|{}|{}|{}".format(
+        sf.SEGMENTS_SCHEMA_VERSION, "legacy", "legacy", template
+    )
     assert fp == hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 

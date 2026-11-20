@@ -8,7 +8,9 @@ def test_set_prompts_and_never_echoes_the_key(monkeypatch, capsys):
     calls = []
     monkeypatch.setenv("VIRALCUTTER_CONFIG_PASSPHRASE", "unit-test-passphrase")
     monkeypatch.setattr("getpass.getpass", lambda prompt: secret)
-    monkeypatch.setattr(secure_config, "set_key", lambda key, **kwargs: calls.append((key, kwargs)))
+    monkeypatch.setattr(
+        secure_config, "set_key", lambda key, **kwargs: calls.append((key, kwargs))
+    )
 
     assert secure_config.main(["--set"]) == 0
 
@@ -39,7 +41,9 @@ def test_set_requires_passphrase(monkeypatch, capsys):
 
 
 def test_get_masks_key_by_default(monkeypatch, capsys):
-    monkeypatch.setattr(secure_config, "resolve_api_key", lambda **kwargs: "AIza1234567890")
+    monkeypatch.setattr(
+        secure_config, "resolve_api_key", lambda **kwargs: "AIza1234567890"
+    )
 
     assert secure_config.main(["--get"]) == 0
 
@@ -49,7 +53,9 @@ def test_get_masks_key_by_default(monkeypatch, capsys):
 
 
 def test_show_key_is_explicit(monkeypatch, capsys):
-    monkeypatch.setattr(secure_config, "resolve_api_key", lambda **kwargs: "AIza1234567890")
+    monkeypatch.setattr(
+        secure_config, "resolve_api_key", lambda **kwargs: "AIza1234567890"
+    )
 
     assert secure_config.main(["--show-key"]) == 0
 

@@ -5,6 +5,7 @@ Everything here is offline: the ``file`` provider copies pre-recorded audio the
 test generates with FFmpeg, so the timing math, the fail-open behaviour and the
 "no gate bypass" guarantee are all verified without a network or a cloud TTS.
 """
+
 import json
 import os
 import re
@@ -15,8 +16,9 @@ import pytest
 
 from scripts import dubbing, tts_providers
 
-pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None,
-                                reason="ffmpeg required")
+pytestmark = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None, reason="ffmpeg required"
+)
 
 WINDOW_RE = re.compile(r"mean_volume:\s*(-?[\d.]+) dB")
 THRESHOLD = -60.0  # anything quieter than this counts as silence
@@ -26,20 +28,45 @@ THRESHOLD = -60.0  # anything quieter than this counts as silence
 # Fixtures and helpers
 # ---------------------------------------------------------------------------
 
+
 def _clip(path, duration=12.0, frequency=300):
-    subprocess.run([
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=15:duration={}".format(duration),
-        "-f", "lavfi", "-i", "sine=frequency={}:sample_rate=44100,volume=0.4".format(frequency),
-        "-t", str(duration), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
-        str(path)], check=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=15:duration={}".format(duration),
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency={}:sample_rate=44100,volume=0.4".format(frequency),
+            "-t",
+            str(duration),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            str(path),
+        ],
+        check=True,
+    )
     return str(path)
 
 
 def _subs(path, segments):
-    payload = {"segments": [
-        {"start": start, "end": end, "text": text, "words": []}
-        for start, end, text in segments]}
+    payload = {
+        "segments": [
+            {"start": start, "end": end, "text": text, "words": []}
+            for start, end, text in segments
+        ]
+    }
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False)
     return str(path)
@@ -50,22 +77,55 @@ def _voice(folder, durations, start_index=1):
     made = []
     for index, duration in enumerate(durations, start=start_index):
         target = os.path.join(folder, "line{}.wav".format(index))
-        subprocess.run([
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency={}:sample_rate=44100,volume=0.5".format(
-                500 + index * 60),
-            "-t", str(duration), target], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency={}:sample_rate=44100,volume=0.5".format(
+                    500 + index * 60
+                ),
+                "-t",
+                str(duration),
+                target,
+            ],
+            check=True,
+        )
         made.append(target)
     return made
 
 
 def _mean_volume(path, start, end):
     """Mean volume (dBFS) of a time window — used to prove placement/fitting."""
-    proc = subprocess.run([
-        "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "info",
-        "-ss", "{:.3f}".format(start), "-t", "{:.3f}".format(max(0.05, end - start)),
-        "-i", path, "-vn", "-af", "volumedetect", "-f", "null", "-"],
-        capture_output=True, text=True, timeout=120)
+    proc = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "info",
+            "-ss",
+            "{:.3f}".format(start),
+            "-t",
+            "{:.3f}".format(max(0.05, end - start)),
+            "-i",
+            path,
+            "-vn",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     match = WINDOW_RE.search((proc.stderr or "") + (proc.stdout or ""))
     return float(match.group(1)) if match else -999.0
 
@@ -73,6 +133,7 @@ def _mean_volume(path, start, end):
 # ---------------------------------------------------------------------------
 # Provider layer
 # ---------------------------------------------------------------------------
+
 
 def test_registry_exposes_both_providers():
     names = tts_providers.provider_names()
@@ -88,8 +149,9 @@ def test_unknown_provider_fails_without_raising(tmp_path):
 
 
 def test_empty_text_is_refused(tmp_path):
-    result = tts_providers.synthesize("   ", str(tmp_path / "a.mp3"), provider="file",
-                                      voice=str(tmp_path))
+    result = tts_providers.synthesize(
+        "   ", str(tmp_path / "a.mp3"), provider="file", voice=str(tmp_path)
+    )
     assert result["ok"] is False
     assert "empty text" in result["error"]
 
@@ -112,8 +174,9 @@ def test_network_provider_opt_in_reaches_the_backend(tmp_path, monkeypatch):
 
 
 def test_file_provider_needs_a_folder(tmp_path):
-    result = tts_providers.synthesize("x", str(tmp_path / "a.wav"), provider="file",
-                                      voice=str(tmp_path / "missing"))
+    result = tts_providers.synthesize(
+        "x", str(tmp_path / "a.wav"), provider="file", voice=str(tmp_path / "missing")
+    )
     assert result["ok"] is False
     assert "folder" in result["error"]
 
@@ -121,12 +184,15 @@ def test_file_provider_needs_a_folder(tmp_path):
 def test_file_provider_consumes_files_in_order_then_exhausts(tmp_path):
     folder = tmp_path / "voices"
     _voice(str(folder), [1.0, 1.0])
-    first = tts_providers.synthesize("a", str(tmp_path / "1.wav"), provider="file",
-                                     voice=str(folder))
-    second = tts_providers.synthesize("b", str(tmp_path / "2.wav"), provider="file",
-                                      voice=str(folder))
-    third = tts_providers.synthesize("c", str(tmp_path / "3.wav"), provider="file",
-                                     voice=str(folder))
+    first = tts_providers.synthesize(
+        "a", str(tmp_path / "1.wav"), provider="file", voice=str(folder)
+    )
+    second = tts_providers.synthesize(
+        "b", str(tmp_path / "2.wav"), provider="file", voice=str(folder)
+    )
+    third = tts_providers.synthesize(
+        "c", str(tmp_path / "3.wav"), provider="file", voice=str(folder)
+    )
     assert first["ok"] and second["ok"]
     assert first["voice"] != second["voice"]
     assert third["ok"] is False
@@ -148,12 +214,16 @@ def test_file_provider_preserves_source_extension(tmp_path):
 # atempo fitting (the maths that keeps the dub on the timeline)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("ratio,expected", [
-    (1.0, ""),
-    (2.0, "atempo=2.0000"),
-    (0.5, "atempo=0.5000"),
-    (1.333, "atempo=1.3330"),
-])
+
+@pytest.mark.parametrize(
+    "ratio,expected",
+    [
+        (1.0, ""),
+        (2.0, "atempo=2.0000"),
+        (0.5, "atempo=0.5000"),
+        (1.333, "atempo=1.3330"),
+    ],
+)
 def test_atempo_filter_semantics(ratio, expected):
     chain, warnings = dubbing._atempo_filter(ratio)
     assert chain == expected
@@ -180,6 +250,7 @@ def test_atempo_rejects_a_zero_ratio():
 # Planning
 # ---------------------------------------------------------------------------
 
+
 def test_plan_reports_the_work(tmp_path):
     clip = _clip(tmp_path / "clip.mp4", 10)
     subs = _subs(tmp_path / "s.json", [(0.5, 3.0, "أهلاً"), (5.0, 8.0, "شكراً")])
@@ -191,10 +262,13 @@ def test_plan_reports_the_work(tmp_path):
     assert plan["duration"] == pytest.approx(10.0, abs=0.3)
 
 
-@pytest.mark.parametrize("kwargs,fragment", [
-    ({"provider": "nope"}, "unknown TTS provider"),
-    ({"mode": "sing"}, "mode must be"),
-])
+@pytest.mark.parametrize(
+    "kwargs,fragment",
+    [
+        ({"provider": "nope"}, "unknown TTS provider"),
+        ({"mode": "sing"}, "mode must be"),
+    ],
+)
 def test_plan_rejects_bad_configuration(tmp_path, kwargs, fragment):
     clip = _clip(tmp_path / "clip.mp4", 3)
     subs = _subs(tmp_path / "s.json", [(0.0, 1.0, "x")])
@@ -220,11 +294,14 @@ def test_plan_ignores_unusable_subtitle_entries(tmp_path):
 # Dubbing a clip — verified by measuring the actual output audio
 # ---------------------------------------------------------------------------
 
+
 def test_dub_clip_places_audio_in_the_subtitle_windows(tmp_path):
     clip = _clip(tmp_path / "clip.mp4", 12)
-    subs = _subs(tmp_path / "s.json", [(0.5, 3.5, "السطر الأول"), (5.0, 9.5, "السطر الثاني")])
+    subs = _subs(
+        tmp_path / "s.json", [(0.5, 3.5, "السطر الأول"), (5.0, 9.5, "السطر الثاني")]
+    )
     voices = tmp_path / "voices"
-    _voice(str(voices), [2.5, 4.0])          # both fit their windows
+    _voice(str(voices), [2.5, 4.0])  # both fit their windows
     out = str(tmp_path / "clip_dubbed.mp4")
 
     result = dubbing.dub_clip(clip, subs, out, provider="file", voice=str(voices))
@@ -250,7 +327,7 @@ def test_dub_clip_fits_audio_longer_than_its_window(tmp_path):
     clip = _clip(tmp_path / "clip.mp4", 12)
     subs = _subs(tmp_path / "s.json", [(0.5, 2.5, "طويل"), (5.0, 8.0, "الثاني")])
     voices = tmp_path / "voices"
-    _voice(str(voices), [6.0, 2.0])          # 6s into a 2s window → 3x
+    _voice(str(voices), [6.0, 2.0])  # 6s into a 2s window → 3x
     out = str(tmp_path / "clip_dubbed.mp4")
 
     result = dubbing.dub_clip(clip, subs, out, provider="file", voice=str(voices))
@@ -268,8 +345,15 @@ def test_dub_clip_mix_mode_keeps_the_original_bed(tmp_path):
     _voice(str(voices), [2.0])
     out = str(tmp_path / "clip_dubbed.mp4")
 
-    result = dubbing.dub_clip(clip, subs, out, provider="file", voice=str(voices),
-                              mode="mix", original_volume=0.2)
+    result = dubbing.dub_clip(
+        clip,
+        subs,
+        out,
+        provider="file",
+        voice=str(voices),
+        mode="mix",
+        original_volume=0.2,
+    )
     assert result["ok"] is True
     assert result["mode"] == "mix"
     # replace mode leaves this window silent; mix keeps the original tone audible
@@ -281,8 +365,9 @@ def test_dub_clip_fails_open_when_no_segment_can_be_synthesised(tmp_path):
     subs = _subs(tmp_path / "s.json", [(0.5, 2.0, "سطر")])
     out = str(tmp_path / "clip_dubbed.mp4")
 
-    result = dubbing.dub_clip(clip, subs, out, provider="file",
-                              voice=str(tmp_path / "empty-voices"))
+    result = dubbing.dub_clip(
+        clip, subs, out, provider="file", voice=str(tmp_path / "empty-voices")
+    )
     assert result["ok"] is False
     assert "no segment could be synthesised" in result["error"]
     assert not os.path.exists(out), "a failed dub must not leave a partial file"
@@ -292,11 +377,11 @@ def test_dub_clip_reports_partial_failures(tmp_path):
     clip = _clip(tmp_path / "clip.mp4", 10)
     subs = _subs(tmp_path / "s.json", [(0.5, 2.5, "أول"), (5.0, 8.0, "ثاني")])
     voices = tmp_path / "voices"
-    _voice(str(voices), [1.5])               # only one line available
+    _voice(str(voices), [1.5])  # only one line available
     out = str(tmp_path / "clip_dubbed.mp4")
 
     result = dubbing.dub_clip(clip, subs, out, provider="file", voice=str(voices))
-    assert result["ok"] is True               # partial success still ships a clip
+    assert result["ok"] is True  # partial success still ships a clip
     assert result["segments_dubbed"] == 1
     assert result["segments_failed"] == 1
     assert result["failures"][0]["index"] == 1
@@ -314,6 +399,7 @@ def test_dub_clip_rejects_unusable_subtitles_without_touching_the_clip(tmp_path)
 # ---------------------------------------------------------------------------
 # Project level + no gate bypass
 # ---------------------------------------------------------------------------
+
 
 def _project(tmp_path):
     project = tmp_path / "proj"
@@ -356,10 +442,14 @@ def test_dubbing_never_touches_the_publish_gate(tmp_path, monkeypatch):
     from scripts import upload_gate
 
     calls = []
-    monkeypatch.setattr(upload_gate, "check_clip",
-                        lambda *a, **k: calls.append("check_clip") or {"allowed": False})
-    monkeypatch.setattr(upload_gate, "gate_upload",
-                        lambda *a, **k: calls.append("gate_upload"))
+    monkeypatch.setattr(
+        upload_gate,
+        "check_clip",
+        lambda *a, **k: calls.append("check_clip") or {"allowed": False},
+    )
+    monkeypatch.setattr(
+        upload_gate, "gate_upload", lambda *a, **k: calls.append("gate_upload")
+    )
 
     project = _project(tmp_path)
     voices = tmp_path / "voices"

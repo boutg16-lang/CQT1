@@ -5,6 +5,7 @@ This module is intentionally dependency-free. It provides stage registration,
 dependency ordering, retry policy, cancellation, atomic state persistence and
 output validation hooks. Existing legacy checkpoint.json remains compatible.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 STATES = {"pending", "running", "retrying", "success", "failed", "cancelled"}
 
+
 @dataclass
 class Stage:
     name: str
@@ -28,17 +30,22 @@ class Stage:
     validator: Optional[Callable[[Any], bool]] = None
     retries: int = 0
 
+
 class CancellationToken:
     def __init__(self):
         self._cancelled = False
+
     def cancel(self):
         self._cancelled = True
+
     @property
     def cancelled(self):
         return self._cancelled
+
     def raise_if_cancelled(self):
         if self._cancelled:
             raise RuntimeError("pipeline cancelled")
+
 
 def fingerprint_files(paths):
     h = hashlib.sha256()
@@ -63,11 +70,14 @@ def _json_safe(value):
         json.dumps(value)
         return value
     except (TypeError, ValueError) as exc:
-        logger.debug("Pipeline stage result needs JSON fallback (%s).", type(exc).__name__)
+        logger.debug(
+            "Pipeline stage result needs JSON fallback (%s).", type(exc).__name__
+        )
     try:
         return json.loads(json.dumps(value, default=str, skipkeys=True))
     except (TypeError, ValueError):
         return repr(value)
+
 
 class PipelineEngine:
     def __init__(self, state_path, token=None, sleep=time.sleep):
@@ -84,22 +94,30 @@ class PipelineEngine:
                 state = json.load(f)
             if isinstance(state, dict):
                 return state
-            logger.warning("Pipeline state is not a JSON object; starting with empty state.")
+            logger.warning(
+                "Pipeline state is not a JSON object; starting with empty state."
+            )
         except FileNotFoundError:
             return empty_state
         except (OSError, UnicodeError, ValueError, TypeError) as exc:
-            logger.warning("Could not load pipeline state (%s); starting with empty state.",
-                           type(exc).__name__)
+            logger.warning(
+                "Could not load pipeline state (%s); starting with empty state.",
+                type(exc).__name__,
+            )
         return empty_state
 
     def register(self, name, action, deps=None, validator=None, retries=0):
         if name in self.stages:
             raise ValueError("duplicate stage: " + name)
-        self.stages[name] = Stage(name, list(deps or []), action, validator, max(0, int(retries)))
+        self.stages[name] = Stage(
+            name, list(deps or []), action, validator, max(0, int(retries))
+        )
 
     def _atomic_save(self):
         os.makedirs(os.path.dirname(os.path.abspath(self.state_path)), exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(self.state_path)), suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(os.path.abspath(self.state_path)), suffix=".tmp"
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self.state, f, ensure_ascii=False, indent=2, default=str)
@@ -111,21 +129,30 @@ class PipelineEngine:
                 try:
                     os.remove(tmp)
                 except OSError as exc:
-                    logger.debug("Could not remove temporary pipeline state (%s).",
-                                 type(exc).__name__)
+                    logger.debug(
+                        "Could not remove temporary pipeline state (%s).",
+                        type(exc).__name__,
+                    )
 
     def order(self):
         visiting, visited, out = set(), set(), []
+
         def visit(n):
-            if n in visiting: raise ValueError("dependency cycle at " + n)
-            if n in visited: return
-            if n not in self.stages: raise KeyError("unknown dependency: " + n)
+            if n in visiting:
+                raise ValueError("dependency cycle at " + n)
+            if n in visited:
+                return
+            if n not in self.stages:
+                raise KeyError("unknown dependency: " + n)
             visiting.add(n)
-            for d in self.stages[n].deps: visit(d)
+            for d in self.stages[n].deps:
+                visit(d)
             visiting.remove(n)
             visited.add(n)
             out.append(n)
-        for n in self.stages: visit(n)
+
+        for n in self.stages:
+            visit(n)
         return out
 
     def invalidate_downstream(self, changed):
@@ -142,10 +169,14 @@ class PipelineEngine:
         names = self.order()
         if targets:
             needed = set()
+
             def add(n):
                 needed.add(n)
-                for d in self.stages[n].deps: add(d)
-            for n in targets: add(n)
+                for d in self.stages[n].deps:
+                    add(d)
+
+            for n in targets:
+                add(n)
             names = [n for n in names if n in needed]
         results = {}
         for name in names:
@@ -161,16 +192,26 @@ class PipelineEngine:
                     raise RuntimeError(f"dependency not successful: {dep} -> {name}")
             for attempt in range(stage.retries + 1):
                 self.token.raise_if_cancelled()
-                rec.update({"status": "running" if attempt == 0 else "retrying",
-                            "attempt": attempt + 1, "started": time.time()})
+                rec.update(
+                    {
+                        "status": "running" if attempt == 0 else "retrying",
+                        "attempt": attempt + 1,
+                        "started": time.time(),
+                    }
+                )
                 self.state["updated"] = time.time()
                 self._atomic_save()
                 try:
                     result = stage.action(context, results)
                     if stage.validator and not stage.validator(result):
                         raise ValueError(f"output validation failed: {name}")
-                    rec.update({"status": "success", "finished": time.time(),
-                                "result": _json_safe(result)})
+                    rec.update(
+                        {
+                            "status": "success",
+                            "finished": time.time(),
+                            "result": _json_safe(result),
+                        }
+                    )
                     self.state["updated"] = time.time()
                     self._atomic_save()
                     results[name] = result
@@ -178,7 +219,7 @@ class PipelineEngine:
                 except Exception as exc:
                     rec.update({"error_type": type(exc).__name__, "error": str(exc)})
                     if attempt < stage.retries:
-                        self.sleep(min(30, 2 ** attempt))
+                        self.sleep(min(30, 2**attempt))
                     else:
                         rec.update({"status": "failed", "finished": time.time()})
                         self.state["updated"] = time.time()

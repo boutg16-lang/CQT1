@@ -1,4 +1,5 @@
 """Auditable local policy lexicon for YouTube safety screening."""
+
 from __future__ import annotations
 
 import hashlib
@@ -33,10 +34,14 @@ def db_path(project_folder: str | None = None, path: str | None = None) -> str:
         if os.path.basename(parent).lower() in {"virals", "oussama", "projects"}:
             return os.path.join(parent, DB_FILENAME)
         return os.path.join(project, DB_FILENAME)
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_FILENAME)
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_FILENAME
+    )
 
 
-def _connect(project_folder: str | None = None, path: str | None = None) -> sqlite3.Connection:
+def _connect(
+    project_folder: str | None = None, path: str | None = None
+) -> sqlite3.Connection:
     target = db_path(project_folder, path)
     os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
     connection = sqlite3.connect(target, timeout=10)
@@ -64,8 +69,12 @@ def _connect(project_folder: str | None = None, path: str | None = None) -> sqli
         updated_at TEXT NOT NULL,
         UNIQUE(normalized_term, lang, source)
     )""")
-    connection.execute("CREATE INDEX IF NOT EXISTS idx_policy_terms_lookup ON policy_terms(normalized_term, lang, active)")
-    connection.execute("CREATE VIRTUAL TABLE IF NOT EXISTS policy_terms_fts_v2 USING fts5(term, category, term_id UNINDEXED)")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_policy_terms_lookup ON policy_terms(normalized_term, lang, active)"
+    )
+    connection.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS policy_terms_fts_v2 USING fts5(term, category, term_id UNINDEXED)"
+    )
     connection.execute("""CREATE TABLE IF NOT EXISTS lexicon_meta (
         meta_key TEXT PRIMARY KEY,
         meta_value TEXT NOT NULL,
@@ -119,11 +128,24 @@ def _term_rows(terms):
 def _terms_fingerprint(rows) -> str:
     """Deterministic fingerprint of the exact term set stored in the DB."""
     digest = hashlib.sha256()
-    for row in sorted(rows, key=lambda r: "|".join((
-            r["normalized"], r["lang"], r["source"], r["severity"], r["category"]))):
-        digest.update("|".join((
-            row["normalized"], row["lang"], row["source"],
-            row["severity"], row["category"], row["term"])).encode("utf-8"))
+    for row in sorted(
+        rows,
+        key=lambda r: "|".join(
+            (r["normalized"], r["lang"], r["source"], r["severity"], r["category"])
+        ),
+    ):
+        digest.update(
+            "|".join(
+                (
+                    row["normalized"],
+                    row["lang"],
+                    row["source"],
+                    row["severity"],
+                    row["category"],
+                    row["term"],
+                )
+            ).encode("utf-8")
+        )
         digest.update(b"\n")
     return digest.hexdigest()
 
@@ -137,8 +159,9 @@ def _context_required(category: str) -> int:
     return int(category in {"hate_slur", "hate_dehumanize", "harassment", "profanity"})
 
 
-def sync_policy_db(project_folder: str | None = None, path: str | None = None,
-                   force: bool = False) -> dict[str, Any]:
+def sync_policy_db(
+    project_folder: str | None = None, path: str | None = None, force: bool = False
+) -> dict[str, Any]:
     """Materialize built-in and downloaded terms into an auditable SQLite DB.
 
     Incremental by default: when the term set (built-in + cached remote) is
@@ -162,21 +185,33 @@ def sync_policy_db(project_folder: str | None = None, path: str | None = None,
                 "SELECT meta_value FROM lexicon_meta WHERE meta_key='terms_fingerprint'"
             ).fetchone()
             count_row = connection.execute(
-                "SELECT COUNT(*) AS count FROM policy_terms WHERE active=1").fetchone()
-            if stored is not None and int(count_row["count"]) > 0 and stored["meta_value"] == fingerprint:
+                "SELECT COUNT(*) AS count FROM policy_terms WHERE active=1"
+            ).fetchone()
+            if (
+                stored is not None
+                and int(count_row["count"]) > 0
+                and stored["meta_value"] == fingerprint
+            ):
                 connection.execute(
                     "INSERT INTO lexicon_meta (meta_key, meta_value, updated_at) "
                     "VALUES ('last_synced_at', ?, ?) "
                     "ON CONFLICT(meta_key) DO UPDATE SET meta_value=excluded.meta_value, updated_at=excluded.updated_at",
-                    (now, now))
+                    (now, now),
+                )
                 connection.commit()
-                return {"database": db_target, "terms_seen": len(rows),
-                        "sources": len(POLICY_SOURCES), "updated_at": now,
-                        "synced": False, "reason": "unchanged"}
+                return {
+                    "database": db_target,
+                    "terms_seen": len(rows),
+                    "sources": len(POLICY_SOURCES),
+                    "updated_at": now,
+                    "synced": False,
+                    "reason": "unchanged",
+                }
         inserted = 0
         for row in rows:
             term_id = _term_id(row["term"], row["lang"], row["source"])
-            connection.execute("""INSERT INTO policy_terms
+            connection.execute(
+                """INSERT INTO policy_terms
                 (term_id, term, normalized_term, lang, severity, category, source,
                  source_version, context_required, active, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -185,35 +220,64 @@ def sync_policy_db(project_folder: str | None = None, path: str | None = None,
                     category=excluded.category, source_version=excluded.source_version,
                     context_required=excluded.context_required, active=1,
                     updated_at=excluded.updated_at""",
-                (term_id, row["term"], row["normalized"], row["lang"],
-                 row["severity"], row["category"], row["source"], row["version"],
-                 _context_required(row["category"]), now))
+                (
+                    term_id,
+                    row["term"],
+                    row["normalized"],
+                    row["lang"],
+                    row["severity"],
+                    row["category"],
+                    row["source"],
+                    row["version"],
+                    _context_required(row["category"]),
+                    now,
+                ),
+            )
             inserted += 1
         for source_id, url in POLICY_SOURCES.items():
             page_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
-            connection.execute("""INSERT INTO policy_sources
+            connection.execute(
+                """INSERT INTO policy_sources
                 (source_id, url, page_hash, last_checked, notes)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(source_id) DO UPDATE SET
                     url=excluded.url, page_hash=excluded.page_hash,
                     last_checked=excluded.last_checked""",
-                (source_id, url, page_hash, now, "Official policy reference; not a word list."))
+                (
+                    source_id,
+                    url,
+                    page_hash,
+                    now,
+                    "Official policy reference; not a word list.",
+                ),
+            )
         connection.execute("DELETE FROM policy_terms_fts_v2")
-        connection.execute("INSERT INTO policy_terms_fts_v2(term, category, term_id) SELECT term, category, term_id FROM policy_terms WHERE active=1")
+        connection.execute(
+            "INSERT INTO policy_terms_fts_v2(term, category, term_id) SELECT term, category, term_id FROM policy_terms WHERE active=1"
+        )
         connection.execute(
             "INSERT INTO lexicon_meta (meta_key, meta_value, updated_at) VALUES (?, ?, ?) "
             "ON CONFLICT(meta_key) DO UPDATE SET meta_value=excluded.meta_value, updated_at=excluded.updated_at",
-            ("terms_fingerprint", fingerprint, now))
+            ("terms_fingerprint", fingerprint, now),
+        )
         connection.commit()
-        return {"database": db_target, "terms_seen": inserted,
-                "sources": len(POLICY_SOURCES), "updated_at": now,
-                "synced": True, "reason": "changed"}
+        return {
+            "database": db_target,
+            "terms_seen": inserted,
+            "sources": len(POLICY_SOURCES),
+            "updated_at": now,
+            "synced": True,
+            "reason": "changed",
+        }
     finally:
         connection.close()
 
 
-def run_doctor(project_folder: str | None = None, path: str | None = None,
-               terms: list[Any] | None = None) -> dict[str, Any]:
+def run_doctor(
+    project_folder: str | None = None,
+    path: str | None = None,
+    terms: list[Any] | None = None,
+) -> dict[str, Any]:
     """Validate the policy knowledge base for data-quality problems.
 
     Checks (all read-only):
@@ -228,6 +292,7 @@ def run_doctor(project_folder: str | None = None, path: str | None = None,
     """
     if terms is None:
         from scripts import safety_filter
+
         terms = list(safety_filter.BLOCKLIST)
         terms.extend(safety_filter.load_remote_terms(project_folder))
     problems: list[str] = []
@@ -245,8 +310,15 @@ def run_doctor(project_folder: str | None = None, path: str | None = None,
                 problems.append(
                     "conflicting duplicate {!r} (lang={}, source={}): "
                     "{}={} vs {}={}".format(
-                        row["term"], row["lang"], row["source"],
-                        field, previous[field], field, row[field]))
+                        row["term"],
+                        row["lang"],
+                        row["source"],
+                        field,
+                        previous[field],
+                        field,
+                        row[field],
+                    )
+                )
     checks = {
         "terms": row_count,
         "unique": len(seen),
@@ -258,15 +330,25 @@ def run_doctor(project_folder: str | None = None, path: str | None = None,
         try:
             connection = _connect(project_folder, path)
             try:
-                active = int(connection.execute(
-                    "SELECT COUNT(*) AS count FROM policy_terms WHERE active=1").fetchone()["count"])
-                fts = int(connection.execute(
-                    "SELECT COUNT(*) AS count FROM policy_terms_fts_v2").fetchone()["count"])
+                active = int(
+                    connection.execute(
+                        "SELECT COUNT(*) AS count FROM policy_terms WHERE active=1"
+                    ).fetchone()["count"]
+                )
+                fts = int(
+                    connection.execute(
+                        "SELECT COUNT(*) AS count FROM policy_terms_fts_v2"
+                    ).fetchone()["count"]
+                )
                 checks["database"] = db_target
                 checks["active_terms"] = active
                 checks["fts_rows"] = fts
                 if active != fts:
-                    problems.append("FTS index out of sync: {} active terms vs {} FTS rows".format(active, fts))
+                    problems.append(
+                        "FTS index out of sync: {} active terms vs {} FTS rows".format(
+                            active, fts
+                        )
+                    )
             finally:
                 connection.close()
         except Exception:  # database may exist but be corrupt — report, don't crash
@@ -282,7 +364,9 @@ def run_doctor(project_folder: str | None = None, path: str | None = None,
     return checks
 
 
-def load_terms(project_folder: str | None = None, path: str | None = None, sync: bool = True) -> list[dict[str, Any]]:
+def load_terms(
+    project_folder: str | None = None, path: str | None = None, sync: bool = True
+) -> list[dict[str, Any]]:
     if sync:
         try:
             sync_policy_db(project_folder, path)
@@ -298,12 +382,17 @@ def load_terms(project_folder: str | None = None, path: str | None = None, sync:
         connection.close()
 
 
-def search_terms(query: str, project_folder: str | None = None, path: str | None = None) -> list[dict[str, Any]]:
+def search_terms(
+    query: str, project_folder: str | None = None, path: str | None = None
+) -> list[dict[str, Any]]:
     connection = _connect(project_folder, path)
     try:
-        rows = connection.execute("""SELECT policy_terms.term, policy_terms.lang, policy_terms.severity, policy_terms.category, policy_terms.source
+        rows = connection.execute(
+            """SELECT policy_terms.term, policy_terms.lang, policy_terms.severity, policy_terms.category, policy_terms.source
             FROM policy_terms_fts_v2 JOIN policy_terms ON policy_terms_fts_v2.term_id=policy_terms.term_id
-            WHERE policy_terms_fts_v2 MATCH ? LIMIT 50""", (query,)).fetchall()
+            WHERE policy_terms_fts_v2 MATCH ? LIMIT 50""",
+            (query,),
+        ).fetchall()
         return [dict(row) for row in rows]
     finally:
         connection.close()
@@ -311,7 +400,10 @@ def search_terms(query: str, project_folder: str | None = None, path: str | None
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    parser = argparse.ArgumentParser(description="Build and inspect the local policy lexicon")
+
+    parser = argparse.ArgumentParser(
+        description="Build and inspect the local policy lexicon"
+    )
     parser.add_argument("--project", default=None)
     parser.add_argument("--db", default=None)
     parser.add_argument("--sync", action="store_true")
@@ -320,12 +412,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--search", default=None)
     args = parser.parse_args(argv)
     if args.doctor:
-        print(json.dumps(run_doctor(args.project, args.db), ensure_ascii=False, indent=2))
+        print(
+            json.dumps(run_doctor(args.project, args.db), ensure_ascii=False, indent=2)
+        )
         return 0
     if args.sync or not args.search:
-        print(json.dumps(sync_policy_db(args.project, args.db, force=args.force_sync), ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                sync_policy_db(args.project, args.db, force=args.force_sync),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     if args.search:
-        print(json.dumps(search_terms(args.search, args.project, args.db), ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                search_terms(args.search, args.project, args.db),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     return 0
 
 

@@ -17,10 +17,20 @@ def test_date_range_shape():
 
 
 def test_format_summary():
-    s = {"days": 28, "start": "2026-07-13", "end": "2026-08-09",
-         "metrics": {"views": 1234567, "estimatedMinutesWatched": 98765,
-                     "averageViewDuration": 23.4, "likes": 12345,
-                     "comments": 678, "shares": 99, "subscribersGained": 4321}}
+    s = {
+        "days": 28,
+        "start": "2026-07-13",
+        "end": "2026-08-09",
+        "metrics": {
+            "views": 1234567,
+            "estimatedMinutesWatched": 98765,
+            "averageViewDuration": 23.4,
+            "likes": 12345,
+            "comments": 678,
+            "shares": 99,
+            "subscribersGained": 4321,
+        },
+    }
     out = analytics.format_summary(s)
     assert "1.2M" in out
     assert "98.8k" in out
@@ -28,9 +38,18 @@ def test_format_summary():
 
 
 def test_format_top():
-    t = {"days": 28, "top": [
-        {"video_id": "x", "title": "My Short", "views": 500000,
-         "watch_minutes": 12000.0, "avg_duration_s": 21.5}]}
+    t = {
+        "days": 28,
+        "top": [
+            {
+                "video_id": "x",
+                "title": "My Short",
+                "views": 500000,
+                "watch_minutes": 12000.0,
+                "avg_duration_s": 21.5,
+            }
+        ],
+    }
     out = analytics.format_top(t)
     assert "My Short" in out
     assert "500.0k" in out
@@ -69,10 +88,12 @@ class FakeAnalyticsService:
 
 
 def test_fetch_summary_builds_metrics():
-    svc = FakeAnalyticsService({
-        "columnHeaders": [{"name": "views"}, {"name": "likes"}],
-        "rows": [[100, 5]],
-    })
+    svc = FakeAnalyticsService(
+        {
+            "columnHeaders": [{"name": "views"}, {"name": "likes"}],
+            "rows": [[100, 5]],
+        }
+    )
     summary = analytics.fetch_summary(svc, days=28)
     assert summary["metrics"]["views"] == 100
     assert summary["metrics"]["likes"] == 5
@@ -87,12 +108,17 @@ def test_fetch_top_videos_empty():
 
 
 def test_fetch_top_videos_with_titles():
-    svc = FakeAnalyticsService({
-        "columnHeaders": [{"name": "video"}, {"name": "views"},
-                          {"name": "estimatedMinutesWatched"},
-                          {"name": "averageViewDuration"}],
-        "rows": [["vid1", 200, 300, 15.0]],
-    })
+    svc = FakeAnalyticsService(
+        {
+            "columnHeaders": [
+                {"name": "video"},
+                {"name": "views"},
+                {"name": "estimatedMinutesWatched"},
+                {"name": "averageViewDuration"},
+            ],
+            "rows": [["vid1", 200, 300, 15.0]],
+        }
+    )
 
     class FakeYT:
         def videos(self):
@@ -100,8 +126,9 @@ def test_fetch_top_videos_with_titles():
 
         def list(self, **kwargs):
             assert kwargs["part"] == "snippet"
-            return FakeResponse({"items": [
-                {"id": "vid1", "snippet": {"title": "Great Short"}}]})
+            return FakeResponse(
+                {"items": [{"id": "vid1", "snippet": {"title": "Great Short"}}]}
+            )
 
     top = analytics.fetch_top_videos(svc, FakeYT(), days=7, limit=5)
     assert top["top"][0]["title"] == "Great Short"
@@ -109,11 +136,16 @@ def test_fetch_top_videos_with_titles():
 
 
 def test_fetch_trends():
-    svc = FakeAnalyticsService({
-        "columnHeaders": [{"name": "day"}, {"name": "views"},
-                          {"name": "estimatedMinutesWatched"}],
-        "rows": [["2026-08-01", 10, 20.0], ["2026-08-02", 30, 60.0]],
-    })
+    svc = FakeAnalyticsService(
+        {
+            "columnHeaders": [
+                {"name": "day"},
+                {"name": "views"},
+                {"name": "estimatedMinutesWatched"},
+            ],
+            "rows": [["2026-08-01", 10, 20.0], ["2026-08-02", 30, 60.0]],
+        }
+    )
     trends = analytics.fetch_trends(svc, days=7)
     assert len(trends["points"]) == 2
     assert trends["points"][1]["views"] == 30

@@ -34,18 +34,20 @@ _ARABIC_ORTHOGRAPHY_TABLE = {
     0x0624: 0x0648,  # ؤ hamza on waw   -> و
     0x0626: 0x064A,  # ئ hamza on yaa   -> ي
     0x0629: 0x0647,  # ة ta marbuta     -> ه
-    0x0640: None,    # tatweel (stretch mark) — deleted
-    0x0670: None,    # superscript alef — deleted
+    0x0640: None,  # tatweel (stretch mark) — deleted
+    0x0670: None,  # superscript alef — deleted
 }
 _ARABIC_ORTHOGRAPHY_TABLE.update(dict.fromkeys(range(0x064B, 0x0660)))
 
 # Arabic-Indic / Persian digits + Arabic decimal marks → ASCII.
-_ARABIC_NUM_TRANSLATION = str.maketrans({
-    **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
-    **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
-    0x066B: ".",  # ٫ Arabic decimal separator
-    0x066C: ".",  # ٬ Arabic thousands separator (used as decimal by LLMs)
-})
+_ARABIC_NUM_TRANSLATION = str.maketrans(
+    {
+        **{ord(src): dst for src, dst in zip("٠١٢٣٤٥٦٧٨٩", "0123456789", strict=False)},
+        **{ord(src): dst for src, dst in zip("۰۱۲۳۴۵۶۷۸۹", "0123456789", strict=False)},
+        0x066B: ".",  # ٫ Arabic decimal separator
+        0x066C: ".",  # ٬ Arabic thousands separator (used as decimal by LLMs)
+    }
+)
 
 
 def normalize_arabic_orthography(text) -> str:
@@ -73,7 +75,8 @@ def normalized_match_text(value) -> str:
     to the historical pipeline.
     """
     return re.sub(
-        r"[^\w\s]", "",
+        r"[^\w\s]",
+        "",
         normalize_arabic_orthography(str(value or "").lower()),
     ).strip()
 
@@ -94,10 +97,22 @@ _STEM_PREFIXES = ("وال", "بال", "كال", "فال", "لل", "ال", "و", 
 # 4-letter stem so a masdar like «إتقان» is not reduced to «اتق» and stops
 # matching «وإتقانها».
 _STEM_SUFFIXES = (
-    ("هما", 3), ("كما", 3), ("ها", 3), ("هم", 3), ("هن", 3),
-    ("كم", 3), ("كن", 3), ("نا", 3), ("ني", 3),
-    ("ات", 4), ("ون", 4), ("ين", 4), ("ان", 4),
-    ("ه", 3), ("ي", 3), ("ك", 3),
+    ("هما", 3),
+    ("كما", 3),
+    ("ها", 3),
+    ("هم", 3),
+    ("هن", 3),
+    ("كم", 3),
+    ("كن", 3),
+    ("نا", 3),
+    ("ني", 3),
+    ("ات", 4),
+    ("ون", 4),
+    ("ين", 4),
+    ("ان", 4),
+    ("ه", 3),
+    ("ي", 3),
+    ("ك", 3),
 )
 _ARABIC_LETTER_RE = re.compile(r"[\u0600-\u06FF]")
 
@@ -113,19 +128,18 @@ def light_stem(word) -> str:
         return text
     for prefix in _STEM_PREFIXES:
         if text.startswith(prefix) and len(text) - len(prefix) >= 4:
-            text = text[len(prefix):]
+            text = text[len(prefix) :]
             break
     for suffix, minimum in _STEM_SUFFIXES:
         if text.endswith(suffix) and len(text) - len(suffix) >= minimum:
-            text = text[:-len(suffix)]
+            text = text[: -len(suffix)]
             break
     return text
 
 
 def stemmed_tokens(text) -> list[str]:
     """Stems of the word tokens in ``text`` (comparison only)."""
-    return [light_stem(token) for token in normalized_match_text(text).split()
-            if token]
+    return [light_stem(token) for token in normalized_match_text(text).split() if token]
 
 
 def collapse_spaces(text) -> str:
@@ -148,8 +162,8 @@ def collapse_spaces(text) -> str:
 #
 # Only COMPARISON/SEARCH ever change digits or letters; DISPLAY is byte-exact.
 
-RTL_MARK = "\u200f"           # RIGHT-TO-LEFT MARK
-LTR_MARK = "\u200e"           # LEFT-TO-RIGHT MARK
+RTL_MARK = "\u200f"  # RIGHT-TO-LEFT MARK
+LTR_MARK = "\u200e"  # LEFT-TO-RIGHT MARK
 _FIRST_STRONG_AR_RE = re.compile(r"[\u0600-\u06FF\u0750-\u077F]")
 
 
@@ -200,7 +214,7 @@ def language_profile(text) -> dict:
             continue
         if _FIRST_STRONG_AR_RE.match(char):
             arabic += 1
-        elif char.isascii() or "\u00C0" <= char <= "\u024F":
+        elif char.isascii() or "\u00c0" <= char <= "\u024f":
             latin += 1
     total = arabic + latin
     if total == 0:

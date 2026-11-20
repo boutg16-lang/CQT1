@@ -30,6 +30,7 @@ def _factors(value=80.0):
 # 1. Empty transcript must not crash process_segments on a raw min()
 # ---------------------------------------------------------------------------
 
+
 def test_process_segments_empty_transcript_returns_empty_result():
     result = cvs.process_segments([], [], 10, 60)
     assert result == {"segments": []}
@@ -45,15 +46,27 @@ def test_process_segments_empty_transcript_with_raw_segments_returns_empty():
 # 2. Semantic repetition penalty must move selection_score (ranking + dedup)
 # ---------------------------------------------------------------------------
 
+
 def test_semantic_repetition_penalty_lowers_selection_score():
     weights = clip_scoring.load_selection_weights()
-    first = {"title": "first", "start_time": 0.0, "end_time": 30.0,
-             "transcript_text": _IDEA_A, "score_breakdown": _factors()}
-    second = {"title": "second", "start_time": 200.0, "end_time": 230.0,
-              "transcript_text": _IDEA_B, "score_breakdown": _factors()}
+    first = {
+        "title": "first",
+        "start_time": 0.0,
+        "end_time": 30.0,
+        "transcript_text": _IDEA_A,
+        "score_breakdown": _factors(),
+    }
+    second = {
+        "title": "second",
+        "start_time": 200.0,
+        "end_time": 230.0,
+        "transcript_text": _IDEA_B,
+        "score_breakdown": _factors(),
+    }
     for candidate in (first, second):
         candidate["selection_score"] = clip_scoring.compute_final_score(
-            candidate["score_breakdown"], weights)
+            candidate["score_breakdown"], weights
+        )
 
     before = second["selection_score"]
     cvs._apply_semantic_repetition_penalties([first, second], weights)
@@ -63,34 +76,54 @@ def test_semantic_repetition_penalty_lowers_selection_score():
     # The recomputed score genuinely reflects the penalty (not just the
     # stored breakdown) so ranking/dedup/editorial floor can act on it.
     assert second["selection_score"] == clip_scoring.compute_final_score(
-        second["score_breakdown"], weights)
+        second["score_breakdown"], weights
+    )
     assert second["selection_score"] < before
     assert second["selection_score"] < first["selection_score"]
 
 
 def test_semantic_repetition_penalty_preserves_performance_nudge():
     weights = clip_scoring.load_selection_weights()
-    first = {"title": "first", "start_time": 0.0, "end_time": 30.0,
-             "transcript_text": _IDEA_A, "score_breakdown": _factors()}
-    second = {"title": "second", "start_time": 200.0, "end_time": 230.0,
-              "transcript_text": _IDEA_B, "score_breakdown": _factors()}
+    first = {
+        "title": "first",
+        "start_time": 0.0,
+        "end_time": 30.0,
+        "transcript_text": _IDEA_A,
+        "score_breakdown": _factors(),
+    }
+    second = {
+        "title": "second",
+        "start_time": 200.0,
+        "end_time": 230.0,
+        "transcript_text": _IDEA_B,
+        "score_breakdown": _factors(),
+    }
     for candidate in (first, second):
         candidate["selection_score"] = round(
-            clip_scoring.compute_final_score(candidate["score_breakdown"], weights) + 3.0, 1)
+            clip_scoring.compute_final_score(candidate["score_breakdown"], weights)
+            + 3.0,
+            1,
+        )
 
     cvs._apply_semantic_repetition_penalties([first, second], weights)
 
     assert second["selection_score"] == round(
-        clip_scoring.compute_final_score(second["score_breakdown"], weights) + 3.0, 1)
+        clip_scoring.compute_final_score(second["score_breakdown"], weights) + 3.0, 1
+    )
 
 
 def test_no_semantic_penalty_leaves_score_untouched():
     weights = clip_scoring.load_selection_weights()
-    unique = {"title": "unique", "start_time": 0.0, "end_time": 30.0,
-              "transcript_text": "البرمجة مهنة المستقبل تعلم لغة واحدة بعمق شديد",
-              "score_breakdown": _factors()}
+    unique = {
+        "title": "unique",
+        "start_time": 0.0,
+        "end_time": 30.0,
+        "transcript_text": "البرمجة مهنة المستقبل تعلم لغة واحدة بعمق شديد",
+        "score_breakdown": _factors(),
+    }
     unique["selection_score"] = clip_scoring.compute_final_score(
-        unique["score_breakdown"], weights)
+        unique["score_breakdown"], weights
+    )
     before = unique["selection_score"]
     cvs._apply_semantic_repetition_penalties([unique], weights)
     assert unique["selection_score"] == before
@@ -99,6 +132,7 @@ def test_no_semantic_penalty_leaves_score_untouched():
 # ---------------------------------------------------------------------------
 # 3. Legacy factor alias must actually be picked up
 # ---------------------------------------------------------------------------
+
 
 def test_legacy_completion_score_alias_is_applied():
     legacy = clip_scoring.compute_final_score({"completion_score": 100.0})
@@ -112,6 +146,7 @@ def test_legacy_completion_score_alias_is_applied():
 # 4. Opening-filler detection must ignore trailing punctuation
 # ---------------------------------------------------------------------------
 
+
 def test_opening_filler_detection_ignores_punctuation():
     punctuated = hook_analyzer.analyze_opening("يعني، طيب، هذا الموضوع مهم جدا")
     plain = hook_analyzer.analyze_opening("يعني طيب هذا الموضوع مهم جدا")
@@ -120,7 +155,8 @@ def test_opening_filler_detection_ignores_punctuation():
     assert punctuated["trim_words"] == plain["trim_words"]
     assert punctuated["hook_score"] == plain["hook_score"]
     assert hook_analyzer._norm_word(punctuated["filler_word"]) == (
-        hook_analyzer._norm_word(plain["filler_word"]))
+        hook_analyzer._norm_word(plain["filler_word"])
+    )
 
 
 def test_mid_thought_marker_detection_ignores_punctuation():
@@ -138,27 +174,48 @@ def test_question_hook_detection_ignores_punctuation():
 # 5. editor_review honours its "NEVER raises" contract
 # ---------------------------------------------------------------------------
 
+
 def test_editor_review_segments_never_raises_on_bad_duration():
-    segment = {"title": "T", "start_time": 0.0, "end_time": 20.0,
-               "duration": "abc", "score": 90, "transcript_text": "نص"}
+    segment = {
+        "title": "T",
+        "start_time": 0.0,
+        "end_time": 20.0,
+        "duration": "abc",
+        "score": 90,
+        "transcript_text": "نص",
+    }
     result = editor_review.editor_review_segments([segment], lambda prompt: "{}")
     assert result["summary"]["candidates"] == 1
     assert result["summary"]["errors"] == []
 
 
 def test_editor_review_segments_never_raises_on_bad_score():
-    segment = {"title": "T", "start_time": 0.0, "end_time": 20.0,
-               "duration": 20.0, "score": "not-a-number", "transcript_text": "نص"}
+    segment = {
+        "title": "T",
+        "start_time": 0.0,
+        "end_time": 20.0,
+        "duration": 20.0,
+        "score": "not-a-number",
+        "transcript_text": "نص",
+    }
     result = editor_review.editor_review_segments([segment], lambda prompt: "{}")
     assert result["summary"]["candidates"] == 1
 
 
 def test_apply_editor_reviews_handles_none_trim_timestamps():
-    segments = [{"title": "T", "start_time": 0.0, "end_time": 20.0,
-                 "duration": 20.0, "score": 90}]
+    segments = [
+        {
+            "title": "T",
+            "start_time": 0.0,
+            "end_time": 20.0,
+            "duration": 20.0,
+            "score": 90,
+        }
+    ]
     result = editor_review.apply_editor_reviews(
-        segments, [{"id": "c0", "verdict": "trim",
-                    "trim_start": None, "trim_end": None}])
+        segments,
+        [{"id": "c0", "verdict": "trim", "trim_start": None, "trim_end": None}],
+    )
     entry = result["segments"][0]
     # Degrades to the original window instead of raising a TypeError.
     assert entry["start_time"] == 0.0
@@ -166,22 +223,37 @@ def test_apply_editor_reviews_handles_none_trim_timestamps():
 
 
 def test_apply_editor_reviews_coerces_string_trim_timestamps():
-    segments = [{"title": "T", "start_time": 0.0, "end_time": 30.0,
-                 "duration": 30.0, "score": 90}]
+    segments = [
+        {
+            "title": "T",
+            "start_time": 0.0,
+            "end_time": 30.0,
+            "duration": 30.0,
+            "score": 90,
+        }
+    ]
     result = editor_review.apply_editor_reviews(
-        segments, [{"id": "c0", "verdict": "trim",
-                    "trim_start": "5", "trim_end": "28"}])
+        segments, [{"id": "c0", "verdict": "trim", "trim_start": "5", "trim_end": "28"}]
+    )
     entry = result["segments"][0]
     assert entry["start_time"] == 5.0
     assert entry["end_time"] == 28.0
 
 
 def test_apply_editor_reviews_clamps_garbage_trim_without_raising():
-    segments = [{"title": "T", "start_time": 0.0, "end_time": 20.0,
-                 "duration": "bad", "score": 90}]
+    segments = [
+        {
+            "title": "T",
+            "start_time": 0.0,
+            "end_time": 20.0,
+            "duration": "bad",
+            "score": 90,
+        }
+    ]
     result = editor_review.apply_editor_reviews(
-        segments, [{"id": "c0", "verdict": "trim",
-                    "trim_start": "junk", "trim_end": object()}])
+        segments,
+        [{"id": "c0", "verdict": "trim", "trim_start": "junk", "trim_end": object()}],
+    )
     assert result["summary"]["reviewed"] == 1
 
 
@@ -189,10 +261,10 @@ def test_apply_editor_reviews_clamps_garbage_trim_without_raising():
 # 6. deduplicate_segments sort key must survive malformed candidates
 # ---------------------------------------------------------------------------
 
+
 def test_deduplicate_segments_skips_non_dict_entries():
     segments = [
-        {"title": "keep", "start_time": 0.0, "end_time": 10.0,
-         "selection_score": 90},
+        {"title": "keep", "start_time": 0.0, "end_time": 10.0, "selection_score": 90},
         "junk",
         None,
     ]
@@ -202,10 +274,13 @@ def test_deduplicate_segments_skips_non_dict_entries():
 
 def test_deduplicate_segments_tolerates_non_numeric_score():
     segments = [
-        {"title": "bad", "start_time": 0.0, "end_time": 10.0,
-         "selection_score": "abc"},
-        {"title": "good", "start_time": 100.0, "end_time": 110.0,
-         "selection_score": 90},
+        {"title": "bad", "start_time": 0.0, "end_time": 10.0, "selection_score": "abc"},
+        {
+            "title": "good",
+            "start_time": 100.0,
+            "end_time": 110.0,
+            "selection_score": 90,
+        },
     ]
     kept = cvs.deduplicate_segments(segments)
     assert len(kept) == 2

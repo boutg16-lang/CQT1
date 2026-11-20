@@ -44,8 +44,15 @@ def _box_diag(box: Sequence[float]) -> float:
 class _Track:
     """Internal per-face state."""
 
-    __slots__ = ("id", "bbox", "center", "velocity", "missing_cycles",
-                 "last_frame", "born_frame")
+    __slots__ = (
+        "id",
+        "bbox",
+        "center",
+        "velocity",
+        "missing_cycles",
+        "last_frame",
+        "born_frame",
+    )
 
     def __init__(self, track_id: int, bbox, frame_index: int, velocity=None):
         self.id = track_id
@@ -72,8 +79,10 @@ class _Track:
             dt = 1.0
         else:
             dt = max(0.0, float(at_frame) - float(self.last_frame))
-        return (self.center[0] + self.velocity[0] * dt,
-                self.center[1] + self.velocity[1] * dt)
+        return (
+            self.center[0] + self.velocity[0] * dt,
+            self.center[1] + self.velocity[1] * dt,
+        )
 
 
 class FaceTracker:
@@ -107,14 +116,18 @@ class FaceTracker:
         EMA factor for the per-track velocity estimate (0 = no prediction).
     """
 
-    def __init__(self, match_gate: float = 0.35,
-                 max_missing_cycles: int = 3, velocity_alpha: float = 0.4,
-                 max_missing_frames: Optional[int] = None):
+    def __init__(
+        self,
+        match_gate: float = 0.35,
+        max_missing_cycles: int = 3,
+        velocity_alpha: float = 0.4,
+        max_missing_frames: Optional[int] = None,
+    ):
         self.match_gate = max(0.01, float(match_gate))
         self.max_missing_cycles = max(0, int(max_missing_cycles))
         self.max_missing_frames = (
-            None if max_missing_frames is None
-            else max(0, int(max_missing_frames)))
+            None if max_missing_frames is None else max(0, int(max_missing_frames))
+        )
         self.velocity_alpha = max(0.0, min(0.95, float(velocity_alpha)))
         self._tracks = {}  # id -> _Track
         self._next_id = 0
@@ -127,7 +140,9 @@ class FaceTracker:
         self._next_id = 0
         self.last_ids = []
 
-    def update(self, frame_index: int, boxes: Sequence[Sequence[float]]) -> List[Optional[int]]:
+    def update(
+        self, frame_index: int, boxes: Sequence[Sequence[float]]
+    ) -> List[Optional[int]]:
         """Match ``boxes`` against the alive tracks and update state.
 
         Returns a list of track IDs aligned to ``boxes`` (``None`` marks a
@@ -137,8 +152,11 @@ class FaceTracker:
         """
         self.frame_index = int(frame_index)
         boxes = [list(b[:4]) for b in (boxes or [])]
-        alive = {tid: t for tid, t in self._tracks.items()
-                 if t.missing_cycles <= self.max_missing_cycles}
+        alive = {
+            tid: t
+            for tid, t in self._tracks.items()
+            if t.missing_cycles <= self.max_missing_cycles
+        }
 
         matched_track_ids = set()
         assignment = [None] * len(boxes)
@@ -178,8 +196,10 @@ class FaceTracker:
                 vx = (new_center[0] - track.center[0]) / dt
                 vy = (new_center[1] - track.center[1]) / dt
                 a = self.velocity_alpha
-                track.velocity = (a * vx + (1 - a) * track.velocity[0],
-                                  a * vy + (1 - a) * track.velocity[1])
+                track.velocity = (
+                    a * vx + (1 - a) * track.velocity[0],
+                    a * vy + (1 - a) * track.velocity[1],
+                )
             track.bbox = box
             track.center = new_center
             track.missing_cycles = 0
@@ -231,8 +251,8 @@ class FaceTracker:
         keyed = sorted(
             range(len(ids)),
             key=lambda i: (
-                0 if ids[i] is not None else 1,          # known faces first
-                ids[i] if ids[i] is not None else 0,     # then by ID
+                0 if ids[i] is not None else 1,  # known faces first
+                ids[i] if ids[i] is not None else 0,  # then by ID
                 fallback_order.index(i) if i in fallback_order else i,
             ),
         )
@@ -249,11 +269,13 @@ class FaceTracker:
         out = []
         for tid in sorted(self._tracks):
             t = self._tracks[tid]
-            out.append({
-                "id": tid,
-                "bbox": [round(v, 1) for v in t.bbox],
-                "missing_cycles": t.missing_cycles,
-                "last_frame": t.last_frame,
-                "born_frame": t.born_frame,
-            })
+            out.append(
+                {
+                    "id": tid,
+                    "bbox": [round(v, 1) for v in t.bbox],
+                    "missing_cycles": t.missing_cycles,
+                    "last_frame": t.last_frame,
+                    "born_frame": t.born_frame,
+                }
+            )
         return out

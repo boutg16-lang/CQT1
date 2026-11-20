@@ -26,6 +26,7 @@ def _image(w, h, color=(200, 30, 30)):
 # Fonts
 # ---------------------------------------------------------------------------
 
+
 def test_font_path_existing_and_missing():
     assert tg._font_path("Cairo-Bold.ttf").endswith("Cairo-Bold.ttf")
     assert tg._font_path("No-Such-Font.ttf") == ""
@@ -49,6 +50,7 @@ def test_load_font_no_pil_returns_none(monkeypatch):
 # ---------------------------------------------------------------------------
 # _cover_crop
 # ---------------------------------------------------------------------------
+
 
 def test_cover_crop_already_16_9_keeps_whole_frame():
     cropped = tg._cover_crop(_image(1920, 1080))
@@ -93,6 +95,7 @@ def test_cover_crop_clamps_to_image_bounds():
 # _wrap_text
 # ---------------------------------------------------------------------------
 
+
 def test_wrap_text_short_text_single_line():
     font = ImageFont.load_default()
     assert tg._wrap_text("hello", font, 500) == ["hello"]
@@ -100,8 +103,7 @@ def test_wrap_text_short_text_single_line():
 
 def test_wrap_text_wraps_and_caps_at_three_lines():
     font = ImageFont.load_default()
-    lines = tg._wrap_text(
-        "one two three four five six seven eight nine ten", font, 60)
+    lines = tg._wrap_text("one two three four five six seven eight nine ten", font, 60)
     # Hard cap at 3 lines: words past the third line are dropped by design.
     assert len(lines) == 3
     assert lines[0].startswith("one")
@@ -123,6 +125,7 @@ def test_wrap_text_no_pil_returns_text_unchanged(monkeypatch):
 # ---------------------------------------------------------------------------
 # extract_frame (cv2 stubbed)
 # ---------------------------------------------------------------------------
+
 
 class _FakeCapture:
     def __init__(self, frames, opened=True):
@@ -195,6 +198,7 @@ def test_extract_frame_no_cv2_returns_none(monkeypatch):
 # _face_bbox (cv2 stubbed)
 # ---------------------------------------------------------------------------
 
+
 def test_face_bbox_no_cv2_returns_none(monkeypatch):
     monkeypatch.setattr(tg, "HAS_CV2", False)
     assert tg._face_bbox(_image(640, 480)) is None
@@ -227,7 +231,8 @@ def test_face_bbox_detector_failure_falls_back_to_haar(monkeypatch):
 
     fake = _fake_cv2(None)
     fake.FaceDetectorYN_create = lambda *a, **k: (_ for _ in ()).throw(
-        RuntimeError("no YN"))
+        RuntimeError("no YN")
+    )
     fake.CascadeClassifier = lambda path: _Cascade()
     fake.cvtColor = lambda frame, code: frame
     monkeypatch.setattr(tg, "cv2", fake)
@@ -258,6 +263,7 @@ def test_face_bbox_no_faces_returns_none(monkeypatch):
 # generate_thumbnail / main
 # ---------------------------------------------------------------------------
 
+
 def _save_source(tmp_path, name="frame.png", size=(1920, 1080)):
     path = tmp_path / name
     _image(*size).save(path, "PNG")
@@ -268,8 +274,7 @@ def test_generate_thumbnail_from_image(tmp_path, monkeypatch):
     monkeypatch.setattr(tg, "_face_bbox", lambda image: None)
     source = _save_source(tmp_path)
     out = str(tmp_path / "thumb.png")
-    result = tg.generate_thumbnail(source, title="كسب المال", hook="NEW",
-                                   out=out)
+    result = tg.generate_thumbnail(source, title="كسب المال", hook="NEW", out=out)
     assert result["ok"] is True
     assert result["out"] == out
     assert result["size"] == (1280, 720)
@@ -288,23 +293,25 @@ def test_generate_thumbnail_no_title_no_hook(tmp_path, monkeypatch):
 
 def test_generate_thumbnail_face_detected_flag(tmp_path, monkeypatch):
     monkeypatch.setattr(tg, "_face_bbox", lambda image: (100, 100, 300, 300))
-    result = tg.generate_thumbnail(_save_source(tmp_path),
-                                   out=str(tmp_path / "thumb.png"))
+    result = tg.generate_thumbnail(
+        _save_source(tmp_path), out=str(tmp_path / "thumb.png")
+    )
     assert result["ok"] is True
     assert result["face_detected"] is True
 
 
 def test_generate_thumbnail_bad_accent_falls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(tg, "_face_bbox", lambda image: None)
-    result = tg.generate_thumbnail(_save_source(tmp_path),
-                                   out=str(tmp_path / "thumb.png"),
-                                   accent="not-a-hex")
+    result = tg.generate_thumbnail(
+        _save_source(tmp_path), out=str(tmp_path / "thumb.png"), accent="not-a-hex"
+    )
     assert result["ok"] is True
 
 
 def test_generate_thumbnail_missing_source():
-    result = tg.generate_thumbnail("/tmp/does-not-exist-xyz.png",
-                                   out="/tmp/thumb-xyz.png")
+    result = tg.generate_thumbnail(
+        "/tmp/does-not-exist-xyz.png", out="/tmp/thumb-xyz.png"
+    )
     assert result["ok"] is False
     assert "does-not-exist-xyz" in result["error"]
 
@@ -319,10 +326,10 @@ def test_generate_thumbnail_unreadable_source(tmp_path):
 
 def test_generate_thumbnail_from_video_uses_extract_frame(tmp_path, monkeypatch):
     monkeypatch.setattr(tg, "_face_bbox", lambda image: None)
-    monkeypatch.setattr(tg, "extract_frame",
-                        lambda path, at_seconds=0.0: _image(640, 480))
-    result = tg.generate_thumbnail("clip.mp4",
-                                   out=str(tmp_path / "thumb.png"))
+    monkeypatch.setattr(
+        tg, "extract_frame", lambda path, at_seconds=0.0: _image(640, 480)
+    )
+    result = tg.generate_thumbnail("clip.mp4", out=str(tmp_path / "thumb.png"))
     assert result["ok"] is True
 
 

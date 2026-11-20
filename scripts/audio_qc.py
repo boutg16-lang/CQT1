@@ -52,28 +52,43 @@ def _run(command: Sequence[str], *, timeout: int = 300) -> subprocess.CompletedP
 
 def _probe_media(path: str) -> Dict[str, Any]:
     command = [
-        "ffprobe", "-v", "error", "-show_streams", "-show_format",
-        "-of", "json", path,
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        path,
     ]
     try:
         result = _run(command, timeout=60)
     except (OSError, subprocess.SubprocessError) as exc:
         return {"ok": False, "error": "ffprobe unavailable: {}".format(exc)}
     if result.returncode != 0:
-        return {"ok": False, "error": (result.stderr or "ffprobe failed").strip()[-500:]}
+        return {
+            "ok": False,
+            "error": (result.stderr or "ffprobe failed").strip()[-500:],
+        }
     try:
         payload = json.loads(result.stdout or "{}")
     except (TypeError, ValueError) as exc:
         return {"ok": False, "error": "invalid ffprobe JSON: {}".format(exc)}
     streams = payload.get("streams") if isinstance(payload, dict) else []
     streams = streams if isinstance(streams, list) else []
-    audio = [item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"]
+    audio = [
+        item
+        for item in streams
+        if isinstance(item, dict) and item.get("codec_type") == "audio"
+    ]
     fmt = payload.get("format") if isinstance(payload, dict) else {}
     fmt = fmt if isinstance(fmt, dict) else {}
     duration = _float(fmt.get("duration"))
     if duration is None:
         for stream in streams:
-            duration = _float(stream.get("duration")) if isinstance(stream, dict) else None
+            duration = (
+                _float(stream.get("duration")) if isinstance(stream, dict) else None
+            )
             if duration is not None:
                 break
     return {
@@ -153,78 +168,149 @@ def analyze_file(
         "issues": [],
     }
     if not os.path.isfile(path):
-        report["issues"].append(_issue("missing_file", "rendered file does not exist", "block"))
+        report["issues"].append(
+            _issue("missing_file", "rendered file does not exist", "block")
+        )
         return report
 
     probe = _probe_media(path)
     report["probe"] = {key: value for key, value in probe.items() if key != "ok"}
     report["duration"] = probe.get("duration", 0.0)
     if not probe.get("ok"):
-        report["issues"].append(_issue("probe_failed", probe.get("error", "ffprobe failed"), "block"))
+        report["issues"].append(
+            _issue("probe_failed", probe.get("error", "ffprobe failed"), "block")
+        )
         return report
     if not probe.get("has_audio"):
-        report["issues"].append(_issue("missing_audio", "rendered file has no audio stream", "block"))
+        report["issues"].append(
+            _issue("missing_audio", "rendered file has no audio stream", "block")
+        )
         return report
     if report["duration"] <= 0:
-        report["issues"].append(_issue("invalid_duration", "rendered file has no positive duration", "block"))
+        report["issues"].append(
+            _issue(
+                "invalid_duration", "rendered file has no positive duration", "block"
+            )
+        )
         return report
 
-    loudnorm_filter = (
-        "loudnorm=I={}:TP={}:LRA={}:print_format=json"
-        .format(float(target_i), float(target_tp), float(DEFAULT_LRA))
+    loudnorm_filter = "loudnorm=I={}:TP={}:LRA={}:print_format=json".format(
+        float(target_i), float(target_tp), float(DEFAULT_LRA)
     )
     try:
-        loud = _run([
-            "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "info",
-            "-i", path, "-vn", "-af", loudnorm_filter, "-f", "null", "-",
-        ], timeout=900)
+        loud = _run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "info",
+                "-i",
+                path,
+                "-vn",
+                "-af",
+                loudnorm_filter,
+                "-f",
+                "null",
+                "-",
+            ],
+            timeout=900,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         loud = None
         report["issues"].append(_issue("loudness_failed", str(exc), "block"))
     loud_metrics = _parse_loudnorm(loud.stderr if loud else "")
     report["metrics"].update(loud_metrics)
     if loud is not None and loud.returncode != 0 and not loud_metrics:
-        report["issues"].append(_issue(
-            "loudness_failed", (loud.stderr or "ffmpeg loudnorm failed").strip()[-500:], "block"))
+        report["issues"].append(
+            _issue(
+                "loudness_failed",
+                (loud.stderr or "ffmpeg loudnorm failed").strip()[-500:],
+                "block",
+            )
+        )
 
     try:
-        silence = _run([
-            "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "info",
-            "-i", path, "-af", "silencedetect=noise={:.1f}dB:d={}".format(
-                float(silence_db), float(silence_duration)), "-f", "null", "-",
-        ], timeout=900)
-        report["metrics"]["silence"] = _parse_silence(silence.stderr, report["duration"])
+        silence = _run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "info",
+                "-i",
+                path,
+                "-af",
+                "silencedetect=noise={:.1f}dB:d={}".format(
+                    float(silence_db), float(silence_duration)
+                ),
+                "-f",
+                "null",
+                "-",
+            ],
+            timeout=900,
+        )
+        report["metrics"]["silence"] = _parse_silence(
+            silence.stderr, report["duration"]
+        )
         if silence.returncode != 0:
-            report["issues"].append(_issue(
-                "silence_analysis_failed", (silence.stderr or "ffmpeg silencedetect failed").strip()[-500:], "review"))
+            report["issues"].append(
+                _issue(
+                    "silence_analysis_failed",
+                    (silence.stderr or "ffmpeg silencedetect failed").strip()[-500:],
+                    "review",
+                )
+            )
     except (OSError, subprocess.SubprocessError) as exc:
         report["issues"].append(_issue("silence_analysis_failed", str(exc), "review"))
 
     input_i = _float(report["metrics"].get("input_i"))
     input_tp = _float(report["metrics"].get("input_tp"))
     if input_i is None:
-        report["issues"].append(_issue(
-            "loudness_unavailable", "integrated loudness could not be measured", "review"))
+        report["issues"].append(
+            _issue(
+                "loudness_unavailable",
+                "integrated loudness could not be measured",
+                "review",
+            )
+        )
     elif input_i < -28.0 or input_i > -8.0:
-        report["issues"].append(_issue(
-            "loudness_out_of_range",
-            "integrated loudness {:.2f} LUFS is outside the review range -28..-8 LUFS".format(input_i),
-        ))
+        report["issues"].append(
+            _issue(
+                "loudness_out_of_range",
+                "integrated loudness {:.2f} LUFS is outside the review range -28..-8 LUFS".format(
+                    input_i
+                ),
+            )
+        )
     if input_tp is None:
-        report["issues"].append(_issue(
-            "true_peak_unavailable", "true peak could not be measured", "review"))
+        report["issues"].append(
+            _issue("true_peak_unavailable", "true peak could not be measured", "review")
+        )
     elif input_tp > -0.5:
-        report["issues"].append(_issue(
-            "true_peak_high",
-            "true peak {:.2f} dBTP is close to or above clipping risk".format(input_tp),
-        ))
+        report["issues"].append(
+            _issue(
+                "true_peak_high",
+                "true peak {:.2f} dBTP is close to or above clipping risk".format(
+                    input_tp
+                ),
+            )
+        )
     silence = report["metrics"].get("silence") or {}
     silence_ratio = _float(silence.get("ratio")) if isinstance(silence, dict) else None
-    if silence_ratio is not None and report["duration"] >= 15.0 and silence_ratio > 0.45:
-        report["issues"].append(_issue(
-            "excessive_silence",
-            "detected silence occupies {:.1%} of the rendered clip".format(silence_ratio),
-        ))
+    if (
+        silence_ratio is not None
+        and report["duration"] >= 15.0
+        and silence_ratio > 0.45
+    ):
+        report["issues"].append(
+            _issue(
+                "excessive_silence",
+                "detected silence occupies {:.1%} of the rendered clip".format(
+                    silence_ratio
+                ),
+            )
+        )
 
     hard = any(item.get("severity") == "block" for item in report["issues"])
     report["status"] = "block" if hard else ("review" if report["issues"] else "pass")
@@ -297,10 +383,16 @@ def analyze_project(
     project = os.path.abspath(os.path.expanduser(os.fspath(project_folder)))
     output_dirs = tuple(output_dirs)
     files = _select_files(project, output_dirs)
-    clips = [analyze_file(
-        path, target_i=target_i, target_tp=target_tp,
-        silence_db=silence_db, silence_duration=silence_duration,
-    ) for path in files]
+    clips = [
+        analyze_file(
+            path,
+            target_i=target_i,
+            target_tp=target_tp,
+            silence_db=silence_db,
+            silence_duration=silence_duration,
+        )
+        for path in files
+    ]
     counts = {"pass": 0, "review": 0, "block": 0}
     for clip in clips:
         status = clip.get("status", "block")
@@ -357,8 +449,9 @@ def load_thresholds(path: str) -> Optional[Dict[str, float]]:
     break a QC run.
     """
     try:
-        with open(os.path.abspath(os.path.expanduser(os.fspath(path))), "r",
-                  encoding="utf-8") as handle:
+        with open(
+            os.path.abspath(os.path.expanduser(os.fspath(path))), "r", encoding="utf-8"
+        ) as handle:
             data = json.load(handle)
     except (OSError, ValueError, TypeError):
         return None
@@ -382,7 +475,10 @@ def report_for_file(project_folder: str, video_path: str) -> Optional[Dict[str, 
         return None
     wanted = os.path.normcase(os.path.abspath(os.fspath(video_path)))
     for clip in report.get("clips", []) or []:
-        if isinstance(clip, dict) and os.path.normcase(os.path.abspath(str(clip.get("path", "")))) == wanted:
+        if (
+            isinstance(clip, dict)
+            and os.path.normcase(os.path.abspath(str(clip.get("path", "")))) == wanted
+        ):
             return clip
     return None
 
@@ -392,7 +488,9 @@ def ensure_file_report(project_folder: str, video_path: str) -> Dict[str, Any]:
     existing = report_for_file(project_folder, video_path)
     if existing is not None:
         try:
-            if os.path.getmtime(video_path) <= os.path.getmtime(_report_path(project_folder)):
+            if os.path.getmtime(video_path) <= os.path.getmtime(
+                _report_path(project_folder)
+            ):
                 return existing
         except OSError:
             pass
@@ -400,7 +498,9 @@ def ensure_file_report(project_folder: str, video_path: str) -> Dict[str, Any]:
     return report_for_file(project_folder, video_path) or analyze_file(video_path)
 
 
-def gate_allows(report: Optional[Dict[str, Any]], *, strict: bool = False) -> tuple[bool, str]:
+def gate_allows(
+    report: Optional[Dict[str, Any]], *, strict: bool = False
+) -> tuple[bool, str]:
     """Return whether a report is acceptable for publishing."""
     if not report:
         return False, "audio_qc_report.json is missing or invalid"
@@ -413,38 +513,86 @@ def gate_allows(report: Optional[Dict[str, Any]], *, strict: bool = False) -> tu
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Run local FFmpeg Audio QC for an OUSSAMA project.")
-    parser.add_argument("--project", required=True, help="Project folder containing final/final_polished/cuts")
-    parser.add_argument("--json", action="store_true", help="Print the full JSON report")
-    parser.add_argument("--target-i", type=float, default=None,
-                        help="Loudness target in LUFS (default: {})".format(DEFAULT_TARGET_I))
-    parser.add_argument("--target-tp", type=float, default=None,
-                        help="True-peak target in dBTP (default: {})".format(DEFAULT_TARGET_TP))
-    parser.add_argument("--silence-db", type=float, default=None,
-                        help="Silence detection threshold in dB (default: {})".format(DEFAULT_SILENCE_DB))
-    parser.add_argument("--silence-duration", type=float, default=None,
-                        help="Minimum silence duration in seconds (default: {})".format(DEFAULT_SILENCE_DURATION))
-    parser.add_argument("--thresholds-file", default=None,
-                        help="Calibrated thresholds JSON from scripts.audio_qc_calibrate "
-                             "(explicit --target-* flags still win)")
+    parser = argparse.ArgumentParser(
+        description="Run local FFmpeg Audio QC for an OUSSAMA project."
+    )
+    parser.add_argument(
+        "--project",
+        required=True,
+        help="Project folder containing final/final_polished/cuts",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Print the full JSON report"
+    )
+    parser.add_argument(
+        "--target-i",
+        type=float,
+        default=None,
+        help="Loudness target in LUFS (default: {})".format(DEFAULT_TARGET_I),
+    )
+    parser.add_argument(
+        "--target-tp",
+        type=float,
+        default=None,
+        help="True-peak target in dBTP (default: {})".format(DEFAULT_TARGET_TP),
+    )
+    parser.add_argument(
+        "--silence-db",
+        type=float,
+        default=None,
+        help="Silence detection threshold in dB (default: {})".format(
+            DEFAULT_SILENCE_DB
+        ),
+    )
+    parser.add_argument(
+        "--silence-duration",
+        type=float,
+        default=None,
+        help="Minimum silence duration in seconds (default: {})".format(
+            DEFAULT_SILENCE_DURATION
+        ),
+    )
+    parser.add_argument(
+        "--thresholds-file",
+        default=None,
+        help="Calibrated thresholds JSON from scripts.audio_qc_calibrate "
+        "(explicit --target-* flags still win)",
+    )
     args = parser.parse_args(argv)
 
     thresholds = load_thresholds(args.thresholds_file) if args.thresholds_file else None
     if args.thresholds_file and thresholds is None:
-        print("[audio-qc] WARN: thresholds file {} is unusable — falling back to defaults".format(
-            args.thresholds_file))
+        print(
+            "[audio-qc] WARN: thresholds file {} is unusable — falling back to defaults".format(
+                args.thresholds_file
+            )
+        )
     thresholds = thresholds or {}
     report = analyze_project(
         args.project,
-        target_i=args.target_i if args.target_i is not None else thresholds.get("target_i", DEFAULT_TARGET_I),
-        target_tp=args.target_tp if args.target_tp is not None else thresholds.get("target_tp", DEFAULT_TARGET_TP),
-        silence_db=args.silence_db if args.silence_db is not None else DEFAULT_SILENCE_DB,
-        silence_duration=args.silence_duration if args.silence_duration is not None else DEFAULT_SILENCE_DURATION,
+        target_i=args.target_i
+        if args.target_i is not None
+        else thresholds.get("target_i", DEFAULT_TARGET_I),
+        target_tp=args.target_tp
+        if args.target_tp is not None
+        else thresholds.get("target_tp", DEFAULT_TARGET_TP),
+        silence_db=args.silence_db
+        if args.silence_db is not None
+        else DEFAULT_SILENCE_DB,
+        silence_duration=args.silence_duration
+        if args.silence_duration is not None
+        else DEFAULT_SILENCE_DURATION,
     )
     summary = report.get("summary", {})
-    print("[audio-qc] status={} pass={} review={} block={} / {}".format(
-        report.get("status"), summary.get("pass", 0), summary.get("review", 0),
-        summary.get("block", 0), summary.get("total", 0)))
+    print(
+        "[audio-qc] status={} pass={} review={} block={} / {}".format(
+            report.get("status"),
+            summary.get("pass", 0),
+            summary.get("review", 0),
+            summary.get("block", 0),
+            summary.get("total", 0),
+        )
+    )
     print("[audio-qc] report: {}".format(_report_path(args.project)))
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -452,8 +600,15 @@ def main(argv=None) -> int:
 
 
 __all__ = [
-    "REPORT_NAME", "analyze_file", "analyze_project", "ensure_file_report",
-    "gate_allows", "load_report", "load_thresholds", "main", "report_for_file",
+    "REPORT_NAME",
+    "analyze_file",
+    "analyze_project",
+    "ensure_file_report",
+    "gate_allows",
+    "load_report",
+    "load_thresholds",
+    "main",
+    "report_for_file",
 ]
 
 

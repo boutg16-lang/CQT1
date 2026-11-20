@@ -5,6 +5,7 @@ Pins the fix for "Failed to read metadata ... charset_normalizer-3.5.2.dist-info
 and the rule that a broken optional integration (MediaPipe/Gemini) warns
 instead of blocking the WebUI.
 """
+
 import os
 import sys
 
@@ -32,8 +33,10 @@ def test_repair_removes_only_incomplete_dist_info(tmp_path):
     removed, failed = preflight.repair_incomplete_dist_info(str(site))
 
     assert failed == []
-    assert set(removed) == {"charset_normalizer-3.5.2.dist-info",
-                            "empty_pkg-2.0.dist-info"}
+    assert set(removed) == {
+        "charset_normalizer-3.5.2.dist-info",
+        "empty_pkg-2.0.dist-info",
+    }
     assert good.is_dir()
     assert not missing.exists()
     assert not empty.exists()
@@ -52,7 +55,8 @@ def test_repair_dry_run_changes_nothing(tmp_path):
 
 def test_repair_is_safe_on_missing_paths(tmp_path):
     removed, failed = preflight.repair_incomplete_dist_info(
-        str(tmp_path / "does-not-exist"))
+        str(tmp_path / "does-not-exist")
+    )
     assert (removed, failed) == ([], [])
 
 
@@ -114,6 +118,7 @@ def test_pyannote_vad_is_checked_when_whisperx_is_installed(monkeypatch):
 def test_pyannote_vad_is_skipped_without_whisperx(monkeypatch):
     monkeypatch.setattr(preflight, "_dist_installed", lambda dist: False)
     result = preflight.check_pyannote_vad(
-        import_module=lambda module: (_ for _ in ()).throw(AssertionError()))
+        import_module=lambda module: (_ for _ in ()).throw(AssertionError())
+    )
     assert result["status"] == preflight.OK
     assert "not installed" in result["detail"]

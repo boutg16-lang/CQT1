@@ -17,18 +17,50 @@ def test_safety_and_risk_are_reflected_in_report(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
     (project / "checkpoint.json").write_text(
-        json.dumps({"stages": dict.fromkeys(("download", "transcribe", "segments", "safety", "cut", "edit", "polish", "subtitles", "scorecard", "done"), True)}), encoding="utf-8")
-    (project / "safety_report.json").write_text(json.dumps({
-        "segments": [{
-            "index": 0,
-            "status": "manual_review",
-            "semantic": {"action": "review"},
-        }],
-    }), encoding="utf-8")
-    (project / "risk_scorecard.json").write_text(json.dumps({
-        "summary": {"blocked_for_publish": 1},
-        "blocked": [{"index": 0}],
-    }), encoding="utf-8")
+        json.dumps(
+            {
+                "stages": dict.fromkeys(
+                    (
+                        "download",
+                        "transcribe",
+                        "segments",
+                        "safety",
+                        "cut",
+                        "edit",
+                        "polish",
+                        "subtitles",
+                        "scorecard",
+                        "done",
+                    ),
+                    True,
+                )
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project / "safety_report.json").write_text(
+        json.dumps(
+            {
+                "segments": [
+                    {
+                        "index": 0,
+                        "status": "manual_review",
+                        "semantic": {"action": "review"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project / "risk_scorecard.json").write_text(
+        json.dumps(
+            {
+                "summary": {"blocked_for_publish": 1},
+                "blocked": [{"index": 0}],
+            }
+        ),
+        encoding="utf-8",
+    )
     report = build_report(str(project))
     assert report["safety"]["counts"]["manual_review"] == 1
     assert report["risk"]["blocked"] == 1
@@ -39,10 +71,15 @@ def test_safety_and_risk_are_reflected_in_report(tmp_path):
 def test_audio_qc_is_reflected_in_readiness_and_html(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
-    (project / "audio_qc_report.json").write_text(json.dumps({
-        "status": "review",
-        "summary": {"total": 2, "pass": 1, "review": 1, "block": 0},
-    }), encoding="utf-8")
+    (project / "audio_qc_report.json").write_text(
+        json.dumps(
+            {
+                "status": "review",
+                "summary": {"total": 2, "pass": 1, "review": 1, "block": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
     report = build_report(str(project))
     assert report["audio_qc"]["status"] == "review"
     assert report["audio_qc"]["review"] == 1

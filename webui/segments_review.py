@@ -6,6 +6,7 @@ Pure logic (no gradio imports) so it stays unit-testable:
 - apply a selection: keep only chosen segments, back up the original file,
   and invalidate stale cuts so the next render reflects the new selection.
 """
+
 import json
 import os
 import shutil
@@ -23,10 +24,19 @@ SAFETY_REPORT_FILENAME = "safety_report.json"
 
 # Legacy columns remain first; the last two columns explain the new ranking.
 HEADERS = [
-    "✓", i18n("Title"), i18n("Rating"), i18n("Start"), i18n("End"),
-    i18n("Duration (s)"), i18n("Why Viral?"), i18n("Publish Caption"),
-    i18n("Safety"), i18n("Safety reason"), i18n("Safe alternative"),
-    i18n("Selection score"), i18n("A/B title alternatives"),
+    "✓",
+    i18n("Title"),
+    i18n("Rating"),
+    i18n("Start"),
+    i18n("End"),
+    i18n("Duration (s)"),
+    i18n("Why Viral?"),
+    i18n("Publish Caption"),
+    i18n("Safety"),
+    i18n("Safety reason"),
+    i18n("Safe alternative"),
+    i18n("Selection score"),
+    i18n("A/B title alternatives"),
 ]
 
 
@@ -80,7 +90,9 @@ def _read_payload(project_path):
         segments = data.get("segments", [])
         # A malformed segment collection must never be treated as a valid
         # project: later selection/export code assumes each entry is a dict.
-        if not isinstance(segments, list) or any(not isinstance(item, dict) for item in segments):
+        if not isinstance(segments, list) or any(
+            not isinstance(item, dict) for item in segments
+        ):
             return None
         return data
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
@@ -112,20 +124,36 @@ def load_safety_map(project_path):
         entries = data.get("segments", []) if isinstance(data, dict) else []
         if not isinstance(entries, list):
             entries = []
-        entries += data.get("ai_review", []) if isinstance(data, dict) and isinstance(data.get("ai_review"), list) else []
+        entries += (
+            data.get("ai_review", [])
+            if isinstance(data, dict) and isinstance(data.get("ai_review"), list)
+            else []
+        )
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
             key = (entry.get("title", ""), entry.get("start_time"))
             semantic = entry.get("semantic") or {}
             matches = entry.get("matches") or []
-            terms = [str(match.get("term", "")).strip() for match in matches if isinstance(match, dict) and match.get("term")]
-            reason = semantic.get("explanation") or entry.get("reason") or ", ".join(dict.fromkeys(terms))
+            terms = [
+                str(match.get("term", "")).strip()
+                for match in matches
+                if isinstance(match, dict) and match.get("term")
+            ]
+            reason = (
+                semantic.get("explanation")
+                or entry.get("reason")
+                or ", ".join(dict.fromkeys(terms))
+            )
             status = entry.get("status", "safe")
             if status in {"blocked", "semantic_blocked", "ai_blocked"}:
-                alternative = i18n("احذف هذا الجزء أو أعد صياغته بعيداً عن استهداف فئة أو الدعوة إلى العنف، ثم راجعه يدوياً قبل النشر.")
+                alternative = i18n(
+                    "احذف هذا الجزء أو أعد صياغته بعيداً عن استهداف فئة أو الدعوة إلى العنف، ثم راجعه يدوياً قبل النشر."
+                )
             elif status in {"manual_review", "flagged", "censor", "ai_flagged"}:
-                alternative = i18n("احتفظ به للمراجعة فقط، أو استبدل العبارات الحساسة بصياغة تعليمية محايدة مع مصدر واضح.")
+                alternative = i18n(
+                    "احتفظ به للمراجعة فقط، أو استبدل العبارات الحساسة بصياغة تعليمية محايدة مع مصدر واضح."
+                )
             else:
                 alternative = ""
             result[key] = {
@@ -140,7 +168,11 @@ def load_safety_map(project_path):
 
 
 def _safety_info(seg, safety_map):
-    info = safety_map.get((seg.get("title", ""), seg.get("start_time")), {}) if safety_map else {}
+    info = (
+        safety_map.get((seg.get("title", ""), seg.get("start_time")), {})
+        if safety_map
+        else {}
+    )
     if isinstance(info, str):
         info = {"status": info}
     annotation = seg.get("safety") or {}
@@ -182,7 +214,11 @@ def rows_from_segments(segments, safety_map=None):
         alternatives = seg.get("alt_titles") or []
         if isinstance(alternatives, str):
             alternatives = [alternatives]
-        alternatives = [str(item).strip() for item in alternatives if str(item).strip() and str(item).strip() != title]
+        alternatives = [
+            str(item).strip()
+            for item in alternatives
+            if str(item).strip() and str(item).strip() != title
+        ]
         reasoning = seg.get("reasoning", "")
         explanation = seg.get("selection_explanation") or {}
         if explanation:
@@ -192,29 +228,36 @@ def rows_from_segments(segments, safety_map=None):
             )
             readiness = explanation.get("readiness") or "review"
             marker = "Selection: {} | {} | {}".format(
-                explanation.get("rank_score", 0), factor_text or "no factor data", readiness)
+                explanation.get("rank_score", 0),
+                factor_text or "no factor data",
+                readiness,
+            )
             reasoning = (reasoning + "\n" if reasoning else "") + marker
         if seg.get("quality_missing"):
             # The AI shipped no editorial self-evaluation; hook/clarity/…
             # values are copies of the virality score. Say so where the
             # reviewer looks, instead of letting them read as measurements.
-            marker = i18n("⚠️ التقييم التحريري من الذكاء الاصطناعي مفقود — قوة الخطاف والوضوح غير مقيسة.")
+            marker = i18n(
+                "⚠️ التقييم التحريري من الذكاء الاصطناعي مفقود — قوة الخطاف والوضوح غير مقيسة."
+            )
             reasoning = (reasoning + "\n" if reasoning else "") + marker
-        rows.append([
-            True,
-            title,
-            seg.get("score", 0),
-            _fmt_time(start),
-            _fmt_time(end),
-            duration,
-            reasoning,
-            seg.get("caption", ""),
-            _safety_badge(seg, safety_map or {}),
-            safety.get("reason", ""),
-            safety.get("alternative", ""),
-            seg.get("selection_score", seg.get("score", 0)),
-            " | ".join(alternatives),
-        ])
+        rows.append(
+            [
+                True,
+                title,
+                seg.get("score", 0),
+                _fmt_time(start),
+                _fmt_time(end),
+                duration,
+                reasoning,
+                seg.get("caption", ""),
+                _safety_badge(seg, safety_map or {}),
+                safety.get("reason", ""),
+                safety.get("alternative", ""),
+                seg.get("selection_score", seg.get("score", 0)),
+                " | ".join(alternatives),
+            ]
+        )
     return rows
 
 
@@ -250,8 +293,13 @@ def _renumber_candidate_ranks(segments):
             return float("inf")
 
     ranked.sort(key=lambda pair: (_rank_value(pair), pair[0]))
-    legacy.sort(key=lambda pair: (_key_score(pair[1], "selection_score"),
-                                  _key_score(pair[1], "score")), reverse=True)
+    legacy.sort(
+        key=lambda pair: (
+            _key_score(pair[1], "selection_score"),
+            _key_score(pair[1], "score"),
+        ),
+        reverse=True,
+    )
     ordered = [item for _, item in ranked + legacy]
     for rank, item in enumerate(ordered, 1):
         item["candidate_rank"] = rank
@@ -327,9 +375,11 @@ def restore_all(project_path):
     try:
         with open(bak_path, "r", encoding="utf-8") as source:
             data = json.load(source)
-        if (not isinstance(data, dict)
-                or not isinstance(data.get("segments", []), list)
-                or any(not isinstance(item, dict) for item in data.get("segments", []))):
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("segments", []), list)
+            or any(not isinstance(item, dict) for item in data.get("segments", []))
+        ):
             return False
         _atomic_write_json(seg_path, data)
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
@@ -373,7 +423,11 @@ def title_choices_for(project_path, index):
 
     unique = {}
     for text, metadata in candidates:
-        if text and text.casefold() != current.casefold() and text.casefold() not in unique:
+        if (
+            text
+            and text.casefold() != current.casefold()
+            and text.casefold() not in unique
+        ):
             unique[text.casefold()] = (text, metadata)
 
     def option_key(item):
@@ -415,31 +469,45 @@ def choose_title(project_path, index, title):
         return False, i18n("Title is empty.")
     options, current = title_choices_for(project_path, index)
     if title not in options:
-        return False, i18n("That title is not among the A/B alternatives of this segment.")
+        return False, i18n(
+            "That title is not among the A/B alternatives of this segment."
+        )
     # v7.41: the reviewer's pick is factually validated against the EXACT clip
     # transcript before it can become the shipped title — an A/B option that
     # the validator rejects (invented number/name/claim) cannot be promoted.
     validation = None
     seg = segments[index]
-    window_text = str(seg.get("transcript_text")
-                      or (seg.get("window_analysis") or {}).get("text") or "")
+    window_text = str(
+        seg.get("transcript_text")
+        or (seg.get("window_analysis") or {}).get("text")
+        or ""
+    )
     if window_text:
         try:
             from scripts import title_factual
+
             validation = title_factual.validate_title_vs_clip(
-                title, window_text,
-                str((seg.get("title_data") or {}).get("title_language") or "auto"))
+                title,
+                window_text,
+                str((seg.get("title_data") or {}).get("title_language") or "auto"),
+            )
             if validation.get("status") == "rejected":
-                return False, i18n("That title is not supported by this clip: {}").format(
-                    "; ".join(validation.get("reasons") or ["factual validation failed"]))
+                return False, i18n(
+                    "That title is not supported by this clip: {}"
+                ).format(
+                    "; ".join(
+                        validation.get("reasons") or ["factual validation failed"]
+                    )
+                )
         except Exception as exc:
             # A selected title must not bypass factual review merely because
             # the validator failed to load or raised unexpectedly.  The clip
             # transcript is present, so fail closed and leave the project
             # file untouched; the user can retry after the validation issue
             # is repaired.
-            return False, i18n("Title validation could not be completed; the title was not saved: {}").format(
-                type(exc).__name__)
+            return False, i18n(
+                "Title validation could not be completed; the title was not saved: {}"
+            ).format(type(exc).__name__)
     if title == current:
         return True, i18n("Title unchanged: {}").format(title)
     payload = _read_payload(project_path)
@@ -459,7 +527,9 @@ def choose_title(project_path, index, title):
             # The publish gate requires >=60 confidence. A reviewer-approved
             # verified title must not stay at the old fallback's 35.
             try:
-                current = float(payload["segments"][index].get("title_confidence") or 0.0)
+                current = float(
+                    payload["segments"][index].get("title_confidence") or 0.0
+                )
             except (TypeError, ValueError):
                 current = 0.0
             payload["segments"][index]["title_confidence"] = max(current, 60.0)
@@ -496,14 +566,14 @@ def apply_title_edits(project_path, rows):
     edited_titles = []
     if hasattr(rows, "iloc"):
         try:
-            edited_titles = [str(value or "").strip()
-                             for value in rows.iloc[:, 1].tolist()]
+            edited_titles = [
+                str(value or "").strip() for value in rows.iloc[:, 1].tolist()
+            ]
         except Exception:
             edited_titles = []
     else:
         try:
-            edited_titles = [str(row[1] or "").strip()
-                             for row in rows]
+            edited_titles = [str(row[1] or "").strip() for row in rows]
         except Exception:
             edited_titles = []
     if len(edited_titles) != len(segments):
@@ -515,22 +585,40 @@ def apply_title_edits(project_path, rows):
     changed = 0
     errors = []
     from scripts import title_factual
-    for index, (segment, edited) in enumerate(zip(payload["segments"], edited_titles, strict=False)):
-        current = str(segment.get("recommended_title") or segment.get("title") or "").strip()
+
+    for index, (segment, edited) in enumerate(
+        zip(payload["segments"], edited_titles, strict=False)
+    ):
+        current = str(
+            segment.get("recommended_title") or segment.get("title") or ""
+        ).strip()
         if not edited or edited == current:
             continue
         window_text = str(segment.get("transcript_text") or "").strip()
         if window_text:
             try:
                 validation = title_factual.validate_title_vs_clip(
-                    edited, window_text,
-                    str((segment.get("title_data") or {}).get("title_language") or "auto"))
+                    edited,
+                    window_text,
+                    str(
+                        (segment.get("title_data") or {}).get("title_language")
+                        or "auto"
+                    ),
+                )
             except Exception as exc:
-                errors.append("#{}: validation failed ({})".format(index + 1, type(exc).__name__))
+                errors.append(
+                    "#{}: validation failed ({})".format(index + 1, type(exc).__name__)
+                )
                 continue
             if validation.get("status") == "rejected":
-                errors.append("#{}: {}".format(
-                    index + 1, "; ".join(validation.get("reasons") or ["not supported by clip"])))
+                errors.append(
+                    "#{}: {}".format(
+                        index + 1,
+                        "; ".join(
+                            validation.get("reasons") or ["not supported by clip"]
+                        ),
+                    )
+                )
                 continue
             segment["title_validation"] = validation
             verified = validation.get("status") == "verified"
@@ -550,8 +638,10 @@ def apply_title_edits(project_path, rows):
                 segment["requires_review"] = True
                 segment["publish_blocked_reason"] = "manual_review_required"
         else:
-            segment["title_validation"] = {"status": "review",
-                                           "reasons": ["no_clip_transcript"]}
+            segment["title_validation"] = {
+                "status": "review",
+                "reasons": ["no_clip_transcript"],
+            }
             segment["title_review_required"] = True
         segment["recommended_title"] = edited
         segment["title"] = edited
@@ -588,7 +678,11 @@ def export_publish_metadata(project_path):
         alternatives = seg.get("alt_titles") or []
         if isinstance(alternatives, str):
             alternatives = [alternatives]
-        alternatives = [str(item).strip() for item in alternatives if str(item).strip() and str(item).strip() != title]
+        alternatives = [
+            str(item).strip()
+            for item in alternatives
+            if str(item).strip() and str(item).strip() != title
+        ]
         if alternatives:
             lines.append("A/B titles: " + " | ".join(alternatives))
         lines.append("")

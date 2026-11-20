@@ -12,17 +12,26 @@ from webui import batch_queue
 
 def test_parse_queue_text_basic():
     text = "https://youtu.be/a\nhttps://youtu.be/b\n"
-    assert batch_queue.parse_queue_text(text) == ["https://youtu.be/a", "https://youtu.be/b"]
+    assert batch_queue.parse_queue_text(text) == [
+        "https://youtu.be/a",
+        "https://youtu.be/b",
+    ]
 
 
 def test_parse_queue_text_skips_blank_and_comments():
     text = "\n  \n# comment line\nhttps://youtu.be/a\n   https://youtu.be/b   \n#x\n"
-    assert batch_queue.parse_queue_text(text) == ["https://youtu.be/a", "https://youtu.be/b"]
+    assert batch_queue.parse_queue_text(text) == [
+        "https://youtu.be/a",
+        "https://youtu.be/b",
+    ]
 
 
 def test_parse_queue_text_dedupes_preserving_order():
     text = "https://youtu.be/a\nhttps://youtu.be/b\nhttps://youtu.be/a\n"
-    assert batch_queue.parse_queue_text(text) == ["https://youtu.be/a", "https://youtu.be/b"]
+    assert batch_queue.parse_queue_text(text) == [
+        "https://youtu.be/a",
+        "https://youtu.be/b",
+    ]
 
 
 def test_parse_queue_text_empty():
@@ -33,8 +42,10 @@ def test_parse_queue_text_empty():
 
 def test_make_items_and_mark():
     items = batch_queue.make_items(["u1", "u2"])
-    assert items == [{"url": "u1", "status": "pending"},
-                     {"url": "u2", "status": "pending"}]
+    assert items == [
+        {"url": "u1", "status": "pending"},
+        {"url": "u2", "status": "pending"},
+    ]
     batch_queue.mark(items, 0, "running")
     assert items[0]["status"] == "running"
     batch_queue.mark(items, 0, "done")

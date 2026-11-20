@@ -26,9 +26,20 @@ from scripts.backend_resolution import (  # noqa: E402
 def cli():
     """Import main_improved once, with heavy third-party deps stubbed."""
     heavy = [
-        "cv2", "mediapipe", "torch", "torchaudio", "whisperx", "insightface",
-        "onnxruntime", "av", "moviepy", "librosa", "soundfile",
-        "tqdm", "tqdm.asyncio", "psutil",
+        "cv2",
+        "mediapipe",
+        "torch",
+        "torchaudio",
+        "whisperx",
+        "insightface",
+        "onnxruntime",
+        "av",
+        "moviepy",
+        "librosa",
+        "soundfile",
+        "tqdm",
+        "tqdm.asyncio",
+        "psutil",
     ]
     saved = {}
     stubs = {}
@@ -57,8 +68,10 @@ def test_reexports_are_the_same_callables(cli):
 # describe_transcription_device
 # ---------------------------------------------------------------------------
 
-def _fake_torch(monkeypatch, cuda_available, name="GeForce RTX 4090",
-                name_raises=False):
+
+def _fake_torch(
+    monkeypatch, cuda_available, name="GeForce RTX 4090", name_raises=False
+):
     torch_mod = types.ModuleType("torch")
 
     def _get_name(index):
@@ -137,6 +150,7 @@ def test_device_request_case_and_whitespace_normalised(monkeypatch):
 # resolve_safety_backend
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def clean_env(monkeypatch):
     for var in ("OPENAI_API_KEY", "OPENAI_MODERATION_API_KEY", "GEMINI_API_KEY"):
@@ -146,7 +160,9 @@ def clean_env(monkeypatch):
 def test_safety_auto_manual_prefers_openai_moderation(clean_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     assert resolve_safety_backend("auto", "manual") == (
-        "openai-moderation", "test-openai-key")
+        "openai-moderation",
+        "test-openai-key",
+    )
 
 
 def test_safety_auto_manual_falls_back_to_local(clean_env):
@@ -155,8 +171,7 @@ def test_safety_auto_manual_falls_back_to_local(clean_env):
 
 def test_safety_auto_manual_uses_moderation_key_fallback(clean_env, monkeypatch):
     monkeypatch.setenv("OPENAI_MODERATION_API_KEY", "mod-key")
-    assert resolve_safety_backend("auto", "manual") == (
-        "openai-moderation", "mod-key")
+    assert resolve_safety_backend("auto", "manual") == ("openai-moderation", "mod-key")
 
 
 def test_safety_auto_openai_never_selects_moderation(clean_env, monkeypatch):
@@ -168,8 +183,7 @@ def test_safety_auto_openai_never_selects_moderation(clean_env, monkeypatch):
 
 
 def test_safety_auto_auto_with_api_key_selects_gemini(clean_env):
-    assert resolve_safety_backend("auto", "auto", api_key="k") == (
-        "gemini", "k")
+    assert resolve_safety_backend("auto", "auto", api_key="k") == ("gemini", "k")
 
 
 def test_safety_auto_auto_without_key_is_local(clean_env):
@@ -177,13 +191,11 @@ def test_safety_auto_auto_without_key_is_local(clean_env):
 
 
 def test_safety_auto_gemini_uses_api_key(clean_env):
-    assert resolve_safety_backend("auto", "gemini", api_key="k") == (
-        "gemini", "k")
+    assert resolve_safety_backend("auto", "gemini", api_key="k") == ("gemini", "k")
 
 
 def test_safety_auto_g4f_uses_api_key(clean_env):
-    assert resolve_safety_backend("auto", "g4f", api_key="k") == (
-        "g4f", "k")
+    assert resolve_safety_backend("auto", "g4f", api_key="k") == ("g4f", "k")
 
 
 def test_safety_auto_gemini_ignores_gemini_env_key(clean_env, monkeypatch):
@@ -196,32 +208,37 @@ def test_safety_auto_gemini_ignores_gemini_env_key(clean_env, monkeypatch):
 def test_safety_explicit_gemini_prefers_env_key(clean_env, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "env-gemini-key")
     assert resolve_safety_backend("gemini", "manual", api_key="k") == (
-        "gemini", "env-gemini-key")
+        "gemini",
+        "env-gemini-key",
+    )
 
 
 def test_safety_explicit_openai_moderation_uses_env_key(clean_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     assert resolve_safety_backend("openai-moderation", "openai") == (
-        "openai-moderation", "test-openai-key")
+        "openai-moderation",
+        "test-openai-key",
+    )
 
 
 def test_safety_explicit_openai_moderation_without_key_is_none(clean_env):
-    assert resolve_safety_backend(
-        "openai-moderation", "manual", api_key="k") == (
-            "openai-moderation", None)
+    assert resolve_safety_backend("openai-moderation", "manual", api_key="k") == (
+        "openai-moderation",
+        None,
+    )
 
 
 def test_safety_explicit_g4f_returns_api_key(clean_env):
-    assert resolve_safety_backend("g4f", "manual", api_key="k") == (
-        "g4f", "k")
+    assert resolve_safety_backend("g4f", "manual", api_key="k") == ("g4f", "k")
 
 
 def test_safety_unknown_request_is_local(clean_env):
-    assert resolve_safety_backend("weird", "manual", api_key="k") == (
-        "local", None)
+    assert resolve_safety_backend("weird", "manual", api_key="k") == ("local", None)
 
 
 def test_safety_request_case_and_whitespace_normalised(clean_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     assert resolve_safety_backend("  AUTO ", "manual") == (
-        "openai-moderation", "test-openai-key")
+        "openai-moderation",
+        "test-openai-key",
+    )

@@ -11,21 +11,38 @@ def test_diagnostics_is_json_serializable():
     assert report["app"] == "OUSSAMA Cutter"
     assert isinstance(report["packages"], dict)
     assert set(report["packages"]) == {
-        "torch", "torchaudio", "ctranslate2", "whisperx", "transformers",
-        "huggingface_hub", "tokenizers", "setuptools", "faster_whisper",
-        "pyannote.audio", "asteroid_filterbanks",
+        "torch",
+        "torchaudio",
+        "ctranslate2",
+        "whisperx",
+        "transformers",
+        "huggingface_hub",
+        "tokenizers",
+        "setuptools",
+        "faster_whisper",
+        "pyannote.audio",
+        "asteroid_filterbanks",
     }
     assert report["backend"] in {"none", "whisperx", "faster-whisper"}
 
 
 def test_tokenizers_conflict_message_is_actionable(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
-    monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: {
-        "packages": {"tokenizers": {"ok": True, "version": "0.23.1"},
-                     "huggingface_hub": {"ok": True, "version": "1.33.0"}},
-        "missing": [], "incompatible": [], "fallback_ready": True,
-        "torch_runtime": {"cuda_available": False},
-    })
+
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose",
+        lambda base_dir=None: {
+            "packages": {
+                "tokenizers": {"ok": True, "version": "0.23.1"},
+                "huggingface_hub": {"ok": True, "version": "1.33.0"},
+            },
+            "missing": [],
+            "incompatible": [],
+            "fallback_ready": True,
+            "torch_runtime": {"cuda_available": False},
+        },
+    )
     message = build_error_message(
         "ImportError: tokenizers>=0.22.0,<=0.23.0 is required ... but found "
         "tokenizers==0.23.1",
@@ -81,7 +98,12 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
     monkeypatch.setattr(
         diagnostics,
         "_probe",
-        lambda name: {"module": name, "ok": True, "version": versions[name], "error": ""},
+        lambda name: {
+            "module": name,
+            "ok": True,
+            "version": versions[name],
+            "error": "",
+        },
     )
     monkeypatch.setattr(
         diagnostics,
@@ -100,12 +122,21 @@ def test_diagnostics_rejects_mixed_stack_but_keeps_fallback(monkeypatch):
 
 def test_huggingface_conflict_message_is_actionable(monkeypatch):
     import scripts.transcription_diagnostics as diagnostics
-    monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: {
-        "packages": {"huggingface_hub": {"ok": True, "version": "0.36.2"},
-                     "tokenizers": {"ok": True, "version": "0.22.2"}},
-        "missing": [], "incompatible": [], "fallback_ready": True,
-        "torch_runtime": {"cuda_available": False},
-    })
+
+    monkeypatch.setattr(
+        diagnostics,
+        "diagnose",
+        lambda base_dir=None: {
+            "packages": {
+                "huggingface_hub": {"ok": True, "version": "0.36.2"},
+                "tokenizers": {"ok": True, "version": "0.22.2"},
+            },
+            "missing": [],
+            "incompatible": [],
+            "fallback_ready": True,
+            "torch_runtime": {"cuda_available": False},
+        },
+    )
     message = build_error_message(
         "cannot import name 'is_offline_mode' from 'huggingface_hub'",
         base_dir=".",
@@ -130,7 +161,9 @@ def test_ctranslate2_windows_import_uses_local_resource_shim(monkeypatch, tmp_pa
 
     def fake_import(module_name):
         if module_name == "pkg_resources":
-            raise ModuleNotFoundError("No module named 'pkg_resources'", name="pkg_resources")
+            raise ModuleNotFoundError(
+                "No module named 'pkg_resources'", name="pkg_resources"
+            )
         if module_name == "ctranslate2":
             shim = sys.modules["pkg_resources"]
             assert shim.resource_filename(module_name, "") == str(tmp_path)
@@ -166,7 +199,12 @@ def test_pkg_resources_is_not_required_for_whisperx_backend(monkeypatch):
     monkeypatch.setattr(
         diagnostics,
         "_probe",
-        lambda name: {"module": name, "ok": True, "version": versions[name], "error": ""},
+        lambda name: {
+            "module": name,
+            "ok": True,
+            "version": versions[name],
+            "error": "",
+        },
     )
     monkeypatch.setattr(
         diagnostics,
@@ -301,11 +339,22 @@ def test_repair_does_not_report_fallback_as_a_whisperx_repair(monkeypatch):
             "packages": {"torch": {"ok": True}, "torchaudio": {"ok": True}},
             "torch_runtime": {"cuda_available": False},
         },
-        {"ready": True, "primary_ready": False, "fallback_ready": True, "gpu_ready": False},
+        {
+            "ready": True,
+            "primary_ready": False,
+            "fallback_ready": True,
+            "gpu_ready": False,
+        },
     ]
     monkeypatch.setattr(diagnostics, "diagnose", lambda base_dir=None: reports.pop(0))
-    monkeypatch.setattr(diagnostics, "_run_install", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(diagnostics, "build_error_message", lambda base_dir=None: "WhisperX stack still incompatible")
+    monkeypatch.setattr(
+        diagnostics, "_run_install", lambda *args, **kwargs: {"ok": True}
+    )
+    monkeypatch.setattr(
+        diagnostics,
+        "build_error_message",
+        lambda base_dir=None: "WhisperX stack still incompatible",
+    )
 
     result = diagnostics.repair("cpu")
 
@@ -331,7 +380,9 @@ def test_transcription_install_manifests_pin_the_locked_stack():
         assert "tokenizers>=0.22.2,<0.23.1" in text
         assert "setuptools>=84.1.0,<85" in text
         if manifest.name == "install_dependencies.bat":
-            install_line = next(line for line in text.splitlines() if '"whisperx==3.3.1"' in line)
+            install_line = next(
+                line for line in text.splitlines() if '"whisperx==3.3.1"' in line
+            )
             assert '"setuptools>=84.1.0,<85"' in install_line
             assert '"ctranslate2>=4.4.0,<4.5.0"' in install_line
             assert "import pkg_resources" not in text

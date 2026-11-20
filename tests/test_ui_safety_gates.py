@@ -63,13 +63,23 @@ def test_public_upload_is_blocked_before_uploader_creation(tmp_path, monkeypatch
     clip.write_bytes(b"fake mp4")
 
     def fail_if_created(*_args, **_kwargs):
-        raise AssertionError("uploader must not be created for an unconfirmed public upload")
+        raise AssertionError(
+            "uploader must not be created for an unconfirmed public upload"
+        )
 
     monkeypatch.setattr(ug, "UPLOADERS", {"youtube": fail_if_created})
     lines = list(
         publish_panel.stream_upload(
-            str(project), "youtube", str(clip), "Title", "Caption", [], False, "warn",
-            privacy_status="public", public_confirm=False,
+            str(project),
+            "youtube",
+            str(clip),
+            "Title",
+            "Caption",
+            [],
+            False,
+            "warn",
+            privacy_status="public",
+            public_confirm=False,
         )
     )
     output = "\n".join(lines)
@@ -94,8 +104,16 @@ def test_public_upload_dry_run_does_not_require_confirmation(tmp_path, monkeypat
     monkeypatch.setattr(ug, "UPLOADERS", {"youtube": FakeUploader})
     output = "\n".join(
         publish_panel.stream_upload(
-            str(project), "youtube", str(clip), "Title", "Caption", [], True, "warn",
-            privacy_status="public", public_confirm=False,
+            str(project),
+            "youtube",
+            str(clip),
+            "Title",
+            "Caption",
+            [],
+            True,
+            "warn",
+            privacy_status="public",
+            public_confirm=False,
         )
     )
     assert "Upload finished." in output
@@ -120,12 +138,16 @@ def test_processing_validator_rejects_invalid_input_and_public_without_confirmat
 def test_processing_validator_accepts_safe_dry_run():
     from webui.app import validate_processing_config
 
-    report = validate_processing_config(**_validation_args(auto_upload=True, auto_upload_privacy="public"))
+    report = validate_processing_config(
+        **_validation_args(auto_upload=True, auto_upload_privacy="public")
+    )
     assert report["errors"] == []
     assert any("Dry Run" in item for item in report["warnings"])
 
 
-def test_youtube_preflight_checks_channel_and_schedule_without_upload(tmp_path, monkeypatch):
+def test_youtube_preflight_checks_channel_and_schedule_without_upload(
+    tmp_path, monkeypatch
+):
     import scripts.content_guard as content_guard
     import scripts.upload_gate as upload_gate
     import webui.youtube_credentials as credentials
@@ -135,12 +157,22 @@ def test_youtube_preflight_checks_channel_and_schedule_without_upload(tmp_path, 
     oauth.write_text("{}", encoding="utf-8")
     seen = {}
 
-    monkeypatch.setattr(credentials, "store_client_secrets", lambda path: {
-        "path": str(tmp_path / "stored-client.json"), "changed": False,
-    })
-    monkeypatch.setattr(content_guard, "channel_status", lambda *_args, **_kwargs: {
-        "locked": False, "incidents": [],
-    })
+    monkeypatch.setattr(
+        credentials,
+        "store_client_secrets",
+        lambda path: {
+            "path": str(tmp_path / "stored-client.json"),
+            "changed": False,
+        },
+    )
+    monkeypatch.setattr(
+        content_guard,
+        "channel_status",
+        lambda *_args, **_kwargs: {
+            "locked": False,
+            "incidents": [],
+        },
+    )
 
     class FakeUploader:
         def __init__(self, project_folder, **kwargs):
@@ -153,9 +185,13 @@ def test_youtube_preflight_checks_channel_and_schedule_without_upload(tmp_path, 
 
     monkeypatch.setattr(upload_gate, "YouTubeUploader", FakeUploader)
     result = app.prepare_youtube_preflight(
-        str(tmp_path / "project"), str(oauth), dry_run=False,
-        privacy_status="private", publish_at="2030-01-01T10:00:00+00:00",
-        schedule_interval_minutes=90, expected_clips=6,
+        str(tmp_path / "project"),
+        str(oauth),
+        dry_run=False,
+        privacy_status="private",
+        publish_at="2030-01-01T10:00:00+00:00",
+        schedule_interval_minutes=90,
+        expected_clips=6,
     )
     assert result["ready"] is True
     assert result["scheduled_count"] == 6
@@ -167,23 +203,29 @@ def test_youtube_preflight_checks_channel_and_schedule_without_upload(tmp_path, 
 def test_schedule_requires_timezone_future_and_valid_interval():
     from webui.app import validate_processing_config
 
-    good = validate_processing_config(**_validation_args(
-        auto_upload=True,
-        auto_upload_publish_at="2030-01-01T10:00:00+00:00",
-        auto_upload_interval_minutes=90,
-    ))
+    good = validate_processing_config(
+        **_validation_args(
+            auto_upload=True,
+            auto_upload_publish_at="2030-01-01T10:00:00+00:00",
+            auto_upload_interval_minutes=90,
+        )
+    )
     assert good["errors"] == []
 
-    naive = validate_processing_config(**_validation_args(
-        auto_upload=True,
-        auto_upload_publish_at="2030-01-01T10:00:00",
-    ))
+    naive = validate_processing_config(
+        **_validation_args(
+            auto_upload=True,
+            auto_upload_publish_at="2030-01-01T10:00:00",
+        )
+    )
     assert any("منطقة زمنية" in item for item in naive["errors"])
 
-    invalid_interval = validate_processing_config(**_validation_args(
-        auto_upload=True,
-        auto_upload_interval_minutes=0,
-    ))
+    invalid_interval = validate_processing_config(
+        **_validation_args(
+            auto_upload=True,
+            auto_upload_interval_minutes=0,
+        )
+    )
     assert any("فاصل الجدولة" in item for item in invalid_interval["errors"])
 
 
@@ -215,7 +257,10 @@ def test_post_render_ocr_uses_selected_sampling_settings(tmp_path, monkeypatch):
         )
     )
     assert component_ids["عدد إطارات OCR للفحص البصري"] in process_event["inputs"]
-    assert component_ids["لغات OCR — يتطلب Tesseract واللغات المختارة"] in process_event["inputs"]
+    assert (
+        component_ids["لغات OCR — يتطلب Tesseract واللغات المختارة"]
+        in process_event["inputs"]
+    )
 
     source = tmp_path / "source.mp4"
     source.write_bytes(b"source")

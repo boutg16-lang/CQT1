@@ -17,8 +17,12 @@ def _term(term, severity="high", lang="test"):
 
 
 def _pack(version, terms, source="test"):
-    return {"version": version, "updated": "2026-08-20", "source": source,
-            "terms": terms}
+    return {
+        "version": version,
+        "updated": "2026-08-20",
+        "source": source,
+        "terms": terms,
+    }
 
 
 class TestMergePacks:
@@ -27,18 +31,22 @@ class TestMergePacks:
         assert merged["version"] == 3 and len(merged["terms"]) == 1
 
     def test_merges_union_of_terms(self):
-        merged = su.merge_packs([
-            _pack(1, [_term("a"), _term("b")]),
-            _pack(2, [_term("c")]),
-        ])
+        merged = su.merge_packs(
+            [
+                _pack(1, [_term("a"), _term("b")]),
+                _pack(2, [_term("c")]),
+            ]
+        )
         assert len(merged["terms"]) == 3
         assert merged["version"] == 2
 
     def test_highest_severity_wins_per_term(self):
-        merged = su.merge_packs([
-            _pack(1, [_term("x", severity="low")]),
-            _pack(2, [_term("x", severity="high")]),
-        ])
+        merged = su.merge_packs(
+            [
+                _pack(1, [_term("x", severity="low")]),
+                _pack(2, [_term("x", severity="high")]),
+            ]
+        )
         terms = {t["term"]: t for t in merged["terms"]}
         assert terms["x"]["severity"] == "high"
 
@@ -63,10 +71,12 @@ class TestMergePacks:
         assert merged["reviewed_at"] == ""
 
     def test_deduplicates_same_term_and_lang(self):
-        merged = su.merge_packs([
-            _pack(1, [_term("word", lang="ar"), _term("word", lang="en")]),
-            _pack(2, [_term("word", lang="ar")]),
-        ])
+        merged = su.merge_packs(
+            [
+                _pack(1, [_term("word", lang="ar"), _term("word", lang="en")]),
+                _pack(2, [_term("word", lang="ar")]),
+            ]
+        )
         assert len(merged["terms"]) == 2  # one ar + one en
 
     def test_skips_none_packs(self):
@@ -117,15 +127,17 @@ class TestMultiSourceUpdate:
         if version:
             pack = _pack(version, terms or [_term("cache-term")])
             (base / su.CACHE_FILENAME).write_text(
-                json.dumps(pack, ensure_ascii=False), encoding="utf-8")
+                json.dumps(pack, ensure_ascii=False), encoding="utf-8"
+            )
         return str(base)
 
     def test_multi_source_merge_updates(self, tmp_path):
         base = self._cache(tmp_path)  # no cache → first run
         url_a = self._pack_path(tmp_path, _pack(1, [_term("from-a")]), "a.json")
         url_b = self._pack_path(tmp_path, _pack(1, [_term("from-b")]), "b.json")
-        r = su.check_and_update(base_dir=base, force=True,
-                                extra_urls=[url_b], url=url_a)
+        r = su.check_and_update(
+            base_dir=base, force=True, extra_urls=[url_b], url=url_a
+        )
         assert r["status"] == "updated"
         cached = su.load_cached_pack(base)
         terms = {t["term"] for t in cached["terms"]}
@@ -135,8 +147,9 @@ class TestMultiSourceUpdate:
         # Single-source contract: an explicit URL that cannot be fetched
         # reports offline (no surprise mirror fallback).
         base = self._cache(tmp_path, version=2)
-        r = su.check_and_update(base_dir=base, url="file:///nonexistent/x.json",
-                                force=True)
+        r = su.check_and_update(
+            base_dir=base, url="file:///nonexistent/x.json", force=True
+        )
         assert r["status"] == "offline"
         assert su.load_cached_pack(base)["version"] == 2
 
@@ -168,6 +181,7 @@ class TestPolicyWatch:
     def test_check_policy_offline_graceful(self, tmp_path, monkeypatch):
         def fake_fetch(url):
             raise OSError("no network in test")
+
         monkeypatch.setattr(yw, "_fetch_text", fake_fetch)
         result = yw.check_policy_pages(str(tmp_path))
         assert result["status"] == "offline"
@@ -175,8 +189,10 @@ class TestPolicyWatch:
     def test_policy_change_detected(self, tmp_path, monkeypatch):
         pages = {}
         monkeypatch.setattr(
-            yw, "_fetch_text",
-            lambda url: pages.setdefault(url, "<html><body>v1 rules</body></html>"))
+            yw,
+            "_fetch_text",
+            lambda url: pages.setdefault(url, "<html><body>v1 rules</body></html>"),
+        )
         first = yw.check_policy_pages(str(tmp_path))
         assert first["status"] == "unchanged"
         # mutate one page
@@ -187,7 +203,7 @@ class TestPolicyWatch:
 
     def test_feed_written(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            yw, "_fetch_text",
-            lambda url: "<html><body>stable</body></html>")
+            yw, "_fetch_text", lambda url: "<html><body>stable</body></html>"
+        )
         yw.check_policy_pages(str(tmp_path))
         assert os.path.exists(tmp_path / yw.FEED_FILENAME)

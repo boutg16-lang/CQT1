@@ -5,6 +5,7 @@ WebUI). This small profile carries its conclusion to the app: which backend
 to use, whether to force CPU, and how large an audio window is safe for the
 available RAM. Explicit user environment variables always win.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,18 +26,20 @@ def recommended_chunk_seconds() -> int:
     """Pick a window size from free RAM; 300s is the normal default."""
     try:
         import psutil
+
         free = float(psutil.virtual_memory().available)
     except Exception:
         return 300
-    if free < 1.5 * 1024 ** 3:
+    if free < 1.5 * 1024**3:
         return 120
-    if free < 2.5 * 1024 ** 3:
+    if free < 2.5 * 1024**3:
         return 180
     return 300
 
 
-def write_profile(*, backend: str, force_cpu: bool, chunk_seconds: int,
-                  reason: str = "") -> str:
+def write_profile(
+    *, backend: str, force_cpu: bool, chunk_seconds: int, reason: str = ""
+) -> str:
     data: Dict[str, Any] = {
         "backend": str(backend),
         "force_cpu": bool(force_cpu),

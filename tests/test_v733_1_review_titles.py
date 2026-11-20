@@ -15,18 +15,26 @@ def _write_project(tmp_path, with_meta=True):
     project.mkdir()
     payload = {
         "segments": [
-            {"title": "Main A", "recommended_title": "Main A",
-             "start_time": 10.0, "end_time": 40.0, "score": 90,
-             "alt_titles": ["Alt A1", "Alt A2"]},
-            {"title": "Main B", "start_time": 50.0, "end_time": 80.0,
-             "score": 80, "alt_titles": ["Alt B1"]},
+            {
+                "title": "Main A",
+                "recommended_title": "Main A",
+                "start_time": 10.0,
+                "end_time": 40.0,
+                "score": 90,
+                "alt_titles": ["Alt A1", "Alt A2"],
+            },
+            {
+                "title": "Main B",
+                "start_time": 50.0,
+                "end_time": 80.0,
+                "score": 80,
+                "alt_titles": ["Alt B1"],
+            },
         ],
     }
     if with_meta:
-        payload["source_meta"] = {"source_video_fp": "abc123",
-                                  "config_fp": "cfg456"}
-    (project / "viral_segments.txt").write_text(
-        json.dumps(payload), encoding="utf-8")
+        payload["source_meta"] = {"source_video_fp": "abc123", "config_fp": "cfg456"}
+    (project / "viral_segments.txt").write_text(json.dumps(payload), encoding="utf-8")
     return str(project), payload
 
 
@@ -42,17 +50,32 @@ def test_title_choices_for_returns_main_plus_alts(tmp_path):
 
 def test_title_choices_prioritize_verified_factual_alternatives(tmp_path):
     project, _ = _write_project(tmp_path)
-    payload = json.loads((tmp_path / "proj" / "viral_segments.txt").read_text(encoding="utf-8"))
+    payload = json.loads(
+        (tmp_path / "proj" / "viral_segments.txt").read_text(encoding="utf-8")
+    )
     payload["segments"][0]["title_data"] = {
         "validated_alternatives": [
-            {"text": "معلومة مؤكدة عن العمل", "score": 71,
-             "validation": {"status": "verified", "checks": {"factual_accuracy_score": 100}}},
-            {"text": "عنوان يحتاج مراجعة", "score": 99,
-             "validation": {"status": "review", "checks": {"factual_accuracy_score": 48}}},
+            {
+                "text": "معلومة مؤكدة عن العمل",
+                "score": 71,
+                "validation": {
+                    "status": "verified",
+                    "checks": {"factual_accuracy_score": 100},
+                },
+            },
+            {
+                "text": "عنوان يحتاج مراجعة",
+                "score": 99,
+                "validation": {
+                    "status": "review",
+                    "checks": {"factual_accuracy_score": 48},
+                },
+            },
         ]
     }
     (tmp_path / "proj" / "viral_segments.txt").write_text(
-        json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
     options, current = segments_review.title_choices_for(project, 0)
     assert current == "Main A"
     assert options.index("معلومة مؤكدة عن العمل") < options.index("عنوان يحتاج مراجعة")
@@ -99,18 +122,22 @@ def test_apply_selection_preserves_top_level_metadata(tmp_path):
     rows = segments_review.rows_from_segments(segments_review.load_segments(project))
     rows[1][0] = False  # keep only segment A
     segments_review.apply_selection(project, rows)
-    payload = json.load(open(os.path.join(project, "viral_segments.txt"),
-                             encoding="utf-8"))
-    assert payload["source_meta"] == {"source_video_fp": "abc123",
-                                      "config_fp": "cfg456"}
+    payload = json.load(
+        open(os.path.join(project, "viral_segments.txt"), encoding="utf-8")
+    )
+    assert payload["source_meta"] == {
+        "source_video_fp": "abc123",
+        "config_fp": "cfg456",
+    }
     assert len(payload["segments"]) == 1
 
 
 def test_choose_title_preserves_top_level_metadata(tmp_path):
     project, _ = _write_project(tmp_path)
     segments_review.choose_title(project, 1, "Alt B1")
-    payload = json.load(open(os.path.join(project, "viral_segments.txt"),
-                             encoding="utf-8"))
+    payload = json.load(
+        open(os.path.join(project, "viral_segments.txt"), encoding="utf-8")
+    )
     assert payload["source_meta"]["config_fp"] == "cfg456"
     assert payload["segments"][1]["recommended_title"] == "Alt B1"
 

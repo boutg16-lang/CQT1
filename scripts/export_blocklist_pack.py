@@ -32,14 +32,24 @@ from scripts import safety_filter
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, required=True,
-                        help="Pack version (bump on every change)")
-    parser.add_argument("--updated", default=None,
-                        help="Content update date in YYYY-MM-DD format (default: today)")
-    parser.add_argument("--reviewed-at", default=None,
-                        help="Human review date in YYYY-MM-DD format (default: today)")
-    parser.add_argument("--out", default=None,
-                        help="Output path (default: repo root safety_blocklist.json)")
+    parser.add_argument(
+        "--version", type=int, required=True, help="Pack version (bump on every change)"
+    )
+    parser.add_argument(
+        "--updated",
+        default=None,
+        help="Content update date in YYYY-MM-DD format (default: today)",
+    )
+    parser.add_argument(
+        "--reviewed-at",
+        default=None,
+        help="Human review date in YYYY-MM-DD format (default: today)",
+    )
+    parser.add_argument(
+        "--out",
+        default=None,
+        help="Output path (default: repo root safety_blocklist.json)",
+    )
     args = parser.parse_args()
 
     import datetime
@@ -68,7 +78,8 @@ def main():
 
     out = args.out or os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "safety_blocklist.json")
+        "safety_blocklist.json",
+    )
     with open(out, "w", encoding="utf-8") as f:
         json.dump(pack, f, ensure_ascii=False, indent=2)
     # SHA-256 sidecar: computed from the exact bytes just written, so the

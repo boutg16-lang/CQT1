@@ -134,8 +134,10 @@ def resolve_toolchain(which_fn=None, isfile=None, runs=None, env=None):
     for name in ("ffmpeg", "ffprobe"):
         info = programs[name]
         if info["state"] == "broken":
-            problems.append("%s found at %s but it does not run (corrupt or missing DLLs)"
-                            % (name, info["path"]))
+            problems.append(
+                "%s found at %s but it does not run (corrupt or missing DLLs)"
+                % (name, info["path"])
+            )
         elif info["state"] == "missing":
             problems.append("%s not found on PATH" % name)
 
@@ -154,9 +156,22 @@ def encoder_works(codec, timeout=20):
     if not codec:
         return False
     command = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-        "-f", "lavfi", "-i", "color=c=black:s=128x72:d=0.2",
-        "-frames:v", "1", "-c:v", str(codec), "-f", "null", "-",
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=128x72:d=0.2",
+        "-frames:v",
+        "1",
+        "-c:v",
+        str(codec),
+        "-f",
+        "null",
+        "-",
     ]
     try:
         result = subprocess.run(command, capture_output=True, timeout=timeout)

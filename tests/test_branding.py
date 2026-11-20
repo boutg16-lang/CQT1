@@ -82,11 +82,9 @@ def test_probe_streams_failure_returns_all_none(monkeypatch):
 
 
 def test_has_audio_true_false_and_error(monkeypatch):
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: _FakeResult(stdout="0\n"))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _FakeResult(stdout="0\n"))
     assert branding._has_audio("clip.mp4") is True
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: _FakeResult(stdout=""))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _FakeResult(stdout=""))
     assert branding._has_audio("clip.mp4") is False
 
     def boom(*a, **k):
@@ -119,16 +117,23 @@ def _stub_ffmpeg_success(monkeypatch, out_paths):
 
 
 def test_watermark_missing_video_returns_false(tmp_path):
-    assert branding.apply_watermark(
-        str(tmp_path / "gone.mp4"), str(tmp_path / "o.mp4"),
-        str(tmp_path / "logo.png")) is False
+    assert (
+        branding.apply_watermark(
+            str(tmp_path / "gone.mp4"),
+            str(tmp_path / "o.mp4"),
+            str(tmp_path / "logo.png"),
+        )
+        is False
+    )
 
 
 def test_watermark_missing_logo_copies_clip(tmp_path):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    assert branding.apply_watermark(str(video), str(out),
-                                    str(tmp_path / "gone.png")) is False
+    assert (
+        branding.apply_watermark(str(video), str(out), str(tmp_path / "gone.png"))
+        is False
+    )
     assert out.read_bytes() == b"video-bytes"
 
 
@@ -166,8 +171,10 @@ def test_watermark_positions(monkeypatch, tmp_path):
     for position, overlay in branding.POSITIONS.items():
         out = tmp_path / ("out_" + position.replace("-", "_") + ".mp4")
         cmds = _stub_ffmpeg_success(monkeypatch, out)
-        assert branding.apply_watermark(
-            str(video), str(out), str(logo), position=position) is True
+        assert (
+            branding.apply_watermark(str(video), str(out), str(logo), position=position)
+            is True
+        )
         fc = [c for c in cmds if c[0] == "ffmpeg"][0]
         fc = fc[fc.index("-filter_complex") + 1]
         assert "overlay={}".format(overlay) in fc
@@ -179,8 +186,10 @@ def test_watermark_unknown_position_falls_back_to_bottom_right(tmp_path, monkeyp
     logo.write_bytes(b"png")
     out = tmp_path / "out.mp4"
     cmds = _stub_ffmpeg_success(monkeypatch, out)
-    assert branding.apply_watermark(
-        str(video), str(out), str(logo), position="nowhere") is True
+    assert (
+        branding.apply_watermark(str(video), str(out), str(logo), position="nowhere")
+        is True
+    )
     fc = [c for c in cmds if c[0] == "ffmpeg"][0]
     fc = fc[fc.index("-filter_complex") + 1]
     assert "overlay=W-w-10:H-h-10" in fc
@@ -203,8 +212,10 @@ def test_watermark_logo_width_minimum_40(tmp_path, monkeypatch):
         return _FakeResult()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    assert branding.apply_watermark(
-        str(video), str(out), str(logo), size_fraction=0.12) is True
+    assert (
+        branding.apply_watermark(str(video), str(out), str(logo), size_fraction=0.12)
+        is True
+    )
     fc = [c for c in cmds if c[0] == "ffmpeg"][0]
     fc = fc[fc.index("-filter_complex") + 1]
     assert "scale=40:-1" in fc
@@ -231,8 +242,9 @@ def test_watermark_ffmpeg_failure_falls_back_to_copy(tmp_path, monkeypatch):
 
 def test_normalize_to_builds_scale_pad_command(monkeypatch, tmp_path):
     cmds = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **k: cmds.append(cmd) or _FakeResult())
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **k: cmds.append(cmd) or _FakeResult()
+    )
     branding._normalize_to("in.mp4", str(tmp_path / "n.mp4"), (1080, 1920, 30.0, True))
     assert len(cmds) == 1
     cmd = cmds[0]
@@ -245,8 +257,9 @@ def test_normalize_to_builds_scale_pad_command(monkeypatch, tmp_path):
 
 def test_normalize_to_no_audio_uses_an(monkeypatch, tmp_path):
     cmds = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **k: cmds.append(cmd) or _FakeResult())
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **k: cmds.append(cmd) or _FakeResult()
+    )
     branding._normalize_to("in.mp4", str(tmp_path / "n.mp4"), (1080, 1920, 30.0, False))
     cmd = cmds[0]
     assert cmd[cmd.index("-c:a") + 1] == "an"
@@ -254,8 +267,9 @@ def test_normalize_to_no_audio_uses_an(monkeypatch, tmp_path):
 
 def test_normalize_to_missing_fps_defaults_30(monkeypatch, tmp_path):
     cmds = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **k: cmds.append(cmd) or _FakeResult())
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **k: cmds.append(cmd) or _FakeResult()
+    )
     branding._normalize_to("in.mp4", str(tmp_path / "n.mp4"), (None, None, None, True))
     vf = cmds[0][cmds[0].index("-vf") + 1]
     assert "fps=30" in vf
@@ -265,9 +279,14 @@ def test_normalize_to_missing_fps_defaults_30(monkeypatch, tmp_path):
 
 
 def test_intro_outro_missing_video_returns_false(tmp_path):
-    assert branding.apply_intro_outro(
-        str(tmp_path / "gone.mp4"), str(tmp_path / "o.mp4"),
-        intro=str(tmp_path / "i.mp4")) is False
+    assert (
+        branding.apply_intro_outro(
+            str(tmp_path / "gone.mp4"),
+            str(tmp_path / "o.mp4"),
+            intro=str(tmp_path / "i.mp4"),
+        )
+        is False
+    )
 
 
 def test_intro_outro_no_assets_copies_clip(tmp_path):
@@ -280,8 +299,12 @@ def test_intro_outro_no_assets_copies_clip(tmp_path):
 def test_intro_outro_missing_assets_copies_clip(tmp_path):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    assert branding.apply_intro_outro(
-        str(video), str(out), intro=str(tmp_path / "gone.mp4")) is False
+    assert (
+        branding.apply_intro_outro(
+            str(video), str(out), intro=str(tmp_path / "gone.mp4")
+        )
+        is False
+    )
     assert out.read_bytes() == b"video-bytes"
 
 
@@ -293,14 +316,19 @@ def test_intro_outro_happy_path_concats_normalized_clips(tmp_path, monkeypatch):
     outro.write_bytes(b"outro")
     out = tmp_path / "out.mp4"
     cmds = _stub_ffmpeg_success(monkeypatch, out)
-    assert branding.apply_intro_outro(
-        str(video), str(out), intro=str(intro), outro=str(outro)) is True
+    assert (
+        branding.apply_intro_outro(
+            str(video), str(out), intro=str(intro), outro=str(outro)
+        )
+        is True
+    )
     concat_cmds = [c for c in cmds if "-f" in c and "concat" in c]
     assert len(concat_cmds) == 1
     assert "-c" in concat_cmds[0] and "copy" in concat_cmds[0]
     # Temp files (normalized clips + concat list) are cleaned up.
-    leftovers = [p.name for p in tmp_path.iterdir()
-                 if "norm" in p.name or "concat" in p.name]
+    leftovers = [
+        p.name for p in tmp_path.iterdir() if "norm" in p.name or "concat" in p.name
+    ]
     assert leftovers == []
     assert out.read_bytes() == b"out-bytes"
 
@@ -317,8 +345,7 @@ def test_intro_outro_ffmpeg_failure_falls_back_to_copy(tmp_path, monkeypatch):
         raise subprocess.CalledProcessError(1, cmd, stderr=b"boom")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    assert branding.apply_intro_outro(
-        str(video), str(out), intro=str(intro)) is False
+    assert branding.apply_intro_outro(str(video), str(out), intro=str(intro)) is False
     assert out.read_bytes() == b"video-bytes"
 
 
@@ -346,8 +373,9 @@ def test_process_file_same_path_no_copy_needed(tmp_path):
 def test_process_file_missing_logo_is_degraded(tmp_path):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    report = branding.process_file(str(video), str(out),
-                                   logo_path=str(tmp_path / "gone.png"))
+    report = branding.process_file(
+        str(video), str(out), logo_path=str(tmp_path / "gone.png")
+    )
     assert report["ok"] is False
     assert report["degraded"] is True
     assert report["error"] == "logo file not found"
@@ -371,10 +399,10 @@ def test_process_file_watermark_success(monkeypatch, tmp_path):
 def test_process_file_missing_intro_is_degraded(monkeypatch, tmp_path):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(branding, "apply_intro_outro",
-                        lambda *a, **k: False)
-    report = branding.process_file(str(video), str(out),
-                                   intro=str(tmp_path / "gone.mp4"))
+    monkeypatch.setattr(branding, "apply_intro_outro", lambda *a, **k: False)
+    report = branding.process_file(
+        str(video), str(out), intro=str(tmp_path / "gone.mp4")
+    )
     assert report["ok"] is False
     assert report["degraded"] is True
     assert report["error"] == "intro/outro file not found"
@@ -385,8 +413,7 @@ def test_process_file_watermark_failure_is_degraded(monkeypatch, tmp_path):
     logo = tmp_path / "logo.png"
     logo.write_bytes(b"png")
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(branding, "apply_watermark",
-                        lambda *a, **k: False)
+    monkeypatch.setattr(branding, "apply_watermark", lambda *a, **k: False)
     report = branding.process_file(str(video), str(out), logo_path=str(logo))
     assert report["ok"] is False
     assert report["degraded"] is True
@@ -406,12 +433,11 @@ def test_process_file_full_flow(monkeypatch, tmp_path):
     intro = tmp_path / "intro.mp4"
     intro.write_bytes(b"intro")
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(branding, "apply_watermark",
-                        lambda *a, **k: True)
-    monkeypatch.setattr(branding, "apply_intro_outro",
-                        lambda *a, **k: True)
-    report = branding.process_file(str(video), str(out), logo_path=str(logo),
-                                   intro=str(intro))
+    monkeypatch.setattr(branding, "apply_watermark", lambda *a, **k: True)
+    monkeypatch.setattr(branding, "apply_intro_outro", lambda *a, **k: True)
+    report = branding.process_file(
+        str(video), str(out), logo_path=str(logo), intro=str(intro)
+    )
     assert report["ok"] is True
     assert report["watermark"] is True
     assert report["intro_outro"] is True
@@ -424,10 +450,12 @@ def test_process_file_full_flow(monkeypatch, tmp_path):
 def test_main_json_reports_status(tmp_path, monkeypatch, capsys):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(sys, "argv", ["branding.py", "--video", str(video),
-                                      "--out", str(out), "--json"])
+    monkeypatch.setattr(
+        sys, "argv", ["branding.py", "--video", str(video), "--out", str(out), "--json"]
+    )
     assert branding.main() == 0
     import json
+
     report = json.loads(capsys.readouterr().out)
     assert report["ok"] is True
     assert report["copy_through"] is True
@@ -436,8 +464,18 @@ def test_main_json_reports_status(tmp_path, monkeypatch, capsys):
 def test_main_text_output_and_failure_code(tmp_path, monkeypatch, capsys):
     video = _make_video(tmp_path)
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(sys, "argv", ["branding.py", "--video", str(video),
-                                      "--out", str(out),
-                                      "--logo", str(tmp_path / "gone.png")])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "branding.py",
+            "--video",
+            str(video),
+            "--out",
+            str(out),
+            "--logo",
+            str(tmp_path / "gone.png"),
+        ],
+    )
     assert branding.main() == 1
     assert "watermark=False" in capsys.readouterr().out

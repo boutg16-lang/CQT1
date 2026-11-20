@@ -49,6 +49,7 @@ def register(name: str, *, network: bool = False, description: str = ""):
             "synthesize": function,
         }
         return function
+
     return decorator
 
 
@@ -70,29 +71,61 @@ def _network_allowed() -> bool:
 def _duration(path: str, ffprobe: str = "ffprobe") -> float:
     try:
         proc = subprocess.run(
-            [ffprobe, "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", path],
-            capture_output=True, text=True, timeout=30)
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         return max(0.0, float((proc.stdout or "").strip() or 0.0))
     except Exception:
         return 0.0
 
 
-def _result(path: str, provider: str, voice: Optional[str], network: bool) -> Dict[str, Any]:
-    return {"ok": True, "path": path, "provider": provider, "voice": voice,
-            "network": bool(network), "duration": _duration(path), "error": None}
+def _result(
+    path: str, provider: str, voice: Optional[str], network: bool
+) -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "path": path,
+        "provider": provider,
+        "voice": voice,
+        "network": bool(network),
+        "duration": _duration(path),
+        "error": None,
+    }
 
 
 def _failure(provider: str, message: str) -> Dict[str, Any]:
-    return {"ok": False, "path": None, "provider": provider, "voice": None,
-            "network": bool(provider_info(provider) and provider_info(provider)["network"]),
-            "duration": 0.0, "error": str(message)[:400]}
+    return {
+        "ok": False,
+        "path": None,
+        "provider": provider,
+        "voice": None,
+        "network": bool(provider_info(provider) and provider_info(provider)["network"]),
+        "duration": 0.0,
+        "error": str(message)[:400],
+    }
 
 
-def synthesize(text: str, out_path: str, *, provider: str = "edge",
-               voice: Optional[str] = None, rate: Optional[str] = None,
-               timeout: int = DEFAULT_TIMEOUT,
-               allow_network: Optional[bool] = None) -> Dict[str, Any]:
+def synthesize(
+    text: str,
+    out_path: str,
+    *,
+    provider: str = "edge",
+    voice: Optional[str] = None,
+    rate: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+    allow_network: Optional[bool] = None,
+) -> Dict[str, Any]:
     """Route one utterance to a provider. Never raises.
 
     ``allow_network`` lets a caller that already collected *explicit, visible*
@@ -102,18 +135,27 @@ def synthesize(text: str, out_path: str, *, provider: str = "edge",
     name = str(provider or "edge").strip().lower()
     entry = _PROVIDERS.get(name)
     if entry is None:
-        return _failure(name, "unknown TTS provider {!r} (available: {})".format(
-            name, ", ".join(provider_names())))
+        return _failure(
+            name,
+            "unknown TTS provider {!r} (available: {})".format(
+                name, ", ".join(provider_names())
+            ),
+        )
     if not str(text or "").strip():
         return _failure(name, "empty text")
     network_ok = _network_allowed() if allow_network is None else bool(allow_network)
     if entry["network"] and not network_ok:
-        return _failure(name, (
-            "{} sends the text to an external service; set {}=1 to allow it "
-            "(privacy: the transcript leaves this machine)").format(name, NETWORK_OPT_IN_ENV))
+        return _failure(
+            name,
+            (
+                "{} sends the text to an external service; set {}=1 to allow it "
+                "(privacy: the transcript leaves this machine)"
+            ).format(name, NETWORK_OPT_IN_ENV),
+        )
     try:
-        return entry["synthesize"](str(text), str(out_path), voice=voice,
-                                   rate=rate, timeout=timeout)
+        return entry["synthesize"](
+            str(text), str(out_path), voice=voice, rate=rate, timeout=timeout
+        )
     except Exception as exc:
         return _failure(name, "{}: {}".format(type(exc).__name__, exc))
 
@@ -122,15 +164,29 @@ def synthesize(text: str, out_path: str, *, provider: str = "edge",
 # Providers
 # ---------------------------------------------------------------------------
 
-@register("edge", network=True,
-          description="Microsoft Edge TTS — free, no API key, sends text to Microsoft")
-def _edge(text: str, out_path: str, *, voice: Optional[str] = None,
-          rate: Optional[str] = None, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+
+@register(
+    "edge",
+    network=True,
+    description="Microsoft Edge TTS — free, no API key, sends text to Microsoft",
+)
+def _edge(
+    text: str,
+    out_path: str,
+    *,
+    voice: Optional[str] = None,
+    rate: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Dict[str, Any]:
     try:
         import edge_tts  # noqa: PLC0415 — optional dependency, lazy on purpose
     except Exception as exc:
-        return _failure("edge", "edge-tts is not installed (pip install edge-tts): {}".format(
-            str(exc)[:160]))
+        return _failure(
+            "edge",
+            "edge-tts is not installed (pip install edge-tts): {}".format(
+                str(exc)[:160]
+            ),
+        )
     import asyncio
 
     voice_name = voice or os.getenv("VIRALCUTTER_TTS_VOICE", "ar-EG-ShakirNeural")
@@ -150,10 +206,19 @@ def _edge(text: str, out_path: str, *, voice: Optional[str] = None,
     return _result(out_path, "edge", voice_name, True)
 
 
-@register("file", network=False,
-          description="Pre-recorded audio from a folder (offline; voice = directory)")
-def _file(text: str, out_path: str, *, voice: Optional[str] = None,
-          rate: Optional[str] = None, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+@register(
+    "file",
+    network=False,
+    description="Pre-recorded audio from a folder (offline; voice = directory)",
+)
+def _file(
+    text: str,
+    out_path: str,
+    *,
+    voice: Optional[str] = None,
+    rate: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Dict[str, Any]:
     """Copy the next unused audio file from *voice* (a directory).
 
     Deterministic (sorted order) and offline — this is what makes the dubbing
@@ -163,8 +228,10 @@ def _file(text: str, out_path: str, *, voice: Optional[str] = None,
     if not folder or not os.path.isdir(folder):
         return _failure("file", "voice must be an existing folder of audio files")
     candidates = sorted(
-        path for path in glob.glob(os.path.join(folder, "*"))
-        if path.lower().endswith(AUDIO_SUFFIXES))
+        path
+        for path in glob.glob(os.path.join(folder, "*"))
+        if path.lower().endswith(AUDIO_SUFFIXES)
+    )
     if not candidates:
         return _failure("file", "no audio files in {}".format(folder))
     used_marker = os.path.join(folder, ".used")
@@ -174,7 +241,9 @@ def _file(text: str, out_path: str, *, voice: Optional[str] = None,
             used = [line.strip() for line in handle if line.strip()]
     for path in candidates:
         if os.path.basename(path) not in used:
-            os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+            os.makedirs(
+                os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True
+            )
             # ``dub_clip`` uses a provider-neutral temporary name. Preserve
             # the selected file's suffix so FFmpeg's demuxer sees WAV/MP3/etc.
             # correctly; copying a WAV to ``*.mp3`` can produce a valid-looking

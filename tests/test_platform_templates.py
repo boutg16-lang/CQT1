@@ -37,8 +37,9 @@ class TestResolve:
         assert tpl is not None
 
     def test_user_values_win(self):
-        min_d, max_d, tpl = pt.resolve_durations("tiktok", min_duration=20,
-                                                 max_duration=45)
+        min_d, max_d, tpl = pt.resolve_durations(
+            "tiktok", min_duration=20, max_duration=45
+        )
         assert (min_d, max_d) == (20, 45)
 
     def test_unknown_template_keeps_fallback(self):
@@ -65,7 +66,8 @@ class TestPersist:
         project = tmp_path / "proj"
         project.mkdir()
         (project / "process_config.json").write_text(
-            json.dumps({"workflow": "1"}), encoding="utf-8")
+            json.dumps({"workflow": "1"}), encoding="utf-8"
+        )
         pt.save_template_choice(str(project), "yt_shorts")
         with open(project / "process_config.json", encoding="utf-8") as f:
             data = json.load(f)

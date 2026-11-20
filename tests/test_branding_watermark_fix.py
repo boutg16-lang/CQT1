@@ -26,8 +26,7 @@ def test_watermark_failure_keeps_original_error(monkeypatch, tmp_path):
     logo = tmp_path / "logo.png"
     logo.write_bytes(b"png")
     out = tmp_path / "out.mp4"
-    monkeypatch.setattr(branding, "apply_watermark",
-                        lambda *a, **k: False)
+    monkeypatch.setattr(branding, "apply_watermark", lambda *a, **k: False)
     report = branding.process_file(str(video), str(out), logo_path=str(logo))
     assert report["ok"] is False
     assert report["degraded"] is True
@@ -45,8 +44,7 @@ def test_watermark_failure_in_place_keeps_original_error(monkeypatch, tmp_path):
     video = _make_video(tmp_path)
     logo = tmp_path / "logo.png"
     logo.write_bytes(b"png")
-    monkeypatch.setattr(branding, "apply_watermark",
-                        lambda *a, **k: False)
+    monkeypatch.setattr(branding, "apply_watermark", lambda *a, **k: False)
     report = branding.process_file(str(video), logo_path=str(logo))
     assert report["ok"] is False
     assert report["degraded"] is True

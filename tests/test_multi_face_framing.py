@@ -33,8 +33,12 @@ def test_multi_face_three_uses_grid_layout():
 def test_multi_face_four_supports_speaker_layout():
     result = crop_and_resize_multi_faces(
         _frame(),
-        [(20, 100, 180, 220), (350, 100, 180, 220),
-         (680, 100, 180, 220), (1010, 100, 220, 280)],
+        [
+            (20, 100, 180, 220),
+            (350, 100, 180, 220),
+            (680, 100, 180, 220),
+            (1010, 100, 220, 280),
+        ],
         layout="speaker",
     )
     assert result.shape == (1920, 1080, 3)

@@ -37,9 +37,14 @@ def metadata_fingerprint(title: str, caption: str) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_review_windows(entries, *, duration, window_seconds=WINDOW_SECONDS,
-                         overlap_seconds=WINDOW_OVERLAP_SECONDS,
-                         max_chars=MAX_WINDOW_CHARS):
+def build_review_windows(
+    entries,
+    *,
+    duration,
+    window_seconds=WINDOW_SECONDS,
+    overlap_seconds=WINDOW_OVERLAP_SECONDS,
+    max_chars=MAX_WINDOW_CHARS,
+):
     """Create overlapping transcript-backed windows with complete text."""
     clean = []
     for entry in entries or []:
@@ -68,20 +73,25 @@ def build_review_windows(entries, *, duration, window_seconds=WINDOW_SECONDS,
     while cursor < end_at:
         stop = min(end_at, cursor + window_seconds)
         parts = [
-            item["text"] for item in clean
+            item["text"]
+            for item in clean
             if item["end"] > cursor and item["start"] < stop
         ]
         text = " ".join(parts).strip()
         if text:
             if len(text) > max_chars:
-                raise ValueError("a transcript review window exceeds the complete-review limit")
-            windows.append({
-                "index": len(windows),
-                "title": "",
-                "start_time": round(cursor, 3),
-                "end_time": round(stop, 3),
-                "text": text,
-            })
+                raise ValueError(
+                    "a transcript review window exceeds the complete-review limit"
+                )
+            windows.append(
+                {
+                    "index": len(windows),
+                    "title": "",
+                    "start_time": round(cursor, 3),
+                    "end_time": round(stop, 3),
+                    "text": text,
+                }
+            )
         if stop >= end_at:
             break
         cursor = stop - overlap_seconds
@@ -122,8 +132,16 @@ def _choose_backend(requested, root_dir):
     raise ValueError("unsupported contextual safety backend")
 
 
-def review_transcript(entries, *, duration, title="", caption="", backend="unknown",
-                      reviewer=None, video_sha256=""):
+def review_transcript(
+    entries,
+    *,
+    duration,
+    title="",
+    caption="",
+    backend="unknown",
+    reviewer=None,
+    video_sha256="",
+):
     """Run deterministic and contextual checks over every transcript window."""
     windows = build_review_windows(entries, duration=duration)
     for window in windows:
@@ -149,8 +167,7 @@ def review_transcript(entries, *, duration, title="", caption="", backend="unkno
         elif item.get("status") == "manual_review":
             review_windows.append(item.get("index"))
     ai_violations = [
-        index for index, verdict in verdicts.items()
-        if verdict.get("violation")
+        index for index, verdict in verdicts.items() if verdict.get("violation")
     ]
     if blocked_windows or ai_violations:
         status = "blocked"
@@ -179,16 +196,28 @@ def review_transcript(entries, *, duration, title="", caption="", backend="unkno
     }
 
 
-def review_video(video_path, *, title="", caption="", backend="auto", model_name=None,
-                 transcription_device="auto", root_dir=None, transcriber=None,
-                 reviewer=None):
+def review_video(
+    video_path,
+    *,
+    title="",
+    caption="",
+    backend="auto",
+    model_name=None,
+    transcription_device="auto",
+    root_dir=None,
+    transcriber=None,
+    reviewer=None,
+):
     video_path = os.path.abspath(os.path.expanduser(str(video_path or "")))
     if not os.path.isfile(video_path):
         raise FileNotFoundError("video file does not exist")
     media = validate_media_file(video_path, min_duration=1.0, require_audio=True)
     if not media.get("ok"):
-        raise ValueError("video failed media validation: {}".format(
-            "; ".join(media.get("errors", [media.get("error", "invalid media")]))))
+        raise ValueError(
+            "video failed media validation: {}".format(
+                "; ".join(media.get("errors", [media.get("error", "invalid media")]))
+            )
+        )
     duration = float(media.get("duration") or 0)
     if duration <= 0 or duration > MAX_VIDEO_SECONDS:
         raise ValueError("video duration is outside the supported review range")
@@ -197,6 +226,7 @@ def review_video(video_path, *, title="", caption="", backend="auto", model_name
         root_dir = str(Path(__file__).resolve().parent.parent)
     if transcriber is None:
         from scripts.transcribe_video import transcribe
+
         transcriber = transcribe
     if reviewer is None:
         selected_backend, api_key, configured_model = _choose_backend(backend, root_dir)
@@ -223,8 +253,11 @@ def review_video(video_path, *, title="", caption="", backend="auto", model_name
         entries = read_tsv_entries(tsv_path)
         validation = validate_entries(entries)
         if not validation["ok"]:
-            raise ValueError("transcription failed validation: {}".format(
-                "; ".join(validation["errors"])))
+            raise ValueError(
+                "transcription failed validation: {}".format(
+                    "; ".join(validation["errors"])
+                )
+            )
         return review_transcript(
             entries,
             duration=duration,
@@ -239,7 +272,9 @@ def review_video(video_path, *, title="", caption="", backend="auto", model_name
 def write_report(path, report):
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=".upload-review-", suffix=".tmp", dir=str(target.parent))
+    fd, temporary = tempfile.mkstemp(
+        prefix=".upload-review-", suffix=".tmp", dir=str(target.parent)
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(report, handle, ensure_ascii=False, indent=2)
@@ -254,19 +289,32 @@ def write_report(path, report):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Contextual policy check for a video before upload")
+    parser = argparse.ArgumentParser(
+        description="Contextual policy check for a video before upload"
+    )
     parser.add_argument("--video", required=True, help="Finished local video file")
     parser.add_argument("--report", required=True, help="JSON report output path")
     parser.add_argument("--title", default="", help="Exact title intended for upload")
-    parser.add_argument("--caption", default="", help="Exact description intended for upload")
-    parser.add_argument("--backend", choices=("auto", "gemini", "g4f", "openai-moderation"), default="auto")
+    parser.add_argument(
+        "--caption", default="", help="Exact description intended for upload"
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("auto", "gemini", "g4f", "openai-moderation"),
+        default="auto",
+    )
     parser.add_argument("--model", default=None)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     args = parser.parse_args(argv)
     try:
         report = review_video(
-            args.video, title=args.title, caption=args.caption, backend=args.backend,
-            model_name=args.model, transcription_device=args.device)
+            args.video,
+            title=args.title,
+            caption=args.caption,
+            backend=args.backend,
+            model_name=args.model,
+            transcription_device=args.device,
+        )
     except Exception as exc:
         report = {
             "schema_version": 1,
@@ -275,11 +323,18 @@ def main(argv=None):
             "error": "{}: {}".format(type(exc).__name__, str(exc)[:500]),
         }
         write_report(args.report, report)
-        print("[upload-review] review unavailable; upload must remain blocked.", flush=True)
+        print(
+            "[upload-review] review unavailable; upload must remain blocked.",
+            flush=True,
+        )
         return 2
     write_report(args.report, report)
-    print("[upload-review] {} ({} window(s))".format(
-        report["status"], report["review_windows"]), flush=True)
+    print(
+        "[upload-review] {} ({} window(s))".format(
+            report["status"], report["review_windows"]
+        ),
+        flush=True,
+    )
     return 0 if report["status"] == "clear" else 1
 
 

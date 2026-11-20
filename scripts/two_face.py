@@ -2,6 +2,7 @@ import cv2
 
 try:
     import mediapipe as mp
+
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     mp = None
@@ -16,66 +17,66 @@ def crop_and_maintain_ar(frame, face_box, target_w, target_h, zoom_out_factor=2.
     """
     img_h, img_w, _ = frame.shape
     x, y, w, h = face_box
-    
+
     # Centro do rosto
     cx = x + w // 2
     cy = y + h // 2
-    
+
     # Dimensão base do rosto (maior lado para garantir cobertura)
     face_size = max(w, h)
-    
+
     # Altura desejada do crop (altura do rosto * fator de zoom/afastamento)
     # zoom_out_factor: quanto maior, mais afastado (mais cenário)
     req_h = face_size * zoom_out_factor
-    
+
     # Aspect Ratio alvo (1080 / 960 = 1.125)
     target_ar = target_w / target_h
-    
+
     # Calcular largura e altura do crop mantendo AR
     crop_h = req_h
     crop_w = crop_h * target_ar
-    
+
     # Verificar limitações da imagem original (não podemos cortar mais que existe)
     # Se a largura necessária for maior que a imagem, limitamos pela largura
     if crop_w > img_w:
         crop_w = float(img_w)
         crop_h = crop_w / target_ar
-        
+
     # Se a altura necessária for maior que a imagem, limitamos pela altura
     if crop_h > img_h:
         crop_h = float(img_h)
         crop_w = crop_h * target_ar
-        
+
     # Converter para inteiros
     crop_w = int(crop_w)
     crop_h = int(crop_h)
-    
+
     # Calcular coordenadas top-left do crop centralizado no rosto
     x1 = int(cx - crop_w // 2)
     y1 = int(cy - crop_h // 2)
-    
+
     # Ajuste de bordas (Clamp) deslisando a janela se possível
     # Se sair pela esquerda, encosta na esquerda
-    if x1 < 0: 
+    if x1 < 0:
         x1 = 0
     # Se sair pela direita, encosta na direita
-    elif x1 + crop_w > img_w: 
+    elif x1 + crop_w > img_w:
         x1 = img_w - crop_w
-        
+
     # Se sair por cima
-    if y1 < 0: 
+    if y1 < 0:
         y1 = 0
     # Se sair por baixo
-    elif y1 + crop_h > img_h: 
+    elif y1 + crop_h > img_h:
         y1 = img_h - crop_h
-    
+
     # Verificação de segurança final se a imagem for menor que o crop (embora lógica acima evite)
     x2 = x1 + crop_w
     y2 = y1 + crop_h
-    
+
     # Crop
     cropped = frame[y1:y2, x1:x2]
-    
+
     # Se o crop falhar (tamanho 0), retorna preto
     if cropped.size == 0 or cropped.shape[0] == 0 or cropped.shape[1] == 0:
         return np.zeros((target_h, target_w, 3), dtype=np.uint8)
@@ -85,16 +86,19 @@ def crop_and_maintain_ar(frame, face_box, target_w, target_h, zoom_out_factor=2.
     resized = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
     return resized
 
+
 def crop_and_resize_two_faces(frame, face_positions, zoom_out_factor=2.2):
     """Backward-compatible two-face vertical composition."""
     return crop_and_resize_multi_faces(
-        frame, face_positions, layout="vertical", max_faces=2,
+        frame,
+        face_positions,
+        layout="vertical",
+        max_faces=2,
         zoom_out_factor=zoom_out_factor,
     )
 
 
-def _safe_face_boxes(face_positions, frame_shape, max_faces=4,
-                     preserve_order=False):
+def _safe_face_boxes(face_positions, frame_shape, max_faces=4, preserve_order=False):
     """Normalize face boxes to valid ``(x, y, w, h)`` rectangles.
 
     Clamping/validation always runs. By default the normalized boxes are
@@ -118,12 +122,19 @@ def _safe_face_boxes(face_positions, frame_shape, max_faces=4,
     if not preserve_order:
         # Stable left-to-right order avoids faces jumping between grid cells.
         normalized.sort(key=lambda b: (b[0] + b[2] / 2.0, b[1] + b[3] / 2.0))
-    return normalized[:max(1, int(max_faces))]
+    return normalized[: max(1, int(max_faces))]
 
 
-def crop_and_resize_multi_faces(frame, face_positions, target_w=1080,
-                                target_h=1920, layout="auto", max_faces=4,
-                                zoom_out_factor=2.2, preserve_order=False):
+def crop_and_resize_multi_faces(
+    frame,
+    face_positions,
+    target_w=1080,
+    target_h=1920,
+    layout="auto",
+    max_faces=4,
+    zoom_out_factor=2.2,
+    preserve_order=False,
+):
     """Compose one to four tracked faces into a portrait output.
 
     ``auto`` keeps the legacy two-person vertical stack and uses a 2x2 grid
@@ -134,12 +145,15 @@ def crop_and_resize_multi_faces(frame, face_positions, target_w=1080,
     from the tracker); the default sorts boxes left-to-right inside
     :func:`_safe_face_boxes`.
     """
-    boxes = _safe_face_boxes(face_positions, frame.shape, max_faces=max_faces,
-                             preserve_order=preserve_order)
+    boxes = _safe_face_boxes(
+        face_positions, frame.shape, max_faces=max_faces, preserve_order=preserve_order
+    )
     if not boxes:
         return np.zeros((target_h, target_w, 3), dtype=np.uint8)
     if len(boxes) == 1:
-        return crop_and_maintain_ar(frame, boxes[0], target_w, target_h, zoom_out_factor)
+        return crop_and_maintain_ar(
+            frame, boxes[0], target_w, target_h, zoom_out_factor
+        )
 
     mode = str(layout or "auto").lower()
     if mode == "auto":
@@ -157,7 +171,7 @@ def crop_and_resize_multi_faces(frame, face_positions, target_w=1080,
             x1 = target_w - thumb_w - margin
             y1 = margin + idx * (thumb_h + margin)
             if y1 + thumb_h <= target_h:
-                result[y1:y1 + thumb_h, x1:x1 + thumb_w] = thumb
+                result[y1 : y1 + thumb_h, x1 : x1 + thumb_w] = thumb
         return result
 
     if mode in {"vertical", "stack"}:
@@ -177,7 +191,7 @@ def crop_and_resize_multi_faces(frame, face_positions, target_w=1080,
         w = cell_w if col < cols - 1 else target_w - x1
         h = cell_h if row < rows - 1 else target_h - y1
         crop = crop_and_maintain_ar(frame, box, w, h, zoom_out_factor)
-        canvas[y1:y1 + h, x1:x1 + w] = crop
+        canvas[y1 : y1 + h, x1 : x1 + w] = crop
     return canvas
 
 
@@ -192,7 +206,7 @@ def detect_face_or_body_two_faces(frame, face_detection, face_mesh, pose, max_fa
 
     face_positions_detection = []
     if results_face_detection.detections:
-        for detection in results_face_detection.detections[:max(1, int(max_faces))]:
+        for detection in results_face_detection.detections[: max(1, int(max_faces))]:
             bbox = detection.location_data.relative_bounding_box
             x_min = int(bbox.xmin * frame.shape[1])
             y_min = int(bbox.ymin * frame.shape[0])
@@ -205,9 +219,15 @@ def detect_face_or_body_two_faces(frame, face_detection, face_mesh, pose, max_fa
 
     face_positions_mesh = []
     if results_face_mesh.multi_face_landmarks:
-        for landmarks in results_face_mesh.multi_face_landmarks[:max(1, int(max_faces))]:
-            x_coords = [int(landmark.x * frame.shape[1]) for landmark in landmarks.landmark]
-            y_coords = [int(landmark.y * frame.shape[0]) for landmark in landmarks.landmark]
+        for landmarks in results_face_mesh.multi_face_landmarks[
+            : max(1, int(max_faces))
+        ]:
+            x_coords = [
+                int(landmark.x * frame.shape[1]) for landmark in landmarks.landmark
+            ]
+            y_coords = [
+                int(landmark.y * frame.shape[0]) for landmark in landmarks.landmark
+            ]
             x_min, x_max = min(x_coords), max(x_coords)
             y_min, y_max = min(y_coords), max(y_coords)
             width = x_max - x_min
@@ -216,7 +236,7 @@ def detect_face_or_body_two_faces(frame, face_detection, face_mesh, pose, max_fa
 
     if len(face_positions_mesh) >= max_faces:
         return face_positions_mesh
-        
+
     # If neither found 2, return what we found (prefer detection as it is bounding box optimized)
     if face_positions_detection:
         return face_positions_detection

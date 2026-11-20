@@ -33,9 +33,13 @@ def test_rejects_same_advisory_on_another_package():
 
 def test_accepts_scoped_filelock_exception_for_python_310():
     assert len(FILELOCK_ALLOWED_IDS) == 17
-    assert validate_report(
-        _report("filelock", "4.1.0", FILELOCK_ALLOWED_IDS), EXPIRES - timedelta(days=1)
-    ) == []
+    assert (
+        validate_report(
+            _report("filelock", "4.1.0", FILELOCK_ALLOWED_IDS),
+            EXPIRES - timedelta(days=1),
+        )
+        == []
+    )
 
 
 def test_rejects_filelock_exception_for_another_version():
@@ -48,17 +52,26 @@ def test_rejects_filelock_exception_for_another_version():
 def test_rejects_unlisted_advisory_and_wrong_pillow_version():
     assert any(
         "Unapproved vulnerability" in error
-        for error in validate_report(_report(vuln_ids={"CVE-UNKNOWN"}), EXPIRES - timedelta(days=1))
+        for error in validate_report(
+            _report(vuln_ids={"CVE-UNKNOWN"}), EXPIRES - timedelta(days=1)
+        )
     )
     assert any(
         "Unapproved vulnerability" in error
-        for error in validate_report(_report(version="12.3.1"), EXPIRES - timedelta(days=1))
+        for error in validate_report(
+            _report(version="12.3.1"), EXPIRES - timedelta(days=1)
+        )
     )
 
 
 def test_rejects_malformed_advisory_identifier():
-    report = {"dependencies": [{"name": "Pillow", "version": "12.3.0", "vulns": [{"id": []}]}]}
-    assert any("Unapproved vulnerability" in error for error in validate_report(report, EXPIRES - timedelta(days=1)))
+    report = {
+        "dependencies": [{"name": "Pillow", "version": "12.3.0", "vulns": [{"id": []}]}]
+    }
+    assert any(
+        "Unapproved vulnerability" in error
+        for error in validate_report(report, EXPIRES - timedelta(days=1))
+    )
 
 
 def test_rejects_expired_exception():

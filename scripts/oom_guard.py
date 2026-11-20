@@ -37,11 +37,11 @@ OOM_MARKERS = (
     "cannot allocate",
     # v7.32.3: real-world memory failures that used to slip through the guard
     # and kill whole runs with a cryptic traceback:
-    "bad allocation",          # torch RuntimeError on Windows (heap/VRAM alloc)
-    "bad_alloc",               # C++ std::bad_alloc surfaced through torch
+    "bad allocation",  # torch RuntimeError on Windows (heap/VRAM alloc)
+    "bad_alloc",  # C++ std::bad_alloc surfaced through torch
     "std::bad_alloc",
-    "unable to allocate",      # numpy _ArrayMemoryError ("Unable to allocate N. MiB")
-    "_arraymemoryerror",       # numpy.core._exceptions._ArrayMemoryError repr
+    "unable to allocate",  # numpy _ArrayMemoryError ("Unable to allocate N. MiB")
+    "_arraymemoryerror",  # numpy.core._exceptions._ArrayMemoryError repr
     "numpy.core._exceptions",
     "memoryerror",
     # v7.33: CTranslate2/MKL host-RAM failure at model load — surfaced as a
@@ -65,8 +65,14 @@ def _next_model(model_name):
     return FALLBACK_CHAIN.get(str(model_name).strip())
 
 
-def transcribe_with_fallback(input_file, model_name, project_folder,
-                             transcribe_fn=None, verbose=True, device="auto"):
+def transcribe_with_fallback(
+    input_file,
+    model_name,
+    project_folder,
+    transcribe_fn=None,
+    verbose=True,
+    device="auto",
+):
     """Transcribe, retrying smaller on OOM. Returns (srt_file, tsv_file).
 
     `transcribe_fn` defaults to scripts.transcribe_video.transcribe and is
@@ -86,8 +92,10 @@ def transcribe_with_fallback(input_file, model_name, project_folder,
             result = transcribe_fn(input_file, current, **kwargs)
             _record_used_model(project_folder, current, attempts)
             if verbose and attempts:
-                print("[oom-guard] transcription succeeded with '{}' "
-                      "(after {} failed attempt(s))".format(current, len(attempts)))
+                print(
+                    "[oom-guard] transcription succeeded with '{}' "
+                    "(after {} failed attempt(s))".format(current, len(attempts))
+                )
             return result
         except Exception as e:
             if not _looks_like_oom(e):
@@ -98,11 +106,15 @@ def transcribe_with_fallback(input_file, model_name, project_folder,
                 print("[oom-guard] OOM even on '{}' — giving up: {}".format(current, e))
                 raise
             if verbose:
-                print("[oom-guard] OOM with '{}' — falling back to '{}'".format(
-                    current, smaller))
+                print(
+                    "[oom-guard] OOM with '{}' — falling back to '{}'".format(
+                        current, smaller
+                    )
+                )
             # free VRAM before reloading
             try:
                 import torch
+
                 if torch.cuda.is_available():
                     gc.collect()
                     torch.cuda.empty_cache()
@@ -113,18 +125,26 @@ def transcribe_with_fallback(input_file, model_name, project_folder,
 
 def _record_used_model(project_folder, model, attempts):
     import json
+
     try:
         os.makedirs(project_folder, exist_ok=True)
-        with open(os.path.join(project_folder, "transcription_model.json"), "w",
-                  encoding="utf-8") as f:
-            json.dump({"requested": model, "used": model,
-                       "oom_fallbacks": attempts}, f, indent=2)
+        with open(
+            os.path.join(project_folder, "transcription_model.json"),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(
+                {"requested": model, "used": model, "oom_fallbacks": attempts},
+                f,
+                indent=2,
+            )
     except Exception:
         pass
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="ViralCutter GPU OOM guard.")
     parser.add_argument("--video", required=True)
     parser.add_argument("--model", default="large-v3-turbo")

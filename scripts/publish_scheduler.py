@@ -46,8 +46,9 @@ def load_measured_hours(project_folder: str | None) -> list[int]:
     """Read performance_insights.json best_hours (empty when unavailable)."""
     if not project_folder:
         return []
-    path = os.path.join(os.path.abspath(os.fspath(project_folder)),
-                        "performance_insights.json")
+    path = os.path.join(
+        os.path.abspath(os.fspath(project_folder)), "performance_insights.json"
+    )
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
@@ -59,11 +60,17 @@ def load_measured_hours(project_folder: str | None) -> list[int]:
     return sorted({int(h) % 24 for h in hours if isinstance(h, (int, float))})
 
 
-def build_plan(video_paths: list[str], *, platform: str = "youtube",
-               start_at: str | None = None, slots_per_day: int = 1,
-               days: int = 7, user_hours: list[int] | None = None,
-               timezone_offset_hours: float = 0.0,
-               measured_hours: list[int] | None = None) -> dict[str, Any]:
+def build_plan(
+    video_paths: list[str],
+    *,
+    platform: str = "youtube",
+    start_at: str | None = None,
+    slots_per_day: int = 1,
+    days: int = 7,
+    user_hours: list[int] | None = None,
+    timezone_offset_hours: float = 0.0,
+    measured_hours: list[int] | None = None,
+) -> dict[str, Any]:
     """Build an even publish plan for the given clips.
 
     Returns {"plan": [{video_path, publish_at, day, hour}], ...}. Slots are
@@ -73,27 +80,36 @@ def build_plan(video_paths: list[str], *, platform: str = "youtube",
     exceed generated slots, the plan cycles through the window hours again
     on following days until every clip is placed.
     """
-    videos = [os.path.abspath(os.fspath(p)) for p in (video_paths or [])
-              if p and os.path.isfile(p)]
+    videos = [
+        os.path.abspath(os.fspath(p))
+        for p in (video_paths or [])
+        if p and os.path.isfile(p)
+    ]
     if not videos:
         return {"ok": False, "error": "no valid video files", "plan": []}
 
     data = seo_titles.BEST_TIMES_BY_PLATFORM.get(
-        platform, seo_titles.BEST_TIMES_BY_PLATFORM["youtube"])
+        platform, seo_titles.BEST_TIMES_BY_PLATFORM["youtube"]
+    )
     if user_hours:
         weekday_hours = sorted({int(h) % 24 for h in user_hours})
-        data = {"weekday": [(h, h + 1) for h in weekday_hours],
-                "weekend": [(h, h + 1) for h in weekday_hours]}
+        data = {
+            "weekday": [(h, h + 1) for h in weekday_hours],
+            "weekend": [(h, h + 1) for h in weekday_hours],
+        }
     elif measured_hours:
         measured = sorted({int(h) % 24 for h in measured_hours})
-        data = {"weekday": [(h, h + 1) for h in measured],
-                "weekend": [(h, h + 1) for h in measured]}
+        data = {
+            "weekday": [(h, h + 1) for h in measured],
+            "weekend": [(h, h + 1) for h in measured],
+        }
 
     start = dt.datetime.now(dt.timezone.utc)
     if start_at:
         try:
             start = dt.datetime.fromisoformat(
-                str(start_at).strip().replace("Z", "+00:00"))
+                str(start_at).strip().replace("Z", "+00:00")
+            )
             if start.tzinfo is None:
                 start = start.replace(tzinfo=dt.timezone.utc)
         except ValueError:
@@ -108,8 +124,9 @@ def build_plan(video_paths: list[str], *, platform: str = "youtube",
         windows = data.get("weekend" if is_weekend else "weekday", [])
         for _start_hour, _end_hour in windows:
             for hour in range(_start_hour, _end_hour):
-                local_slot = day.replace(hour=hour % 24, minute=0, second=0,
-                                         microsecond=0)
+                local_slot = day.replace(
+                    hour=hour % 24, minute=0, second=0, microsecond=0
+                )
                 # best_hours are LOCAL hours (performance_loop._publish_hour);
                 # materialise the UTC instant they map to. target UTC =
                 # local hour - offset, so offset 0 is unchanged.
@@ -130,14 +147,16 @@ def build_plan(video_paths: list[str], *, platform: str = "youtube",
     plan = []
     for idx, video in enumerate(videos):
         slot = slots[min(idx, len(slots) - 1)]
-        plan.append({
-            "video_path": video,
-            "video_name": os.path.basename(video),
-            "publish_at": slot.isoformat(),
-            "day": slot.date().isoformat(),
-            "hour": slot.hour,
-            "platform": platform,
-        })
+        plan.append(
+            {
+                "video_path": video,
+                "video_name": os.path.basename(video),
+                "publish_at": slot.isoformat(),
+                "day": slot.date().isoformat(),
+                "hour": slot.hour,
+                "platform": platform,
+            }
+        )
 
     return {
         "ok": True,
@@ -167,10 +186,16 @@ def _wait_until(target: dt.datetime, sleep=None):
         sleep(min(60, max(1, (target - now).total_seconds())))
 
 
-def run_daemon(plan: dict[str, Any], *, dry_run: bool = True,
-               privacy: str = "private", interval_minutes: int = 60,
-               progress=None, sleep=None,
-               lead_minutes: int = DEFAULT_LEAD_MINUTES) -> dict[str, Any]:
+def run_daemon(
+    plan: dict[str, Any],
+    *,
+    dry_run: bool = True,
+    privacy: str = "private",
+    interval_minutes: int = 60,
+    progress=None,
+    sleep=None,
+    lead_minutes: int = DEFAULT_LEAD_MINUTES,
+) -> dict[str, Any]:
     """Execute a plan: wait for each slot, then upload that clip.
 
     In real mode the upload starts ``lead_minutes`` before the slot and passes
@@ -198,9 +223,14 @@ def run_daemon(plan: dict[str, Any], *, dry_run: bool = True,
             progress("scheduled", item["video_name"], item["publish_at"])
         if not dry_run:
             if target <= dt.datetime.now(dt.timezone.utc):
-                results.append({"video": item["video_name"], "status": "missed",
-                                "publish_at": item["publish_at"],
-                                "detail": "slot passed before its upload lead time"})
+                results.append(
+                    {
+                        "video": item["video_name"],
+                        "status": "missed",
+                        "publish_at": item["publish_at"],
+                        "detail": "slot passed before its upload lead time",
+                    }
+                )
                 if progress:
                     progress("missed", item["video_name"], "passed before lead time")
                 continue
@@ -208,24 +238,40 @@ def run_daemon(plan: dict[str, Any], *, dry_run: bool = True,
             _wait_until(target - dt.timedelta(minutes=lead), sleep=sleep)
         try:
             from webui import publish_panel
-            updates = list(publish_panel.stream_upload_batch(
-                os.path.dirname(item["video_path"]), item.get("platform", "youtube"),
-                [item["video_path"]], dry_run, "warn",
-                privacy_status=privacy,
-                publish_at=item["publish_at"] if not dry_run else None,
-                schedule_interval_minutes=interval_minutes,
-                require_existing_auth=not dry_run,
-            ))
+
+            updates = list(
+                publish_panel.stream_upload_batch(
+                    os.path.dirname(item["video_path"]),
+                    item.get("platform", "youtube"),
+                    [item["video_path"]],
+                    dry_run,
+                    "warn",
+                    privacy_status=privacy,
+                    publish_at=item["publish_at"] if not dry_run else None,
+                    schedule_interval_minutes=interval_minutes,
+                    require_existing_auth=not dry_run,
+                )
+            )
             status = "dry_run" if dry_run else "uploaded"
-            results.append({"video": item["video_name"], "status": status,
-                            "publish_at": item["publish_at"],
-                            "detail": "; ".join(str(u) for u in updates[-3:])})
+            results.append(
+                {
+                    "video": item["video_name"],
+                    "status": status,
+                    "publish_at": item["publish_at"],
+                    "detail": "; ".join(str(u) for u in updates[-3:]),
+                }
+            )
             if progress:
                 progress("done", item["video_name"], status)
         except Exception as exc:
-            results.append({"video": item["video_name"], "status": "failed",
-                            "publish_at": item["publish_at"],
-                            "detail": str(exc)[:300]})
+            results.append(
+                {
+                    "video": item["video_name"],
+                    "status": "failed",
+                    "publish_at": item["publish_at"],
+                    "detail": str(exc)[:300],
+                }
+            )
             if progress:
                 progress("failed", item["video_name"], str(exc)[:150])
     return {"ok": True, "dry_run": dry_run, "results": results}
@@ -234,28 +280,48 @@ def run_daemon(plan: dict[str, Any], *, dry_run: bool = True,
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", help="JSON plan file to execute (run_daemon)")
-    parser.add_argument("--videos", nargs="*", default=[],
-                        help="video files to schedule (build_plan)")
-    parser.add_argument("--project", default=None,
-                        help="project folder for the plan file")
-    parser.add_argument("--platform", default="youtube",
-                        choices=["youtube", "tiktok", "reels"])
-    parser.add_argument("--start-at", default=None,
-                        help="first slot ISO time (default: now)")
+    parser.add_argument(
+        "--videos", nargs="*", default=[], help="video files to schedule (build_plan)"
+    )
+    parser.add_argument(
+        "--project", default=None, help="project folder for the plan file"
+    )
+    parser.add_argument(
+        "--platform", default="youtube", choices=["youtube", "tiktok", "reels"]
+    )
+    parser.add_argument(
+        "--start-at", default=None, help="first slot ISO time (default: now)"
+    )
     parser.add_argument("--days", type=int, default=7)
-    parser.add_argument("--user-hours", type=int, nargs="*", default=None,
-                        help="preferred hours (0-23); overrides built-in windows")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="print the plan / simulate execution (the default for --plan)")
-    parser.add_argument("--live", "--no-dry-run", dest="live", action="store_true",
-                        help="actually publish when executing --plan (opt-in; "
-                             "--plan is dry-run by default)")
-    parser.add_argument("--lead-minutes", type=int, default=DEFAULT_LEAD_MINUTES,
-                        metavar="MIN",
-                        help="start each real upload this many minutes before its "
-                             "slot (default: %(default)s)")
-    parser.add_argument("--privacy", default="private",
-                        choices=["private", "unlisted"])
+    parser.add_argument(
+        "--user-hours",
+        type=int,
+        nargs="*",
+        default=None,
+        help="preferred hours (0-23); overrides built-in windows",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the plan / simulate execution (the default for --plan)",
+    )
+    parser.add_argument(
+        "--live",
+        "--no-dry-run",
+        dest="live",
+        action="store_true",
+        help="actually publish when executing --plan (opt-in; "
+        "--plan is dry-run by default)",
+    )
+    parser.add_argument(
+        "--lead-minutes",
+        type=int,
+        default=DEFAULT_LEAD_MINUTES,
+        metavar="MIN",
+        help="start each real upload this many minutes before its "
+        "slot (default: %(default)s)",
+    )
+    parser.add_argument("--privacy", default="private", choices=["private", "unlisted"])
     args = parser.parse_args(argv)
 
     if args.plan:
@@ -264,8 +330,9 @@ def main(argv=None) -> int:
         # --plan is dry-run by default; only an explicit --live opts in. --dry-run
         # always wins if both are given.
         dry_run = not (args.live and not args.dry_run)
-        summary = run_daemon(plan, dry_run=dry_run, privacy=args.privacy,
-                             lead_minutes=args.lead_minutes)
+        summary = run_daemon(
+            plan, dry_run=dry_run, privacy=args.privacy, lead_minutes=args.lead_minutes
+        )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
 
@@ -275,10 +342,17 @@ def main(argv=None) -> int:
 
     measured = load_measured_hours(args.project) if not args.user_hours else []
     if measured:
-        print("[scheduler] using measured best hours from insights: {}".format(measured))
-    plan = build_plan(args.videos, platform=args.platform,
-                      start_at=args.start_at, days=args.days,
-                      user_hours=args.user_hours, measured_hours=measured)
+        print(
+            "[scheduler] using measured best hours from insights: {}".format(measured)
+        )
+    plan = build_plan(
+        args.videos,
+        platform=args.platform,
+        start_at=args.start_at,
+        days=args.days,
+        user_hours=args.user_hours,
+        measured_hours=measured,
+    )
     if args.project:
         path = save_plan(plan, args.project)
         print("[scheduler] plan saved: {}".format(path))

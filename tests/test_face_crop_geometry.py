@@ -36,6 +36,7 @@ def _white_pixels(img):
 # (a) InsightFace crop: horizontal face bisection fix
 # ---------------------------------------------------------------------------
 
+
 def test_face_zoom_relaxes_width_to_keep_whole_face():
     """A zoom that used to bisect the face must now relax so the whole face
     (with ~6% horizontal margin) fits inside the 9:16 window."""
@@ -55,11 +56,13 @@ def test_face_zoom_relaxes_width_to_keep_whole_face():
     # output must keep ~480*300 * (1080*1920)/(904*508) white pixels.
     expected = 480 * 300 * (1080 * 1920) / (904 * 508)
     assert white >= 0.95 * expected, (
-        f"face bisected: {white} < 95% of expected {expected}")
+        f"face bisected: {white} < 95% of expected {expected}"
+    )
     # A bisecting crop would pack the partial face into the frame and yield
     # ~1.59x that count; a fitted crop must stay near the expected value.
     assert white < 1.30 * expected, (
-        f"unexpectedly tight crop: {white} vs expected {expected}")
+        f"unexpectedly tight crop: {white} vs expected {expected}"
+    )
     # Black context must survive on BOTH sides of the frame: a bisecting
     # window (x 732..1069, entirely inside the white block) would push white
     # all the way to the output edges.
@@ -98,7 +101,8 @@ def test_face_zoom_extreme_closeup_falls_back_to_full_height_crop():
     legacy = crop_and_resize_insightface(frame, face, headroom=0.0, face_zoom=0.0)
     assert out.shape == (1920, 1080, 3)
     assert np.array_equal(out, legacy), (
-        "extreme close-up must use the centered full-height crop")
+        "extreme close-up must use the centered full-height crop"
+    )
     assert _white_pixels(out) > 0
 
 
@@ -106,12 +110,13 @@ def test_face_zoom_extreme_closeup_falls_back_to_full_height_crop():
 # (b) Split-cell identity: preserve_order
 # ---------------------------------------------------------------------------
 
+
 # Tiny two-tone frame: A = red block on the left, B = blue block on the
 # right. In a vertical stack the first box owns the TOP cell.
 def _two_tone_frame():
     frame = np.zeros((120, 240, 3), dtype=np.uint8)
-    frame[40:80, 20:60, :] = (0, 0, 255)      # A: red
-    frame[40:80, 180:220, :] = (255, 0, 0)    # B: blue
+    frame[40:80, 20:60, :] = (0, 0, 255)  # A: red
+    frame[40:80, 180:220, :] = (255, 0, 0)  # B: blue
     return frame
 
 
@@ -120,8 +125,8 @@ BOX_B = (180, 40, 40, 40)
 
 
 def _stack_top_bottom_channels(result):
-    top = result[:result.shape[0] // 2].reshape(-1, 3).astype(int)
-    bottom = result[result.shape[0] // 2:].reshape(-1, 3).astype(int)
+    top = result[: result.shape[0] // 2].reshape(-1, 3).astype(int)
+    bottom = result[result.shape[0] // 2 :].reshape(-1, 3).astype(int)
     return top, bottom
 
 
@@ -129,8 +134,13 @@ def test_multi_face_default_still_sorts_left_to_right():
     """Default behavior is unchanged: caller order [B, A] is re-sorted so
     the left face (A, red) owns the top cell."""
     result = crop_and_resize_multi_faces(
-        _two_tone_frame(), [BOX_B, BOX_A], target_w=90, target_h=180,
-        layout="auto", max_faces=2, zoom_out_factor=1.0,
+        _two_tone_frame(),
+        [BOX_B, BOX_A],
+        target_w=90,
+        target_h=180,
+        layout="auto",
+        max_faces=2,
+        zoom_out_factor=1.0,
     )
     assert result.shape == (180, 90, 3)
     top, _ = _stack_top_bottom_channels(result)
@@ -142,8 +152,14 @@ def test_multi_face_preserve_order_keeps_caller_slots():
     """preserve_order=True must keep the caller's identity-stable order:
     [B, A] keeps B (blue) in the top cell even though B sits on the right."""
     result = crop_and_resize_multi_faces(
-        _two_tone_frame(), [BOX_B, BOX_A], target_w=90, target_h=180,
-        layout="auto", max_faces=2, zoom_out_factor=1.0, preserve_order=True,
+        _two_tone_frame(),
+        [BOX_B, BOX_A],
+        target_w=90,
+        target_h=180,
+        layout="auto",
+        max_faces=2,
+        zoom_out_factor=1.0,
+        preserve_order=True,
     )
     top, bottom = _stack_top_bottom_channels(result)
     assert top[:, 0].mean() > 200.0, "caller-first face (B, blue) must be on top"
@@ -155,22 +171,25 @@ def test_safe_face_boxes_preserve_order_still_clamps_and_truncates():
     """preserve_order skips only the LTR sort — clamping/validation and the
     max_faces truncation keep working."""
     # Box partly outside the frame gets clamped but keeps its caller slot.
-    boxes = _safe_face_boxes([(-100, -40, 500, 500), BOX_A],
-                             (120, 240, 3), max_faces=2, preserve_order=True)
+    boxes = _safe_face_boxes(
+        [(-100, -40, 500, 500), BOX_A], (120, 240, 3), max_faces=2, preserve_order=True
+    )
     assert boxes[0] == (0, 0, 240, 120)
     assert boxes[1] == BOX_A
     # Default still LTR-sorts the same input.
     ltr = _safe_face_boxes([BOX_B, BOX_A], (120, 240, 3), max_faces=2)
     assert ltr == [BOX_A, BOX_B]
     # max_faces truncation applies in caller order too.
-    truncated = _safe_face_boxes([BOX_B, BOX_A], (120, 240, 3),
-                                 max_faces=1, preserve_order=True)
+    truncated = _safe_face_boxes(
+        [BOX_B, BOX_A], (120, 240, 3), max_faces=1, preserve_order=True
+    )
     assert truncated == [BOX_B]
 
 
 # ---------------------------------------------------------------------------
 # (c) Resolution-scaled dead zone
 # ---------------------------------------------------------------------------
+
 
 def test_scaled_dead_zone_1080p_keeps_legacy_value():
     assert edit_video.scaled_dead_zone(40, 1920, 1080) == 40.0
@@ -197,6 +216,7 @@ def test_scaled_dead_zone_zero_or_negative_disables():
 # ---------------------------------------------------------------------------
 # (d) 1→2 split join grace (face_join_hold)
 # ---------------------------------------------------------------------------
+
 
 def test_face_join_hold_allows_only_after_grace_consecutive_wants():
     allow, count = edit_video.face_join_hold(0, True)  # default grace=2
@@ -226,6 +246,7 @@ def test_face_join_hold_grace_one_splits_on_first_want():
 # ---------------------------------------------------------------------------
 # (e) Reframe no-op for already-matching clips
 # ---------------------------------------------------------------------------
+
 
 def test_reframe_skips_clip_already_at_target_size(monkeypatch, tmp_path):
     """A 9:16 clip 'reframed' to 9:16 must not be re-encoded lossily."""
@@ -284,8 +305,10 @@ def test_reframe_missing_ffprobe_keeps_legacy_behavior(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        reframe.shutil, "which",
-        lambda name: None if "probe" in name else "/usr/bin/ffmpeg")
+        reframe.shutil,
+        "which",
+        lambda name: None if "probe" in name else "/usr/bin/ffmpeg",
+    )
     monkeypatch.setattr(reframe.subprocess, "run", fake_run)
     clip = tmp_path / "x_subtitled.mp4"
     clip.write_bytes(b"fake video bytes")

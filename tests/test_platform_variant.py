@@ -21,28 +21,51 @@ from scripts import platform_variant as pv  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("raw,expected", [
-    (" TikTok ", "tiktok"), ("YouTube", "youtube"), ("", ""), (None, ""),
-    ("INSTAGRAM", "instagram"),
-])
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (" TikTok ", "tiktok"),
+        ("YouTube", "youtube"),
+        ("", ""),
+        (None, ""),
+        ("INSTAGRAM", "instagram"),
+    ],
+)
 def test_normalize_platform(raw, expected):
     assert pv.normalize_platform(raw) == expected
 
 
-@pytest.mark.parametrize("platform,expected", [
-    ("tiktok", True), ("TikTok", True), ("instagram", True),
-    ("reels", True), ("youtube", False), ("yt_shorts", False), ("", False),
-    (None, False),
-])
+@pytest.mark.parametrize(
+    "platform,expected",
+    [
+        ("tiktok", True),
+        ("TikTok", True),
+        ("instagram", True),
+        ("reels", True),
+        ("youtube", False),
+        ("yt_shorts", False),
+        ("", False),
+        (None, False),
+    ],
+)
 def test_is_variant_platform(platform, expected):
     assert pv.is_variant_platform(platform) is expected
 
 
-@pytest.mark.parametrize("name,expected", [
-    ("03_clip.mp4", 3), ("1234_x.mp4", 1234), ("1.mp4", 1),
-    ("clip.mp4", None), ("12345_x.mp4", None), ("03clip.mp4", None),
-    ("", None), (None, None),
-])
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("03_clip.mp4", 3),
+        ("1234_x.mp4", 1234),
+        ("1.mp4", 1),
+        ("clip.mp4", None),
+        ("12345_x.mp4", None),
+        ("03clip.mp4", None),
+        ("", None),
+        (None, None),
+    ],
+)
 def test_clip_index(name, expected):
     assert pv._clip_index(name) == expected
 
@@ -60,13 +83,16 @@ def test_choose_seed_deterministic_and_sensitive():
 # Original-contribution gate
 # ---------------------------------------------------------------------------
 
+
 def _project(tmp_path, manifest=None, provenance=None):
     if manifest is not None:
         (tmp_path / "project_manifest.json").write_text(
-            json.dumps(manifest), encoding="utf-8")
+            json.dumps(manifest), encoding="utf-8"
+        )
     if provenance is not None:
         (tmp_path / "provenance_report.json").write_text(
-            json.dumps(provenance), encoding="utf-8")
+            json.dumps(provenance), encoding="utf-8"
+        )
     video = tmp_path / "01_clip.mp4"
     video.write_bytes(b"x")
     return tmp_path, str(video)
@@ -83,7 +109,9 @@ class TestOriginalContribution:
 
     def test_manifest_commentary(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"1": {"commentary": True}}}})
+            tmp_path,
+            manifest={"transformation": {"clips": {"1": {"commentary": True}}}},
+        )
         result = pv._original_contribution(str(project), video)
         assert result["meaningful"] is True
         assert result["signals"] == ["commentary"]
@@ -92,7 +120,10 @@ class TestOriginalContribution:
     def test_manifest_voiceover_and_broll(self, tmp_path):
         project, video = _project(
             tmp_path,
-            manifest={"transformation": {"voiceover_path": "v.mp3", "broll": ["b1.mp4"]}})
+            manifest={
+                "transformation": {"voiceover_path": "v.mp3", "broll": ["b1.mp4"]}
+            },
+        )
         result = pv._original_contribution(str(project), video)
         assert result["meaningful"] is True
         assert sorted(result["signals"]) == ["broll", "voiceover"]
@@ -100,12 +131,16 @@ class TestOriginalContribution:
     def test_manifest_nested_clips_int_key(self, tmp_path):
         # JSON keys are strings; the lookup handles both spellings.
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"1": {"original_analysis": "x"}}}})
+            tmp_path,
+            manifest={"transformation": {"clips": {"1": {"original_analysis": "x"}}}},
+        )
         assert pv._original_contribution(str(project), video)["meaningful"] is True
 
     def test_manifest_wrong_clip_index_ignored(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"2": {"commentary": True}}}})
+            tmp_path,
+            manifest={"transformation": {"clips": {"2": {"commentary": True}}}},
+        )
         assert pv._original_contribution(str(project), video)["meaningful"] is False
 
     def test_malformed_manifest_falls_through(self, tmp_path):
@@ -116,10 +151,18 @@ class TestOriginalContribution:
     def test_provenance_report_fallback(self, tmp_path):
         project, video = _project(
             tmp_path,
-            provenance={"clips": [
-                {"index": 1, "transformation": {
-                    "status": "meaningful",
-                    "evidence": [{"name": "voiceover"}, {"name": "broll"}]}}]})
+            provenance={
+                "clips": [
+                    {
+                        "index": 1,
+                        "transformation": {
+                            "status": "meaningful",
+                            "evidence": [{"name": "voiceover"}, {"name": "broll"}],
+                        },
+                    }
+                ]
+            },
+        )
         result = pv._original_contribution(str(project), video)
         assert result["meaningful"] is True
         assert result["signals"] == ["voiceover", "broll"]
@@ -128,20 +171,32 @@ class TestOriginalContribution:
     def test_provenance_action_allow_counts(self, tmp_path):
         project, video = _project(
             tmp_path,
-            provenance={"clips": [
-                {"index": 1, "transformation": {"action": "allow", "evidence": []}}]})
+            provenance={
+                "clips": [
+                    {"index": 1, "transformation": {"action": "allow", "evidence": []}}
+                ]
+            },
+        )
         assert pv._original_contribution(str(project), video)["meaningful"] is True
 
     def test_provenance_wrong_index_ignored(self, tmp_path):
         project, video = _project(
             tmp_path,
-            provenance={"clips": [
-                {"index": 2, "transformation": {"status": "meaningful", "evidence": []}}]})
+            provenance={
+                "clips": [
+                    {
+                        "index": 2,
+                        "transformation": {"status": "meaningful", "evidence": []},
+                    }
+                ]
+            },
+        )
         assert pv._original_contribution(str(project), video)["meaningful"] is False
 
     def test_unindexed_video_manifest_without_clips(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"commentary": True}})
+            tmp_path, manifest={"transformation": {"commentary": True}}
+        )
         video2 = tmp_path / "clip.mp4"
         video2.write_bytes(b"x")
         result = pv._original_contribution(str(project), str(video2))
@@ -165,25 +220,29 @@ class TestPriorPublishes:
         project, video = _project(tmp_path)
         events = [_YT, _TT, _FAILED, _OTHER]
         matches = pv.prior_other_platform_publishes(
-            str(project), video, "tiktok", events)
+            str(project), video, "tiktok", events
+        )
         assert matches == [_YT]
 
     def test_target_platform_excluded(self, tmp_path):
         project, video = _project(tmp_path)
         matches = pv.prior_other_platform_publishes(
-            str(project), video, "youtube", [_YT, _IG])
+            str(project), video, "youtube", [_YT, _IG]
+        )
         assert matches == [_IG]
 
     def test_variant_of_matches(self, tmp_path):
         project, video = _project(tmp_path)
         matches = pv.prior_other_platform_publishes(
-            str(project), video, "tiktok", [_IG])
+            str(project), video, "tiktok", [_IG]
+        )
         assert matches == [_IG]
 
     def test_non_dict_events_ignored(self, tmp_path):
         project, video = _project(tmp_path)
         matches = pv.prior_other_platform_publishes(
-            str(project), video, "tiktok", ["junk", None, _YT])
+            str(project), video, "tiktok", ["junk", None, _YT]
+        )
         assert matches == [_YT]
 
     def test_fingerprint_match(self, tmp_path, monkeypatch):
@@ -191,16 +250,25 @@ class TestPriorPublishes:
 
         project, video = _project(tmp_path)
         monkeypatch.setattr(ph, "file_fingerprint", lambda path: "fp-123")
-        event = {"platform": "youtube", "status": "uploaded",
-                 "video": "different_name.mp4", "file_fingerprint": "fp-123"}
+        event = {
+            "platform": "youtube",
+            "status": "uploaded",
+            "video": "different_name.mp4",
+            "file_fingerprint": "fp-123",
+        }
         matches = pv.prior_other_platform_publishes(
-            str(project), video, "tiktok", [event])
+            str(project), video, "tiktok", [event]
+        )
         assert matches == [event]
 
     def test_previous_target_attempts(self, tmp_path):
         project, video = _project(tmp_path)
-        events = [_TT, _TT, _YT, {"platform": "tiktok", "status": "failed",
-                                  "video": "01_clip.mp4"}]
+        events = [
+            _TT,
+            _TT,
+            _YT,
+            {"platform": "tiktok", "status": "failed", "video": "01_clip.mp4"},
+        ]
         assert pv._previous_target_attempts(str(project), video, "tiktok", events) == 2
         assert pv._previous_target_attempts(str(project), video, "youtube", events) == 1
 
@@ -208,6 +276,7 @@ class TestPriorPublishes:
 # ---------------------------------------------------------------------------
 # plan_variant
 # ---------------------------------------------------------------------------
+
 
 class TestPlanVariant:
     def test_non_variant_platform(self, tmp_path):
@@ -248,7 +317,9 @@ class TestPlanVariant:
 
     def test_auto_siblings_with_contribution_variates(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"1": {"commentary": True}}}})
+            tmp_path,
+            manifest={"transformation": {"clips": {"1": {"commentary": True}}}},
+        )
         decision = pv.plan_variant(str(project), video, "tiktok", events=[_YT])
         assert decision["action"] == "variate"
         assert decision["siblings"] == 1
@@ -259,22 +330,27 @@ class TestPlanVariant:
 
     def test_always_without_siblings_variates(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"1": {"voiceover": True}}}})
-        decision = pv.plan_variant(str(project), video, "tiktok",
-                                   policy="always", events=[])
+            tmp_path, manifest={"transformation": {"clips": {"1": {"voiceover": True}}}}
+        )
+        decision = pv.plan_variant(
+            str(project), video, "tiktok", policy="always", events=[]
+        )
         assert decision["action"] == "variate"
         assert decision["siblings"] == 0
         assert "variant_policy=always" in decision["reason"]
 
     def test_always_without_contribution_needs_review(self, tmp_path):
         project, video = _project(tmp_path)
-        decision = pv.plan_variant(str(project), video, "tiktok",
-                                   policy="always", events=[])
+        decision = pv.plan_variant(
+            str(project), video, "tiktok", policy="always", events=[]
+        )
         assert decision["action"] == "review"
 
     def test_attempt_counts_previous_target_publishes(self, tmp_path):
         project, video = _project(
-            tmp_path, manifest={"transformation": {"clips": {"1": {"commentary": True}}}})
+            tmp_path,
+            manifest={"transformation": {"clips": {"1": {"commentary": True}}}},
+        )
         events = [_YT, _TT, _TT]
         decision = pv.plan_variant(str(project), video, "tiktok", events=events)
         assert decision["attempt"] == 3
@@ -291,14 +367,17 @@ class TestPlanVariant:
 # maybe_variant (stubbed originality)
 # ---------------------------------------------------------------------------
 
+
 def _contributing_project(tmp_path):
     return _project(
-        tmp_path, manifest={"transformation": {"clips": {"1": {"voiceover": True}}}})
+        tmp_path, manifest={"transformation": {"clips": {"1": {"voiceover": True}}}}
+    )
 
 
 class TestMaybeVariant:
     def _stub_originality(self, monkeypatch, transform=None, compare=None):
         import scripts.originality as orig
+
         if transform is not None:
             monkeypatch.setattr(orig, "transform_with_seed", transform)
         if compare is not None:
@@ -338,8 +417,8 @@ class TestMaybeVariant:
             return {"ok": True, "transforms": ["mirror"]}
 
         self._stub_originality(
-            monkeypatch, transform=_transform,
-            compare=lambda a, b: {"similarity": 0.9})
+            monkeypatch, transform=_transform, compare=lambda a, b: {"similarity": 0.9}
+        )
         decision = pv.maybe_variant(str(project), video, "tiktok", events=[_YT])
         assert decision["action"] == "variate"
         assert attempts["n"] == pv.VERIFY_ATTEMPTS
@@ -358,8 +437,8 @@ class TestMaybeVariant:
             return {"ok": True, "transforms": ["speed"]}
 
         self._stub_originality(
-            monkeypatch, transform=_transform,
-            compare=lambda a, b: {"similarity": 0.2})
+            monkeypatch, transform=_transform, compare=lambda a, b: {"similarity": 0.2}
+        )
         decision = pv.maybe_variant(str(project), video, "tiktok", events=[_YT])
         assert decision["action"] == "variate"
         assert attempts["n"] == 1
@@ -385,8 +464,7 @@ class TestMaybeVariant:
 
     def test_transform_failure_falls_back_to_original(self, tmp_path, monkeypatch):
         project, video = _contributing_project(tmp_path)
-        self._stub_originality(
-            monkeypatch, transform=lambda *a, **k: {"ok": False})
+        self._stub_originality(monkeypatch, transform=lambda *a, **k: {"ok": False})
         decision = pv.maybe_variant(str(project), video, "tiktok", events=[_YT])
         assert decision["action"] == "none"
         assert decision["path"] == video
@@ -396,7 +474,8 @@ class TestMaybeVariant:
         project, video = _contributing_project(tmp_path)
         # reports ok but writes nothing -> treated as failure
         self._stub_originality(
-            monkeypatch, transform=lambda *a, **k: {"ok": True, "transforms": []})
+            monkeypatch, transform=lambda *a, **k: {"ok": True, "transforms": []}
+        )
         decision = pv.maybe_variant(str(project), video, "tiktok", events=[_YT])
         assert decision["action"] == "none"
         assert decision["path"] == video

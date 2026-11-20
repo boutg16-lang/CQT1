@@ -17,6 +17,7 @@ from scripts import arabic_text as at
 # normalize_arabic_orthography
 # ---------------------------------------------------------------------------
 
+
 def test_orthography_hamza_carriers_fold_to_alef():
     assert at.normalize_arabic_orthography("أإآٱ") == "اااا"
 
@@ -36,7 +37,9 @@ def test_orthography_alif_maqsura_is_not_folded():
     # على / علي must stay distinct.
     assert at.normalize_arabic_orthography("على") == "على"
     assert at.normalize_arabic_orthography("علي") == "علي"
-    assert at.normalize_arabic_orthography("على") != at.normalize_arabic_orthography("علي")
+    assert at.normalize_arabic_orthography("على") != at.normalize_arabic_orthography(
+        "علي"
+    )
 
 
 def test_orthography_none_and_non_arabic_passthrough():
@@ -49,6 +52,7 @@ def test_orthography_none_and_non_arabic_passthrough():
 # ---------------------------------------------------------------------------
 # normalize_digits
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_digits_arabic_indic_and_persian():
     assert at.normalize_digits("٣٫٥") == "3.5"
@@ -65,6 +69,7 @@ def test_normalize_digits_none_and_ascii_passthrough():
 # ---------------------------------------------------------------------------
 # normalized_match_text
 # ---------------------------------------------------------------------------
+
 
 def test_match_text_lowercases_and_strips_punctuation():
     assert at.normalized_match_text("Hello, World!") == "hello world"
@@ -84,6 +89,7 @@ def test_match_text_empty_and_none():
 # ---------------------------------------------------------------------------
 # light_stem / stemmed_tokens
 # ---------------------------------------------------------------------------
+
 
 def test_light_stem_strips_prefixes():
     assert at.light_stem("النجاح") == "نجاح"
@@ -134,6 +140,7 @@ def test_stemmed_tokens():
 # collapse_spaces
 # ---------------------------------------------------------------------------
 
+
 def test_collapse_spaces():
     assert at.collapse_spaces("a  b\tc") == "a b c"
     assert at.collapse_spaces("  padded  ") == "padded"
@@ -145,6 +152,7 @@ def test_collapse_spaces():
 # ---------------------------------------------------------------------------
 # Three normalization levels
 # ---------------------------------------------------------------------------
+
 
 def test_to_display_is_identity():
     text = "السَّلامُ ٣ خطوات!"
@@ -173,11 +181,16 @@ def test_search_tokens():
 # language_profile / dominant_language
 # ---------------------------------------------------------------------------
 
+
 def test_language_profile_empty():
     profile = at.language_profile("")
     assert profile == {
-        "arabic": 0, "latin": 0, "arabic_ratio": 0.0, "latin_ratio": 0.0,
-        "script": "none", "dominant": "none",
+        "arabic": 0,
+        "latin": 0,
+        "arabic_ratio": 0.0,
+        "latin_ratio": 0.0,
+        "script": "none",
+        "dominant": "none",
     }
 
 
@@ -205,8 +218,8 @@ def test_language_profile_tie_goes_arabic():
 
 
 def test_language_profile_ratio_boundaries():
-    assert at.language_profile("مرحباا abcd")["script"] == "ar"   # 6/10 = 0.6
-    assert at.language_profile("مر abcdefgh")["script"] == "en"   # 2/10 = 0.2
+    assert at.language_profile("مرحباا abcd")["script"] == "ar"  # 6/10 = 0.6
+    assert at.language_profile("مر abcdefgh")["script"] == "en"  # 2/10 = 0.2
 
 
 def test_dominant_language():
@@ -219,6 +232,7 @@ def test_dominant_language():
 # ---------------------------------------------------------------------------
 # RTL helpers
 # ---------------------------------------------------------------------------
+
 
 def test_is_rtl_first_strong_character_decides():
     assert at.is_rtl("مرحبا") is True

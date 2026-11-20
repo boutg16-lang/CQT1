@@ -6,6 +6,7 @@ without its DLLs) passed the existence-only preflight, while yt-dlp — which
 EXECUTES the binary before merging — failed every download with
 "You have requested merging of multiple formats but ffmpeg is not installed".
 """
+
 import os
 
 from scripts import download_video, preflight
@@ -20,12 +21,14 @@ def _exe(name):
 def _which_factory(mapping):
     def which(name):
         return mapping.get(name)
+
     return which
 
 
 def _runs_factory(working):
     def runs(path, *a, **k):
         return path in working
+
     return runs
 
 
@@ -50,8 +53,9 @@ def test_broken_path_ffmpeg_is_rescued_from_ffprobe_dir():
     good_fp = os.path.join(ff_dir, _exe("ffprobe"))
     which = _which_factory({"ffmpeg": broken, "ffprobe": good_fp})
     runs = _runs_factory({good_ff, good_fp})
-    tc = resolve_toolchain(which_fn=which, isfile=lambda p: p in {good_ff, good_fp},
-                           runs=runs, env={})
+    tc = resolve_toolchain(
+        which_fn=which, isfile=lambda p: p in {good_ff, good_fp}, runs=runs, env={}
+    )
     assert tc["ok"] is True
     assert tc["programs"]["ffmpeg"]["state"] == "rescued"
     assert tc["programs"]["ffmpeg"]["path"] == good_ff
@@ -66,8 +70,12 @@ def test_env_dir_rescue_when_ffprobe_also_broken():
     good_fp = os.path.join(good_dir, _exe("ffprobe"))
     which = _which_factory({"ffmpeg": broken_ff, "ffprobe": broken_fp})
     runs = _runs_factory({good_ff, good_fp})
-    tc = resolve_toolchain(which_fn=which, isfile=lambda p: True, runs=runs,
-                           env={"VIRALCUTTER_FFMPEG_DIR": good_dir})
+    tc = resolve_toolchain(
+        which_fn=which,
+        isfile=lambda p: True,
+        runs=runs,
+        env={"VIRALCUTTER_FFMPEG_DIR": good_dir},
+    )
     assert tc["ok"] is True
     assert tc["location"] == good_dir
 
@@ -75,8 +83,9 @@ def test_env_dir_rescue_when_ffprobe_also_broken():
 def test_totally_broken_toolchain_reports_problems():
     broken = os.path.join(r"C:\Windows\system32", _exe("ffmpeg"))
     which = _which_factory({"ffmpeg": broken, "ffprobe": None})
-    tc = resolve_toolchain(which_fn=which, isfile=lambda p: False,
-                           runs=_runs_factory(set()), env={})
+    tc = resolve_toolchain(
+        which_fn=which, isfile=lambda p: False, runs=_runs_factory(set()), env={}
+    )
     assert tc["ok"] is False
     assert any("does not run" in p for p in tc["problems"])
     assert any("ffprobe not found" in p for p in tc["problems"])
@@ -90,7 +99,10 @@ def test_guidance_mentions_real_fixes():
 
 def test_friendly_error_maps_ytdlp_ffmpeg_message():
     msg = download_video._friendly_download_error(
-        Exception("You have requested merging of multiple formats but ffmpeg is not installed"))
+        Exception(
+            "You have requested merging of multiple formats but ffmpeg is not installed"
+        )
+    )
     assert "ffmpeg" in msg
     assert "winget install ffmpeg" in msg
 
@@ -99,9 +111,16 @@ def test_preflight_flags_broken_binary_as_warn_with_rescue(monkeypatch):
     ff_dir = r"C:\ffmpeg\bin"
     good_ff = os.path.join(ff_dir, _exe("ffmpeg"))
     good_fp = os.path.join(ff_dir, _exe("ffprobe"))
-    monkeypatch.setattr(ft.shutil, "which",
-                        _which_factory({"ffmpeg": os.path.join(r"C:\Windows\system32", _exe("ffmpeg")),
-                                        "ffprobe": good_fp}))
+    monkeypatch.setattr(
+        ft.shutil,
+        "which",
+        _which_factory(
+            {
+                "ffmpeg": os.path.join(r"C:\Windows\system32", _exe("ffmpeg")),
+                "ffprobe": good_fp,
+            }
+        ),
+    )
     monkeypatch.setattr(ft, "binary_runs", _runs_factory({good_ff, good_fp}))
     monkeypatch.setattr(ft.os.path, "isfile", lambda p: True)
     entries = {e["name"]: e for e in preflight.check_ffmpeg_toolchain()}
@@ -112,9 +131,16 @@ def test_preflight_flags_broken_binary_as_warn_with_rescue(monkeypatch):
 
 
 def test_preflight_fails_when_nothing_runs(monkeypatch):
-    monkeypatch.setattr(ft.shutil, "which",
-                        _which_factory({"ffmpeg": os.path.join(r"C:\Windows\system32", _exe("ffmpeg")),
-                                        "ffprobe": None}))
+    monkeypatch.setattr(
+        ft.shutil,
+        "which",
+        _which_factory(
+            {
+                "ffmpeg": os.path.join(r"C:\Windows\system32", _exe("ffmpeg")),
+                "ffprobe": None,
+            }
+        ),
+    )
     monkeypatch.setattr(ft, "binary_runs", lambda *a, **k: False)
     monkeypatch.setattr(ft.os.path, "isfile", lambda p: False)
     entries = {e["name"]: e for e in preflight.check_ffmpeg_toolchain()}

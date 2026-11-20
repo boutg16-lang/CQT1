@@ -8,15 +8,24 @@ from scripts.create_viral_segments import (
 
 
 def test_selection_score_is_bounded_and_explainable():
-    score, breakdown = _selection_score({
-        "score": 90,
-        "hook_strength": 80,
-        "narrative_completeness": 70,
-        "clarity_score": 85,
-        "novelty_score": 60,
-    })
+    score, breakdown = _selection_score(
+        {
+            "score": 90,
+            "hook_strength": 80,
+            "narrative_completeness": 70,
+            "clarity_score": 85,
+            "novelty_score": 60,
+        }
+    )
     assert 0 <= score <= 100
-    assert set(breakdown) == {"virality", "hook", "completeness", "clarity", "novelty", "title"}
+    assert set(breakdown) == {
+        "virality",
+        "hook",
+        "completeness",
+        "clarity",
+        "novelty",
+        "title",
+    }
     assert breakdown["virality"] == 90
 
 
@@ -33,12 +42,30 @@ def test_model_virality_score_is_capped_and_missing_factors_are_neutral():
 
 
 def test_editorial_evidence_beats_high_raw_score_even_with_override():
-    model_hype = {"score": 100, "hook_strength": 0, "narrative_completeness": 0,
-                  "clarity_score": 0, "novelty_score": 0, "title_quality_score": 0}
-    grounded_quality = {"score": 10, "hook_strength": 90, "narrative_completeness": 90,
-                        "clarity_score": 90, "novelty_score": 90, "title_quality_score": 90}
-    override = {"virality": 1.0, "hook": 0.0, "completeness": 0.0,
-                "clarity": 0.0, "novelty": 0.0, "title": 0.0}
+    model_hype = {
+        "score": 100,
+        "hook_strength": 0,
+        "narrative_completeness": 0,
+        "clarity_score": 0,
+        "novelty_score": 0,
+        "title_quality_score": 0,
+    }
+    grounded_quality = {
+        "score": 10,
+        "hook_strength": 90,
+        "narrative_completeness": 90,
+        "clarity_score": 90,
+        "novelty_score": 90,
+        "title_quality_score": 90,
+    }
+    override = {
+        "virality": 1.0,
+        "hook": 0.0,
+        "completeness": 0.0,
+        "clarity": 0.0,
+        "novelty": 0.0,
+        "title": 0.0,
+    }
 
     hype_score, _ = _selection_score(model_hype, override)
     quality_score, _ = _selection_score(grounded_quality, override)
@@ -64,10 +91,20 @@ def test_process_segments_drops_same_window_with_different_titles():
         {"start": 20.0, "end": 30.0, "text": "later detail"},
     ]
     raw = [
-        {"title": "Hook A", "start_time_ref": "0s", "start_text": "opening statement",
-         "end_text": "important conclusion", "score": 95},
-        {"title": "Hook B", "start_time_ref": "0s", "start_text": "opening statement",
-         "end_text": "important conclusion", "score": 94},
+        {
+            "title": "Hook A",
+            "start_time_ref": "0s",
+            "start_text": "opening statement",
+            "end_text": "important conclusion",
+            "score": 95,
+        },
+        {
+            "title": "Hook B",
+            "start_time_ref": "0s",
+            "start_text": "opening statement",
+            "end_text": "important conclusion",
+            "score": 94,
+        },
     ]
     result = process_segments(raw, transcript, 5, 30)
     assert len(result["segments"]) == 1
@@ -75,13 +112,19 @@ def test_process_segments_drops_same_window_with_different_titles():
 
 
 def test_process_segments_respects_explicit_numeric_window():
-    transcript = [{"start": float(i), "end": float(i + 1), "text": f"word {i}"} for i in range(0, 61, 5)]
+    transcript = [
+        {"start": float(i), "end": float(i + 1), "text": f"word {i}"}
+        for i in range(0, 61, 5)
+    ]
     raw = [
         {"title": "First", "start_time": 10, "end_time": 20, "score": 90},
         {"title": "Second", "start_time": 40, "end_time": 50, "score": 80},
     ]
     result = process_segments(raw, transcript, 5, 30)
-    windows = {(round(item["start_time"]), round(item["end_time"])) for item in result["segments"]}
+    windows = {
+        (round(item["start_time"]), round(item["end_time"]))
+        for item in result["segments"]
+    }
     assert windows == {(10, 20), (40, 50)}
 
 
@@ -113,8 +156,13 @@ def test_title_quality_penalizes_keyword_stuffing():
 
 
 def test_selection_score_rewards_quality_titles():
-    base = {"score": 60, "hook_strength": 60, "narrative_completeness": 60,
-            "clarity_score": 60, "novelty_score": 60}
+    base = {
+        "score": 60,
+        "hook_strength": 60,
+        "narrative_completeness": 60,
+        "clarity_score": 60,
+        "novelty_score": 60,
+    }
     stuffed = dict(base, title_quality_score=30.0)
     curious = dict(base, title_quality_score=85.0)
     missing = dict(base)
@@ -143,19 +191,35 @@ def test_virality_is_capped_and_missing_factors_use_neutral_values():
     }
     calibrated_score, _ = _selection_score(
         {"score": 100},
-        weights={"virality": 0.8, "hook": 0.1, "completeness": 0.1,
-                  "clarity": 0.0, "novelty": 0.0, "title": 0.0},
+        weights={
+            "virality": 0.8,
+            "hook": 0.1,
+            "completeness": 0.1,
+            "clarity": 0.0,
+            "novelty": 0.0,
+            "title": 0.0,
+        },
     )
     assert calibrated_score == 55.0
 
 
 def test_editorial_quality_beats_a_high_raw_virality_estimate():
-    high_virality = {"score": 100, "hook_strength": 10,
-                     "narrative_completeness": 10, "clarity_score": 10,
-                     "novelty_score": 10, "title_quality_score": 10}
-    strong_editorial = {"score": 20, "hook_strength": 90,
-                        "narrative_completeness": 90, "clarity_score": 90,
-                        "novelty_score": 90, "title_quality_score": 90}
+    high_virality = {
+        "score": 100,
+        "hook_strength": 10,
+        "narrative_completeness": 10,
+        "clarity_score": 10,
+        "novelty_score": 10,
+        "title_quality_score": 10,
+    }
+    strong_editorial = {
+        "score": 20,
+        "hook_strength": 90,
+        "narrative_completeness": 90,
+        "clarity_score": 90,
+        "novelty_score": 90,
+        "title_quality_score": 90,
+    }
 
     assert _selection_score(strong_editorial)[0] > _selection_score(high_virality)[0]
 
@@ -178,8 +242,12 @@ def test_verified_title_status_improves_selection_evidence():
     base = {"score": 75, "duration": 8, "recommended_title": "خطوات النجاح"}
     verified = dict(base, title_validation={"status": "verified"})
     review = dict(base, title_validation={"status": "review"})
-    verified_factors = cvs._compute_factor_scores(verified, analysis, title_relevance_ratio=0.5)
-    review_factors = cvs._compute_factor_scores(review, analysis, title_relevance_ratio=0.5)
+    verified_factors = cvs._compute_factor_scores(
+        verified, analysis, title_relevance_ratio=0.5
+    )
+    review_factors = cvs._compute_factor_scores(
+        review, analysis, title_relevance_ratio=0.5
+    )
     assert verified_factors["title_relevance"] > review_factors["title_relevance"]
 
 
@@ -188,8 +256,11 @@ def test_selection_explanation_is_publish_readiness_aware():
 
     segment = {
         "selection_score": 82.5,
-        "score_breakdown": {"hook_strength": 90, "title_relevance": 80,
-                            "repetition_penalty": 4},
+        "score_breakdown": {
+            "hook_strength": 90,
+            "title_relevance": 80,
+            "repetition_penalty": 4,
+        },
         "diversity_adjustment": 3.0,
         "title_selection_status": "verified",
         "title_validation": {"status": "verified"},
@@ -207,11 +278,15 @@ def test_process_segments_aligns_paraphrased_start_text():
         {"start": 10.0, "end": 19.0, "text": "the secret ingredient is patience"},
         {"start": 20.0, "end": 30.0, "text": "thanks for watching"},
     ]
-    raw = [{
-        "title": "Patience", "start_time_ref": "0s",
-        "start_text": "secret ingredient patience",
-        "end_text": "thanks for watching", "score": 90,
-    }]
+    raw = [
+        {
+            "title": "Patience",
+            "start_time_ref": "0s",
+            "start_text": "secret ingredient patience",
+            "end_text": "thanks for watching",
+            "score": 90,
+        }
+    ]
     result = process_segments(raw, transcript, 5, 30)
     assert result["segments"][0]["start_time"] == 10.0
 
@@ -232,12 +307,19 @@ def test_process_segments_clamps_malformed_ai_timestamps_to_transcript():
         {"start": 0.0, "end": 8.0, "text": "opening"},
         {"start": 9.0, "end": 20.0, "text": "complete thought"},
     ]
-    result = process_segments([{
-        "title": "Out of range",
-        "start_time": 9999,
-        "end_time": 10000,
-        "score": 90,
-    }], transcript, 5, 30)
+    result = process_segments(
+        [
+            {
+                "title": "Out of range",
+                "start_time": 9999,
+                "end_time": 10000,
+                "score": 90,
+            }
+        ],
+        transcript,
+        5,
+        30,
+    )
     segment = result["segments"][0]
     assert 0.0 <= segment["start_time"] < segment["end_time"] <= 20.0
     assert 5.0 <= segment["duration"] <= 30.0
@@ -247,9 +329,11 @@ def test_verified_title_status_beats_review_at_same_lexical_overlap():
     from scripts.create_viral_segments import _title_validation_signal
 
     verified, verified_status = _title_validation_signal(
-        {"title_validation": {"status": "verified"}}, 0.8)
+        {"title_validation": {"status": "verified"}}, 0.8
+    )
     review, review_status = _title_validation_signal(
-        {"title_validation": {"status": "review"}}, 0.8)
+        {"title_validation": {"status": "review"}}, 0.8
+    )
     assert verified > review
     assert verified_status == "verified"
     assert review_status == "review"
@@ -261,16 +345,25 @@ def test_selection_explanation_exposes_rank_factors_and_readiness():
         _selection_readiness,
     )
 
-    ready = {"selection_score": 88, "score_breakdown": {"hook_strength": 92,
-             "standalone_context": 85, "repetition_penalty": 4},
-             "title_validation": {"status": "verified"}}
+    ready = {
+        "selection_score": 88,
+        "score_breakdown": {
+            "hook_strength": 92,
+            "standalone_context": 85,
+            "repetition_penalty": 4,
+        },
+        "title_validation": {"status": "verified"},
+    }
     assert _selection_readiness(ready) == "publish_ready"
     explanation = _selection_explanation(ready)
     assert explanation["top_factors"][0]["name"] == "hook_strength"
     assert explanation["penalties"] == {"repetition_penalty": 4.0}
     assert explanation["readiness"] == "publish_ready"
     assert _selection_readiness({"requires_review": True}) == "review"
-    assert _selection_readiness({"title_validation": {"status": "rejected"}}) == "blocked"
+    assert (
+        _selection_readiness({"title_validation": {"status": "rejected"}}) == "blocked"
+    )
+
 
 def test_raw_virality_score_does_not_fill_missing_active_factors():
     from scripts import create_viral_segments as cvs
@@ -289,14 +382,26 @@ def test_raw_virality_score_does_not_fill_missing_active_factors():
     }
     low = cvs._compute_factor_scores({"score": 10, "duration": 5}, analysis)
     high = cvs._compute_factor_scores({"score": 100, "duration": 5}, analysis)
-    low_invalid = cvs._compute_factor_scores({
-        "score": 10, "duration": 5, "hook_strength": "invalid",
-        "narrative_completeness": "invalid", "clarity_score": "invalid",
-    }, analysis)
-    high_invalid = cvs._compute_factor_scores({
-        "score": 100, "duration": 5, "hook_strength": "invalid",
-        "narrative_completeness": "invalid", "clarity_score": "invalid",
-    }, analysis)
+    low_invalid = cvs._compute_factor_scores(
+        {
+            "score": 10,
+            "duration": 5,
+            "hook_strength": "invalid",
+            "narrative_completeness": "invalid",
+            "clarity_score": "invalid",
+        },
+        analysis,
+    )
+    high_invalid = cvs._compute_factor_scores(
+        {
+            "score": 100,
+            "duration": 5,
+            "hook_strength": "invalid",
+            "narrative_completeness": "invalid",
+            "clarity_score": "invalid",
+        },
+        analysis,
+    )
 
     assert low == high
     assert low_invalid == high_invalid

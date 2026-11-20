@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
     HAS_PIL = True
 except Exception:  # pragma: no cover
     Image = ImageDraw = ImageFilter = ImageFont = None
@@ -38,13 +39,16 @@ except Exception:  # pragma: no cover
 
 try:
     import cv2
+
     HAS_CV2 = True
 except Exception:  # pragma: no cover
     cv2 = None
     HAS_CV2 = False
 
 TARGET_W, TARGET_H = 1280, 720
-FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+FONT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts"
+)
 
 
 def _font_path(name: str) -> str:
@@ -56,7 +60,7 @@ def _load_font(size: int, bold: bool = True, text: str = ""):
     if not HAS_PIL:
         return None
     # Arabic text needs an Arabic font (Montserrat has no Arabic glyphs).
-    has_arabic = any("\u0600" <= ch <= "\u06FF" for ch in (text or ""))
+    has_arabic = any("\u0600" <= ch <= "\u06ff" for ch in (text or ""))
     if has_arabic:
         candidates = [
             _font_path("Cairo-Bold.ttf") if bold else _font_path("Cairo-Regular.ttf"),
@@ -69,7 +73,9 @@ def _load_font(size: int, bold: bool = True, text: str = ""):
                 except Exception:
                     continue
     candidates = [
-        _font_path("Montserrat-ExtraBold.ttf") if bold else _font_path("Montserrat-Regular.ttf"),
+        _font_path("Montserrat-ExtraBold.ttf")
+        if bold
+        else _font_path("Montserrat-Regular.ttf"),
         _font_path("Montserrat-Bold.ttf"),
         _font_path("Montserrat-Regular.ttf"),
     ]
@@ -120,6 +126,7 @@ def _face_bbox(image):
     if not HAS_CV2:
         return None
     import numpy as np
+
     rgb = np.array(image.convert("RGB"))
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     h, w = bgr.shape[:2]
@@ -128,8 +135,8 @@ def _face_bbox(image):
     detector = None
     try:
         detector = cv2.FaceDetectorYN_create(
-            "", "", (w, h),
-            score_threshold=0.6, nms_threshold=0.3, top_k=5)
+            "", "", (w, h), score_threshold=0.6, nms_threshold=0.3, top_k=5
+        )
         detector.setInputSize((w, h))
         _ok, faces = detector.detect(bgr)
         if faces is not None and len(faces) > 0:
@@ -143,10 +150,12 @@ def _face_bbox(image):
     # Legacy fallback: Haar cascade (cv2 < 5.0)
     try:
         cascade = cv2.CascadeClassifier(
-            os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml"))
+            os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+        )
         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5,
-                                         minSize=(60, 60))
+        faces = cascade.detectMultiScale(
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
+        )
         if len(faces) == 0:
             return None
         x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
@@ -204,15 +213,24 @@ def _wrap_text(text: str, font, max_width: int) -> list[str]:
     return lines[:3]  # max 3 lines
 
 
-def generate_thumbnail(source: str, *, title: str = "", hook: str = "",
-                       out: str = "thumbnail.png", at_seconds: float = 0.0,
-                       accent: str = "#FFD400") -> dict[str, Any]:
+def generate_thumbnail(
+    source: str,
+    *,
+    title: str = "",
+    hook: str = "",
+    out: str = "thumbnail.png",
+    at_seconds: float = 0.0,
+    accent: str = "#FFD400",
+) -> dict[str, Any]:
     """Create a YouTube thumbnail from a video or image source."""
     if not HAS_PIL:
         return {"ok": False, "error": "Pillow is required (pip install Pillow)"}
 
-    image = extract_frame(source, at_seconds) if source.lower().endswith(
-        (".mp4", ".mov", ".mkv", ".webm", ".avi")) else None
+    image = (
+        extract_frame(source, at_seconds)
+        if source.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".avi"))
+        else None
+    )
     if image is None and os.path.isfile(source):
         try:
             image = Image.open(source).convert("RGB")
@@ -223,7 +241,8 @@ def generate_thumbnail(source: str, *, title: str = "", hook: str = "",
 
     face_box = _face_bbox(image)
     cropped = _cover_crop(image, face_box=face_box).resize(
-        (TARGET_W, TARGET_H), Image.LANCZOS)
+        (TARGET_W, TARGET_H), Image.LANCZOS
+    )
 
     # subtle dark gradient at the bottom for text readability
     overlay = Image.new("RGBA", (TARGET_W, TARGET_H), (0, 0, 0, 0))
@@ -237,7 +256,7 @@ def generate_thumbnail(source: str, *, title: str = "", hook: str = "",
 
     # accent bar
     try:
-        accent_rgb = tuple(int(accent.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        accent_rgb = tuple(int(accent.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
     except Exception:
         accent_rgb = (255, 212, 0)
     draw.rectangle([0, TARGET_H - 14, TARGET_W, TARGET_H], fill=accent_rgb)
@@ -255,15 +274,25 @@ def generate_thumbnail(source: str, *, title: str = "", hook: str = "",
         lines = _wrap_text(title, title_font, TARGET_W - 80)
         y = TARGET_H - 40 - len(lines) * 92
         for line in lines:
-            draw.text((40, y), line, font=title_font, fill=(255, 255, 255),
-                      stroke_width=6, stroke_fill=(0, 0, 0))
+            draw.text(
+                (40, y),
+                line,
+                font=title_font,
+                fill=(255, 255, 255),
+                stroke_width=6,
+                stroke_fill=(0, 0, 0),
+            )
             y += 92
 
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     cropped.save(out, "PNG")
-    return {"ok": True, "out": out, "size": (TARGET_W, TARGET_H),
-            "face_detected": face_box is not None,
-            "engine": "pillow+opencv"}
+    return {
+        "ok": True,
+        "out": out,
+        "size": (TARGET_W, TARGET_H),
+        "face_detected": face_box is not None,
+        "engine": "pillow+opencv",
+    }
 
 
 def main(argv=None) -> int:
@@ -272,19 +301,28 @@ def main(argv=None) -> int:
     parser.add_argument("--title", default="", help="main title (bottom)")
     parser.add_argument("--hook", default="", help="hook badge (top-left)")
     parser.add_argument("--out", default="thumbnail.png")
-    parser.add_argument("--at", type=float, default=0.0,
-                        help="video frame time in seconds (default 0)")
+    parser.add_argument(
+        "--at", type=float, default=0.0, help="video frame time in seconds (default 0)"
+    )
     parser.add_argument("--accent", default="#FFD400", help="accent hex color")
     args = parser.parse_args(argv)
 
     result = generate_thumbnail(
-        args.source, title=args.title, hook=args.hook, out=args.out,
-        at_seconds=args.at, accent=args.accent)
+        args.source,
+        title=args.title,
+        hook=args.hook,
+        out=args.out,
+        at_seconds=args.at,
+        accent=args.accent,
+    )
     if not result["ok"]:
         print("[thumbnail] ERROR: {}".format(result["error"]))
         return 1
-    print("[thumbnail] OK -> {} (face detected: {})".format(
-        result["out"], result["face_detected"]))
+    print(
+        "[thumbnail] OK -> {} (face detected: {})".format(
+            result["out"], result["face_detected"]
+        )
+    )
     return 0
 
 

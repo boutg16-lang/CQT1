@@ -5,6 +5,7 @@ This is an offline, deterministic post-selection layer. It never edits or
 removes source candidates: it returns selected clips plus explicit exclusion
 reasons so an editor can override every decision.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,9 +43,14 @@ def _topic(segment: dict) -> str:
     return value.casefold() or "غير مصنف"
 
 
-def plan_package(segments: list[dict], *, limit: int = 5,
-                 max_per_topic: int = 2, min_similarity: float = 0.72,
-                 min_gap_seconds: float = 0.0) -> dict:
+def plan_package(
+    segments: list[dict],
+    *,
+    limit: int = 5,
+    max_per_topic: int = 2,
+    min_similarity: float = 0.72,
+    min_gap_seconds: float = 0.0,
+) -> dict:
     """Select a diverse clip package without mutating input.
 
     Candidates are considered by editorial score, then virality score, then
@@ -65,11 +71,17 @@ def plan_package(segments: list[dict], *, limit: int = 5,
         raise ValueError("min_similarity must be finite and between 0 and 1")
     if not math.isfinite(min_gap_seconds) or min_gap_seconds < 0:
         raise ValueError("min_gap_seconds must be finite and >= 0")
-    candidates = [(i, dict(item)) for i, item in enumerate(segments)
-                  if isinstance(item, dict)]
-    candidates.sort(key=lambda pair: (
-        _number(pair[1].get("selection_score"), _number(pair[1].get("score"))),
-        _number(pair[1].get("score")), -pair[0]), reverse=True)
+    candidates = [
+        (i, dict(item)) for i, item in enumerate(segments) if isinstance(item, dict)
+    ]
+    candidates.sort(
+        key=lambda pair: (
+            _number(pair[1].get("selection_score"), _number(pair[1].get("score"))),
+            _number(pair[1].get("score")),
+            -pair[0],
+        ),
+        reverse=True,
+    )
 
     selected: list[dict] = []
     excluded: list[dict] = []
@@ -88,9 +100,11 @@ def plan_package(segments: list[dict], *, limit: int = 5,
         for prior in selected:
             candidate_source = candidate.get("source_id") or candidate.get("source")
             prior_source = prior.get("source_id") or prior.get("source")
-            same_source = (candidate_source is not None
-                           and str(candidate_source).strip() != ""
-                           and candidate_source == prior_source)
+            same_source = (
+                candidate_source is not None
+                and str(candidate_source).strip() != ""
+                and candidate_source == prior_source
+            )
             start = _number(candidate.get("start"), -1)
             end = _number(candidate.get("end"), -1)
             prior_start = _number(prior.get("start"), -1)
@@ -131,8 +145,12 @@ def plan_package(segments: list[dict], *, limit: int = 5,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build a diverse editorial clip package")
-    parser.add_argument("input", type=Path, help="JSON file containing a list or {segments: [...]}")
+    parser = argparse.ArgumentParser(
+        description="Build a diverse editorial clip package"
+    )
+    parser.add_argument(
+        "input", type=Path, help="JSON file containing a list or {segments: [...]}"
+    )
     parser.add_argument("--output", type=Path, default=Path("clip_package.json"))
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--max-per-topic", type=int, default=2)
@@ -144,12 +162,17 @@ def main(argv: list[str] | None = None) -> int:
         segments = payload.get("segments", []) if isinstance(payload, dict) else payload
         if not isinstance(segments, list):
             raise ValueError("input JSON must be a list or contain a segments list")
-        result = plan_package(segments, limit=args.limit,
-                              max_per_topic=args.max_per_topic,
-                              min_similarity=args.min_similarity,
-                              min_gap_seconds=args.min_gap_seconds)
+        result = plan_package(
+            segments,
+            limit=args.limit,
+            max_per_topic=args.max_per_topic,
+            min_similarity=args.min_similarity,
+            min_gap_seconds=args.min_gap_seconds,
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        args.output.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         print(json.dumps(result["summary"], ensure_ascii=False))
         return 0
     except (OSError, json.JSONDecodeError, ValueError) as exc:

@@ -63,9 +63,14 @@ def test_publish_history_is_secret_free_and_persistent(tmp_path):
     clip = project / "clip.mp4"
     clip.write_bytes(b"video")
     publish_history.record(
-        str(project), platform="youtube", video_path=str(clip),
-        title="A safe title", result={"status": "scheduled", "video_id": "abc123"},
-        privacy_status="private", publish_at="2030-01-01T12:00:00Z")
+        str(project),
+        platform="youtube",
+        video_path=str(clip),
+        title="A safe title",
+        result={"status": "scheduled", "video_id": "abc123"},
+        privacy_status="private",
+        publish_at="2030-01-01T12:00:00Z",
+    )
     rows = publish_history.load(str(project))
     assert rows[-1]["status"] == "scheduled"
     assert rows[-1]["video_id"] == "abc123"
@@ -78,15 +83,28 @@ def test_publish_history_deduplicates_successful_file_but_not_dry_run(tmp_path):
     clip = project / "clip.mp4"
     clip.write_bytes(b"video")
     publish_history.record(
-        str(project), platform="youtube", video_path=str(clip), title="Title",
-        result={"status": "dry-run"})
-    assert publish_history.find_success(
-        str(project), platform="youtube", video_path=str(clip)) is None
+        str(project),
+        platform="youtube",
+        video_path=str(clip),
+        title="Title",
+        result={"status": "dry-run"},
+    )
+    assert (
+        publish_history.find_success(
+            str(project), platform="youtube", video_path=str(clip)
+        )
+        is None
+    )
     publish_history.record(
-        str(project), platform="youtube", video_path=str(clip), title="Title",
-        result={"status": "uploaded", "video_id": "abc123"})
+        str(project),
+        platform="youtube",
+        video_path=str(clip),
+        title="Title",
+        result={"status": "uploaded", "video_id": "abc123"},
+    )
     prior = publish_history.find_success(
-        str(project), platform="youtube", video_path=str(clip))
+        str(project), platform="youtube", video_path=str(clip)
+    )
     assert prior and prior["video_id"] == "abc123"
 
 
@@ -94,5 +112,6 @@ def test_publish_history_ignores_corrupt_lines(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
     (project / publish_history.HISTORY_NAME).write_text(
-        "{bad json}\n{" + '"status": "uploaded"' + "}\n", encoding="utf-8")
+        "{bad json}\n{" + '"status": "uploaded"' + "}\n", encoding="utf-8"
+    )
     assert publish_history.load(str(project)) == [{"status": "uploaded"}]

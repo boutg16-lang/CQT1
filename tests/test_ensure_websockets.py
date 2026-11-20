@@ -26,7 +26,9 @@ def test_compatibility_range_matches_requirements_pyproject_and_lock():
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
-    match = re.search(r'(?ms)^\[\[package\]\]\nname = "websockets"\nversion = "([^"]+)"', lock)
+    match = re.search(
+        r'(?ms)^\[\[package\]\]\nname = "websockets"\nversion = "([^"]+)"', lock
+    )
 
     assert ensure_websockets.COMPATIBILITY_SPEC in requirements
     assert '"{}"'.format(ensure_websockets.COMPATIBILITY_SPEC) in pyproject
@@ -39,7 +41,9 @@ def test_compatible_version_does_not_trigger_repair(monkeypatch):
     monkeypatch.setattr(
         ensure_websockets.subprocess,
         "run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected install")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unexpected install")
+        ),
     )
 
     assert ensure_websockets.needs_repair() is False
@@ -51,7 +55,9 @@ def test_incompatible_version_is_detected_without_importing_it(monkeypatch):
     monkeypatch.setattr(
         ensure_websockets,
         "has_connection_closed_export",
-        lambda: (_ for _ in ()).throw(AssertionError("incompatible package must not load")),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("incompatible package must not load")
+        ),
     )
 
     assert ensure_websockets.needs_repair() is True
@@ -59,7 +65,9 @@ def test_incompatible_version_is_detected_without_importing_it(monkeypatch):
 
 def test_missing_connection_closed_export_requires_repair(monkeypatch):
     monkeypatch.setattr(ensure_websockets, "installed_version", lambda: "16.1.1")
-    monkeypatch.setattr(ensure_websockets, "has_connection_closed_export", lambda: False)
+    monkeypatch.setattr(
+        ensure_websockets, "has_connection_closed_export", lambda: False
+    )
 
     assert ensure_websockets.needs_repair() is True
 
@@ -115,8 +123,12 @@ def test_repair_finds_uv_in_windows_user_install_path(monkeypatch, tmp_path):
     monkeypatch.setattr(ensure_websockets, "installed_version", lambda: next(versions))
     monkeypatch.setattr(ensure_websockets, "has_connection_closed_export", lambda: True)
     monkeypatch.setattr(ensure_websockets.shutil, "which", lambda _: None)
-    monkeypatch.setattr(ensure_websockets.os.path, "expanduser", lambda _: str(tmp_path))
-    monkeypatch.setattr(ensure_websockets.os.path, "isfile", lambda path: path == str(expected_uv))
+    monkeypatch.setattr(
+        ensure_websockets.os.path, "expanduser", lambda _: str(tmp_path)
+    )
+    monkeypatch.setattr(
+        ensure_websockets.os.path, "isfile", lambda path: path == str(expected_uv)
+    )
     monkeypatch.setattr(
         ensure_websockets.subprocess,
         "run",
@@ -131,6 +143,8 @@ def test_repair_finds_uv_in_windows_user_install_path(monkeypatch, tmp_path):
 def test_repair_returns_false_when_package_install_fails(monkeypatch):
     monkeypatch.setattr(ensure_websockets, "installed_version", lambda: "17.4")
     monkeypatch.setattr(ensure_websockets.shutil, "which", lambda _: "uv")
-    monkeypatch.setattr(ensure_websockets.subprocess, "run", lambda *args, **kwargs: Result(1))
+    monkeypatch.setattr(
+        ensure_websockets.subprocess, "run", lambda *args, **kwargs: Result(1)
+    )
 
     assert ensure_websockets.repair() is False

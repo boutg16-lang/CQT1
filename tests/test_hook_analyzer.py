@@ -2,7 +2,9 @@ from scripts import hook_analyzer
 
 
 def test_clean_question_opening_scores_high():
-    report = hook_analyzer.analyze_opening("ليش الناس تخاف من التغيير؟ الجواب راح يفاجئك")
+    report = hook_analyzer.analyze_opening(
+        "ليش الناس تخاف من التغيير؟ الجواب راح يفاجئك"
+    )
     assert report["has_question_hook"] is True
     assert report["opens_with_filler"] is False
     assert report["opens_mid_thought"] is False
@@ -28,7 +30,9 @@ def test_mid_thought_opener_is_flagged():
 
 
 def test_number_and_personal_hooks_add_score():
-    report = hook_analyzer.analyze_opening("أنت تعرف إن 90 بالمية من الناس يطبقونها غلط")
+    report = hook_analyzer.analyze_opening(
+        "أنت تعرف إن 90 بالمية من الناس يطبقونها غلط"
+    )
     assert report["has_number_hook"] is True
     assert report["has_personal_hook"] is True
     baseline = hook_analyzer.analyze_opening("الناس يطبقون الطريقة دي غلط كثير")
@@ -50,7 +54,8 @@ def test_empty_text_scores_zero():
 def test_score_stays_within_bounds():
     weak = hook_analyzer.analyze_opening("يعني طيب وبعدين امم")
     strong = hook_analyzer.analyze_opening(
-        "ليش أنت ضيعت 3 سنين؟! والله القصة مجنونة!!! صدمني الجواب؟")
+        "ليش أنت ضيعت 3 سنين؟! والله القصة مجنونة!!! صدمني الجواب؟"
+    )
     assert 0.0 <= weak["hook_score"] <= 100.0
     assert 0.0 <= strong["hook_score"] <= 100.0
     assert strong["hook_score"] > weak["hook_score"]
@@ -74,5 +79,8 @@ def test_rank_openings_sorts_and_does_not_mutate():
     ]
     ranked = hook_analyzer.rank_openings(segments)
     assert ranked[0]["title"] == "قوي"
-    assert ranked[0]["opening_analysis"]["hook_score"] > ranked[1]["opening_analysis"]["hook_score"]
+    assert (
+        ranked[0]["opening_analysis"]["hook_score"]
+        > ranked[1]["opening_analysis"]["hook_score"]
+    )
     assert "opening_analysis" not in segments[0]  # input untouched

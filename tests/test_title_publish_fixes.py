@@ -33,6 +33,7 @@ def _write(project, name, data):
 # title_text: script detection
 # ---------------------------------------------------------------------------
 
+
 class TestScriptDetection:
     def test_arabic_detected(self):
         assert tt.detect_text_script("مرحبا بالعالم") == "ar"
@@ -83,6 +84,7 @@ class TestScriptsMatch:
 # title_text: emoji helpers
 # ---------------------------------------------------------------------------
 
+
 class TestEmojiHelpers:
     def test_count_emoji(self):
         assert tt.count_emoji("") == 0
@@ -127,11 +129,16 @@ class TestEmojiHelpers:
 # metadata_compliance: Arabic clickbait / engagement-bait patterns
 # ---------------------------------------------------------------------------
 
+
 class TestArabicPatterns:
     def test_arabic_clickbait_flagged_low(self):
         res = mc.check_metadata("لن تصدق ما حدث في هذه القرية!", "", [])
-        assert any(f["category"] == "clickbait" and f["severity"] == "low"
-                   and "لن تصدق" in f["matched"] for f in res["findings"])
+        assert any(
+            f["category"] == "clickbait"
+            and f["severity"] == "low"
+            and "لن تصدق" in f["matched"]
+            for f in res["findings"]
+        )
         # low severity never fails the gate
         assert res["ok"] is True
         assert res["severity"] == "low"
@@ -139,19 +146,26 @@ class TestArabicPatterns:
     def test_darija_and_egyptian_clickbait(self):
         for title in ("ماشي تصدق هادشي اللي شفت", "مش هتصدق اللي حصل النهارده"):
             res = mc.check_metadata(title, "", [])
-            assert any(f["category"] == "clickbait" and f["severity"] == "low"
-                       for f in res["findings"]), title
+            assert any(
+                f["category"] == "clickbait" and f["severity"] == "low"
+                for f in res["findings"]
+            ), title
 
     def test_arabic_engagement_bait(self):
         res = mc.check_metadata(
-            "", "اكتب نعم في التعليقات واشترك في القناة لمزيد من الفيديوهات", [])
-        assert any(f["category"] == "engagement_bait" and f["severity"] == "low"
-                   for f in res["findings"])
+            "", "اكتب نعم في التعليقات واشترك في القناة لمزيد من الفيديوهات", []
+        )
+        assert any(
+            f["category"] == "engagement_bait" and f["severity"] == "low"
+            for f in res["findings"]
+        )
 
     def test_normal_arabic_sentence_not_flagged(self):
         res = mc.check_metadata(
             "طريقة تحضير القهوة التركية في المنزل",
-            "شرح كامل خطوة بخطوة مع المكونات", [])
+            "شرح كامل خطوة بخطوة مع المكونات",
+            [],
+        )
         assert res["ok"] is True
         assert res["findings"] == []
 
@@ -165,6 +179,7 @@ class TestArabicPatterns:
 # ---------------------------------------------------------------------------
 # metadata_compliance: language mismatch + excessive emoji (metadata axis)
 # ---------------------------------------------------------------------------
+
 
 class TestLanguageMismatch:
     def test_en_title_ar_caption_finding(self):
@@ -186,8 +201,10 @@ class TestLanguageMismatch:
 
     def test_axis_includes_language_mismatch(self):
         axis = mc.metadata_axis("Top 5 Editing Tips", "شاهد الشرح الكامل", [])
-        assert any(f["category"] == "language_mismatch" and f["severity"] == "low"
-                   for f in axis["findings"])
+        assert any(
+            f["category"] == "language_mismatch" and f["severity"] == "low"
+            for f in axis["findings"]
+        )
         # low severity: shape/ok/score unchanged
         assert axis["ok"] is True
         assert axis["severity"] == "low"
@@ -197,8 +214,10 @@ class TestLanguageMismatch:
 class TestExcessiveEmoji:
     def test_more_than_three_emoji_flagged(self):
         axis = mc.metadata_axis("🔥🔥🔥🔥🔥 Title", "caption text", [])
-        assert any(f["category"] == "excessive_emoji" and f["severity"] == "low"
-                   for f in axis["findings"])
+        assert any(
+            f["category"] == "excessive_emoji" and f["severity"] == "low"
+            for f in axis["findings"]
+        )
         assert axis["ok"] is True
         assert axis["score"] == 0
 
@@ -223,6 +242,7 @@ class TestExcessiveEmoji:
 # ---------------------------------------------------------------------------
 # upload_gate: effective_title + audit vets the shipped title
 # ---------------------------------------------------------------------------
+
 
 class TestEffectiveTitle:
     def test_prefers_recommended_title(self):
@@ -256,8 +276,13 @@ class TestAuditVetsShippedTitle:
         project = self._project(
             tmp_path,
             scorecard_segments=[{"index": 0, "title": "This cures cancer"}],
-            viral_segments=[{"title": "This cures cancer",
-                             "recommended_title": "Top 5 Editing Tips"}])
+            viral_segments=[
+                {
+                    "title": "This cures cancer",
+                    "recommended_title": "Top 5 Editing Tips",
+                }
+            ],
+        )
         allowed, blocked = ug.audit_project(project)
         assert allowed == [0]
         assert blocked == []
@@ -268,27 +293,46 @@ class TestAuditVetsShippedTitle:
         project = self._project(
             tmp_path,
             scorecard_segments=[{"index": 0, "title": "A calm cooking tutorial"}],
-            viral_segments=[{"title": "A calm cooking tutorial",
-                             "recommended_title": "This cures cancer"}])
+            viral_segments=[
+                {
+                    "title": "A calm cooking tutorial",
+                    "recommended_title": "This cures cancer",
+                }
+            ],
+        )
         allowed, blocked = ug.audit_project(project)
         assert allowed == []
         assert len(blocked) == 1
         assert blocked[0]["index"] == 0
         assert blocked[0]["title"] == "This cures cancer"
-        assert any(r["source"] == "metadata_compliance"
-                   for r in blocked[0]["reasons"])
+        assert any(r["source"] == "metadata_compliance" for r in blocked[0]["reasons"])
 
     def test_audit_falls_back_when_no_viral_segments(self, tmp_path):
         # Legacy project / tests: no viral_segments.txt → vets entry title.
         project = str(tmp_path)
-        _write(project, ug.SCORECARD, {
-            "segments": [
-                {"index": 0, "title": "Clean"},
-                {"index": 1, "title": "Dangerous cure"},
-            ]})
-        _write(project, ug.PUBLISH_BLOCKLIST, {
-            "blocked": [{"index": 1, "title": "Dangerous cure",
-                         "axes": {"reuse": {"score": 75}}}]})
+        _write(
+            project,
+            ug.SCORECARD,
+            {
+                "segments": [
+                    {"index": 0, "title": "Clean"},
+                    {"index": 1, "title": "Dangerous cure"},
+                ]
+            },
+        )
+        _write(
+            project,
+            ug.PUBLISH_BLOCKLIST,
+            {
+                "blocked": [
+                    {
+                        "index": 1,
+                        "title": "Dangerous cure",
+                        "axes": {"reuse": {"score": 75}},
+                    }
+                ]
+            },
+        )
         allowed, blocked = ug.audit_project(project)
         assert allowed == [0]
         assert len(blocked) == 1
@@ -305,8 +349,10 @@ ELLIPSIS = tt.ELLIPSIS  # "\u2026" — single-char ellipsis used by the fitter
 class TestFitPublishTitle:
     def test_short_title_unchanged_no_ellipsis(self):
         assert tt.fit_publish_title("Short title") == "Short title"
-        assert tt.fit_publish_title("Another very normal title") == \
-            "Another very normal title"
+        assert (
+            tt.fit_publish_title("Another very normal title")
+            == "Another very normal title"
+        )
 
     def test_exactly_at_limit_unchanged(self):
         text = "a" * 100
@@ -328,7 +374,7 @@ class TestFitPublishTitle:
         assert result == title[:98] + ELLIPSIS
         assert result.endswith(ELLIPSIS)
         assert len(result) == 99 <= 100
-        assert result[:-1] == title[:98]      # pure prefix, no word split
+        assert result[:-1] == title[:98]  # pure prefix, no word split
         assert title[len(result) - 1] == " "  # the cut landed on a space
 
     def test_boundary_whitespace_at_limit_minus_one(self):
@@ -386,6 +432,7 @@ class TestFitPublishTitle:
 # ---------------------------------------------------------------------------
 # Wiring: final publish titles go through fit_publish_title (no silent slices)
 # ---------------------------------------------------------------------------
+
 
 class TestPublishTitleWiring:
     def test_youtube_request_title_fitted_at_100(self, tmp_path, monkeypatch):
@@ -452,7 +499,9 @@ class TestPublishTitleWiring:
         result = uploader.upload(str(video2), "My Title", "cap", [], index=0)
         assert captured["body"]["snippet"]["title"] == "My Title"
 
-    def test_publish_panel_batch_filename_fallback_is_fitted(self, tmp_path, monkeypatch):
+    def test_publish_panel_batch_filename_fallback_is_fitted(
+        self, tmp_path, monkeypatch
+    ):
         """Batch clips without a segment suggestion get a word-boundary title.
 
         stream_upload_batch derives the fallback publish title from the
@@ -481,8 +530,9 @@ class TestPublishTitleWiring:
             return pp._publish_result("uploaded", args[2], args[3])
 
         monkeypatch.setattr(pp, "stream_upload", fake_stream_upload)
-        updates = list(pp.stream_upload_batch(project, "youtube", [clip_path],
-                                              True, "warn"))
+        updates = list(
+            pp.stream_upload_batch(project, "youtube", [clip_path], True, "warn")
+        )
         assert captured["platform"] == "youtube"
         assert captured["title"] == tt.fit_publish_title(stem, 100)
         assert captured["title"].endswith(ELLIPSIS)
@@ -518,10 +568,22 @@ class TestPublishTitleWiring:
         project = str(tmp_path / "proj")
         final_dir = os.path.join(project, "final")
         os.makedirs(final_dir, exist_ok=True)
-        with open(os.path.join(project, "viral_segments.txt"), "w", encoding="utf-8") as f:
-            json.dump({"segments": [{"title": "Clean Short Title",
-                                     "recommended_title": "Clean Short Title",
-                                     "caption": ""}]}, f, ensure_ascii=False)
+        with open(
+            os.path.join(project, "viral_segments.txt"), "w", encoding="utf-8"
+        ) as f:
+            json.dump(
+                {
+                    "segments": [
+                        {
+                            "title": "Clean Short Title",
+                            "recommended_title": "Clean Short Title",
+                            "caption": "",
+                        }
+                    ]
+                },
+                f,
+                ensure_ascii=False,
+            )
         clip_path = os.path.join(final_dir, "000_clip.mp4")
         with open(clip_path, "wb") as stream:
             stream.write(b"clip")

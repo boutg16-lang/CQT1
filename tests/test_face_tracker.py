@@ -1,6 +1,5 @@
 """Unit tests for the lightweight identity tracker (scripts/face_tracker.py)."""
 
-
 from scripts.face_tracker import FaceTracker
 
 
@@ -46,7 +45,7 @@ def test_order_reversal_after_gap_keeps_person_slots():
     # swapped slots (crop jumps). The tracker must restore the old slot order.
     tr = FaceTracker(max_missing_cycles=3)
     tr.update(0, [box(150, 100), box(450, 100)])  # A=id0 left, B=id1 right
-    tr.update(10, [box(155, 100)])                # only A visible
+    tr.update(10, [box(155, 100)])  # only A visible
     tr.update(20, [box(160, 100)])
     tr.update(30, [box(165, 100)])
     ids = tr.update(40, [box(165, 100), box(455, 105)])  # B is back
@@ -59,7 +58,7 @@ def test_order_reversal_after_gap_keeps_person_slots():
 def test_missing_face_matches_back_at_predicted_position():
     tr = FaceTracker(velocity_alpha=0.5)
     tr.update(0, [box(100, 100)])
-    tr.update(10, [box(140, 100)])   # moving right ~4px/cycle
+    tr.update(10, [box(140, 100)])  # moving right ~4px/cycle
     # Face missing for one cycle, reappears near the predicted position.
     ids = tr.update(30, [box(170, 100)])
     assert ids == [0]
@@ -104,7 +103,7 @@ def test_track_survives_long_gap_inside_max_missing_frames():
     # after a handful of cycles.
     tr = FaceTracker(max_missing_frames=300)
     tr.update(0, [box(100, 100)])
-    tr.update(150, [])                      # missed cycle (no detections)
+    tr.update(150, [])  # missed cycle (no detections)
     # Reappears at the predicted place -> same ID, not a re-spawn.
     ids = tr.update(290, [box(100, 100)])
     assert ids == [0]
@@ -119,10 +118,10 @@ def test_frame_gap_rule_ignores_same_frame_second_call():
     # matched again later with the same ID.
     tr = FaceTracker(max_missing_frames=30)
     tr.update(0, [box(100, 100)])
-    ids = tr.update(0, [])                  # double call, same frame
+    ids = tr.update(0, [])  # double call, same frame
     assert ids == []
     assert tr.track_count() == 1
-    ids = tr.update(31, [box(105, 100)])    # still the same identity
+    ids = tr.update(31, [box(105, 100)])  # still the same identity
     assert ids == [0]
 
 
@@ -158,7 +157,7 @@ def test_missing_track_survives_and_reacquires_same_id():
 
 def test_stable_order_known_first_then_new():
     tr = FaceTracker()
-    ids = tr.update(0, [box(0, 0), box(500, 0)])       # ids 0,1
+    ids = tr.update(0, [box(0, 0), box(500, 0)])  # ids 0,1
     ids = tr.update(10, [box(500, 0), box(0, 0), box(250, 400)])
     # ids: [1,0,2] (crossed) -> stable order keeps 0 before 1, new face last.
     order = tr.stable_order(ids)

@@ -22,7 +22,9 @@ class TestGithubOutput:
         gpwc._github_output("status", "changed")
         gpwc._github_output("changed", "yes")
         assert out_path.read_text(encoding="utf-8").splitlines() == [
-            "status=changed", "changed=yes"]
+            "status=changed",
+            "changed=yes",
+        ]
 
     def test_prints_legacy_set_output_without_env(self, monkeypatch, capsys):
         monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
@@ -32,8 +34,10 @@ class TestGithubOutput:
 
 def _stub_check(monkeypatch, result):
     if isinstance(result, Exception):
+
         def _raise():
             raise result
+
         monkeypatch.setattr(gpwc, "check_policy_pages", _raise)
     else:
         monkeypatch.setattr(gpwc, "check_policy_pages", lambda: result)
@@ -41,9 +45,14 @@ def _stub_check(monkeypatch, result):
 
 class TestMain:
     def test_changed_status(self, tmp_path, monkeypatch, capsys):
-        _stub_check(monkeypatch, {"status": "changed",
-                                  "changes": ["hate_speech"],
-                                  "markers": {"hate_speech": ["m1"]}})
+        _stub_check(
+            monkeypatch,
+            {
+                "status": "changed",
+                "changes": ["hate_speech"],
+                "markers": {"hate_speech": ["m1"]},
+            },
+        )
         out_path = tmp_path / "gh_out"
         monkeypatch.setenv("GITHUB_OUTPUT", str(out_path))
         assert gpwc.main() == 0
@@ -52,7 +61,9 @@ class TestMain:
         assert lines[1] == "changed=yes"
         assert json.loads(lines[2].split("=", 1)[1]) == ["hate_speech"]
         assert json.loads(lines[3].split("=", 1)[1]) == {"hate_speech": ["m1"]}
-        assert "status=changed changed=yes changes=hate_speech" in capsys.readouterr().out
+        assert (
+            "status=changed changed=yes changes=hate_speech" in capsys.readouterr().out
+        )
 
     def test_unchanged_status(self, monkeypatch, capsys):
         _stub_check(monkeypatch, {"status": "unchanged", "changes": [], "markers": {}})

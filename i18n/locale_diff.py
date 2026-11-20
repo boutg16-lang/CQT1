@@ -47,5 +47,7 @@ for lang_file in languages:
     with open(lang_file, "w", encoding="utf-8") as f:
         json.dump(lang_data, f, ensure_ascii=False, indent=4, sort_keys=True)
         f.write("\n")
-    print(f"[locale_diff] {os.path.basename(lang_file)}: "
-          f"{len(diff)} keys added, {len(miss)} keys removed")
+    print(
+        f"[locale_diff] {os.path.basename(lang_file)}: "
+        f"{len(diff)} keys added, {len(miss)} keys removed"
+    )

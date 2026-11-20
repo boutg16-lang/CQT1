@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for the offline selection-quality benchmark."""
+
 import json
 
 import pytest
@@ -9,6 +10,7 @@ from scripts import selection_benchmark as sb
 # ---------------------------------------------------------------------------
 # Metric math
 # ---------------------------------------------------------------------------
+
 
 def test_coverage_math():
     assert sb.coverage((10, 20), (10, 20)) == 1.0
@@ -44,7 +46,9 @@ def test_evaluate_zero_k_means_no_outputs():
     assert metrics["recall_at_k"] == 0.0
 
 
-@pytest.mark.parametrize("start,end", [(float("nan"), 1), (0, float("inf")), (-float("inf"), 1)])
+@pytest.mark.parametrize(
+    "start,end", [(float("nan"), 1), (0, float("inf")), (-float("inf"), 1)]
+)
 def test_fixture_rejects_non_finite_windows(start, end):
     fixture = {
         "transcript": [{"start": start, "end": end, "text": "x"}],
@@ -62,21 +66,41 @@ def test_evaluate_empty_gold_is_safe():
 # Fixture validation
 # ---------------------------------------------------------------------------
 
+
 def test_validate_fixture_accepts_the_demo():
     assert sb.validate_fixture(sb.demo_fixture()) == []
 
 
-@pytest.mark.parametrize("fixture,fragment", [
-    ({"transcript": [], "candidates": [{}], "gold": [{}]}, "transcript"),
-    ({"transcript": [{"start": 0, "end": 1, "text": "x"}],
-      "candidates": [], "gold": [{"start": 0, "end": 1}]}, "candidates"),
-    ({"transcript": [{"start": 0, "end": 1, "text": "x"}],
-      "candidates": [{"start_time": 0, "end_time": 1}],
-      "gold": []}, "gold"),
-    ({"transcript": [{"start": 0, "end": 1, "text": "x"}],
-      "candidates": [{"start_time": 5, "end_time": 2}],
-      "gold": [{"start": 0, "end": 1}]}, "start_time/end_time"),
-])
+@pytest.mark.parametrize(
+    "fixture,fragment",
+    [
+        ({"transcript": [], "candidates": [{}], "gold": [{}]}, "transcript"),
+        (
+            {
+                "transcript": [{"start": 0, "end": 1, "text": "x"}],
+                "candidates": [],
+                "gold": [{"start": 0, "end": 1}],
+            },
+            "candidates",
+        ),
+        (
+            {
+                "transcript": [{"start": 0, "end": 1, "text": "x"}],
+                "candidates": [{"start_time": 0, "end_time": 1}],
+                "gold": [],
+            },
+            "gold",
+        ),
+        (
+            {
+                "transcript": [{"start": 0, "end": 1, "text": "x"}],
+                "candidates": [{"start_time": 5, "end_time": 2}],
+                "gold": [{"start": 0, "end": 1}],
+            },
+            "start_time/end_time",
+        ),
+    ],
+)
 def test_validate_fixture_rejects_bad_input(fixture, fragment):
     problems = sb.validate_fixture(fixture)
     assert problems
@@ -94,6 +118,7 @@ def test_load_fixture_rejects_invalid_file(tmp_path):
 # End-to-end (deterministic, offline)
 # ---------------------------------------------------------------------------
 
+
 def test_demo_run_is_deterministic_and_perfect():
     fixture = sb.demo_fixture()
     first = sb.run_benchmark(fixture)
@@ -102,8 +127,10 @@ def test_demo_run_is_deterministic_and_perfect():
     assert first["metrics"]["gold_total"] == 3
     assert first["metrics"]["recall_at_k"] == 1.0
     # every gold window lands inside the top-3
-    assert all(d["best_rank"] is not None and d["best_rank"] < 3
-               for d in first["metrics"]["details"])
+    assert all(
+        d["best_rank"] is not None and d["best_rank"] < 3
+        for d in first["metrics"]["details"]
+    )
 
 
 def test_cli_demo_writes_report(tmp_path, capsys):

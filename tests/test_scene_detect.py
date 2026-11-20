@@ -5,6 +5,7 @@ Pure helpers (snap_to_scene, scene_boundary_frames) are tested directly;
 the detectors are tested with stubbed engines — no real video, no cv2
 frames, no PySceneDetect.
 """
+
 import json
 
 from scripts import scene_detect
@@ -15,6 +16,7 @@ SCENES = [(0.0, 2.0), (2.0, 5.5), (5.5, 9.0)]
 # ---------------------------------------------------------------------------
 # snap_to_scene
 # ---------------------------------------------------------------------------
+
 
 def test_snap_no_scenes_returns_window_unchanged():
     assert scene_detect.snap_to_scene(1.0, 4.0, []) == (1.0, 4.0)
@@ -71,6 +73,7 @@ def test_snap_prefers_closest_boundary():
 # scene_boundary_frames
 # ---------------------------------------------------------------------------
 
+
 def test_boundary_frames_skips_opening_scene():
     frames = scene_detect.scene_boundary_frames(SCENES, fps=30.0)
     # scene starts at 2.0s -> 60, 5.5s -> 165; 0.0s is not a boundary
@@ -87,7 +90,9 @@ def test_boundary_frames_fps_guard():
 
 def test_boundary_frames_respects_total_frames():
     scenes = [(2.0, 4.0), (9.0, 10.0)]
-    assert scene_detect.scene_boundary_frames(scenes, fps=30.0, total_frames=100) == {60}
+    assert scene_detect.scene_boundary_frames(scenes, fps=30.0, total_frames=100) == {
+        60
+    }
     # frame 270 >= total 100 is dropped
 
 
@@ -104,6 +109,7 @@ def test_boundary_frames_empty_input():
 # ---------------------------------------------------------------------------
 # find_scene_cuts — engine selection
 # ---------------------------------------------------------------------------
+
 
 def test_find_cuts_missing_file_returns_empty():
     assert scene_detect.find_scene_cuts("/no/such/video.mp4") == []
@@ -122,10 +128,14 @@ def test_find_cuts_prefers_pyscenedetect(tmp_path, monkeypatch):
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"fake")
     monkeypatch.setattr(scene_detect, "HAS_SCENEDETECT", True)
-    monkeypatch.setattr(scene_detect, "_scenes_with_pyscenedetect",
-                        lambda path, threshold: [(0.0, 3.0)])
-    monkeypatch.setattr(scene_detect, "_scenes_with_opencv",
-                        lambda path, threshold: (_ for _ in ()).throw(AssertionError("must not run")))
+    monkeypatch.setattr(
+        scene_detect, "_scenes_with_pyscenedetect", lambda path, threshold: [(0.0, 3.0)]
+    )
+    monkeypatch.setattr(
+        scene_detect,
+        "_scenes_with_opencv",
+        lambda path, threshold: (_ for _ in ()).throw(AssertionError("must not run")),
+    )
     assert scene_detect.find_scene_cuts(str(video)) == [(0.0, 3.0)]
 
 
@@ -139,8 +149,9 @@ def test_find_cuts_pyscenedetect_failure_falls_back_to_opencv(tmp_path, monkeypa
         raise RuntimeError("engine blew up")
 
     monkeypatch.setattr(scene_detect, "_scenes_with_pyscenedetect", boom)
-    monkeypatch.setattr(scene_detect, "_scenes_with_opencv",
-                        lambda path, threshold: [(0.0, 2.5)])
+    monkeypatch.setattr(
+        scene_detect, "_scenes_with_opencv", lambda path, threshold: [(0.0, 2.5)]
+    )
     assert scene_detect.find_scene_cuts(str(video)) == [(0.0, 2.5)]
 
 
@@ -149,14 +160,18 @@ def test_find_cuts_opencv_failure_returns_empty(tmp_path, monkeypatch):
     video.write_bytes(b"fake")
     monkeypatch.setattr(scene_detect, "HAS_SCENEDETECT", False)
     monkeypatch.setattr(scene_detect, "HAS_CV2", True)
-    monkeypatch.setattr(scene_detect, "_scenes_with_opencv",
-                        lambda path, threshold: (_ for _ in ()).throw(RuntimeError("cv2 fail")))
+    monkeypatch.setattr(
+        scene_detect,
+        "_scenes_with_opencv",
+        lambda path, threshold: (_ for _ in ()).throw(RuntimeError("cv2 fail")),
+    )
     assert scene_detect.find_scene_cuts(str(video)) == []
 
 
 # ---------------------------------------------------------------------------
 # _scenes_with_opencv — stubbed cv2
 # ---------------------------------------------------------------------------
+
 
 class _FakeCap:
     """Minimal VideoCapture stub: fps, total frames, N readable frames."""
@@ -267,11 +282,16 @@ def test_opencv_fallback_releases_capture(monkeypatch):
 
 def test_opencv_fallback_threshold_scales(monkeypatch):
     # diff 0.5 beats threshold 27 (0.27) but not threshold 60 (0.60)
-    _install_fake_cv2(monkeypatch, [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.1],
-                      fps=30.0, total=120, reads=120)
-    assert scene_detect._scenes_with_opencv("clip.mp4", 27.0) == [(0.0, 2.0), (2.0, 4.0)]
-    _install_fake_cv2(monkeypatch, [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.1],
-                      fps=30.0, total=120, reads=120)
+    _install_fake_cv2(
+        monkeypatch, [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.1], fps=30.0, total=120, reads=120
+    )
+    assert scene_detect._scenes_with_opencv("clip.mp4", 27.0) == [
+        (0.0, 2.0),
+        (2.0, 4.0),
+    ]
+    _install_fake_cv2(
+        monkeypatch, [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.1], fps=30.0, total=120, reads=120
+    )
     assert scene_detect._scenes_with_opencv("clip.mp4", 60.0) == [(0.0, 4.0)]
 
 
@@ -279,9 +299,13 @@ def test_opencv_fallback_threshold_scales(monkeypatch):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def test_main_list_prints_scenes(monkeypatch, capsys):
-    monkeypatch.setattr(scene_detect, "find_scene_cuts",
-                        lambda path, threshold=27.0: [(1.0, 3.0), (3.0, 5.5)])
+    monkeypatch.setattr(
+        scene_detect,
+        "find_scene_cuts",
+        lambda path, threshold=27.0: [(1.0, 3.0), (3.0, 5.5)],
+    )
     assert scene_detect.main(["clip.mp4", "--list"]) == 0
     out = capsys.readouterr().out
     assert "1.00 --> 3.00" in out
@@ -290,8 +314,9 @@ def test_main_list_prints_scenes(monkeypatch, capsys):
 
 def test_main_json_writes_payload(tmp_path, monkeypatch):
     out_path = tmp_path / "scenes.json"
-    monkeypatch.setattr(scene_detect, "find_scene_cuts",
-                        lambda path, threshold=27.0: [(0.0, 2.0)])
+    monkeypatch.setattr(
+        scene_detect, "find_scene_cuts", lambda path, threshold=27.0: [(0.0, 2.0)]
+    )
     assert scene_detect.main(["clip.mp4", "--json", str(out_path)]) == 0
     payload = json.loads(out_path.read_text(encoding="utf-8"))
     assert payload["source"] == "clip.mp4"
@@ -299,8 +324,9 @@ def test_main_json_writes_payload(tmp_path, monkeypatch):
 
 
 def test_main_default_prints_json_array(monkeypatch, capsys):
-    monkeypatch.setattr(scene_detect, "find_scene_cuts",
-                        lambda path, threshold=27.0: [(0.0, 2.0)])
+    monkeypatch.setattr(
+        scene_detect, "find_scene_cuts", lambda path, threshold=27.0: [(0.0, 2.0)]
+    )
     assert scene_detect.main(["clip.mp4"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload == [{"start": 0.0, "end": 2.0}]

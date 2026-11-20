@@ -53,8 +53,13 @@ def _now() -> str:
 # Autocomplete
 # ---------------------------------------------------------------------------
 
-def fetch_suggestions(topic: str, language: str = "ar", region: str = "",
-                      max_results: int = MAX_SUGGESTIONS) -> list[str]:
+
+def fetch_suggestions(
+    topic: str,
+    language: str = "ar",
+    region: str = "",
+    max_results: int = MAX_SUGGESTIONS,
+) -> list[str]:
     """Query YouTube's public autocomplete API.
 
     Returns a de-duplicated list of suggestion strings. On any network /
@@ -98,7 +103,9 @@ def _suggestion_text(item) -> str:
     text = str(item).strip()
     if text.startswith("[") and text.endswith("]") and text[1:2] in ("'", '"'):
         # stringified list: ['make money', 0, [512]]
-        inner = text[2:text.rfind("'")] if text[1:2] == "'" else text[2:text.rfind('"')]
+        inner = (
+            text[2 : text.rfind("'")] if text[1:2] == "'" else text[2 : text.rfind('"')]
+        )
         return inner.strip()
     return text
 
@@ -113,7 +120,7 @@ def _parse_suggest_response(raw: str):
         start = text.find("(")
         end = text.rfind(")")
         if start != -1 and end > start:
-            text = text[start + 1:end]
+            text = text[start + 1 : end]
     try:
         return json.loads(text)
     except Exception:
@@ -129,7 +136,9 @@ def _parse_suggest_response(raw: str):
 # variants (كيفاش/علاش/شنو/واش...) so dialect content scores like MSA.
 _HOOK_WORDS_RE = re.compile(
     r"(?<!\w)(?:كيف|كيفاش|لماذا|علاش|ما هو|شنو|اشنو|واش|شحال|طريقة|أفضل|سر|خطأ|جديد"
-    r"|how|why|best|secret|mistake|trick|tips)(?!\w)")
+    r"|how|why|best|secret|mistake|trick|tips)(?!\w)"
+)
+
 
 def _len_score(title: str) -> float:
     n = len(title)
@@ -187,8 +196,10 @@ def score_title(title: str, keywords: list[str] | None = None) -> dict[str, Any]
     """Return a transparent 0-100 score with a breakdown."""
     title = str(title or "").strip()
     if not title:
-        return {"score": 0.0, "breakdown": {"length": 0, "hook": 0,
-                                            "keywords": 0, "penalty": 0}}
+        return {
+            "score": 0.0,
+            "breakdown": {"length": 0, "hook": 0, "keywords": 0, "penalty": 0},
+        }
     keywords = [str(k) for k in (keywords or []) if str(k).strip()]
     length = _len_score(title)
     hook = _hook_score(title)
@@ -225,19 +236,27 @@ _TEMPLATES = [
     "تجربة عملية مع {topic}",
 ]
 
-_HOOKS = ["شرح واضح ومباشر", "تجربة عملية", "نصائح مفيدة",
-          "خطوات بسيطة", "دليل مختصر"]
-_BENEFITS = ["وفّر وقتك وجهدك", "النتائج من أول مرة", "بلا أخطاء شائعة",
-             "بأبسط طريقة ممكنة"]
+_HOOKS = ["شرح واضح ومباشر", "تجربة عملية", "نصائح مفيدة", "خطوات بسيطة", "دليل مختصر"]
+_BENEFITS = [
+    "وفّر وقتك وجهدك",
+    "النتائج من أول مرة",
+    "بلا أخطاء شائعة",
+    "بأبسط طريقة ممكنة",
+]
 
 
 def _topic_token(topic: str) -> str:
     return re.sub(r"[\?؟!\s]+$", "", str(topic or "").strip()) or "هذا الموضوع"
 
 
-def generate_titles(topic: str, keywords: list[str] | None = None,
-                    count: int = 6, *, transcript_text: str | None = None,
-                    content_language: str = "auto") -> list[dict[str, Any]]:
+def generate_titles(
+    topic: str,
+    keywords: list[str] | None = None,
+    count: int = 6,
+    *,
+    transcript_text: str | None = None,
+    content_language: str = "auto",
+) -> list[dict[str, Any]]:
     """Generate ranked title candidates from a topic + optional keywords.
 
     v7.41 — pass ``transcript_text`` (the EXACT clip-window transcript) to get
@@ -283,16 +302,19 @@ def generate_titles(topic: str, keywords: list[str] | None = None,
                 continue
             seen_grounded.add(key)
             validation = title_factual.validate_title_vs_clip(
-                title, raw, content_language)
+                title, raw, content_language
+            )
             if validation.get("status") == "rejected":
                 continue
-            grounded_candidates.append({
-                "title": title,
-                **score_title(title, keywords),
-                "validation": validation,
-                "grounded": True,
-                "title_source": "exact_clip_transcript",
-            })
+            grounded_candidates.append(
+                {
+                    "title": title,
+                    **score_title(title, keywords),
+                    "validation": validation,
+                    "grounded": True,
+                    "title_source": "exact_clip_transcript",
+                }
+            )
         grounded_candidates.sort(
             key=lambda item: (
                 item["validation"].get("status") == "verified",
@@ -333,6 +355,7 @@ def generate_titles(topic: str, keywords: list[str] | None = None,
 # Publish-time hints
 # ---------------------------------------------------------------------------
 
+
 def best_time_windows(platform: str = "youtube") -> dict[str, Any]:
     """Return the built-in engagement windows for a platform."""
     resolved = platform if platform in BEST_TIMES_BY_PLATFORM else "youtube"
@@ -340,16 +363,17 @@ def best_time_windows(platform: str = "youtube") -> dict[str, Any]:
     return {"platform": resolved, **data}
 
 
-def suggest_next_slots(platform: str = "youtube", count: int = 5,
-                       from_time=None) -> list[str]:
+def suggest_next_slots(
+    platform: str = "youtube", count: int = 5, from_time=None
+) -> list[str]:
     """Return the next ``count`` ISO slots inside the platform's windows.
 
     ``from_time`` (datetime, timezone-aware) defaults to now. Slots are
     hourly starts inside the best windows, skipping ones in the past.
     """
     import datetime as dt
-    data = BEST_TIMES_BY_PLATFORM.get(
-        platform, BEST_TIMES_BY_PLATFORM["youtube"])
+
+    data = BEST_TIMES_BY_PLATFORM.get(platform, BEST_TIMES_BY_PLATFORM["youtube"])
     now = from_time or dt.datetime.now(dt.timezone.utc)
     slots = []
     # scan the next 14 days
@@ -371,6 +395,7 @@ def suggest_next_slots(platform: str = "youtube", count: int = 5,
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command")
@@ -390,8 +415,9 @@ def main(argv=None) -> int:
     score.add_argument("--keyword", action="append", default=[])
 
     slots = sub.add_parser("slots", help="suggest next publish-time slots")
-    slots.add_argument("--platform", default="youtube",
-                       choices=["youtube", "tiktok", "reels"])
+    slots.add_argument(
+        "--platform", default="youtube", choices=["youtube", "tiktok", "reels"]
+    )
     slots.add_argument("--count", type=int, default=5)
 
     args = parser.parse_args(argv)
@@ -408,8 +434,13 @@ def main(argv=None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "slots":
-        print(json.dumps(suggest_next_slots(args.platform, args.count),
-                         ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                suggest_next_slots(args.platform, args.count),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     parser.print_help()
     return 2

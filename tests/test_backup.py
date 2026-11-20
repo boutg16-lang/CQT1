@@ -18,7 +18,9 @@ def test_backup_excludes_secrets_and_media_by_default(tmp_path):
     with zipfile.ZipFile(result["path"]) as archive:
         names = archive.namelist()
     assert "project/project_manifest.json" in names
-    assert not any("token.json" in name or "client_secrets.json" in name for name in names)
+    assert not any(
+        "token.json" in name or "client_secrets.json" in name for name in names
+    )
     assert not any(name.endswith("clip.mp4") for name in names)
 
 
@@ -31,7 +33,9 @@ def test_backup_with_media_inspects_and_restores_to_new_project(tmp_path):
     info = inspect_backup(result["path"])
     assert info["manifest"]["include_media"] is True
     restored = restore_backup(result["path"], str(tmp_path / "restored"))
-    assert (tmp_path / "restored" / "project_restored" / "clip.mp4").read_bytes() == b"video"
+    assert (
+        tmp_path / "restored" / "project_restored" / "clip.mp4"
+    ).read_bytes() == b"video"
     restored_again = restore_backup(result["path"], str(tmp_path / "restored"))
     assert restored_again != restored
 

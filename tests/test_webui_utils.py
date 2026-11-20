@@ -25,9 +25,9 @@ from webui.utils import (
         ("#00FF00", "&H0000FF00&"),
         ("#0000FF", "&H00FF0000&"),
         ("#FFFFFF", "&H00FFFFFF&"),
-        ("#0F0", "&H0000FF00&"),     # 3-digit hex expands
+        ("#0F0", "&H0000FF00&"),  # 3-digit hex expands
         ("rgb(255, 0, 0)", "&H000000FF&"),
-        ("", "&H00FFFFFF&"),         # empty -> white fallback
+        ("", "&H00FFFFFF&"),  # empty -> white fallback
         ("garbage", "&H00FFFFFF&"),  # invalid -> white fallback
         (None, "&H00FFFFFF&"),
     ],
@@ -76,12 +76,27 @@ def test_empty_progress_state_structure():
 
 def test_build_subtitle_config():
     cfg = build_subtitle_config(
-        font_name="Arial", font_size="20", font_color="#FF0000",
-        highlight_color="#00FF00", outline_color="#000000",
-        outline_thickness="2.5", shadow_color="#111111", shadow_size="3",
-        is_bold=True, is_italic=False, is_uppercase=True, vertical_pos="200",
-        alignment="2", h_size="16", w_block="4", gap="0.7", mode="word",
-        under=False, strike=False, border_s="1", remove_punc=True,
+        font_name="Arial",
+        font_size="20",
+        font_color="#FF0000",
+        highlight_color="#00FF00",
+        outline_color="#000000",
+        outline_thickness="2.5",
+        shadow_color="#111111",
+        shadow_size="3",
+        is_bold=True,
+        is_italic=False,
+        is_uppercase=True,
+        vertical_pos="200",
+        alignment="2",
+        h_size="16",
+        w_block="4",
+        gap="0.7",
+        mode="word",
+        under=False,
+        strike=False,
+        border_s="1",
+        remove_punc=True,
     )
     assert cfg["font"] == "Arial"
     assert cfg["base_size"] == 20
@@ -97,12 +112,27 @@ def test_build_subtitle_config():
 
 def test_build_subtitle_config_defaults_on_bad_input():
     cfg = build_subtitle_config(
-        font_name="Arial", font_size="bad", font_color="zzz",
-        highlight_color="", outline_color=None,
-        outline_thickness="bad", shadow_color=None, shadow_size=None,
-        is_bold=False, is_italic=False, is_uppercase=False, vertical_pos=None,
-        alignment=None, h_size=None, w_block=None, gap=None, mode="block",
-        under=False, strike=False, border_s=None, remove_punc=False,
+        font_name="Arial",
+        font_size="bad",
+        font_color="zzz",
+        highlight_color="",
+        outline_color=None,
+        outline_thickness="bad",
+        shadow_color=None,
+        shadow_size=None,
+        is_bold=False,
+        is_italic=False,
+        is_uppercase=False,
+        vertical_pos=None,
+        alignment=None,
+        h_size=None,
+        w_block=None,
+        gap=None,
+        mode="block",
+        under=False,
+        strike=False,
+        border_s=None,
+        remove_punc=False,
     )
     assert cfg["base_size"] == 12
     assert cfg["base_color"] == "&H00FFFFFF&"
@@ -113,9 +143,11 @@ def test_build_subtitle_config_defaults_on_bad_input():
 
 # --- v6 flags (Roadmap 5.2 / Sprint 3 / 4.2 / 2.4) ---
 
+
 class TestV6Flags:
     def _cmd(self, **kw):
         from webui.pipeline import build_command
+
         return build_command("main.py", ["--url", "https://x"], segments=3, **kw)
 
     def test_platform_flag(self):
@@ -142,7 +174,10 @@ class TestV6Flags:
 
     def test_metadata_gate_block_passed(self):
         cmd = self._cmd(metadata_gate="block")
-        assert "--metadata-gate" in cmd and cmd[cmd.index("--metadata-gate") + 1] == "block"
+        assert (
+            "--metadata-gate" in cmd
+            and cmd[cmd.index("--metadata-gate") + 1] == "block"
+        )
 
     def test_cookies_browser_flag(self):
         cmd = self._cmd(cookies_browser="chrome")
@@ -152,67 +187,87 @@ class TestV6Flags:
 
 # --- v6.4: error report summarizer ---
 
+
 class TestErrorSummarizer:
     def test_private_video_hint(self):
         from webui.utils import summarize_error
+
         title, detail, hint = summarize_error(
-            "ERROR: [youtube] abc: Private video. Sign in if you've been granted access.")
+            "ERROR: [youtube] abc: Private video. Sign in if you've been granted access."
+        )
         assert "Private video" in title
         assert "الفيديو خاص" in hint
 
     def test_whisperx_hint(self):
         from webui.utils import summarize_error
+
         _, _, hint = summarize_error("ModuleNotFoundError: No module named 'whisperx'")
         assert "whisperx" in hint
 
     def test_unknown_error_empty_hint(self):
         from webui.utils import summarize_error
+
         title, _, hint = summarize_error("Weird failure 42")
         assert title == "Weird failure 42"
         assert hint == ""
 
     def test_render_error_html_cards(self):
         from webui.utils import render_error_html
-        html = render_error_html([{"title": "T", "detail": "D", "hint": "الفيديو خاص", "code": 3}])
+
+        html = render_error_html(
+            [{"title": "T", "detail": "D", "hint": "الفيديو خاص", "code": 3}]
+        )
         assert "رمز الخروج 3" in html
         assert "التفاصيل التقنية" in html
         assert "الفيديو خاص" in html
 
     def test_render_error_html_empty(self):
         from webui.utils import render_error_html
+
         assert render_error_html([]) == ""
 
     def test_render_accepts_strings(self):
         from webui.utils import render_error_html
+
         html = render_error_html(["ERROR: [youtube] x: Private video."])
         assert html != "" and "Private video" in html
 
     def test_gemini_sdk_hint(self):
         from webui.utils import summarize_error
+
         _, _, hint = summarize_error(
-            "ImportError: Gemini SDK is not installed.\n... Sign in to confirm your age")
+            "ImportError: Gemini SDK is not installed.\n... Sign in to confirm your age"
+        )
         assert "Gemini" in hint and "كوكيز" not in hint
 
     def test_whisper_model_hint(self):
         from webui.utils import summarize_error
+
         _, _, hint = summarize_error(
-            "ValueError: Invalid model size 'large-v3-turbo', expected one of: tiny...")
+            "ValueError: Invalid model size 'large-v3-turbo', expected one of: tiny..."
+        )
         assert "faster-whisper" in hint
 
     def test_numpy_conflict_hint(self):
         from webui.utils import summarize_error
-        _, _, hint = summarize_error("AttributeError: `np.NaN` was removed in the NumPy 2.0 release.")
+
+        _, _, hint = summarize_error(
+            "AttributeError: `np.NaN` was removed in the NumPy 2.0 release."
+        )
         assert "numpy<2" in hint
 
     def test_403_hint(self):
         from webui.utils import summarize_error
-        _, _, hint = summarize_error("yt_dlp.utils.DownloadError: ERROR: unable to download video data: HTTP Error 403: Forbidden")
-        assert "yt-dlp" in hint
 
+        _, _, hint = summarize_error(
+            "yt_dlp.utils.DownloadError: ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        )
+        assert "yt-dlp" in hint
 
 
 def test_huggingface_is_offline_mode_error_hint_outranks_age_hint():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
         "ImportError: cannot import name 'is_offline_mode' from 'huggingface_hub'\n"
         "Age-restricted video — use your browser cookies"
@@ -224,6 +279,7 @@ def test_huggingface_is_offline_mode_error_hint_outranks_age_hint():
 
 def test_huggingface_conflict_hint_recommends_supported_hub_range():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
         "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0"
     )
@@ -233,6 +289,7 @@ def test_huggingface_conflict_hint_recommends_supported_hub_range():
 
 def test_huggingface_path_in_traceback_is_not_a_version_conflict():
     from webui.utils import summarize_error
+
     text = (
         "Traceback (most recent call last):\n"
         '  File "D:\\OS\\.venv\\Lib\\site-packages\\huggingface_hub\\utils\\_http.py", line 1, in <module>\n'
@@ -247,20 +304,25 @@ def test_huggingface_path_in_traceback_is_not_a_version_conflict():
 
 def test_use_auth_token_hint_is_specific():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
-        "TypeError: hf_hub_download() got an unexpected keyword argument 'use_auth_token'")
+        "TypeError: hf_hub_download() got an unexpected keyword argument 'use_auth_token'"
+    )
     assert "use_auth_token" in hint
 
 
 def test_huggingface_version_conflict_still_recognized():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
-        "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0")
+        "ImportError: huggingface-hub>=0.34.0,<1.0 is required; found 1.27.0"
+    )
     assert "1.16.0" in hint and "2.0" in hint
 
 
 def test_tokenizers_path_in_traceback_is_not_a_version_conflict():
     from webui.utils import summarize_error
+
     text = (
         "Traceback (most recent call last):\n"
         '  File "D:\\OS\\.venv\\Lib\\site-packages\\tokenizers\\__init__.py", line 1, in <module>\n'
@@ -274,21 +336,26 @@ def test_tokenizers_path_in_traceback_is_not_a_version_conflict():
 
 def test_real_tokenizers_version_conflict_is_recognized():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
-        "ImportError: tokenizers>=0.22.0,<=0.23.0 is required; found 0.23.1")
+        "ImportError: tokenizers>=0.22.0,<=0.23.0 is required; found 0.23.1"
+    )
     assert "0.23.0" in hint
     assert "0.22.2" in hint
 
 
 def test_tokenizers_native_failure_gets_a_reinstall_hint():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
-        "Exception: tokenizers native extension failed to load (rust panicked)")
+        "Exception: tokenizers native extension failed to load (rust panicked)"
+    )
     assert "reinstall" in hint.lower() or "أعد" in hint
 
 
 def test_native_crash_code_has_a_specific_hint():
     from webui.utils import native_crash_hint, summarize_error
+
     assert "0xC0000409" in native_crash_hint(3221226505)
     assert "0xC0000409" in native_crash_hint(-1073740791)
     assert "faster-whisper" in native_crash_hint(3221226505)
@@ -298,6 +365,7 @@ def test_native_crash_code_has_a_specific_hint():
 
 def test_whisperx_file_path_is_not_reported_as_missing_package():
     from webui.utils import summarize_error
+
     text = (
         "Traceback (most recent call last):\n"
         '  File "D:\\OS\\.venv\\Lib\\site-packages\\whisperx\\asr.py", line 1\n'
@@ -310,15 +378,17 @@ def test_whisperx_file_path_is_not_reported_as_missing_package():
 
 def test_missing_whisperx_package_still_gets_the_install_hint():
     from webui.utils import summarize_error
-    _, _, hint = summarize_error(
-        "ModuleNotFoundError: No module named 'whisperx'")
+
+    _, _, hint = summarize_error("ModuleNotFoundError: No module named 'whisperx'")
     assert "install_dependencies" in hint
 
 
 def test_oom_hint_outranks_a_youtube_403_line():
     from webui.utils import summarize_error
+
     _, _, hint = summarize_error(
         "Unable to allocate 383. MiB for an array with shape (1, 174490, 576)\n"
-        "yt_dlp: HTTP Error 403")
+        "yt_dlp: HTTP Error 403"
+    )
     assert "yt-dlp" not in hint
     assert "memory" in hint.lower() or "الذاكرة" in hint

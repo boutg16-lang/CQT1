@@ -20,8 +20,10 @@ import shutil
 import subprocess
 
 POSITIONS = {
-    "top-left": "10:10", "top-right": "W-w-10:10",
-    "bottom-left": "10:H-h-10", "bottom-right": "W-w-10:H-h-10",
+    "top-left": "10:10",
+    "top-right": "W-w-10:10",
+    "bottom-left": "10:H-h-10",
+    "bottom-right": "W-w-10:H-h-10",
     "center": "(W-w)/2:(H-h)/2",
 }
 
@@ -30,11 +32,22 @@ def _probe_streams(video_path):
     """Return (width, height, fps, has_audio) or (None,)*4."""
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error",
-             "-select_streams", "v:0",
-             "-show_entries", "stream=width,height,r_frame_rate",
-             "-of", "csv=p=0", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,r_frame_rate",
+                "-of",
+                "csv=p=0",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         w, h, fps = None, None, None
         line = res.stdout.strip()
         if line:
@@ -48,17 +61,36 @@ def _probe_streams(video_path):
     has_audio = True
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a",
-             "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         has_audio = bool(res.stdout.strip())
     except Exception:
         pass
     return w, h, fps, has_audio
 
 
-def apply_watermark(video_path, out_path, logo_path, position="bottom-right",
-                    size_fraction=0.12, opacity=0.9):
+def apply_watermark(
+    video_path,
+    out_path,
+    logo_path,
+    position="bottom-right",
+    size_fraction=0.12,
+    opacity=0.9,
+):
     """Overlay the logo. Returns True when applied (or copied fallback)."""
     if not os.path.exists(video_path):
         return False
@@ -71,17 +103,38 @@ def apply_watermark(video_path, out_path, logo_path, position="bottom-right",
         logo_w = max(40, int(w * size_fraction))
         pos = POSITIONS.get(position, POSITIONS["bottom-right"])
         # scale logo, force RGBA, apply opacity
-        logo_vf = ("[1:v]scale={lw}:-1,format=rgba,"
-                   "colorchannelmixer=aa={op}[logo]").format(lw=logo_w, op=opacity)
+        logo_vf = (
+            "[1:v]scale={lw}:-1,format=rgba,colorchannelmixer=aa={op}[logo]"
+        ).format(lw=logo_w, op=opacity)
         fc = "{};[0:v][logo]overlay={}:format=auto[v]".format(logo_vf, pos)
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-i", video_path, "-i", logo_path,
-            "-filter_complex", fc,
-            "-map", "[v]", "-map", "0:a?",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-            "-pix_fmt", "yuv420p", "-c:a", "copy",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            video_path,
+            "-i",
+            logo_path,
+            "-filter_complex",
+            fc,
+            "-map",
+            "[v]",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
             out_path,
         ]
         subprocess.run(cmd, check=True, capture_output=True, timeout=1800)
@@ -99,17 +152,34 @@ def apply_watermark(video_path, out_path, logo_path, position="bottom-right",
 def _normalize_to(video_path, out_path, ref_size):
     """Re-encode to a uniform format (for concat)."""
     w, h, fps, has_audio = ref_size
-    vf = ("scale={}:{}:force_original_aspect_ratio=decrease,"
-          "pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={}").format(w, h, w, h, fps or 30)
+    vf = (
+        "scale={}:{}:force_original_aspect_ratio=decrease,"
+        "pad={}:{}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={}"
+    ).format(w, h, w, h, fps or 30)
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", video_path,
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac" if has_audio else "an",
-        "-ar", "44100",
-        "-ac", "2",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        video_path,
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac" if has_audio else "an",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
         "-shortest",
         out_path,
     ]
@@ -119,9 +189,22 @@ def _normalize_to(video_path, out_path, ref_size):
 def _has_audio(video_path):
     try:
         res = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a",
-             "-show_entries", "stream=index", "-of", "csv=p=0", video_path],
-            capture_output=True, text=True, timeout=30)
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                video_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         return bool(res.stdout.strip())
     except Exception:
         return True
@@ -160,9 +243,19 @@ def apply_intro_outro(video_path, out_path, intro=None, outro=None):
             for fp in files:
                 f.write("file '{}'\n".format(os.path.abspath(fp).replace("\\", "/")))
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "concat", "-safe", "0", "-i", list_file,
-            "-c", "copy",
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            list_file,
+            "-c",
+            "copy",
             out_path,
         ]
         subprocess.run(cmd, check=True, capture_output=True, timeout=1800)
@@ -182,16 +275,29 @@ def apply_intro_outro(video_path, out_path, intro=None, outro=None):
         return False
 
 
-def process_file(video_path, out_path=None, logo_path=None, position="bottom-right",
-                 size_fraction=0.12, opacity=0.9, intro=None, outro=None):
+def process_file(
+    video_path,
+    out_path=None,
+    logo_path=None,
+    position="bottom-right",
+    size_fraction=0.12,
+    opacity=0.9,
+    intro=None,
+    outro=None,
+):
     """Apply branding steps in order: watermark → intro/outro.
 
     ``ok`` means the requested branding operations completed. A valid
     copy-through output is still produced on failure, but ``degraded=True``
     makes that fallback visible to the caller instead of pretending success.
     """
-    report = {"video": os.path.basename(video_path), "ok": False,
-              "watermark": False, "intro_outro": False, "degraded": False}
+    report = {
+        "video": os.path.basename(video_path),
+        "ok": False,
+        "watermark": False,
+        "intro_outro": False,
+        "degraded": False,
+    }
     if out_path is None:
         out_path = video_path
     try:
@@ -211,13 +317,16 @@ def process_file(video_path, out_path=None, logo_path=None, position="bottom-rig
             else:
                 tmp = out_path + ".wm.mp4"
                 report["watermark"] = apply_watermark(
-                    video_path, tmp, logo_path, position, size_fraction, opacity)
+                    video_path, tmp, logo_path, position, size_fraction, opacity
+                )
                 staged = tmp
                 if not report["watermark"]:
                     report["degraded"] = True
                     report["error"] = "watermark rendering failed"
         if intro or outro:
-            missing = [path for path in (intro, outro) if path and not os.path.exists(path)]
+            missing = [
+                path for path in (intro, outro) if path and not os.path.exists(path)
+            ]
             if missing:
                 report["degraded"] = True
                 report["error"] = "intro/outro file not found"
@@ -231,8 +340,9 @@ def process_file(video_path, out_path=None, logo_path=None, position="bottom-rig
                 if os.path.exists(staged):
                     os.replace(staged, out_path)
                     staged = out_path
-                elif (os.path.exists(video_path)
-                        and os.path.abspath(video_path) != os.path.abspath(out_path)):
+                elif os.path.exists(video_path) and os.path.abspath(
+                    video_path
+                ) != os.path.abspath(out_path):
                     # The watermark step failed before creating the staged
                     # file: fall back to a plain copy and keep the original
                     # "watermark rendering failed" error instead of letting
@@ -255,25 +365,38 @@ def process_file(video_path, out_path=None, logo_path=None, position="bottom-rig
 def main():
     import argparse
     import json
-    parser = argparse.ArgumentParser(description="ViralCutter branding (watermark + intro/outro).")
+
+    parser = argparse.ArgumentParser(
+        description="ViralCutter branding (watermark + intro/outro)."
+    )
     parser.add_argument("--video", required=True)
     parser.add_argument("--out", default=None)
     parser.add_argument("--logo", default=None, help="channel logo PNG")
-    parser.add_argument("--position", default="bottom-right",
-                        choices=list(POSITIONS))
+    parser.add_argument("--position", default="bottom-right", choices=list(POSITIONS))
     parser.add_argument("--size-fraction", type=float, default=0.12)
     parser.add_argument("--opacity", type=float, default=0.9)
     parser.add_argument("--intro", default=None, help="intro clip (mp4)")
     parser.add_argument("--outro", default=None, help="outro clip (mp4)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    report = process_file(args.video, args.out, args.logo, args.position,
-                          args.size_fraction, args.opacity, args.intro, args.outro)
+    report = process_file(
+        args.video,
+        args.out,
+        args.logo,
+        args.position,
+        args.size_fraction,
+        args.opacity,
+        args.intro,
+        args.outro,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print("{}: watermark={} intro/outro={}".format(
-            report["video"], report["watermark"], report["intro_outro"]))
+        print(
+            "{}: watermark={} intro/outro={}".format(
+                report["video"], report["watermark"], report["intro_outro"]
+            )
+        )
     return 0 if report["ok"] else 1
 
 

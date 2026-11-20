@@ -4,7 +4,9 @@ import pytest
 
 from scripts.quality_benchmark import run_benchmark
 
-pytestmark = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not available")
+pytestmark = pytest.mark.skipif(
+    not shutil.which("ffmpeg"), reason="ffmpeg not available"
+)
 
 
 def test_quality_benchmark_passes(tmp_path):

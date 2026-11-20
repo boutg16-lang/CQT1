@@ -42,20 +42,33 @@ VISUAL_GRAPHIC_THRESHOLD = 70.0
 # ffmpeg frame helpers (pure stdlib)
 # ---------------------------------------------------------------------------
 
+
 def _grab_gray_frame(video_path, at_seconds, width=9, height=8):
     """Sample one grayscale frame (width*height bytes) via ffmpeg rawvideo pipe."""
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-ss", "{:.3f}".format(at_seconds), "-i", video_path,
-        "-frames:v", "1", "-vf", "scale={}:{},format=gray".format(width, height),
-        "-f", "rawvideo", "pipe:1",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        "{:.3f}".format(at_seconds),
+        "-i",
+        video_path,
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale={}:{},format=gray".format(width, height),
+        "-f",
+        "rawvideo",
+        "pipe:1",
     ]
     try:
         res = subprocess.run(cmd, capture_output=True, timeout=60)
         raw = res.stdout
         if len(raw) < width * height:
             return None
-        return raw[:width * height]
+        return raw[: width * height]
     except Exception:
         return None
 
@@ -106,7 +119,7 @@ def _letterbox_ratio(video_path, at_seconds):
     w, h = 64, 36
 
     def row_mean(r):
-        row = frame[r * w:(r + 1) * w]
+        row = frame[r * w : (r + 1) * w]
         return sum(row) / len(row)
 
     def col_mean(c):
@@ -133,6 +146,7 @@ def _letterbox_ratio(video_path, at_seconds):
 # ---------------------------------------------------------------------------
 # Text signals
 # ---------------------------------------------------------------------------
+
 
 def profanity_in_first_seconds(segment, words, seconds=FIRST_SECONDS_PROFANITY):
     """Any policy-violating word inside the first N seconds of the clip?
@@ -168,6 +182,7 @@ def profanity_in_first_seconds(segment, words, seconds=FIRST_SECONDS_PROFANITY):
 # Scorecard
 # ---------------------------------------------------------------------------
 
+
 def _find_source_video(project_folder):
     for name in ("input.mp4", "input_video.mp4"):
         p = os.path.join(project_folder, name)
@@ -193,14 +208,26 @@ def _find_source_video(project_folder):
 
 def _find_clip_video(project_folder, index):
     """Prefer the final edited video, fall back to the raw cut."""
-    final = sorted(glob.glob(os.path.join(
-        project_folder, "final", "*{0:03d}*.mp4".format(index)))) + sorted(
-        glob.glob(os.path.join(project_folder, "final",
-                               "final-output{0:03d}_processed.mp4".format(index))))
+    final = sorted(
+        glob.glob(os.path.join(project_folder, "final", "*{0:03d}*.mp4".format(index)))
+    ) + sorted(
+        glob.glob(
+            os.path.join(
+                project_folder,
+                "final",
+                "final-output{0:03d}_processed.mp4".format(index),
+            )
+        )
+    )
     if final:
         return final[0]
-    cuts = sorted(glob.glob(os.path.join(
-        project_folder, "cuts", "{0:03d}_*_original_scale.mp4".format(index))))
+    cuts = sorted(
+        glob.glob(
+            os.path.join(
+                project_folder, "cuts", "{0:03d}_*_original_scale.mp4".format(index)
+            )
+        )
+    )
     return cuts[0] if cuts else None
 
 
@@ -217,18 +244,33 @@ def _load_words(project_folder):
     for seg in data.get("segments", []):
         for w in seg.get("words", []) or []:
             try:
-                words.append({"word": str(w.get("word", "")),
-                              "start": float(w.get("start", 0)),
-                              "end": float(w.get("end", 0))})
+                words.append(
+                    {
+                        "word": str(w.get("word", "")),
+                        "start": float(w.get("start", 0)),
+                        "end": float(w.get("end", 0)),
+                    }
+                )
             except Exception:
                 continue
     words.sort(key=lambda w: w["start"])
     return words
 
 
-def score_segment(segment, index, project_folder, words, source_video,
-                  visual_model_path=None, visual_classifier=None, safety_entry=None,
-                  provenance_entry=None, ocr_entry=None, visual_frames=4, visual_threshold=VISUAL_GRAPHIC_THRESHOLD):
+def score_segment(
+    segment,
+    index,
+    project_folder,
+    words,
+    source_video,
+    visual_model_path=None,
+    visual_classifier=None,
+    safety_entry=None,
+    provenance_entry=None,
+    ocr_entry=None,
+    visual_frames=4,
+    visual_threshold=VISUAL_GRAPHIC_THRESHOLD,
+):
     """Compute the risk axes for one segment. Returns a dict (never raises)."""
     entry = {
         "index": index,
@@ -300,10 +342,16 @@ def score_segment(segment, index, project_folder, words, source_video,
         visual["available"] = bool(visual_classifier.available)
         visual["status"] = "ready" if visual_classifier.available else "unavailable"
         visual["error"] = visual_classifier.error
-    if visual_classifier is not None and visual_classifier.available and clip and os.path.exists(clip):
+    if (
+        visual_classifier is not None
+        and visual_classifier.available
+        and clip
+        and os.path.exists(clip)
+    ):
         visual["status"] = "scanned"
         vreport = visual_classifier.analyze_video(
-            clip, num_frames=max(1, int(visual_frames or 4)))
+            clip, num_frames=max(1, int(visual_frames or 4))
+        )
         if vreport.get("graphic_score") is not None:
             visual["score"] = round(vreport["graphic_score"], 1)
             visual["graphic"] = vreport["graphic"]
@@ -311,26 +359,51 @@ def score_segment(segment, index, project_folder, words, source_video,
             visual["frames"] = vreport["frames"]
             visual["model"] = vreport["model"] or visual["model"]
             if visual["score"] >= float(visual_threshold):
-                visual["flag"] = "graphic content ({}% probability)".format(visual["score"])
+                visual["flag"] = "graphic content ({}% probability)".format(
+                    visual["score"]
+                )
     elif visual_classifier is not None and visual_classifier.available:
         visual["status"] = "no_clip"
     entry["axes"]["visual"] = visual
 
     # --- overall ---
-    scores = [text_scores["first7s"], text_scores["semantic_policy"], reuse["score"], visual["score"]]
+    scores = [
+        text_scores["first7s"],
+        text_scores["semantic_policy"],
+        reuse["score"],
+        visual["score"],
+    ]
     overall = max(scores)
     entry["overall_score"] = round(overall, 1)
-    entry["overall"] = ("danger" if overall >= 85 else
-                        "high" if overall >= 70 else
-                        "medium" if overall >= 40 else "low")
+    entry["overall"] = (
+        "danger"
+        if overall >= 85
+        else "high"
+        if overall >= 70
+        else "medium"
+        if overall >= 40
+        else "low"
+    )
     return entry
 
 
-def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REUSE_THRESHOLD,
-                    visual_model_path=None, auto_download_visual=False, i18n=lambda k: k,
-                    visual_check="auto", visual_gate="warn", visual_frames=4,
-                    visual_threshold=VISUAL_GRAPHIC_THRESHOLD, provenance_gate="warn",
-                    ocr_check="auto", ocr_gate="warn", ocr_frames=4, ocr_lang="ara+eng"):
+def analyze_project(
+    project_folder,
+    viral_segments=None,
+    gate_threshold=HIGH_REUSE_THRESHOLD,
+    visual_model_path=None,
+    auto_download_visual=False,
+    i18n=lambda k: k,
+    visual_check="auto",
+    visual_gate="warn",
+    visual_frames=4,
+    visual_threshold=VISUAL_GRAPHIC_THRESHOLD,
+    provenance_gate="warn",
+    ocr_check="auto",
+    ocr_gate="warn",
+    ocr_frames=4,
+    ocr_lang="ara+eng",
+):
     """Score every segment, persist risk_scorecard.json + publish_blocklist.json.
 
     Returns {"segments": [...], "blocked": [...], "summary": {...}}.
@@ -370,8 +443,11 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
         if model_path and os.path.exists(model_path):
             classifier = visual_check_module.NudeNetClassifier(model_path)
             if not classifier.available:
-                print("[risk] visual classifier unavailable ({}); continuing text-only".format(
-                    classifier.error))
+                print(
+                    "[risk] visual classifier unavailable ({}); continuing text-only".format(
+                        classifier.error
+                    )
+                )
 
     segments = (viral_segments or {}).get("segments", [])
     source_video = _find_source_video(project_folder)
@@ -397,25 +473,45 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
         if ocr_mode != "off" and clip_path and os.path.exists(clip_path):
             try:
                 ocr_entry = ocr_safety.analyze_video(
-                    clip_path, frames=ocr_frames, language=ocr_lang)
+                    clip_path, frames=ocr_frames, language=ocr_lang
+                )
             except Exception as exc:
-                ocr_entry = {"available": False, "status": "error",
-                             "action": "review", "score": 0, "reason": str(exc)[:300]}
+                ocr_entry = {
+                    "available": False,
+                    "status": "error",
+                    "action": "review",
+                    "score": 0,
+                    "reason": str(exc)[:300],
+                }
         elif ocr_mode == "on":
-            ocr_entry = {"available": False, "status": "no_clip",
-                         "action": "review", "score": 0, "reason": "clip_not_found"}
-        entries.append(score_segment(seg, i, project_folder, words,
-                                     source_video, visual_model_path=model_path,
-                                     visual_classifier=classifier,
-                                     safety_entry=safety_entries.get(i),
-                                     ocr_entry=ocr_entry,
-                                     visual_frames=visual_frames,
-                                     visual_threshold=visual_threshold))
+            ocr_entry = {
+                "available": False,
+                "status": "no_clip",
+                "action": "review",
+                "score": 0,
+                "reason": "clip_not_found",
+            }
+        entries.append(
+            score_segment(
+                seg,
+                i,
+                project_folder,
+                words,
+                source_video,
+                visual_model_path=model_path,
+                visual_classifier=classifier,
+                safety_entry=safety_entries.get(i),
+                ocr_entry=ocr_entry,
+                visual_frames=visual_frames,
+                visual_threshold=visual_threshold,
+            )
+        )
 
     provenance_reviews = []
     for entry in entries:
         evidence = provenance.assess_clip(
-            project_folder, entry.get("index"), policy=provenance_gate)
+            project_folder, entry.get("index"), policy=provenance_gate
+        )
         entry["axes"]["provenance"] = evidence
         if evidence.get("action") != "allow":
             provenance_reviews.append(entry)
@@ -424,25 +520,31 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
         axes = entry.get("axes") or {}
         text = axes.get("text") or {}
         values = [
-            text.get("first7s", 0), text.get("semantic_policy", 0),
+            text.get("first7s", 0),
+            text.get("semantic_policy", 0),
             (axes.get("reuse") or {}).get("score", 0),
         ]
         return max(float(v or 0) for v in values)
 
     def _visual_blocked(entry):
         visual = (entry.get("axes") or {}).get("visual") or {}
-        return visual_policy != "off" and float(visual.get("score", 0) or 0) >= float(visual_threshold)
+        return visual_policy != "off" and float(visual.get("score", 0) or 0) >= float(
+            visual_threshold
+        )
 
     def _ocr_blocked(entry):
         ocr = (entry.get("axes") or {}).get("ocr") or {}
         return ocr_policy == "block" and ocr.get("action") == "block"
 
-    blocked = [e for e in entries if
-               ((e.get("axes") or {}).get("reuse") or {}).get("score", 0) >= gate_threshold
-               or _non_visual_score(e) >= 70.0
-               or _visual_blocked(e)
-               or _ocr_blocked(e)
-               or ((e.get("axes") or {}).get("provenance") or {}).get("action") == "block"]
+    blocked = [
+        e
+        for e in entries
+        if ((e.get("axes") or {}).get("reuse") or {}).get("score", 0) >= gate_threshold
+        or _non_visual_score(e) >= 70.0
+        or _visual_blocked(e)
+        or _ocr_blocked(e)
+        or ((e.get("axes") or {}).get("provenance") or {}).get("action") == "block"
+    ]
 
     summary = {
         "total": len(entries),
@@ -452,28 +554,45 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
         "danger": sum(1 for e in entries if e["overall"] == "danger"),
         "blocked_for_publish": len(blocked),
         "gate_threshold": gate_threshold,
-        "visual_model": os.path.basename(model_path) if model_path and os.path.exists(model_path) else None,
+        "visual_model": os.path.basename(model_path)
+        if model_path and os.path.exists(model_path)
+        else None,
         "visual_check": visual_mode,
         "visual_gate": visual_policy,
         "visual_available": bool(classifier is not None and classifier.available),
-        "visual_unavailable": visual_mode == "on" and not bool(classifier is not None and classifier.available),
-        "visual_gate_failed": visual_mode == "on" and visual_policy == "block" and not bool(classifier is not None and classifier.available),
+        "visual_unavailable": visual_mode == "on"
+        and not bool(classifier is not None and classifier.available),
+        "visual_gate_failed": visual_mode == "on"
+        and visual_policy == "block"
+        and not bool(classifier is not None and classifier.available),
         "ocr_check": ocr_mode,
         "ocr_gate": ocr_policy,
-        "ocr_available": any(((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries),
-        "ocr_unavailable": ocr_mode == "on" and not any(((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries),
-        "ocr_gate_failed": ocr_mode == "on" and ocr_policy == "block" and not any(((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries),
+        "ocr_available": any(
+            ((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries
+        ),
+        "ocr_unavailable": ocr_mode == "on"
+        and not any(
+            ((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries
+        ),
+        "ocr_gate_failed": ocr_mode == "on"
+        and ocr_policy == "block"
+        and not any(
+            ((e.get("axes") or {}).get("ocr") or {}).get("available") for e in entries
+        ),
         "ocr_blocked": sum(_ocr_blocked(e) for e in entries),
         "provenance_gate": provenance_gate,
         "provenance_review": len(provenance_reviews),
         "provenance_blocked": sum(
             ((e.get("axes") or {}).get("provenance") or {}).get("action") == "block"
-            for e in entries),
+            for e in entries
+        ),
     }
 
     report = {"summary": summary, "segments": entries, "blocked": blocked}
     try:
-        with open(os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8"
+        ) as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[risk] could not save scorecard: {e}")
@@ -481,24 +600,33 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
     try:
         for entry in entries:
             content_ledger.record_clip_audit(
-                project_folder, entry.get("index"), entry,
-                _find_clip_video(project_folder, entry.get("index")))
+                project_folder,
+                entry.get("index"),
+                entry,
+                _find_clip_video(project_folder, entry.get("index")),
+            )
         summary["database"] = content_ledger.ledger_summary(project_folder)["database"]
     except Exception as e:
         print("[risk] ledger write skipped: {}".format(e))
 
     report["summary"] = summary
     try:
-        with open(os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8"
+        ) as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[risk] could not update scorecard metadata: {e}")
 
     try:
-        provenance_report = provenance.analyze_project(project_folder, policy=provenance_gate)
+        provenance_report = provenance.analyze_project(
+            project_folder, policy=provenance_gate
+        )
         summary["provenance"] = provenance_report.get("summary", {})
         report["summary"] = summary
-        with open(os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(project_folder, SCORECARD_FILENAME), "w", encoding="utf-8"
+        ) as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print("[risk] provenance report skipped: {}".format(e))
@@ -511,68 +639,124 @@ def analyze_project(project_folder, viral_segments=None, gate_threshold=HIGH_REU
         except Exception as exc:
             # The upload gate reads this file to block risky clips; failing to
             # write it must never be silent (fail-open).
-            print("[risk] could not write publish blocklist {}: {}".format(
-                blocklist_path, exc))
+            print(
+                "[risk] could not write publish blocklist {}: {}".format(
+                    blocklist_path, exc
+                )
+            )
     else:
         # Do not let a previous run's blocklist keep affecting a clean rerun.
         try:
             if os.path.exists(blocklist_path):
                 os.remove(blocklist_path)
         except Exception as exc:
-            print("[risk] could not remove stale publish blocklist {}: {}".format(
-                blocklist_path, exc))
+            print(
+                "[risk] could not remove stale publish blocklist {}: {}".format(
+                    blocklist_path, exc
+                )
+            )
 
     try:
         from scripts import review_queue
+
         review_queue.build_queue(project_folder)
     except Exception as exc:
         print("[risk] review queue skipped: {}".format(exc))
 
     # console summary
-    print(i18n("[risk] Scorecard: {} total — {} low / {} medium / {} high / {} danger — {} blocked for publish").format(
-        summary["total"], summary["low"], summary["medium"], summary["high"],
-        summary["danger"], summary["blocked_for_publish"]))
+    print(
+        i18n(
+            "[risk] Scorecard: {} total — {} low / {} medium / {} high / {} danger — {} blocked for publish"
+        ).format(
+            summary["total"],
+            summary["low"],
+            summary["medium"],
+            summary["high"],
+            summary["danger"],
+            summary["blocked_for_publish"],
+        )
+    )
     for e in entries:
         reuse = e["axes"]["reuse"].get("score")
         reuse_s = "{:.0f}".format(reuse) if reuse is not None else "n/a"
-        print(i18n("[risk]   {} '{}': overall={} reuse={} first7s={}").format(
-            "⛔" if e in blocked else "  ",
-            e["title"], e["overall"], reuse_s, e["axes"]["text"]["first7s"]))
+        print(
+            i18n("[risk]   {} '{}': overall={} reuse={} first7s={}").format(
+                "⛔" if e in blocked else "  ",
+                e["title"],
+                e["overall"],
+                reuse_s,
+                e["axes"]["text"]["first7s"],
+            )
+        )
         if e in blocked:
-            print(i18n("[risk]       → DO NOT PUBLISH: {}").format(
-                "clip is still ~{:.0f}% identical to the source (reused content risk)".format(e["axes"]["reuse"]["score"])
-                if e["axes"]["reuse"].get("score") and e["axes"]["reuse"]["score"] >= gate_threshold
-                else "high overall risk"))
+            print(
+                i18n("[risk]       → DO NOT PUBLISH: {}").format(
+                    "clip is still ~{:.0f}% identical to the source (reused content risk)".format(
+                        e["axes"]["reuse"]["score"]
+                    )
+                    if e["axes"]["reuse"].get("score")
+                    and e["axes"]["reuse"]["score"] >= gate_threshold
+                    else "high overall risk"
+                )
+            )
     return report
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Per-clip YouTube risk scorecard.")
     parser.add_argument("--project", required=True, help="Project folder")
     parser.add_argument("--gate-threshold", type=float, default=HIGH_REUSE_THRESHOLD)
-    parser.add_argument("--visual-model", default=None,
-                        help="Path to an optional local ONNX visual classifier (e.g. models/nudenet_lite.onnx)")
-    parser.add_argument("--auto-download-visual", action="store_true",
-                        help="Download the default small visual classifier into models/ if missing")
-    parser.add_argument("--visual-check", choices=["off", "auto", "on"], default="auto",
-                        help="Visual safety scan: off, auto when a local model exists, or on (fail closed if unavailable)")
-    parser.add_argument("--visual-gate", choices=["off", "warn", "block"], default="warn",
-                        help="Visual policy: off, warn, or block graphic visual findings")
-    parser.add_argument("--visual-frames", type=int, default=4,
-                        help="Frames sampled per clip for the visual scan (default: 4)")
-    parser.add_argument("--exit-on-blocked", action="store_true",
-                        help="Exit code 1 if any clip is blocked for publish")
-    parser.add_argument("--html-report", action="store_true",
-                        help="Also write a readable risk_report.html next to the scorecard")
+    parser.add_argument(
+        "--visual-model",
+        default=None,
+        help="Path to an optional local ONNX visual classifier (e.g. models/nudenet_lite.onnx)",
+    )
+    parser.add_argument(
+        "--auto-download-visual",
+        action="store_true",
+        help="Download the default small visual classifier into models/ if missing",
+    )
+    parser.add_argument(
+        "--visual-check",
+        choices=["off", "auto", "on"],
+        default="auto",
+        help="Visual safety scan: off, auto when a local model exists, or on (fail closed if unavailable)",
+    )
+    parser.add_argument(
+        "--visual-gate",
+        choices=["off", "warn", "block"],
+        default="warn",
+        help="Visual policy: off, warn, or block graphic visual findings",
+    )
+    parser.add_argument(
+        "--visual-frames",
+        type=int,
+        default=4,
+        help="Frames sampled per clip for the visual scan (default: 4)",
+    )
+    parser.add_argument(
+        "--exit-on-blocked",
+        action="store_true",
+        help="Exit code 1 if any clip is blocked for publish",
+    )
+    parser.add_argument(
+        "--html-report",
+        action="store_true",
+        help="Also write a readable risk_report.html next to the scorecard",
+    )
     args = parser.parse_args()
 
-    report = analyze_project(args.project, gate_threshold=args.gate_threshold,
-                             visual_model_path=args.visual_model,
-                             auto_download_visual=args.auto_download_visual,
-                             visual_check=args.visual_check,
-                             visual_gate=args.visual_gate,
-                             visual_frames=args.visual_frames)
+    report = analyze_project(
+        args.project,
+        gate_threshold=args.gate_threshold,
+        visual_model_path=args.visual_model,
+        auto_download_visual=args.auto_download_visual,
+        visual_check=args.visual_check,
+        visual_gate=args.visual_gate,
+        visual_frames=args.visual_frames,
+    )
     if args.html_report:
         path = render_html_report(args.project)
         print("[risk] HTML report → {}".format(path or "failed"))
@@ -590,8 +774,10 @@ if __name__ == "__main__":
 # HTML for the channel owner — shown in the WebUI Review tab too).
 # --------------------------------------------------------------------------
 BADGE = {
-    "low": ("#16a34a", "منخفض"), "medium": ("#f59e0b", "متوسط"),
-    "high": ("#f97316", "مرتفع"), "danger": ("#dc2626", "خطير"),
+    "low": ("#16a34a", "منخفض"),
+    "medium": ("#f59e0b", "متوسط"),
+    "high": ("#f97316", "مرتفع"),
+    "danger": ("#dc2626", "خطير"),
 }
 
 
@@ -608,15 +794,16 @@ def build_scorecard_html(report):
     def badge(overall):
         color, label = BADGE.get(overall, ("#64748b", overall or "?"))
         return '<span style="background:{}22;color:{};border:1px solid {}55;border-radius:999px;padding:2px 10px;font-weight:700;font-size:0.8em;">{}</span>'.format(
-            color, color, color, label)
+            color, color, color, label
+        )
 
     rows = []
     for e in segments:
         is_blocked = id(e) in blocked_ids or e.get("overall") in ("high", "danger")
         axes = e.get("axes") or {}
-        reuse = (axes.get("reuse") or {})
-        visual = (axes.get("visual") or {})
-        text = (axes.get("text") or {})
+        reuse = axes.get("reuse") or {}
+        visual = axes.get("visual") or {}
+        text = axes.get("text") or {}
         first7 = text.get("first7s")
         if isinstance(first7, dict):
             f7 = "{} /100".format(first7.get("score", 0))
@@ -624,7 +811,9 @@ def build_scorecard_html(report):
             f7 = "—"
         sim = reuse.get("similarity")
         sim_txt = "{:.0f}%".format(sim * 100) if isinstance(sim, (int, float)) else "—"
-        vis_txt = "{:.0f}".format(visual.get("score") or 0) + (" ⚠️" if visual.get("flag") else "")
+        vis_txt = "{:.0f}".format(visual.get("score") or 0) + (
+            " ⚠️" if visual.get("flag") else ""
+        )
         rows.append(
             '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">'
             '<td style="padding:8px 10px;">{}</td>'
@@ -634,42 +823,52 @@ def build_scorecard_html(report):
             '<td style="padding:8px 10px;text-align:center;">{}</td>'
             '<td style="padding:8px 10px;text-align:center;">{}</td>'
             '<td style="padding:8px 10px;text-align:center;">{}</td>'
-            '</tr>'.format(
-                e.get("index", "?"), (e.get("title") or "")[:60],
-                badge(e.get("overall")), f7, sim_txt, vis_txt,
-                "⛔ محجوب" if is_blocked else "✅ مسموح"))
+            "</tr>".format(
+                e.get("index", "?"),
+                (e.get("title") or "")[:60],
+                badge(e.get("overall")),
+                f7,
+                sim_txt,
+                vis_txt,
+                "⛔ محجوب" if is_blocked else "✅ مسموح",
+            )
+        )
 
     visual_notice = ""
     if summary.get("visual_gate_failed"):
         visual_notice = (
             '<div style="background:#dc262615;border:1px solid #dc262655;border-radius:10px;'
             'padding:10px 14px;margin:10px 0;color:#fca5a5;">'
-            '⛔ الفحص البصري إلزامي، لكن النموذج المحلي غير متاح؛ لا يُسمح بالنشر.</div>'
+            "⛔ الفحص البصري إلزامي، لكن النموذج المحلي غير متاح؛ لا يُسمح بالنشر.</div>"
         )
     elif summary.get("visual_unavailable"):
         visual_notice = (
             '<div style="background:#f59e0b15;border:1px solid #f59e0b55;border-radius:10px;'
             'padding:10px 14px;margin:10px 0;color:#fbbf24;">'
-            '⚠️ لم يُنفذ الفحص البصري لغياب نموذج ONNX؛ النتائج الحالية نصية/تقنية فقط.</div>'
+            "⚠️ لم يُنفذ الفحص البصري لغياب نموذج ONNX؛ النتائج الحالية نصية/تقنية فقط.</div>"
         )
     elif summary.get("visual_available"):
         visual_notice = (
             '<div style="background:#16a34a15;border:1px solid #16a34a55;border-radius:10px;'
             'padding:10px 14px;margin:10px 0;color:#86efac;">'
-            '✅ تم تنفيذ الفحص البصري المحلي على المقاطع.</div>'
+            "✅ تم تنفيذ الفحص البصري المحلي على المقاطع.</div>"
         )
 
     blocked_html = ""
     if blocked:
         items = "".join(
             '<li style="padding:6px 0;">⛔ <b>{}</b> — <span style="color:#94a3b8;">السبب: {}</span></li>'.format(
-                (e.get("title") or "?"), _block_reason(e))
-            for e in blocked[:10])
+                (e.get("title") or "?"), _block_reason(e)
+            )
+            for e in blocked[:10]
+        )
         blocked_html = (
             '<div style="background:#dc262612;border:1px solid #dc262655;border-radius:10px;'
             'padding:10px 14px;margin-top:10px;"><b style="color:#fca5a5;">⛔ ممنوع النشر: '
             '{}</b><ul style="margin:6px 0 0;padding-right:18px;">{}</ul></div>'.format(
-                len(blocked), items))
+                len(blocked), items
+            )
+        )
 
     return """
 <div style="direction:rtl;text-align:right;font-family:inherit;">
@@ -695,12 +894,17 @@ def build_scorecard_html(report):
   {visual_notice}
   {blocked_html}
 </div>
-""".format(low=summary.get("low", 0), med=summary.get("medium", 0),
-           high=summary.get("high", 0), danger=summary.get("danger", 0),
-           blocked=summary.get("blocked_for_publish", 0),
-           visual_notice=visual_notice,
-           rows="".join(rows) or '<tr><td colspan="7" style="padding:12px;color:#94a3b8;">لا توجد بيانات</td></tr>',
-           blocked_html=blocked_html)
+""".format(
+        low=summary.get("low", 0),
+        med=summary.get("medium", 0),
+        high=summary.get("high", 0),
+        danger=summary.get("danger", 0),
+        blocked=summary.get("blocked_for_publish", 0),
+        visual_notice=visual_notice,
+        rows="".join(rows)
+        or '<tr><td colspan="7" style="padding:12px;color:#94a3b8;">لا توجد بيانات</td></tr>',
+        blocked_html=blocked_html,
+    )
 
 
 def _block_reason(entry):
@@ -708,8 +912,14 @@ def _block_reason(entry):
     parts = []
     reuse = axes.get("reuse") or {}
     if (reuse.get("similarity") or 0) >= HIGH_REUSE_THRESHOLD:
-        parts.append("محتوى مُعاد استخدامه ({:.0f}% تشابه)".format(reuse["similarity"] * 100))
-    if axes.get("text") and isinstance(axes["text"].get("first7s"), dict) and (axes["text"]["first7s"].get("score") or 0) >= 50:
+        parts.append(
+            "محتوى مُعاد استخدامه ({:.0f}% تشابه)".format(reuse["similarity"] * 100)
+        )
+    if (
+        axes.get("text")
+        and isinstance(axes["text"].get("first7s"), dict)
+        and (axes["text"]["first7s"].get("score") or 0) >= 50
+    ):
         parts.append("كلمة مخالفة في أول 7 ثوانٍ")
     if axes.get("visual") and (axes["visual"].get("flag")):
         parts.append(axes["visual"]["flag"])

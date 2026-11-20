@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Lightweight ffprobe validation for rendered ViralCutter media."""
+
 from __future__ import annotations
 
 import json
@@ -19,8 +20,13 @@ def probe_media(path, ffprobe=None):
     if not os.path.isfile(path):
         return {"ok": False, "path": path, "error": "file not found"}
     cmd = [
-        ffprobe, "-v", "error", "-print_format", "json",
-        "-show_entries", "format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate",
+        ffprobe,
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_entries",
+        "format=duration,size:stream=index,codec_type,codec_name,width,height,r_frame_rate",
         path,
     ]
     try:
@@ -28,11 +34,19 @@ def probe_media(path, ffprobe=None):
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"ok": False, "path": path, "error": str(exc)}
     if proc.returncode != 0:
-        return {"ok": False, "path": path, "error": (proc.stderr or "ffprobe failed")[-1000:]}
+        return {
+            "ok": False,
+            "path": path,
+            "error": (proc.stderr or "ffprobe failed")[-1000:],
+        }
     try:
         data = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError as exc:
-        return {"ok": False, "path": path, "error": "invalid ffprobe JSON: {}".format(exc)}
+        return {
+            "ok": False,
+            "path": path,
+            "error": "invalid ffprobe JSON: {}".format(exc),
+        }
     fmt = data.get("format") or {}
     try:
         duration = float(fmt.get("duration") or 0)
@@ -72,7 +86,13 @@ def _aspect_ratio_value(value):
         return None
 
 
-def validate_media_file(path, min_duration=0.05, require_audio=False, expected_aspect=None, aspect_tolerance=0.03):
+def validate_media_file(
+    path,
+    min_duration=0.05,
+    require_audio=False,
+    expected_aspect=None,
+    aspect_tolerance=0.03,
+):
     report = probe_media(path)
     if not report.get("ok"):
         return report
@@ -90,7 +110,11 @@ def validate_media_file(path, min_duration=0.05, require_audio=False, expected_a
     if expected and video.get("width") and video.get("height"):
         actual = float(video["width"]) / float(video["height"])
         if abs(actual - expected) > float(aspect_tolerance):
-            errors.append("unexpected aspect ratio: {:.3f} (expected {:.3f})".format(actual, expected))
+            errors.append(
+                "unexpected aspect ratio: {:.3f} (expected {:.3f})".format(
+                    actual, expected
+                )
+            )
     report["ok"] = not errors
     report["errors"] = errors
     return report
@@ -116,13 +140,31 @@ def output_files(project_folder):
     return []
 
 
-def validate_project_outputs(project_folder, *, require_outputs=True, require_audio=False, expected_aspect=None):
+def validate_project_outputs(
+    project_folder, *, require_outputs=True, require_audio=False, expected_aspect=None
+):
     files = output_files(project_folder)
     if not files:
-        return {"ok": not require_outputs, "outputs": [], "errors": ["no rendered media found"]}
-    reports = [validate_media_file(path, require_audio=require_audio, expected_aspect=expected_aspect) for path in files]
+        return {
+            "ok": not require_outputs,
+            "outputs": [],
+            "errors": ["no rendered media found"],
+        }
+    reports = [
+        validate_media_file(
+            path, require_audio=require_audio, expected_aspect=expected_aspect
+        )
+        for path in files
+    ]
     errors = []
     for report in reports:
         if not report.get("ok"):
-            errors.append("{}: {}".format(os.path.basename(report["path"]), "; ".join(report.get("errors", [report.get("error", "invalid media")]))))
+            errors.append(
+                "{}: {}".format(
+                    os.path.basename(report["path"]),
+                    "; ".join(
+                        report.get("errors", [report.get("error", "invalid media")])
+                    ),
+                )
+            )
     return {"ok": not errors, "outputs": reports, "errors": errors}

@@ -24,6 +24,7 @@ def _term(term, severity="high"):
 # Validation
 # ---------------------------------------------------------------------------
 
+
 class TestValidate:
     def test_good_pack(self):
         p = su.validate_pack(_pack(3, [_term("x")]))
@@ -50,6 +51,7 @@ class TestValidate:
 # Update flow (file:// URLs — no network needed)
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateFlow:
     def _pack_path(self, tmp_path, pack, name="pack.json"):
         p = tmp_path / name
@@ -68,7 +70,8 @@ class TestUpdateFlow:
         if version:
             pack = _pack(version, terms or [_term("cache-term")])
             (base / su.CACHE_FILENAME).write_text(
-                json.dumps(pack, ensure_ascii=False), encoding="utf-8")
+                json.dumps(pack, ensure_ascii=False), encoding="utf-8"
+            )
         return str(base)
 
     def test_update_newer_version(self, tmp_path):
@@ -107,21 +110,29 @@ class TestUpdateFlow:
 
     def test_unreachable_url_offline(self, tmp_path):
         base = self._cache(tmp_path, version=2)
-        r = su.check_and_update(base_dir=base, url="file:///nonexistent/x.json", force=True)
+        r = su.check_and_update(
+            base_dir=base, url="file:///nonexistent/x.json", force=True
+        )
         assert r["status"] == "offline"
         assert su.load_cached_pack(base)["version"] == 2
 
     def test_daily_throttle(self, tmp_path):
         base = self._cache(tmp_path, version=1)
         url = self._pack_path(tmp_path, _pack(9, [_term("soon")]))
-        assert su.check_and_update(base_dir=base, url=url, force=True)["status"] == "updated"
+        assert (
+            su.check_and_update(base_dir=base, url=url, force=True)["status"]
+            == "updated"
+        )
         # second call without force within a day → throttled, no update
         url2 = self._pack_path(tmp_path, _pack(10, [_term("never")]), name="p2.json")
         r = su.check_and_update(base_dir=base, url=url2)
         assert r["status"] == "up-to-date"
         assert su.load_cached_pack(base)["version"] == 9
         # force bypasses the throttle
-        assert su.check_and_update(base_dir=base, url=url2, force=True)["status"] == "updated"
+        assert (
+            su.check_and_update(base_dir=base, url=url2, force=True)["status"]
+            == "updated"
+        )
         assert su.load_cached_pack(base)["version"] == 10
 
     def test_never_raises(self, tmp_path):
@@ -134,36 +145,48 @@ class TestUpdateFlow:
 # Remote terms merge into the filter
 # ---------------------------------------------------------------------------
 
+
 class TestRemoteMerge:
     def test_load_remote_terms(self, tmp_path):
         base = tmp_path / "base"
         base.mkdir()
         pack = _pack(1, [_term("كلمة-مستوردة"), _term("imported-word")])
         (base / su.CACHE_FILENAME).write_text(
-            json.dumps(pack, ensure_ascii=False), encoding="utf-8")
+            json.dumps(pack, ensure_ascii=False), encoding="utf-8"
+        )
         terms = sf.load_remote_terms(str(base))
         assert len(terms) == 2
-        assert sf.normalize_text(terms[0]["term"]) == "كلمهمستورده" or True  # just ensure loaded
+        assert (
+            sf.normalize_text(terms[0]["term"]) == "كلمهمستورده" or True
+        )  # just ensure loaded
 
     def test_no_cache_returns_empty(self, tmp_path):
         assert sf.load_remote_terms(str(tmp_path)) == []
 
     def test_remote_term_is_blocked(self, tmp_path, monkeypatch):
         # Simulate a freshly downloaded term that is not in the built-in list
-        monkeypatch.setattr(sf, "load_remote_terms",
-                            lambda base_dir=None: [_term("كلمة-جديدة-محظورة")])
+        monkeypatch.setattr(
+            sf, "load_remote_terms", lambda base_dir=None: [_term("كلمة-جديدة-محظورة")]
+        )
         segs = [{"title": "x", "start_time": 0.0, "end_time": 5.0}]
-        transcript = [{"start": 0.0, "end": 5.0, "text": "هذا كلام فيه كلمة-جديدة-محظورة"}]
+        transcript = [
+            {"start": 0.0, "end": 5.0, "text": "هذا كلام فيه كلمة-جديدة-محظورة"}
+        ]
         kept, report = sf.analyze_segments(segs, transcript, mode="block")
         assert len(kept) == 0
         assert report["blocked"] == 1
 
     def test_remote_term_works_with_allowlist(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(sf, "load_remote_terms",
-                            lambda base_dir=None: [_term("كلمة-جديدة-محظورة")])
+        monkeypatch.setattr(
+            sf, "load_remote_terms", lambda base_dir=None: [_term("كلمة-جديدة-محظورة")]
+        )
         segs = [{"title": "x", "start_time": 0.0, "end_time": 5.0}]
         transcript = [{"start": 0.0, "end": 5.0, "text": "كلمة-جديدة-محظورة هنا"}]
-        with open(os.path.join(str(tmp_path), "safety_terms.json"), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(str(tmp_path), "safety_terms.json"), "w", encoding="utf-8"
+        ) as f:
             json.dump({"allow_terms": ["كلمة-جديدة-محظورة"]}, f, ensure_ascii=False)
-        kept, _ = sf.analyze_segments(segs, transcript, project_folder=str(tmp_path), mode="block")
+        kept, _ = sf.analyze_segments(
+            segs, transcript, project_folder=str(tmp_path), mode="block"
+        )
         assert len(kept) == 1  # allowlisted

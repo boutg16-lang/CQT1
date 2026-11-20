@@ -5,6 +5,7 @@ Files are processed only after their size/mtime remain stable. A SQLite ledger
 prevents duplicate runs and survives restarts. This worker never uploads or
 publishes; it creates local review-ready projects only.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,12 +31,16 @@ class WatchQueue:
             status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
             started_at REAL, finished_at REAL, return_code INTEGER, log_path TEXT,
             updated_at REAL NOT NULL)""")
-        self.connection.execute("UPDATE jobs SET status='interrupted', updated_at=? WHERE status='running' AND started_at < ?", (time.time(), time.time() - 21600))
+        self.connection.execute(
+            "UPDATE jobs SET status='interrupted', updated_at=? WHERE status='running' AND started_at < ?",
+            (time.time(), time.time() - 21600),
+        )
         self.connection.commit()
 
     def status(self, path: Path, stat: os.stat_result) -> str | None:
         row = self.connection.execute(
-            "SELECT size, mtime_ns, status FROM jobs WHERE path=?", (str(path.resolve()),)
+            "SELECT size, mtime_ns, status FROM jobs WHERE path=?",
+            (str(path.resolve()),),
         ).fetchone()
         if not row:
             return None
@@ -46,7 +51,8 @@ class WatchQueue:
     def claim(self, path: Path, stat: os.stat_result) -> bool:
         now = time.time()
         with self.connection:
-            cursor = self.connection.execute("""INSERT INTO jobs
+            cursor = self.connection.execute(
+                """INSERT INTO jobs
                 (path,size,mtime_ns,status,attempts,started_at,updated_at)
                 VALUES (?,?,?,'running',1,?,?)
                 ON CONFLICT(path) DO UPDATE SET size=excluded.size,
@@ -55,14 +61,24 @@ class WatchQueue:
                 updated_at=excluded.updated_at
                 WHERE jobs.status IN ('failed','interrupted') OR
                 jobs.size<>excluded.size OR jobs.mtime_ns<>excluded.mtime_ns""",
-                (str(path.resolve()), stat.st_size, stat.st_mtime_ns, now, now))
+                (str(path.resolve()), stat.st_size, stat.st_mtime_ns, now, now),
+            )
             return cursor.rowcount == 1
 
     def finish(self, path: Path, status: str, return_code: int, log_path: Path) -> None:
         with self.connection:
-            self.connection.execute("""UPDATE jobs SET status=?,finished_at=?,
+            self.connection.execute(
+                """UPDATE jobs SET status=?,finished_at=?,
                 return_code=?,log_path=?,updated_at=? WHERE path=?""",
-                (status, time.time(), return_code, str(log_path), time.time(), str(path.resolve())))
+                (
+                    status,
+                    time.time(),
+                    return_code,
+                    str(log_path),
+                    time.time(),
+                    str(path.resolve()),
+                ),
+            )
 
     def close(self) -> None:
         self.connection.close()
@@ -82,7 +98,10 @@ def is_stable(path: Path, settle_seconds: float) -> os.stat_result | None:
             return None
         time.sleep(min(1.0, max(0.1, settle_seconds / 4)))
         second = path.stat()
-        if first.st_size <= 0 or (first.st_size, first.st_mtime_ns) != (second.st_size, second.st_mtime_ns):
+        if first.st_size <= 0 or (first.st_size, first.st_mtime_ns) != (
+            second.st_size,
+            second.st_mtime_ns,
+        ):
             return None
         return second
     except OSError:
@@ -99,7 +118,9 @@ def resolve_runtime(args: argparse.Namespace) -> tuple[str, str, str]:
             profile = loaded if isinstance(loaded, dict) else {}
         except (OSError, json.JSONDecodeError):
             profile = {}
-    transcription = profile.get("transcription", {}) if isinstance(profile, dict) else {}
+    transcription = (
+        profile.get("transcription", {}) if isinstance(profile, dict) else {}
+    )
     if not isinstance(transcription, dict):
         transcription = {}
     device = args.device
@@ -128,13 +149,32 @@ def process_file(path: Path, args: argparse.Namespace, queue: WatchQueue) -> int
 
     logs = args.state_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in path.stem)[:80] or "video"
+    safe_stem = (
+        "".join(c if c.isalnum() or c in "-_" else "_" for c in path.stem)[:80]
+        or "video"
+    )
     log_path = logs / f"{safe_stem}-{stat.st_mtime_ns}.log"
     device, model, _tier = resolve_runtime(args)
-    command = [sys.executable, str(args.app), "--local-video", str(path.resolve()),
-               "--autopilot", "--viral", "--skip-prompts", "--platform", args.platform,
-               "--prefer-hardware-acceleration", "--transcription-device", device,
-               "--model", model, "--safety-mode", "block", "--risk-gate", "block"]
+    command = [
+        sys.executable,
+        str(args.app),
+        "--local-video",
+        str(path.resolve()),
+        "--autopilot",
+        "--viral",
+        "--skip-prompts",
+        "--platform",
+        args.platform,
+        "--prefer-hardware-acceleration",
+        "--transcription-device",
+        device,
+        "--model",
+        model,
+        "--safety-mode",
+        "block",
+        "--risk-gate",
+        "block",
+    ]
     if args.segments:
         command.extend(["--segments", str(args.segments)])
     env = os.environ.copy()
@@ -145,10 +185,15 @@ def process_file(path: Path, args: argparse.Namespace, queue: WatchQueue) -> int
         with log_path.open("w", encoding="utf-8", errors="replace") as log:
             log.write("COMMAND: " + json.dumps(command, ensure_ascii=False) + "\n\n")
             log.flush()
-            result = subprocess.run(command, cwd=str(args.app.parent), env=env,
-                                    stdout=log, stderr=subprocess.STDOUT,
-                                    timeout=args.job_timeout if args.job_timeout > 0 else None,
-                                    check=False)
+            result = subprocess.run(
+                command,
+                cwd=str(args.app.parent),
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=args.job_timeout if args.job_timeout > 0 else None,
+                check=False,
+            )
         code = int(result.returncode)
         queue.finish(path, "success" if code == 0 else "failed", code, log_path)
         return code
@@ -165,21 +210,44 @@ def process_file(path: Path, args: argparse.Namespace, queue: WatchQueue) -> int
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="OUSSAMA Cutter unattended watch-folder worker")
-    parser.add_argument("--input", type=Path, required=True, help="Folder receiving source videos")
+    parser = argparse.ArgumentParser(
+        description="OUSSAMA Cutter unattended watch-folder worker"
+    )
+    parser.add_argument(
+        "--input", type=Path, required=True, help="Folder receiving source videos"
+    )
     parser.add_argument("--state-dir", type=Path, default=Path(".watch-folder"))
     parser.add_argument("--app", type=Path, default=Path("main_improved.py"))
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--settle-seconds", type=float, default=15.0)
     parser.add_argument("--recursive", action="store_true")
     parser.add_argument("--once", action="store_true", help="Scan once and exit")
-    parser.add_argument("--platform", choices=["yt_shorts", "tiktok", "reels", "yt_standard"], default="yt_shorts")
+    parser.add_argument(
+        "--platform",
+        choices=["yt_shorts", "tiktok", "reels", "yt_standard"],
+        default="yt_shorts",
+    )
     parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
-    parser.add_argument("--model", default="auto", help="Whisper model, or auto to use the detected GPU profile")
-    parser.add_argument("--gpu-profile", type=Path, default=Path("gpu_profile.json"), help="Hardware profile JSON used by auto device/model selection")
+    parser.add_argument(
+        "--model",
+        default="auto",
+        help="Whisper model, or auto to use the detected GPU profile",
+    )
+    parser.add_argument(
+        "--gpu-profile",
+        type=Path,
+        default=Path("gpu_profile.json"),
+        help="Hardware profile JSON used by auto device/model selection",
+    )
     parser.add_argument("--segments", type=int, default=10)
-    parser.add_argument("--job-timeout", type=int, default=0, help="Seconds; 0 means unlimited")
-    parser.add_argument("--retry-failed", action="store_true", help="Retry failed jobs on subsequent scans")
+    parser.add_argument(
+        "--job-timeout", type=int, default=0, help="Seconds; 0 means unlimited"
+    )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry failed jobs on subsequent scans",
+    )
     return parser
 
 
@@ -189,18 +257,28 @@ def main(argv: list[str] | None = None) -> int:
     args.state_dir = args.state_dir.expanduser().resolve()
     args.app = args.app.expanduser().resolve()
     if not args.input.is_dir():
-        print(f"[watch-folder] Input folder does not exist: {args.input}", file=sys.stderr)
+        print(
+            f"[watch-folder] Input folder does not exist: {args.input}", file=sys.stderr
+        )
         return 2
     if not args.app.is_file():
-        print(f"[watch-folder] Application entry point not found: {args.app}", file=sys.stderr)
+        print(
+            f"[watch-folder] Application entry point not found: {args.app}",
+            file=sys.stderr,
+        )
         return 2
     if args.poll_seconds < 1 or args.settle_seconds < 0:
-        print("[watch-folder] poll-seconds must be >=1 and settle-seconds >=0", file=sys.stderr)
+        print(
+            "[watch-folder] poll-seconds must be >=1 and settle-seconds >=0",
+            file=sys.stderr,
+        )
         return 2
     args.state_dir.mkdir(parents=True, exist_ok=True)
     queue = WatchQueue(args.state_dir / "jobs.sqlite3")
     device, model, tier = resolve_runtime(args)
-    print(f"[watch-folder] Watching {args.input} | device={device} | model={model} | GPU tier={tier} | platform={args.platform}")
+    print(
+        f"[watch-folder] Watching {args.input} | device={device} | model={model} | GPU tier={tier} | platform={args.platform}"
+    )
     try:
         while True:
             for path in sorted(discover(args.input, args.recursive)):
@@ -213,12 +291,16 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 result = process_file(path, args, queue)
                 if result is not None:
-                    print(f"[watch-folder] {path.name}: {'completed' if result == 0 else 'failed'} (exit {result})")
+                    print(
+                        f"[watch-folder] {path.name}: {'completed' if result == 0 else 'failed'} (exit {result})"
+                    )
             if args.once:
                 return 0
             time.sleep(args.poll_seconds)
     except KeyboardInterrupt:
-        print("\n[watch-folder] Stopped. Queue state is saved; completed jobs will not repeat.")
+        print(
+            "\n[watch-folder] Stopped. Queue state is saved; completed jobs will not repeat."
+        )
         return 0
     finally:
         queue.close()

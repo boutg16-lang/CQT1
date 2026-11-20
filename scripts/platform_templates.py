@@ -67,8 +67,13 @@ def list_templates():
     return {k: v["name"] for k, v in TEMPLATES.items()}
 
 
-def resolve_durations(template_name, min_duration=None, max_duration=None,
-                      fallback_min=15, fallback_max=90):
+def resolve_durations(
+    template_name,
+    min_duration=None,
+    max_duration=None,
+    fallback_min=15,
+    fallback_max=90,
+):
     """Apply template defaults, letting explicit user values win.
 
     Returns (min_duration, max_duration, template).
@@ -93,8 +98,12 @@ def describe(template_name):
     if tpl is None:
         return "unknown platform template '{}'".format(template_name)
     return "{} ({} · {}s–{}s · {})".format(
-        tpl["name"], tpl["aspect"], tpl["min_duration"],
-        tpl["max_duration"], tpl["recommended_resolution"])
+        tpl["name"],
+        tpl["aspect"],
+        tpl["min_duration"],
+        tpl["max_duration"],
+        tpl["recommended_resolution"],
+    )
 
 
 def save_template_choice(project_folder, template_name):
@@ -110,8 +119,10 @@ def save_template_choice(project_folder, template_name):
         data["platform_template"] = template_name
         if get_template(template_name):
             data["platform_template_info"] = {
-                k: v for k, v in get_template(template_name).items()
-                if k != "caption_note"}
+                k: v
+                for k, v in get_template(template_name).items()
+                if k != "caption_note"
+            }
         directory = os.path.dirname(path)
         fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
         try:
@@ -133,11 +144,15 @@ def save_template_choice(project_folder, template_name):
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="ViralCutter platform templates.")
     parser.add_argument("--list", action="store_true", help="list templates")
     parser.add_argument("--show", default=None, help="show one template")
-    parser.add_argument("--resolve", default=None,
-                        help="resolve durations for a template (with --min/--max)")
+    parser.add_argument(
+        "--resolve",
+        default=None,
+        help="resolve durations for a template (with --min/--max)",
+    )
     parser.add_argument("--min", type=int, default=None)
     parser.add_argument("--max", type=int, default=None)
     args = parser.parse_args()
@@ -155,8 +170,11 @@ def main():
         return 0
     if args.resolve:
         min_d, max_d, tpl = resolve_durations(args.resolve, args.min, args.max)
-        print("min={} max={} template={}".format(
-            min_d, max_d, tpl["name"] if tpl else None))
+        print(
+            "min={} max={} template={}".format(
+                min_d, max_d, tpl["name"] if tpl else None
+            )
+        )
         return 0
     parser.print_help()
     return 0
