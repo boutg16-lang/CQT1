@@ -169,6 +169,9 @@ class TestAVSyncFix:
             ),
             encoding="utf-8",
         ).read()
-        assert '"-vsync", "cfr"' in src
-        assert '"-shortest"' in src
-        assert '"-af", "aresample=async=1000:first_pts=0"' in src
+        # The ffmpeg command is a multi-line list literal, so collapse
+        # whitespace before matching: a reformat must not break this test.
+        flat = " ".join(src.split())
+        assert '"-vsync", "cfr"' in flat
+        assert '"-shortest"' in flat
+        assert '"-af", "aresample=async=1000:first_pts=0"' in flat
