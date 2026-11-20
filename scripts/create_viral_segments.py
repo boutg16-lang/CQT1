@@ -33,7 +33,10 @@ from scripts.segment_fingerprints import (
 # (monolith split, step 1). Re-exported here so existing import paths
 # (``from scripts.create_viral_segments import clean_json_response``)
 # keep working unchanged.
-from scripts.segment_json import _extract_segments_json, clean_json_response  # noqa: F401
+from scripts.segment_json import (  # noqa: F401
+    _extract_segments_json,
+    clean_json_response,
+)
 from scripts.segment_titles import (
     _ARABIC_ORTHOGRAPHY_TABLE,  # noqa: F401  (re-exported for backward compatibility)
     _choose_recommended_title,
