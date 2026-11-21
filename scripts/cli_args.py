@@ -278,7 +278,7 @@ def build_parser():
         "--safety-fail-closed",
         choices=["on", "off"],
         default="on",
-        help="Refuse to continue when an enabled safety check errors or contextual review is unavailable in block/censor mode (default: on)",
+        help="Refuse to continue when an enabled safety check errors in block/censor mode (default: on). An unavailable AI review backend only warns and continues with the blocklist filter.",
     )
     parser.add_argument(
         "--safety-autoupdate",

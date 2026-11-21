@@ -646,15 +646,18 @@ def run_safety_stage(
             debug(
                 "AI safety review unavailable for backend '{}'.".format(review_backend)
             )
-            if getattr(
-                args, "safety_fail_closed", "on"
-            ) == "on" and args.safety_mode in ("block", "censor"):
-                print(
-                    i18n(
-                        "AI safety review failed; fail-closed policy refuses to continue."
-                    )
-                )
-                sys.exit(1)
+            # Option B (warn-and-continue): no AI-capable backend is available
+            # (e.g. a default local-only run resolves to "local"), so the AI
+            # second pass is skipped — but the blocklist first pass above has
+            # already run and the run continues. Only a real review *error*
+            # (the except branch above) still fails closed.
+            print(
+                i18n(
+                    "Warning: AI safety review unavailable for backend '{}'; "
+                    "continuing without the AI second pass "
+                    "(blocklist safety filter still applied)."
+                ).format(review_backend)
+            )
 
     if args.safety_mode in ("block", "censor") and not viral_segments.get("segments"):
         print(
