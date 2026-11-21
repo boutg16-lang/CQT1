@@ -1,0 +1,76 @@
+# OUSSAMA Cutter — Docker build-context exclusions.
+#
+# The Dockerfile's `COPY . .` would otherwise copy the whole working tree
+# into the image, including version control, tests, docs and — worst case —
+# local secret files that happen to exist in the builder's tree.
+#
+# Deliberately NOT ignored (the build needs them):
+#   - requirements*.txt — the Dockerfile COPYs requirements.txt, and
+#     setup.py lists requirements.txt, requirements-transcribe.txt,
+#     requirements-transcribe-fallback.txt, requirements-upload.txt and
+#     requirements-dubbing.txt as RUNTIME_ASSETS.
+#   - .env.example — the documented template (cf. .gitignore's !.env.example).
+
+# Version control and CI
+.git/
+.github/
+
+# Tests and documentation (not needed at runtime)
+tests/
+docs/
+
+# Android app tree (Gradle). The container runs the Python WebUI only;
+# nothing in the Dockerfile or the Python code imports from app/ —
+# main_improved.py's `import app` resolves to webui/app.py (webui/ is
+# inserted into sys.path first) and app/ has no __init__.py.
+app/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tmp-pytest/
+.gradio/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local credentials — never bake these into an image.
+.env
+.env.*
+!.env.example
+client_secrets.json
+client_secrets*.json
+token.json
+yt_token.json
+api_config.json
+api_config.local.json
+api_config.secure.json
+*.pem
+*.keystore
+*.jks
+local.properties
+.viralcutter/
+webui_settings.json
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs and runtime / output directories. The Dockerfile mkdirs VIRALS/
+# and models/ itself and docker-compose mounts them from the host, so
+# the image needs nothing from them; the rest are app-created outputs.
+*.log
+VIRALS/
+models/
+output/
+tmp/
+.polish_tmp/
+final_polished/
+updates/
