@@ -13,10 +13,44 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import psutil
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import transcription_health as health
+
+# Env keys apply_profile() writes via os.environ.setdefault. They must be
+# snapshotted explicitly: monkeypatch.delenv(key, raising=False) records
+# NOTHING when the key is absent (delitem only appends when the key exists),
+# so a setdefault write afterwards is invisible to monkeypatch and leaks
+# into every later test in the process.
+_PROFILE_ENV_KEYS = (
+    "VIRALCUTTER_TRANSCRIPTION_BACKEND",
+    "VIRALCUTTER_TRANSCRIPTION_FORCE_CPU",
+    "VIRALCUTTER_TRANSCRIBE_CHUNK_SECONDS",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_profile_env():
+    """Restore the profile env keys after each test in this file.
+
+    apply_profile() writes the real os.environ via setdefault. Without this,
+    test_apply_profile_sets_defaults_and_user_env_wins leaks
+    VIRALCUTTER_TRANSCRIPTION_BACKEND=faster-whisper (plus the other two
+    keys) into the process, and any later test calling transcribe() takes the
+    faster-whisper path and fails where faster-whisper is not installed
+    (test_transcribe_vad_fallback, test_selection_anchoring). The leak only
+    showed in non-default orders because this file runs after those tests
+    alphabetically.
+    """
+    original = {key: os.environ.get(key) for key in _PROFILE_ENV_KEYS}
+    yield
+    for key, value in original.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 
 def _profile(tmp_path, **overrides):
@@ -100,3 +134,18 @@ def test_ensure_ready_publishes_a_health_profile(tmp_path, monkeypatch):
     assert data["backend"] == "whisperx"
     assert data["force_cpu"] is False
     assert 60 <= data["chunk_seconds"] <= 900
+
+
+def test_apply_profile_does_not_leak_env_into_later_tests():
+    """Regression: the profile env keys must not survive apply_profile().
+
+    This test deliberately runs after test_apply_profile_... in this file
+    (definition order): before the fix it failed because
+    VIRALCUTTER_TRANSCRIPTION_BACKEND=faster-whisper (and the other two
+    keys) leaked via os.environ.setdefault, which monkeypatch cannot undo.
+    A leak flips transcribe() to the faster-whisper backend for the rest of
+    the process, breaking test_transcribe_vad_fallback and
+    test_selection_anchoring whenever this file runs first.
+    """
+    for key in _PROFILE_ENV_KEYS:
+        assert key not in os.environ
