@@ -8,9 +8,10 @@ pytest-cov>=7.0
 # ruff version used by local `make lint`. Do NOT widen this: `ruff check`
 # and `ruff format --check` drift between versions, and CI must test the
 # same ruff developers run locally.
-# NOTE: `ruff format --check .` is NOT yet a CI step — on main it would
-# fail on 332/498 files (verified with ruff 0.16.8). Add the format check
-# to ci.yml only after the one-off `ruff format` reformat lands.
+# NOTE: the one-off `ruff format` reformat landed (PR #115) and
+# `ruff format --check .` is clean on main (565 files, verified with
+# ruff 0.16.8), so adding the format check to ci.yml is now unblocked.
+# (ci.yml itself is edited by the owner via the web UI.)
 ruff==0.16.8
 pip-audit>=2.9
 pip-licenses>=5.0
