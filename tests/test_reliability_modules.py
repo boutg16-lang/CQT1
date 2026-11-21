@@ -570,6 +570,11 @@ def test_rich_lifecycle_metadata_records_failure_and_resume(tmp_path):
 
 
 def test_rich_lifecycle_metadata_records_skip(tmp_path):
+    # A skipped resume needs the stage's outputs present: a bare "done"
+    # marker with no cuts/*.mp4 is stale and must re-run instead.
+    cuts = tmp_path / "cuts"
+    cuts.mkdir()
+    (cuts / "000_Test_clip_original_scale.mp4").write_bytes(b"fake-media-bytes")
     checkpoint.mark_done(str(tmp_path), "cut")
     with checkpoint.StageTracker(str(tmp_path)) as st:
         assert st.run("cut", lambda: "must-not-run") is None
