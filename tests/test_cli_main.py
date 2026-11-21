@@ -323,28 +323,121 @@ def test_safety_stage_unchanged_filter_does_not_resave(cli, tmp_path, monkeypatc
     assert out is segs
 
 
-def test_safety_stage_fails_closed_when_contextual_review_is_unavailable(
-    cli, tmp_path, monkeypatch
+def test_safety_stage_warns_and_continues_when_contextual_review_is_unavailable(
+    cli, tmp_path, monkeypatch, capsys
 ):
+    """Option B: an *unavailable* AI backend warns and continues (block mode,
+    fail-closed on) instead of exiting — a default local-only run can finish.
+    The blocklist first pass has already run; only the AI second pass is
+    skipped. Real review *errors* still fail closed (see the incomplete-review
+    and raises tests below)."""
     segs = _segments("clean transcript")
     monkeypatch.setattr(
         cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
     )
-    with pytest.raises(SystemExit) as exc:
-        cli.run_safety_stage(
-            segs,
-            project_folder=str(tmp_path),
-            args=_safety_args(safety_ai="on"),
-            ai_backend="local",
-            api_key=None,
-            safety_backend="local",
-            workflow_choice="1",
-        )
-    assert exc.value.code == 1
+    result = cli.run_safety_stage(
+        segs,
+        project_folder=str(tmp_path),
+        args=_safety_args(safety_ai="on", safety_fail_closed="on"),
+        ai_backend="local",
+        api_key=None,
+        safety_backend="local",
+        workflow_choice="1",
+    )
+    assert result is segs
+    out = capsys.readouterr().out
+    assert "AI safety review unavailable for backend 'local'" in out
+    assert "continuing without the AI second pass" in out
+    assert "fail-closed policy refuses to continue" not in out
     report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
     assert report["ai_review_requested"] is True
     assert report["ai_review_status"] == "unavailable"
     assert report["ai_reviewed_clips"][0]["index"] == 0
+
+
+def test_safety_stage_unavailable_review_keeps_blocklist_first_pass(
+    cli, tmp_path, monkeypatch, capsys
+):
+    """When the AI backend is unavailable, the blocklist first pass still
+    runs and its filtered result is what continues down the pipeline."""
+    filtered = {"segments": [{"title": "ok", "text": "fine"}]}
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda *a, **k: filtered
+    )
+    saved = []
+    monkeypatch.setattr(
+        cli.save_json, "save_viral_segments", lambda data, **k: saved.append(data)
+    )
+    result = cli.run_safety_stage(
+        _segments("bad word"),
+        project_folder=str(tmp_path),
+        args=_safety_args(safety_ai="on", safety_fail_closed="on"),
+        ai_backend="local",
+        api_key=None,
+        safety_backend="local",
+        workflow_choice="1",
+    )
+    assert result is filtered
+    assert saved == [filtered]  # filtered result persisted
+    assert "continuing without the AI second pass" in capsys.readouterr().out
+    report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
+    assert report["ai_review_status"] == "unavailable"
+
+
+def test_safety_stage_unavailable_review_via_default_local_backend(
+    cli, tmp_path, monkeypatch, capsys
+):
+    """The exact default local-only trigger: --safety-backend auto with
+    ai_backend 'openai' and no API keys resolves to ('local', None), so the
+    run warns and continues instead of exiting."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_MODERATION_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    segs = _segments("clean transcript")
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
+    )
+    result = cli.run_safety_stage(
+        segs,
+        project_folder=str(tmp_path),
+        args=_safety_args(safety_ai="on", safety_fail_closed="on"),
+        ai_backend="openai",
+        api_key=None,
+        safety_backend="auto",
+        workflow_choice="1",
+    )
+    assert result is segs
+    assert "AI safety review unavailable for backend 'local'" in capsys.readouterr().out
+    report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
+    assert report["ai_review_backend"] == "local"
+    assert report["ai_review_status"] == "unavailable"
+
+
+def test_safety_stage_fails_closed_when_ai_review_raises(cli, tmp_path, monkeypatch):
+    """Real AI review *errors* still fail closed under option B: only the
+    'unavailable' branch warns and continues."""
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("moderation API down")
+
+    segs = _segments("clean transcript")
+    monkeypatch.setattr(
+        cli.safety_filter, "apply_safety_filter", lambda data, **_kwargs: data
+    )
+    monkeypatch.setattr(cli.safety_ai, "review_segments", boom)
+    with pytest.raises(SystemExit) as exc:
+        cli.run_safety_stage(
+            segs,
+            project_folder=str(tmp_path),
+            args=_safety_args(safety_ai="on", safety_fail_closed="on"),
+            ai_backend="gemini",
+            api_key=None,
+            safety_backend="gemini",
+            workflow_choice="1",
+        )
+    assert exc.value.code == 1
+    report = json.loads((tmp_path / "safety_report.json").read_text(encoding="utf-8"))
+    assert report["ai_review_status"] == "failed"
 
 
 def test_safety_stage_allows_unavailable_review_in_flag_mode(
