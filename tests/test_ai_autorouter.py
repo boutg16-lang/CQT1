@@ -191,8 +191,19 @@ def test_detect_does_not_probe_the_same_url_twice(monkeypatch):
     monkeypatch.setenv("VIRALCUTTER_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     monkeypatch.setattr(ai_autorouter.openai_compat, "list_models", fake_models)
     chain = ai_autorouter.detect({"openai": {"base_url": "http://127.0.0.1:11434/v1"}})
-    assert len(chain) == 1
+    # The URL must be probed exactly once, and yield exactly one candidate
+    # for it — however many other providers (e.g. g4f, when installed) also
+    # contribute candidates to the chain.
     assert calls.count("http://127.0.0.1:11434/v1") == 1
+    assert (
+        sum(
+            1
+            for candidate in chain
+            if candidate.backend == "openai"
+            and candidate.base_url == "http://127.0.0.1:11434/v1"
+        )
+        == 1
+    )
 
 
 def test_configured_embedding_model_is_never_used_for_chat(monkeypatch):
