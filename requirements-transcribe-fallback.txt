@@ -9,4 +9,8 @@
 # CTranslate2 version first, then install this file. If GPU libraries are not
 # available, the backend automatically uses CPU when device=auto.
 faster-whisper>=1.2.1,<2
+# PyAV 19.0.0 removed the `metadata_errors` argument to av.open() that
+# faster-whisper 1.2.1 calls in decode_audio; a fresh install resolving to
+# av>=19 breaks the fallback with TypeError. Verified working: 15.1.0, 18.1.0.
+av>=11,<19
 numpy<2

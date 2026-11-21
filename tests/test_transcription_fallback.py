@@ -49,6 +49,37 @@ def test_write_outputs_creates_pipeline_compatible_files(tmp_path):
     assert json.loads(data.read_text(encoding="utf-8"))["backend"] == "faster-whisper"
 
 
+def test_write_outputs_tsv_times_are_milliseconds(tmp_path):
+    """Regression: the WhisperX TSV contract is integer milliseconds.
+
+    Downstream parsers (create_viral_segments._parse_tsv_transcript and
+    safety_filter.load_transcript) divide TSV times by 1000. Writing seconds
+    made a 17.62s transcript read back as 0.01762s, collapsing every clip
+    to a ~0.1s frame while the pipeline still reported success.
+    """
+    from scripts import create_viral_segments
+
+    result = {
+        "segments": [
+            {"start": 0.0, "end": 17.62, "text": "Welcome to this test video."},
+            {"start": 5.52, "end": 13.74, "text": "First, choose the best moments."},
+        ],
+        "language": "en",
+        "backend": "faster-whisper",
+    }
+    srt = tmp_path / "input.srt"
+    tsv = tmp_path / "input.tsv"
+    data = tmp_path / "input.json"
+    transcription_fallback.write_outputs(result, str(srt), str(tsv), str(data))
+    raw = tsv.read_text(encoding="utf-8")
+    assert "0\t17620\tWelcome to this test video." in raw
+    assert "5520\t13740\tFirst, choose the best moments." in raw
+    assert create_viral_segments._parse_tsv_transcript(str(tsv)) == [
+        {"start": 0.0, "end": 17.62, "text": "Welcome to this test video."},
+        {"start": 5.52, "end": 13.74, "text": "First, choose the best moments."},
+    ]
+
+
 def test_transcribe_uses_faster_whisper_when_primary_stack_is_missing(
     monkeypatch, tmp_path
 ):
