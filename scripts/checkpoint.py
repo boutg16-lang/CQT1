@@ -16,6 +16,129 @@ import time
 
 CHECKPOINT_FILENAME = "checkpoint.json"
 
+# Expected output artifacts per stage, used to validate a checkpointed
+# "done" marker on resume. A stage marked done whose outputs are missing
+# (or empty/stale) must re-run instead of being skipped: a deleted
+# final/ + burned_sub/ + subs_ass/ previously let a re-run claim a
+# successful delivery with no final clip on disk.
+#
+# Validation applies to markers loaded from a previous run. A stage
+# completed by the current StageTracker instance just ran in this
+# process, so its marker is trusted without re-validation.
+#
+# Stages without an entry keep today's behaviour (marker only):
+# transcribe is validated separately by main_improved (transcript
+# repair/validation, which needs the transcript basename the tracker
+# does not know), and download / segments / polish / done are not run
+# through StageTracker.
+_VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv")
+_IGNORED_VIDEO_PREFIXES = ("temp_", "preview_")
+
+
+def _nonempty_media_files(folder):
+    """Non-empty rendered video files in folder (temp/preview ignored)."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    found = []
+    for name in names:
+        if not name.lower().endswith(_VIDEO_EXTENSIONS):
+            continue
+        if name.lower().startswith(_IGNORED_VIDEO_PREFIXES):
+            continue
+        path = os.path.join(folder, name)
+        try:
+            if os.path.isfile(path) and os.path.getsize(path) > 0:
+                found.append(path)
+        except OSError:
+            continue
+    return sorted(found)
+
+
+def _load_json_report(path):
+    """Parse a JSON report file; None when missing, empty or invalid."""
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            return None
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _report_clips_current(report, report_path):
+    """True when every clip the report measured still exists unchanged.
+
+    Follows the same mtime rule as audio_qc.ensure_file_report: a clip
+    rendered after the report was written makes the report stale. A
+    report with no clips is current when it parses (that is what
+    analyze_project writes when nothing was rendered).
+    """
+    clips = report.get("clips")
+    if not isinstance(clips, list):
+        return False
+    try:
+        report_mtime = os.path.getmtime(report_path)
+    except OSError:
+        return False
+    for clip in clips:
+        if not isinstance(clip, dict):
+            return False
+        clip_path = clip.get("path")
+        if not clip_path:
+            return False
+        try:
+            if not os.path.isfile(clip_path) or os.path.getsize(clip_path) == 0:
+                return False
+            if os.path.getmtime(clip_path) > report_mtime:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def stage_artifacts_valid(project_folder, stage):
+    """True when a checkpointed "done" stage still has its outputs.
+
+    Returns True for stages with no artifact rule (their markers are
+    trusted as today). Never raises: an unreadable project is treated
+    as stale so the stage re-runs instead of being skipped.
+    """
+    _validate_stage(stage)
+    try:
+        if stage == "cut":
+            return bool(_nonempty_media_files(os.path.join(project_folder, "cuts")))
+        if stage == "edit":
+            return bool(_nonempty_media_files(os.path.join(project_folder, "final")))
+        if stage == "subtitles":
+            return bool(
+                _nonempty_media_files(os.path.join(project_folder, "burned_sub"))
+            )
+        if stage == "audio_qc":
+            report_path = os.path.join(project_folder, "audio_qc_report.json")
+            report = _load_json_report(report_path)
+            if report is None:
+                return False
+            return _report_clips_current(report, report_path)
+        if stage == "scorecard":
+            return (
+                _load_json_report(os.path.join(project_folder, "risk_scorecard.json"))
+                is not None
+            )
+        if stage == "music_check":
+            return (
+                _load_json_report(
+                    os.path.join(project_folder, "music_fingerprint.json")
+                )
+                is not None
+            )
+        return True
+    except Exception:
+        return False
+
+
 # Serialises read-modify-write cycles across threads. Two concurrent writers
 # (e.g. the WebUI thread pool and a pipeline worker) otherwise load the same
 # state and the second save clobbers the first one's stages.
@@ -256,9 +379,25 @@ class StageTracker:
         if not self.enabled:
             return fn(*args, **kwargs)
         if not force and is_done(self.project_folder, stage):
-            print("[checkpoint] skipping completed stage '{}'".format(stage))
-            self._skipped.append(stage)
-            return None
+            if stage in self._completed_this_run:
+                # It ran (and produced its outputs) in this process, so
+                # the marker is trusted without re-validating: only
+                # markers loaded from a previous run are validated below.
+                print("[checkpoint] skipping completed stage '{}'".format(stage))
+                self._skipped.append(stage)
+                return None
+            if not stage_artifacts_valid(self.project_folder, stage):
+                # A stale marker must not skip the stage: its outputs were
+                # deleted (or never written). Re-run instead of claiming
+                # success with nothing deliverable on disk.
+                print(
+                    "[checkpoint] stage '{}' is marked done but its expected "
+                    "outputs are missing or stale; re-running".format(stage)
+                )
+            else:
+                print("[checkpoint] skipping completed stage '{}'".format(stage))
+                self._skipped.append(stage)
+                return None
         mark_started(self.project_folder, stage)
         try:
             result = fn(*args, **kwargs)
