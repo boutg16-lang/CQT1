@@ -56,11 +56,11 @@ goto FAILED
 echo [1/6] uv is ready.
 
 echo.
-echo [2/6] Preparing supported Python 3.10-3.12 virtual environment...
+echo [2/6] Preparing supported Python 3.11-3.12 virtual environment...
 if not exist ".venv\Scripts\python.exe" goto CREATE_VENV
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows_installer_preflight.ps1" -PythonPath "%CD%\.venv\Scripts\python.exe"
 if errorlevel 1 goto ENVIRONMENT_IN_USE
-".venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,12) else 1)"
+".venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if (3,11) <= sys.version_info[:2] <= (3,12) else 1)"
 if not errorlevel 1 goto VENV_READY
 rmdir /s /q ".venv"
 :CREATE_VENV
@@ -265,7 +265,7 @@ goto FAILED
 echo [ERROR] Could not create a Python 3.12 virtual environment.
 goto FAILED
 :CORE_FAILED
-echo [ERROR] Core dependencies failed. Check free space, network, and supported Python 3.10-3.12.
+echo [ERROR] Core dependencies failed. Check free space, network, and supported Python 3.11-3.12.
 echo [INFO] If an Access is denied error names a .pyd or .dll file, close OUSSAMA Cutter and all Python processes using this .venv, then rerun setup.
 echo [INFO] If the file remains locked after closing those processes, restart Windows and retry; check Windows Security if the error persists.
 goto FAILED

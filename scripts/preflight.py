@@ -54,8 +54,8 @@ logger = logging.getLogger(__name__)
 OK, WARN, FAIL = "ok", "warn", "fail"
 ICONS = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
 
-MIN_PYTHON = (3, 10)
-MIN_PYTHON_RECOMMENDED = (3, 10)
+MIN_PYTHON = (3, 11)
+MIN_PYTHON_RECOMMENDED = (3, 11)
 # The project pins NumPy <2 for WhisperX/pyannote compatibility. NumPy 1.26
 # wheels support Python through 3.12; fail early on 3.13+ instead of letting
 # pip attempt a source build that requires MSVC.
@@ -328,7 +328,7 @@ def check_python():
             ),
         }
     status = OK if v >= MIN_PYTHON_RECOMMENDED else WARN
-    note = "recommended 3.10/3.11" if status == WARN else ""
+    note = "recommended 3.11/3.12" if status == WARN else ""
     return {
         "name": "Python",
         "status": status,

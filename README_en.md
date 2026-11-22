@@ -74,7 +74,7 @@ To run OUSSAMA Cutter on a fresh computer, you need to install the following cor
    - Run the installer and check the **"Desktop development with C++"** box.
    - Ensure *Windows 10/11 SDK* and *MSVC v143 - VS 2022 C++* are checked on the right panel, then click install. Restart your PC if prompted.
 
-2. **Python (3.10.x or 3.11.x recommended)**
+2. **Python (3.11.x or 3.12.x recommended)**
    - Download from [python.org/downloads](https://www.python.org/downloads/).
    - ⚠️ **VERY IMPORTANT:** On the very first setup screen, mark the checkbox **"Add Python to PATH"** at the bottom before clicking install.
 
