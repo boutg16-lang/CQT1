@@ -1,7 +1,7 @@
 {
-  "version": 8,
-  "updated": "2026-11-18",
-  "reviewed_at": "2026-10-25",
+  "version": 9,
+  "updated": "2026-11-22",
+  "reviewed_at": "2026-11-22",
   "source": "ViralCutter built-in blocklist",
   "terms": [
     {
@@ -185,24 +185,6 @@
       "category": "profanity"
     },
     {
-      "term": "زاني",
-      "lang": "ar",
-      "severity": "high",
-      "category": "profanity"
-    },
-    {
-      "term": "قحبة",
-      "lang": "ar",
-      "severity": "high",
-      "category": "profanity"
-    },
-    {
-      "term": "منيوك",
-      "lang": "ar",
-      "severity": "high",
-      "category": "profanity"
-    },
-    {
       "term": "نيك",
       "lang": "ar",
       "severity": "high",
@@ -210,12 +192,6 @@
     },
     {
       "term": "زبي",
-      "lang": "ar",
-      "severity": "high",
-      "category": "profanity"
-    },
-    {
-      "term": "قحاب",
       "lang": "ar",
       "severity": "high",
       "category": "profanity"
@@ -255,12 +231,6 @@
       "lang": "ar",
       "severity": "medium",
       "category": "harassment"
-    },
-    {
-      "term": "ابن الزنا",
-      "lang": "ar",
-      "severity": "high",
-      "category": "profanity"
     },
     {
       "term": "ابن الحرام",
@@ -312,18 +282,6 @@
     },
     {
       "term": "اذبحهم",
-      "lang": "ar",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
-      "term": "اذبحوهم",
-      "lang": "ar",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
-      "term": "اقتلوهم",
       "lang": "ar",
       "severity": "high",
       "category": "violence_threat"
@@ -384,12 +342,6 @@
     },
     {
       "term": "موتوا",
-      "lang": "ar",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
-      "term": "الموت لهم",
       "lang": "ar",
       "severity": "high",
       "category": "violence_threat"
@@ -485,34 +437,10 @@
       "category": "hate_slur"
     },
     {
-      "term": "subhuman",
-      "lang": "en",
-      "severity": "high",
-      "category": "hate_dehumanize"
-    },
-    {
       "term": "sub-human",
       "lang": "en",
       "severity": "high",
       "category": "hate_dehumanize"
-    },
-    {
-      "term": "vermin",
-      "lang": "en",
-      "severity": "low",
-      "category": "hate_dehumanize"
-    },
-    {
-      "term": "cockroaches",
-      "lang": "en",
-      "severity": "low",
-      "category": "hate_dehumanize"
-    },
-    {
-      "term": "kill them all",
-      "lang": "en",
-      "severity": "high",
-      "category": "violence_threat"
     },
     {
       "term": "kill all",
@@ -677,12 +605,6 @@
       "category": "violence_threat"
     },
     {
-      "term": "morte aos",
-      "lang": "pt",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
       "term": "vou te matar",
       "lang": "pt",
       "severity": "high",
@@ -737,12 +659,6 @@
       "category": "violence_threat"
     },
     {
-      "term": "mort aux",
-      "lang": "fr",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
       "term": "je vais te tuer",
       "lang": "fr",
       "severity": "high",
@@ -753,12 +669,6 @@
       "lang": "es",
       "severity": "high",
       "category": "hate_slur"
-    },
-    {
-      "term": "puta",
-      "lang": "es",
-      "severity": "high",
-      "category": "profanity"
     },
     {
       "term": "hijo de puta",
@@ -774,12 +684,6 @@
     },
     {
       "term": "mátalos",
-      "lang": "es",
-      "severity": "high",
-      "category": "violence_threat"
-    },
-    {
-      "term": "muerte a los",
       "lang": "es",
       "severity": "high",
       "category": "violence_threat"
@@ -831,12 +735,6 @@
       "lang": "ar",
       "severity": "high",
       "category": "hate_dehumanize"
-    },
-    {
-      "term": "نجس",
-      "lang": "ar",
-      "severity": "medium",
-      "category": "harassment"
     },
     {
       "term": "يا زبالة",
@@ -1207,8 +1105,8 @@
     {
       "term": "داعش",
       "lang": "ar",
-      "severity": "high",
-      "category": "hate_slur"
+      "severity": "medium",
+      "category": "violence_threat"
     },
     {
       "term": "داعشي",
@@ -2021,12 +1919,6 @@
       "category": "hate_slur"
     },
     {
-      "term": "vatan haini",
-      "lang": "tr",
-      "severity": "medium",
-      "category": "hate_slur"
-    },
-    {
       "term": "gook",
       "lang": "en",
       "severity": "high",
@@ -2262,6 +2154,378 @@
     },
     {
       "term": "عقبيلك",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "double your bitcoin",
+      "lang": "en",
+      "severity": "high",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "double your crypto",
+      "lang": "en",
+      "severity": "high",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "elon musk giveaway",
+      "lang": "en",
+      "severity": "high",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "crypto giveaway",
+      "lang": "en",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "get rich quick",
+      "lang": "en",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "guaranteed returns",
+      "lang": "en",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "guaranteed profit",
+      "lang": "en",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "free payout",
+      "lang": "en",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "أرسل بيتكوين واحصل على الضعف",
+      "lang": "ar",
+      "severity": "high",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "ضاعف أموالك",
+      "lang": "ar",
+      "severity": "high",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "أرباح مضمونة",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "استثمار مضمون الربح",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "scam_fraud"
+    },
+    {
+      "term": "porn",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "pornhub",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "onlyfans",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "sex tape",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "send nudes",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "nude pics",
+      "lang": "en",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "فيديو إباحي",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "أفلام إباحية",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "صور عارية",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "محتوى إباحي",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "أونلي فانز",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "sexual_explicit"
+    },
+    {
+      "term": "how to kill yourself",
+      "lang": "en",
+      "severity": "high",
+      "category": "self_harm"
+    },
+    {
+      "term": "how to commit suicide",
+      "lang": "en",
+      "severity": "high",
+      "category": "self_harm"
+    },
+    {
+      "term": "i want to die",
+      "lang": "en",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "end my life",
+      "lang": "en",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "cut yourself",
+      "lang": "en",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "self-harm",
+      "lang": "en",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "كيف أنتحر",
+      "lang": "ar",
+      "severity": "high",
+      "category": "self_harm"
+    },
+    {
+      "term": "طرق الانتحار",
+      "lang": "ar",
+      "severity": "high",
+      "category": "self_harm"
+    },
+    {
+      "term": "أريد أن أنتحر",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "أريد أن أموت",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "إيذاء النفس",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "self_harm"
+    },
+    {
+      "term": "online casino",
+      "lang": "en",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "guaranteed to win",
+      "lang": "en",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "free spins",
+      "lang": "en",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "betting site",
+      "lang": "en",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "كازينو أونلاين",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "موقع مراهنات",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "لفات مجانية",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "gambling"
+    },
+    {
+      "term": "nicotine is not addictive",
+      "lang": "en",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "tobacco is not harmful",
+      "lang": "en",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "smoking doesn't cause cancer",
+      "lang": "en",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "nicotine is harmless",
+      "lang": "en",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "النيكوتين غير ضار",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "التدخين لا يسبب السرطان",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "النيكوتين ليس مسبباً للإدمان",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "misinformation"
+    },
+    {
+      "term": "deepfake",
+      "lang": "en",
+      "severity": "low",
+      "category": "ai_deception"
+    },
+    {
+      "term": "ai generated voice",
+      "lang": "en",
+      "severity": "low",
+      "category": "ai_deception"
+    },
+    {
+      "term": "voice clone",
+      "lang": "en",
+      "severity": "low",
+      "category": "ai_deception"
+    },
+    {
+      "term": "تزييف عميق",
+      "lang": "ar",
+      "severity": "low",
+      "category": "ai_deception"
+    },
+    {
+      "term": "ديب فيك",
+      "lang": "ar",
+      "severity": "low",
+      "category": "ai_deception"
+    },
+    {
+      "term": "dyke",
+      "lang": "en",
+      "severity": "high",
+      "category": "hate_slur"
+    },
+    {
+      "term": "behead them",
+      "lang": "en",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "slit their throats",
+      "lang": "en",
+      "severity": "high",
+      "category": "violence_threat"
+    },
+    {
+      "term": "join isis",
+      "lang": "en",
+      "severity": "medium",
+      "category": "violence_threat"
+    },
+    {
+      "term": "glory to isis",
+      "lang": "en",
+      "severity": "medium",
+      "category": "violence_threat"
+    },
+    {
+      "term": "انضم إلى داعش",
+      "lang": "ar",
+      "severity": "medium",
+      "category": "violence_threat"
+    },
+    {
+      "term": "dox them",
+      "lang": "en",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "leak their address",
+      "lang": "en",
+      "severity": "medium",
+      "category": "harassment"
+    },
+    {
+      "term": "يا معاق",
       "lang": "ar",
       "severity": "medium",
       "category": "harassment"
