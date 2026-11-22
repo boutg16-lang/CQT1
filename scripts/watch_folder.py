@@ -1,4 +1,4 @@
-# Python 3.10+, file: scripts/watch_folder.py, target: Windows 10/11 and Linux
+# Python 3.11+, file: scripts/watch_folder.py, target: Windows 10/11 and Linux
 """Durable watch-folder worker for unattended local-video processing.
 
 Files are processed only after their size/mtime remain stable. A SQLite ledger

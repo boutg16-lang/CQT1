@@ -11,7 +11,7 @@ if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
 }
 & py -3.12 --version
 if ($LASTEXITCODE -ne 0) {
-    throw 'Python 3.12 is required (supported project range: 3.10–3.12).'
+    throw 'Python 3.12 is required (supported project range: 3.11–3.12).'
 }
 
 if (-not (Test-Path '.venv')) {

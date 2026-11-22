@@ -350,9 +350,9 @@ def collect(root: str | os.PathLike[str] | None = None) -> dict[str, Any]:
         ),
         _check(
             "Python",
-            OK if (3, 9) <= sys.version_info[:2] <= (3, 12) else FAIL,
+            OK if (3, 11) <= sys.version_info[:2] <= (3, 12) else FAIL,
             platform.python_version(),
-            critical=not ((3, 9) <= sys.version_info[:2] <= (3, 12)),
+            critical=not ((3, 11) <= sys.version_info[:2] <= (3, 12)),
         ),
         _path_check("Project root", root_path, critical=True),
         _path_check(

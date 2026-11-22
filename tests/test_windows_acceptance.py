@@ -38,7 +38,7 @@ def test_build_report_verdicts():
 
 
 def test_python_check_matches_supported_project_range(monkeypatch):
-    assert wa.SUPPORTED_PYTHON == ((3, 10), (3, 12))
+    assert wa.SUPPORTED_PYTHON == ((3, 11), (3, 12))
 
     monkeypatch.setattr(wa.platform, "python_version_tuple", lambda: ("3", "9", "18"))
     monkeypatch.setattr(wa.platform, "python_version", lambda: "3.9.18")
@@ -46,6 +46,10 @@ def test_python_check_matches_supported_project_range(monkeypatch):
 
     monkeypatch.setattr(wa.platform, "python_version_tuple", lambda: ("3", "10", "0"))
     monkeypatch.setattr(wa.platform, "python_version", lambda: "3.10.0")
+    assert wa.check_python()["status"] == wa.FAIL
+
+    monkeypatch.setattr(wa.platform, "python_version_tuple", lambda: ("3", "11", "0"))
+    monkeypatch.setattr(wa.platform, "python_version", lambda: "3.11.0")
     assert wa.check_python()["status"] == wa.OK
 
 

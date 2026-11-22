@@ -1,10 +1,10 @@
 # requirements-locked.txt — pinned runtime dependencies for OUSSAMA Cutter
 #
-# Generated 2026-11-18 from uv.lock at commit d3fb45b0e0fe562d956c76b775db494e28e73816 (main, 8.10.1).
+# Generated 2026-11-22 from uv.lock at commit 1ee6f6840c239de8d926f6bb6f8d20be79ebcae5 (main, 8.10.1).
 # It pins exactly the direct runtime dependencies that are left unpinned
 # in pyproject.toml [project] dependencies; the already-bounded deps
 # (numpy<2, websockets>=16.1.1,<17, requests>=2.31,<3, onnxruntime<1.24,
-# Pillow==12.3.0, gradio>=6.7,<7) are NOT duplicated here — see
+# Pillow==13.0.0, gradio>=6.7,<7) are NOT duplicated here — see
 # pyproject.toml and requirements.txt for those.
 #
 # Regenerate after updating uv.lock (e.g. `uv lock`):

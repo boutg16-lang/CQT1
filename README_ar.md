@@ -165,7 +165,7 @@ run_webui.bat
    - حمّل [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
    - في المثبّت اختر **"Desktop development with C++"**.
 
-2. **Python (يفضل 3.10.x أو 3.11.x)**
+2. **Python (يفضل 3.11.x أو 3.12.x)**
    - من [python.org/downloads](https://www.python.org/downloads/).
    - ⚠️ **مهم جداً:** في أول شاشة تثبيت فعّل خيار **"Add Python to PATH"**.
 

@@ -55,7 +55,7 @@ def test_installer_checks_for_locked_venv_before_mutating_it():
     assert guard in text
     assert text.index(guard) < text.index('rmdir /s /q ".venv"')
     assert text.index(guard) < text.index("uv pip install")
-    assert "(3,10) <= sys.version_info[:2] <= (3,12)" in text
+    assert "(3,11) <= sys.version_info[:2] <= (3,12)" in text
     assert "[INFO] If an Access is denied error names a .pyd or .dll file" in text
 
 

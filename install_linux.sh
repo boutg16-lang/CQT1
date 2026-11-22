@@ -13,7 +13,7 @@ elif command -v dnf >/dev/null 2>&1; then
 elif command -v pacman >/dev/null 2>&1; then
     sudo pacman -Sy --noconfirm ffmpeg python python-pip base-devel
 else
-    echo "!! Unknown package manager — install ffmpeg + Python 3.10+ manually."
+    echo "!! Unknown package manager — install ffmpeg + Python 3.11+ manually."
 fi
 
 echo "[2/4] Virtual environment..."

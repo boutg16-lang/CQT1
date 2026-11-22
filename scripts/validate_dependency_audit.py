@@ -5,82 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-EXPIRES = date(2027, 3, 15)
-PILLOW_VERSION = "12.3.0"
 FILELOCK_VERSION = "4.1.0"
-ALLOWED_IDS = {
-    "CVE-2026-112895",
-    "CVE-2026-112400",
-    "CVE-2026-112397",
-    "CVE-2026-112896",
-    "CVE-2026-112897",
-    "CVE-2026-112395",
-    "CVE-2026-112404",
-    "CVE-2026-112899",
-    "CVE-2026-112402",
-    "CVE-2026-112900",
-    "CVE-2026-112893",
-    "CVE-2026-112392",
-    "CVE-2026-112891",
-    "CVE-2026-112405",
-    "CVE-2026-112390",
-    "CVE-2026-112401",
-    "CVE-2026-112901",
-    "CVE-2026-112391",
-    "CVE-2026-112894",
-    "CVE-2026-112406",
-    "CVE-2026-112399",
-    "CVE-2026-112892",
-    "CVE-2026-112393",
-    "CVE-2026-112396",
-    "CVE-2026-96638",
-    "CVE-2026-96641",
-    "CVE-2026-96640",
-    "CVE-2026-96642",
-    "CVE-2026-96639",
-    "CVE-2026-96643",
-    "CVE-2026-96637",
-    "CVE-2026-96644",
-    "CVE-2026-96778",
-    "CVE-2026-96636",
-    "GHSA-78g4-xqwv-q3g8",
-    "CVE-2026-114501",
-    "CVE-2026-112398",
-    # PYSEC-2026-43xx batch (2026-10-28 OSV refresh) — fixes land in Pillow 13.0.0.
-    # Gradio lifted its pillow<13 cap in 6.32.0 (now pillow<14, verified
-    # 2026-11-18 via PyPI metadata, a pip resolver dry-run, and a clean-venv
-    # import of gradio 6.32.0 + Pillow 13.0.0); the blocker is now Python
-    # 3.10 — Pillow 13.0.0 needs Python >=3.11 and this repo still supports
-    # 3.10. Re-check when 3.10 support is dropped; exception renewed
-    # 2026-11-18 to 2027-03-15.
-    # PYSEC-2026-4363 (2026-11-12 refresh): same package/version ceiling; 12.3.0 is
-    # the newest release installable on Python 3.10, so there is no installable fixed build.
-    "PYSEC-2026-4363",
-    "CVE-2026-128066",
-    "CVE-2026-128067",
-    "PYSEC-2026-4326",
-    "PYSEC-2026-4327",
-    "PYSEC-2026-4328",
-    "PYSEC-2026-4329",
-    "PYSEC-2026-4330",
-    "PYSEC-2026-4331",
-    "PYSEC-2026-4332",
-    "PYSEC-2026-4333",
-    "PYSEC-2026-4334",
-    "PYSEC-2026-4335",
-    "PYSEC-2026-4336",
-    "PYSEC-2026-4337",
-    "PYSEC-2026-4338",
-    "PYSEC-2026-4339",
-    "PYSEC-2026-4340",
-    "PYSEC-2026-4341",
-    "PYSEC-2026-4342",
-    "PYSEC-2026-4343",
-}
 FILELOCK_ALLOWED_IDS = {
     "CVE-2026-112906",
     "CVE-2026-112908",
@@ -102,11 +30,8 @@ FILELOCK_ALLOWED_IDS = {
 }
 
 
-def validate_report(report: dict[str, Any], today: date | None = None) -> list[str]:
-    today = today or datetime.now(timezone.utc).date()
+def validate_report(report: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    if today >= EXPIRES:
-        errors.append(f"Temporary Pillow exception expired on {EXPIRES.isoformat()}.")
 
     dependencies = report.get("dependencies")
     if not isinstance(dependencies, list):
@@ -128,11 +53,6 @@ def validate_report(report: dict[str, Any], today: date | None = None) -> list[s
             name = str(dependency.get("name", "")).casefold().replace("_", "-")
             version = str(dependency.get("version", ""))
             allowed = (
-                name == "pillow"
-                and version == PILLOW_VERSION
-                and isinstance(vuln_id, str)
-                and vuln_id in ALLOWED_IDS
-            ) or (
                 name == "filelock"
                 and version == FILELOCK_VERSION
                 and isinstance(vuln_id, str)
@@ -164,9 +84,7 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(
-        f"Dependency audit accepted; temporary exceptions expire {EXPIRES.isoformat()}."
-    )
+    print("Dependency audit accepted.")
     return 0
 
 
