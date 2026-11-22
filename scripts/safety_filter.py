@@ -59,7 +59,7 @@ REMOTE_CACHE_FILENAME = "safety_blocklist_cache.json"
 # Blocklist
 # ---------------------------------------------------------------------------
 # Each entry: (phrase, language, severity, category)
-#   category: hate_slur | hate_dehumanize | violence_threat | harassment | profanity
+#   category: hate_slur | hate_dehumanize | violence_threat | harassment | profanity | scam_fraud | sexual_explicit | self_harm | gambling | misinformation | ai_deception
 #
 # NOTE: these lists intentionally target *strong* policy-violating terms.
 # They are not meant to censor normal speech — mild words are "low" severity
@@ -98,19 +98,14 @@ BLOCKLIST = [
     ("شرموط", "ar", "high", "profanity"),
     ("شرموطة", "ar", "high", "profanity"),
     ("زانية", "ar", "high", "profanity"),
-    ("زاني", "ar", "high", "profanity"),
-    ("قحبة", "ar", "high", "profanity"),
-    ("منيوك", "ar", "high", "profanity"),
     ("نيك", "ar", "high", "profanity"),
     ("زبي", "ar", "high", "profanity"),
-    ("قحاب", "ar", "high", "profanity"),
     ("زامل", "ar", "high", "hate_slur"),
     ("بوسبير", "ar", "high", "hate_slur"),
     ("خنزير", "ar", "medium", "harassment"),
     ("خنازير", "ar", "high", "hate_dehumanize"),
     ("قردة", "ar", "high", "hate_dehumanize"),
     ("يا كلاب", "ar", "medium", "harassment"),
-    ("ابن الزنا", "ar", "high", "profanity"),
     ("ابن الحرام", "ar", "high", "profanity"),
     ("ولد الحرام", "ar", "high", "profanity"),
     ("ولد القحبة", "ar", "high", "profanity"),
@@ -121,8 +116,6 @@ BLOCKLIST = [
     ("معاق ذهنيا", "ar", "high", "hate_slur"),
     # Calls to violence (التحريض على العنف)
     ("اذبحهم", "ar", "high", "violence_threat"),
-    ("اذبحوهم", "ar", "high", "violence_threat"),
-    ("اقتلوهم", "ar", "high", "violence_threat"),
     ("اقتلهم", "ar", "high", "violence_threat"),
     ("اقضي عليهم", "ar", "high", "violence_threat"),
     ("ابادهم", "ar", "high", "violence_threat"),
@@ -133,7 +126,6 @@ BLOCKLIST = [
     ("لازم نقتلهم", "ar", "high", "violence_threat"),
     ("يجب قتلهم", "ar", "high", "violence_threat"),
     ("موتوا", "ar", "high", "violence_threat"),
-    ("الموت لهم", "ar", "high", "violence_threat"),
     ("سأقتلك", "ar", "high", "violence_threat"),
     ("راح نقتلك", "ar", "high", "violence_threat"),
     ("ندبحك", "ar", "high", "violence_threat"),
@@ -150,11 +142,7 @@ BLOCKLIST = [
     ("towelhead", "en", "high", "hate_slur"),
     ("sand nigger", "en", "high", "hate_slur"),
     ("white trash", "en", "high", "hate_slur"),
-    ("subhuman", "en", "high", "hate_dehumanize"),
     ("sub-human", "en", "high", "hate_dehumanize"),
-    ("vermin", "en", "low", "hate_dehumanize"),
-    ("cockroaches", "en", "low", "hate_dehumanize"),
-    ("kill them all", "en", "high", "violence_threat"),
     ("kill all", "en", "high", "violence_threat"),
     ("exterminate", "en", "high", "violence_threat"),
     ("gas the", "en", "high", "violence_threat"),
@@ -183,7 +171,6 @@ BLOCKLIST = [
     ("retardado", "pt", "high", "hate_slur"),
     ("mata eles", "pt", "high", "violence_threat"),
     ("matar todos", "pt", "high", "violence_threat"),
-    ("morte aos", "pt", "high", "violence_threat"),
     ("vou te matar", "pt", "high", "violence_threat"),
     # ------------------------------------------------------------------ FR
     ("nègre", "fr", "high", "hate_slur"),
@@ -194,15 +181,12 @@ BLOCKLIST = [
     ("fils de pute", "fr", "high", "profanity"),
     ("attardé", "fr", "high", "hate_slur"),
     ("tuez-les", "fr", "high", "violence_threat"),
-    ("mort aux", "fr", "high", "violence_threat"),
     ("je vais te tuer", "fr", "high", "violence_threat"),
     # ------------------------------------------------------------------ ES
     ("maricón", "es", "high", "hate_slur"),
-    ("puta", "es", "high", "profanity"),
     ("hijo de puta", "es", "high", "profanity"),
     ("retrasado", "es", "high", "hate_slur"),
     ("mátalos", "es", "high", "violence_threat"),
-    ("muerte a los", "es", "high", "violence_threat"),
     ("te voy a matar", "es", "high", "violence_threat"),
     # ------------------------------------------------------------------ TR
     ("orospu", "tr", "high", "profanity"),
@@ -215,7 +199,6 @@ BLOCKLIST = [
     # Terms flagged in YouTube policy reviews / community reports (2026).
     # AR — dehumanization & incitement frequently used in hate comments.
     ("أيها النجس", "ar", "high", "hate_dehumanize"),
-    ("نجس", "ar", "medium", "harassment"),
     ("يا زبالة", "ar", "medium", "harassment"),
     ("اقتلوهم", "ar", "high", "violence_threat"),
     ("احرقوهم", "ar", "high", "violence_threat"),
@@ -278,7 +261,7 @@ BLOCKLIST = [
     ("خنيث", "ar", "high", "hate_slur"),
     ("خول", "ar", "high", "hate_slur"),
     ("خولات", "ar", "high", "hate_slur"),
-    ("داعش", "ar", "high", "hate_slur"),
+    ("داعش", "ar", "medium", "violence_threat"),
     ("داعشي", "ar", "high", "hate_slur"),
     ("درزي", "ar", "high", "hate_slur"),
     ("ذباب", "ar", "medium", "hate_dehumanize"),
@@ -421,7 +404,6 @@ BLOCKLIST = [
     ("muerte a los", "es", "high", "violence_threat"),
     ("morte aos", "pt", "high", "violence_threat"),
     ("vatan haini", "tr", "medium", "hate_slur"),
-    ("vatan haini", "tr", "medium", "hate_slur"),
     # ------------------------------------------------------------------ v7.43 (pack v7)
     # Terms from continued community strike reports (2026-10 review).
     # EN — documented ethnic / identity slurs not yet covered. Token-based
@@ -473,6 +455,81 @@ BLOCKLIST = [
     ("زوعة", "ar", "high", "hate_slur"),  # Maghrebi anti-gay slur
     ("طيز", "ar", "medium", "profanity"),
     ("عقبيلك", "ar", "medium", "harassment"),  # Levantine death-wish curse
+    # ------------------------------------------------------------------ v9
+    # Added 2026-11-22 (pack v9): new policy areas — scam/fraud, sexual
+    # content, self-harm, gambling, misinformation, AI deception — plus
+    # coverage gaps in the existing categories.
+    # scam_fraud (12)
+    ("double your bitcoin", "en", "high", "scam_fraud"),
+    ("double your crypto", "en", "high", "scam_fraud"),
+    ("elon musk giveaway", "en", "high", "scam_fraud"),
+    ("crypto giveaway", "en", "medium", "scam_fraud"),
+    ("get rich quick", "en", "medium", "scam_fraud"),
+    ("guaranteed returns", "en", "medium", "scam_fraud"),
+    ("guaranteed profit", "en", "medium", "scam_fraud"),
+    ("free payout", "en", "medium", "scam_fraud"),
+    ("أرسل بيتكوين واحصل على الضعف", "ar", "high", "scam_fraud"),
+    ("ضاعف أموالك", "ar", "high", "scam_fraud"),
+    ("أرباح مضمونة", "ar", "medium", "scam_fraud"),
+    ("استثمار مضمون الربح", "ar", "medium", "scam_fraud"),
+    # sexual_explicit (11)
+    ("porn", "en", "medium", "sexual_explicit"),
+    ("pornhub", "en", "medium", "sexual_explicit"),
+    ("onlyfans", "en", "medium", "sexual_explicit"),
+    ("sex tape", "en", "medium", "sexual_explicit"),
+    ("send nudes", "en", "medium", "sexual_explicit"),
+    ("nude pics", "en", "medium", "sexual_explicit"),
+    ("فيديو إباحي", "ar", "medium", "sexual_explicit"),
+    ("أفلام إباحية", "ar", "medium", "sexual_explicit"),
+    ("صور عارية", "ar", "medium", "sexual_explicit"),
+    ("محتوى إباحي", "ar", "medium", "sexual_explicit"),
+    ("أونلي فانز", "ar", "medium", "sexual_explicit"),
+    # self_harm (11)
+    ("how to kill yourself", "en", "high", "self_harm"),
+    ("how to commit suicide", "en", "high", "self_harm"),
+    ("i want to die", "en", "medium", "self_harm"),
+    ("end my life", "en", "medium", "self_harm"),
+    ("cut yourself", "en", "medium", "self_harm"),
+    ("self-harm", "en", "medium", "self_harm"),
+    ("كيف أنتحر", "ar", "high", "self_harm"),
+    ("طرق الانتحار", "ar", "high", "self_harm"),
+    ("أريد أن أنتحر", "ar", "medium", "self_harm"),
+    ("أريد أن أموت", "ar", "medium", "self_harm"),
+    ("إيذاء النفس", "ar", "medium", "self_harm"),
+    # gambling (7)
+    ("online casino", "en", "medium", "gambling"),
+    ("guaranteed to win", "en", "medium", "gambling"),
+    ("free spins", "en", "medium", "gambling"),
+    ("betting site", "en", "medium", "gambling"),
+    ("كازينو أونلاين", "ar", "medium", "gambling"),
+    ("موقع مراهنات", "ar", "medium", "gambling"),
+    ("لفات مجانية", "ar", "medium", "gambling"),
+    # misinformation (7)
+    ("nicotine is not addictive", "en", "medium", "misinformation"),
+    ("tobacco is not harmful", "en", "medium", "misinformation"),
+    ("smoking doesn't cause cancer", "en", "medium", "misinformation"),
+    ("nicotine is harmless", "en", "medium", "misinformation"),
+    ("النيكوتين غير ضار", "ar", "medium", "misinformation"),
+    ("التدخين لا يسبب السرطان", "ar", "medium", "misinformation"),
+    ("النيكوتين ليس مسبباً للإدمان", "ar", "medium", "misinformation"),
+    # ai_deception (5)
+    ("deepfake", "en", "low", "ai_deception"),
+    ("ai generated voice", "en", "low", "ai_deception"),
+    ("voice clone", "en", "low", "ai_deception"),
+    ("تزييف عميق", "ar", "low", "ai_deception"),
+    ("ديب فيك", "ar", "low", "ai_deception"),
+    # hate_slur (1)
+    ("dyke", "en", "high", "hate_slur"),
+    # violence_threat (5)
+    ("behead them", "en", "high", "violence_threat"),
+    ("slit their throats", "en", "high", "violence_threat"),
+    ("join isis", "en", "medium", "violence_threat"),
+    ("glory to isis", "en", "medium", "violence_threat"),
+    ("انضم إلى داعش", "ar", "medium", "violence_threat"),
+    # harassment (3)
+    ("dox them", "en", "medium", "harassment"),
+    ("leak their address", "en", "medium", "harassment"),
+    ("يا معاق", "ar", "medium", "harassment"),
 ]
 
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3}
@@ -562,7 +619,7 @@ CONTEXT_ONLY_TERMS = {
     #   اسود — the colour black
     #   فلاح/فلاحين — "farmer(s)", everyday word
     #   هندي/فرس/عربان/وافد — nationality / ethnicity / demographic labels
-    #   كافر/مرتد/زنديق/مجوسي/وثني/قوم لوط/لواط — religious-discourse terms
+    #   كافر/مرتد/زنديق/مجوسي/وثني/قوم لوط/لواط — religious-discourse terms (+ plurals كفار/كفرة/ملاحدة, v9)
     #   داعش/داعشي/حوثي/سلفي/اخونجي/البنا — org / movement labels (news use)
     #   علوج — historical term, legitimate in history content
     #   عبرية — the Hebrew language name
@@ -576,6 +633,9 @@ CONTEXT_ONLY_TERMS = {
     "عربان",
     "وافد",
     "كافر",
+    "كفار",
+    "كفرة",
+    "ملاحدة",
     "مرتد",
     "زنديق",
     "مجوسي",
