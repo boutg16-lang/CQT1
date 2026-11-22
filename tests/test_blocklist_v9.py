@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Regression tests for safety blocklist v9 (pack v9, 2026-11-22).
+"""Regression tests for safety blocklist v9 (pack v9, 2026-11-22) and the
+v10 follow-up (2026-11-22).
 
 v9: 421 terms (377 in v8 − 18 deduped + 62 new), 6 new categories
 (scam_fraud, sexual_explicit, self_harm, gambling, misinformation,
@@ -11,6 +12,12 @@ ai_deception). Review decisions pinned here:
 - "كفار"/"كفرة"/"ملاحدة" added to CONTEXT_ONLY_TERMS (the v7.42 pattern
   already used for the singulars كافر/ملحد): bare religious-discussion
   mentions never block; harmful context still escalates ملاحدة (medium).
+
+v10 follow-up: "داعشي" moved hate_slur/high -> violence_threat/medium —
+the same org-label logic as "داعش" in v9 (a label for a member of the
+organisation, not a slur). It stays in CONTEXT_ONLY_TERMS, so bare
+mentions still never block; harmful context still escalates. Total stays
+421 terms.
 """
 
 from collections import Counter
@@ -28,16 +35,37 @@ def test_v9_term_count_and_categories():
     assert cats["gambling"] == 7
     assert cats["misinformation"] == 7
     assert cats["ai_deception"] == 5
-    assert cats["hate_slur"] == 131
+    assert cats["hate_slur"] == 130  # v10: "داعشي" moved out (was 131 in v9)
     assert cats["hate_dehumanize"] == 90
-    assert cats["violence_threat"] == 75
+    assert cats["violence_threat"] == 76  # v10: "داعشي" moved in (was 75 in v9)
     assert cats["profanity"] == 51
     assert cats["harassment"] == 21
+    sevs = Counter(sev for _, _, sev, _ in sf.BLOCKLIST)
+    assert sevs["high"] == 264  # v10: "داعشي" high -> medium (was 265 in v9)
+    assert sevs["medium"] == 147  # (was 146 in v9)
+    assert sevs["low"] == 10
 
 
 def test_daesh_recategorised_in_blocklist():
     entries = [e for e in sf.BLOCKLIST if e[0] == "داعش"]
     assert entries == [("داعش", "ar", "medium", "violence_threat")]
+
+
+def test_daeishi_recategorised_in_blocklist():
+    # v10 follow-up to v9: "داعشي" is a label for a member of the
+    # organisation, not a slur — same logic as "داعش" in v9.
+    entries = [e for e in sf.BLOCKLIST if e[0] == "داعشي"]
+    assert entries == [("داعشي", "ar", "medium", "violence_threat")]
+    # It stays context-only: bare news mentions never block.
+    assert sf.normalize_text("داعشي") in {
+        sf.normalize_text(t) for t in sf.CONTEXT_ONLY_TERMS
+    }
+    assert sf.find_matches("تقرير إخباري عن مقاتل داعشي", min_severity="medium") == []
+    # ... but it is still reported as a low-severity context signal.
+    matches = sf.find_matches("تقرير إخباري عن مقاتل داعشي")
+    assert matches
+    assert all(m["severity"] == "low" for m in matches)
+    assert all(m["category"] == "context_only_identity" for m in matches)
 
 
 def test_theological_plurals_are_context_only():

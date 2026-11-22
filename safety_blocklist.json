@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "updated": "2026-11-22",
   "reviewed_at": "2026-11-22",
   "source": "ViralCutter built-in blocklist",
@@ -1111,8 +1111,8 @@
     {
       "term": "داعشي",
       "lang": "ar",
-      "severity": "high",
-      "category": "hate_slur"
+      "severity": "medium",
+      "category": "violence_threat"
     },
     {
       "term": "درزي",

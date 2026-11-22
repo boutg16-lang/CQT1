@@ -262,7 +262,7 @@ BLOCKLIST = [
     ("خول", "ar", "high", "hate_slur"),
     ("خولات", "ar", "high", "hate_slur"),
     ("داعش", "ar", "medium", "violence_threat"),
-    ("داعشي", "ar", "high", "hate_slur"),
+    ("داعشي", "ar", "medium", "violence_threat"),
     ("درزي", "ar", "high", "hate_slur"),
     ("ذباب", "ar", "medium", "hate_dehumanize"),
     ("رخمة", "ar", "medium", "hate_dehumanize"),
