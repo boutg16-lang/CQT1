@@ -4,14 +4,13 @@
 pytest>=8.0
 # Needed by the CI coverage floor (ci.yml --cov-fail-under=62).
 pytest-cov>=7.0
-# Pinned to match .pre-commit-config.yaml (ruff-pre-commit v0.16.8) and the
+# Pinned to match .pre-commit-config.yaml (ruff-pre-commit v0.17.6) and the
 # ruff version used by local `make lint`. Do NOT widen this: `ruff check`
 # and `ruff format --check` drift between versions, and CI must test the
 # same ruff developers run locally.
 # NOTE: the one-off `ruff format` reformat landed (PR #115) and
-# `ruff format --check .` is clean on main (565 files, verified with
-# ruff 0.16.8), so adding the format check to ci.yml is now unblocked.
-# (ci.yml itself is edited by the owner via the web UI.)
+# `ruff format --check .` is clean on main and runs in CI (ci.yml,
+# added 2026-11-23), verified with ruff 0.17.6.
 ruff==0.17.6
 pip-audit>=2.9
 pip-licenses>=5.0
