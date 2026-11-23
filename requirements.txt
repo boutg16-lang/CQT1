@@ -10,7 +10,7 @@ insightface
 gradio>=6.7,<7
 opencv-python
 psutil
-fastapi>=0.115
+fastapi>=0.165.0
 uvicorn>=0.30
 tqdm
 requests>=2.31,<3

@@ -26,7 +26,7 @@ google-genai==2.17.0
 insightface==1.0.1
 opencv-python==4.11.0.86
 psutil==7.2.2
-fastapi==0.141.1
+fastapi==0.165.0
 uvicorn==0.52.1
 tqdm==4.70.0
 cryptography==50.0.0
