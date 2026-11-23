@@ -12,7 +12,7 @@ pytest-cov>=7.0
 # `ruff format --check .` is clean on main (565 files, verified with
 # ruff 0.16.8), so adding the format check to ci.yml is now unblocked.
 # (ci.yml itself is edited by the owner via the web UI.)
-ruff==0.16.8
+ruff==0.17.6
 pip-audit>=2.9
 pip-licenses>=5.0
 build>=1.2
