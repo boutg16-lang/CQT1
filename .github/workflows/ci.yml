@@ -204,7 +204,10 @@ jobs:
             sleep 20
           done
           ffmpeg -version | head -1
-          flite --version
+          # flite --version prints its version but exits 1, which fails
+          # the step under bash -e; the speech-generation step below is
+          # the real check that flite works (run #324 proved it).
+          flite --version || true
       - name: Upgrade pip installer
         run: python -m pip install --upgrade pip
       - name: Install app and transcription dependencies
