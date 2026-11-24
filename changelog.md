@@ -10,6 +10,7 @@
 
 ### التبعيات
 - إعادة نطاق websockets إلى `>=16.1.1,<17` في `pyproject.toml` و`requirements.txt` (عكس PR #131): التوسيع إلى `<18` كسر اختبار التوافق (`test_compatibility_range_matches_requirements_pyproject_and_lock`) لأن `scripts/ensure_websockets.py` يثبّت `COMPATIBILITY_SPEC = "websockets>=16.1.1,<17"` مع آلية إصلاح تُعيد التثبيت ضمن هذا النطاق، كما ترك `uv.lock` غير متزامن (`uv lock --check` كان يفشل على main). الإصدار المثبّت 16.1.1 لم يتغير.
+- ترقية insightface 1.0.1 ← 2.1 في `uv.lock` (أُعيد توليد القفل بـ`uv lock --upgrade-package insightface`؛ كل الواجهات المستخدمة — `FaceAnalysis` بحزمة `buffalo_l` و`prepare` و`get` والـlandmarks — لم تتغير في 2.x، والمكتبة اختيارية مع الرجوع إلى MediaPipe ثم Haar عند غيابها). `requirements-locked.txt` كان يحمل 2.1 أصلاً (PR #127) فلم تتغير أرقامه، بل حُدّث سطر التوليد فقط.
 - إسقاط Python 3.10 (النطاق المدعوم الآن 3.11–3.12): Pillow 12.3.0 ← 13.0.0، وأُزيل استثناء التدقيق المؤقت لـ Pillow 12.3.0 (كان سيفشل CI تلقائياً بعد انتهائه في 2027-03-15). أُعيد توليد `uv.lock` و`requirements-locked.txt`.
 
 ## OUSSAMA Cutter 8.10.1-ultimate — 2026-11-14
