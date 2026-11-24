@@ -66,6 +66,10 @@ class TestMain:
         )
 
     def test_unchanged_status(self, monkeypatch, capsys):
+        # The legacy ::set-output fallback only prints when GITHUB_OUTPUT
+        # is unset; the runner always sets it, so remove it to test the
+        # fallback deterministically.
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
         _stub_check(monkeypatch, {"status": "unchanged", "changes": [], "markers": {}})
         assert gpwc.main() == 0
         out = capsys.readouterr().out
@@ -73,11 +77,15 @@ class TestMain:
         assert "status=unchanged changed=no changes=none" in out
 
     def test_offline_status_is_not_changed(self, monkeypatch, capsys):
+        # See test_unchanged_status: the runner always sets GITHUB_OUTPUT.
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
         _stub_check(monkeypatch, {"status": "offline", "changes": [], "markers": {}})
         assert gpwc.main() == 0
         assert "::set-output name=changed::no" in capsys.readouterr().out
 
     def test_checker_raising_becomes_error_exit_one(self, monkeypatch, capsys):
+        # See test_unchanged_status: the runner always sets GITHUB_OUTPUT.
+        monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
         _stub_check(monkeypatch, RuntimeError("boom"))
         assert gpwc.main() == 1
         out = capsys.readouterr().out
