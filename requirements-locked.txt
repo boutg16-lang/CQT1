@@ -1,6 +1,11 @@
 # requirements-locked.txt — pinned runtime dependencies for OUSSAMA Cutter
 #
-# Generated 2026-11-22 from uv.lock at commit 1ee6f6840c239de8d926f6bb6f8d20be79ebcae5 (main, 8.10.1).
+# Generated 2026-11-23 from uv.lock at commit e7a2320 (main, 8.10.1),
+# after `uv lock --upgrade-package insightface` (insightface 1.0.1 -> 2.1).
+# NOTE: fastapi/tqdm below (0.165.0/4.70.1, from Dependabot PRs #129/#130)
+# are NEWER than uv.lock still pins (0.141.1/4.70.0) — those PRs bumped
+# the requirements files but not the lock. Align the lock with
+# `uv lock --upgrade-package fastapi tqdm` as a follow-up.
 # It pins exactly the direct runtime dependencies that are left unpinned
 # in pyproject.toml [project] dependencies; the already-bounded deps
 # (numpy<2, websockets>=16.1.1,<17, requests>=2.31,<3, onnxruntime<1.24,
