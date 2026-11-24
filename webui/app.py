@@ -6540,6 +6540,18 @@ def _launch(argv=None):
     if args.colab_public and not args.colab:
         parser.error("--colab-public requires --colab")
 
+    # The WebUI used to print to the console only, so when the process
+    # died (for example a Windows native crash, which Python cannot
+    # catch) the whole output vanished with the terminal window and
+    # there was no report to diagnose from. Tee stdout/stderr to
+    # logs/webui.log first, so the next stop leaves a file behind.
+    try:
+        from webui.logfile import install_webui_logfile
+
+        install_webui_logfile(os.path.join(_APP_ROOT, "logs"))
+    except Exception as exc:
+        print("[webui] console log disabled ({}).".format(exc))
+
     # v7.18: continuous safety-data refresh. A daemon thread keeps the
     # hate-speech blocklist and the YouTube policy-watch feed fresh for as
     # long as the WebUI runs (first check at boot, then every 6h).
