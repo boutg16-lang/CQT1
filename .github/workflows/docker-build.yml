@@ -1,0 +1,70 @@
+# OUSSAMA Cutter — Docker image build check
+#
+# Verifies the production Dockerfile actually builds (and the WebUI boots
+# inside the container) whenever the Docker inputs change. The image has
+# never been built before — this workflow is the first verification.
+# Build-only: the image is loaded into the runner's Docker, never pushed
+# to a registry, so no credentials are needed.
+name: Docker Build
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - requirements.txt
+      - .dockerignore
+      - .github/workflows/docker-build.yml
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - requirements.txt
+      - .dockerignore
+      - .github/workflows/docker-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (load into runner Docker, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: oussama-cutter:ci
+
+      - name: Smoke test — boot WebUI and probe it
+        run: |
+          docker run -d --name oussama-cutter-ci -p 7860:7860 \
+            -e VIRALCUTTER_WEBUI_USER=ci -e VIRALCUTTER_WEBUI_PASSWORD=ci-test-only \
+            oussama-cutter:ci
+          # The app binds 0.0.0.0 with basic auth; HTTP 200 or 401 both
+          # prove the server is up. Wait up to ~3 min for it to boot.
+          for i in $(seq 1 36); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7860/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "401" ]; then
+              echo "WebUI is up (HTTP $code)"
+              docker logs oussama-cutter-ci --tail 20
+              docker stop oussama-cutter-ci
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "WebUI did not come up within 3 minutes"
+          docker logs oussama-cutter-ci --tail 50
+          docker stop oussama-cutter-ci
+          exit 1
