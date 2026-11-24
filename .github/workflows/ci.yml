@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Audit item 2 — weekly dependency-drift check (Mondays 06:00 UTC).
+    # requirements-dev.txt leaves gradio/fastapi/tqdm unpinned, so drift is
+    # otherwise invisible until the next push.
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -48,6 +53,13 @@ jobs:
           ffmpeg -version | head -1
       - name: Upgrade pip installer
         run: python -m pip install --upgrade pip
+      - name: Check uv lockfile is in sync
+        # Audit item 1 — this is the exact check that would have caught the
+        # PR #131 drift (pyproject/requirements widened websockets to <18
+        # while uv.lock stayed on <17). Fails fast, before the test run.
+        run: |
+          python -m pip install uv==0.13.5
+          uv lock --check
       - name: Install test dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Ruff lint
@@ -152,5 +164,134 @@ jobs:
         with:
           name: quality-windows
           path: quality-benchmark-windows.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  e2e:
+    # Audit item 3 — real end-to-end run (synthetic video -> real clip).
+    # Mirrors the verified local E2E on main 070cf6c2 (~103 s, exit 0):
+    # same entry point (main_improved.py --local-video), same flags
+    # (--ai-backend manual --model tiny --segments 1 --skip-prompts),
+    # same scripted AI answers (manual_response.json below), faster-whisper
+    # tiny for transcription. Input video is generated in the job with
+    # ffmpeg testsrc + flite speech, so no fixture is committed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install ffmpeg and flite (speech synthesis for the input video)
+        run: |
+          for attempt in 1 2 3; do
+            echo "apt install attempt $attempt/3"
+            if sudo apt-get \
+              -o Acquire::http::Timeout=30 \
+              -o Acquire::https::Timeout=30 \
+              -o Acquire::Retries=2 \
+              -o DPkg::Lock::Timeout=60 \
+              update && sudo apt-get \
+              -o Acquire::http::Timeout=30 \
+              -o Acquire::https::Timeout=30 \
+              -o Acquire::Retries=2 \
+              -o DPkg::Lock::Timeout=60 \
+              install -y --no-install-recommends ffmpeg flite; then
+              break
+            fi
+            [ "$attempt" = "3" ] && exit 1
+            sleep 20
+          done
+          ffmpeg -version | head -1
+          # flite --version prints its version but exits 1, which fails
+          # the step under bash -e; the speech-generation step below is
+          # the real check that flite works (run #324 proved it).
+          flite --version || true
+      - name: Upgrade pip installer
+        run: python -m pip install --upgrade pip
+      - name: Install app and transcription dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -r requirements-transcribe-fallback.txt
+      - name: Generate synthetic input video with speech
+        run: |
+          mkdir -p e2e-input
+          SPEECH="First, choose the best moments from the recording. Then cut them carefully and add clear captions. Good editing takes patience and practice. Pick your best moments before you cut anything."
+          flite -t "$SPEECH" -o e2e-input/speech.wav
+          ffmpeg -y -v error \
+            -f lavfi -i testsrc=size=1280x720:rate=30:duration=18 \
+            -i e2e-input/speech.wav -shortest \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac \
+            e2e-input/input_speech_18s.mp4
+          ffprobe -v error -show_entries format=duration -of csv=p=0 e2e-input/input_speech_18s.mp4
+      - name: Write scripted AI answers
+        run: |
+          cat > e2e-input/manual_response.json <<'EOF'
+          {"segments":[{"alt_captions":["Pick your best moments before you cut anything.","Great clips start with great choices.","Choose first, cut second, publish with confidence."],"alt_titles":["Pick only the best moments","Cut the boring parts first","Start with your strongest clip"],"angle":"lesson","caption":"Choose the best moments first, then cut them carefully. Good editing takes patience and practice.","clarity_score":90,"end_text":"Then cut them carefully and add clear captions.","hashtags":["videoediting","contentcreator","videotips","shorts","editing"],"hook_strength":85,"hook_type":"bold_claim","narrative_completeness":85,"novelty_score":70,"reasoning":"Clear actionable advice that stands alone as a complete tip.","score":88,"start_text":"First, choose the best moments from the recording.","start_time_ref":"5s","title":"Choose the best moments first","topic":"choosing video moments"}]}
+          EOF
+      - name: Run full pipeline end to end
+        env:
+          # Only lowercase no_proxy: GitHub's workflow parser rejects
+          # NO_PROXY + no_proxy in one env mapping as a duplicate
+          # (case-insensitive env keys) — "Invalid workflow file:
+          # 'no_proxy' is already defined" (run #323).
+          no_proxy: localhost,127.0.0.1
+          GRADIO_ANALYTICS_ENABLED: "False"
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          python -u main_improved.py --local-video e2e-input/input_speech_18s.mp4 \
+            --ai-backend manual --model tiny --segments 1 --skip-prompts \
+            --min-duration 5 --max-duration 15 \
+            < e2e-input/manual_response.json
+      - name: Verify a real subtitled clip was produced
+        run: |
+          clip=$(ls VIRALS/*/burned_sub/*_subtitled.mp4 | head -1)
+          echo "clip: $clip"
+          test -s "$clip"
+          ffprobe -v error -show_entries stream=width,height,codec_name -of csv=p=0 "$clip"
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$clip"
+      - name: Upload E2E clip
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-clip
+          path: VIRALS/*/burned_sub/*_subtitled.mp4
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-test:
+    # Audit item 4 — the project ships install_macos.sh and
+    # packaging/build_macos.sh and claims macOS support, but CI never runs
+    # on macOS (only ubuntu + windows). Starts non-blocking
+    # (continue-on-error) until the first green run proves the suite is
+    # macOS-clean; remove that line once it passes.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+      - name: Upgrade pip installer
+        run: python -m pip install --upgrade pip
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run Ruff lint
+        run: ruff check .
+      - name: Run Ruff format check
+        run: ruff format --check .
+      - name: Run deterministic quality benchmark
+        run: python -m scripts.quality_benchmark --output quality-benchmark-macos.json
+      - name: Run unit tests
+        run: pytest -v --cov=scripts --cov=webui --cov=app_version.py --cov-report=term --cov-fail-under=62
+      - name: Upload macOS quality report
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-macos
+          path: quality-benchmark-macos.json
           if-no-files-found: warn
           retention-days: 7
