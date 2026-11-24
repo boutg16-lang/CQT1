@@ -9,6 +9,7 @@
 - المراجعة السياقية بالذكاء الاصطناعي غير المتاحة لم تعد توقف التشغيل: إذا لم توجد خلفية ذكاء اصطناعي (مثلاً التشغيل المحلي الافتراضي حيث الخلفية `local`)، يطبع التشغيل تحذيراً ويكمل بفلتر الكلمات المحلي فقط، ويُسجَّل `ai_review_status: "unavailable"` في `safety_report.json`. أما فشل المراجعة بخطأ حقيقي فما زال يوقف التشغيل في وضعي `block` و`censor` عند تفعيل `--safety-fail-closed on`.
 
 ### التبعيات
+- إعادة نطاق websockets إلى `>=16.1.1,<17` في `pyproject.toml` و`requirements.txt` (عكس PR #131): التوسيع إلى `<18` كسر اختبار التوافق (`test_compatibility_range_matches_requirements_pyproject_and_lock`) لأن `scripts/ensure_websockets.py` يثبّت `COMPATIBILITY_SPEC = "websockets>=16.1.1,<17"` مع آلية إصلاح تُعيد التثبيت ضمن هذا النطاق، كما ترك `uv.lock` غير متزامن (`uv lock --check` كان يفشل على main). الإصدار المثبّت 16.1.1 لم يتغير.
 - إسقاط Python 3.10 (النطاق المدعوم الآن 3.11–3.12): Pillow 12.3.0 ← 13.0.0، وأُزيل استثناء التدقيق المؤقت لـ Pillow 12.3.0 (كان سيفشل CI تلقائياً بعد انتهائه في 2027-03-15). أُعيد توليد `uv.lock` و`requirements-locked.txt`.
 
 ## OUSSAMA Cutter 8.10.1-ultimate — 2026-11-14
