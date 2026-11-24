@@ -229,7 +229,10 @@ jobs:
           EOF
       - name: Run full pipeline end to end
         env:
-          NO_PROXY: localhost,127.0.0.1
+          # Only lowercase no_proxy: GitHub's workflow parser rejects
+          # NO_PROXY + no_proxy in one env mapping as a duplicate
+          # (case-insensitive env keys) — "Invalid workflow file:
+          # 'no_proxy' is already defined" (run #323).
           no_proxy: localhost,127.0.0.1
           GRADIO_ANALYTICS_ENABLED: "False"
           HF_HUB_DISABLE_TELEMETRY: "1"
