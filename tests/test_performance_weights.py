@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts import performance_weights as pw
+from scripts import query_targeting as qt  # noqa: E402
 
 
 def _write_insights(folder, payload):
@@ -342,3 +343,202 @@ def test_main_prints_defaults_json(tmp_path, capsys):
 def test_main_missing_project_arg_exits():
     with pytest.raises(SystemExit):
         pw.main([])
+
+
+# ---------------------------------------------------------------------------
+# Title-template learning (feat/pro-cutting item 6)
+# ---------------------------------------------------------------------------
+
+
+def _insights_with_templates(rows):
+    return {
+        "with_metrics": 5,
+        "content_insights": {
+            "overall_avg_views": 1000.0,
+            "categories": {"title_template": rows},
+        },
+    }
+
+
+def test_preferred_title_template_picks_measured_winner():
+    insights = _insights_with_templates(
+        [
+            {"value": "query_question", "samples": 3, "delta_pct": 22.0},
+            {"value": "funnel_full", "samples": 4, "delta_pct": -8.0},
+            {"value": "thin", "samples": 1, "delta_pct": 90.0},
+        ]
+    )
+    assert pw.preferred_title_template(insights) == "query_question"
+
+
+def test_preferred_title_template_empty_without_evidence():
+    insights = _insights_with_templates(
+        [{"value": "funnel_full", "samples": 1, "delta_pct": 60.0}]
+    )
+    assert pw.preferred_title_template(insights) == ""
+    assert pw.preferred_title_template({}) == ""
+
+
+def test_winning_title_patterns_sorted_and_filtered():
+    insights = _insights_with_templates(
+        [
+            {"value": "funnel_full", "samples": 4, "delta_pct": -8.0},
+            {"value": "query_question", "samples": 3, "delta_pct": 22.0},
+            {"value": "single_hit", "samples": 1, "delta_pct": 80.0},
+        ]
+    )
+    winners = pw.winning_title_patterns(insights)
+    assert [row["value"] for row in winners] == ["query_question"]
+
+
+def test_style_bonuses_carry_title_template():
+    insights = _insights_with_templates(
+        [{"value": "query_question", "samples": 3, "delta_pct": 25.0}]
+    )
+    bonuses = pw.style_bonuses(insights, confidence=1.0)
+    assert bonuses["title_template"] == {"query_question": 1.0}
+
+
+def test_style_bonus_for_reads_segment_template():
+    segment = {"title_template": "query_question"}
+    style = {"title_template": {"query_question": 1.5}}
+    assert pw.style_bonus_for(segment, style) == 1.5
+
+
+def test_build_query_title_prefers_measured_template():
+    seg = {
+        "transcript_text": "لما رفضوا الدفع انفجر الموقف بالكامل. مصطفى بونيف تبون هنا.",
+        "start_time": 0.0,
+        "end_time": 6.0,
+    }
+    qt = pytest.importorskip("scripts.query_targeting")
+    default = qt.build_query_title("مصطفى بونيف تبون", seg)
+    preferred = qt.build_query_title(
+        "مصطفى بونيف تبون", seg, prefer_template="query_question"
+    )
+    assert preferred["title"].startswith("مصطفى بونيف تبون")
+    if any(c["pattern"] == "query_question" for c in default["candidates"]):
+        assert preferred["pattern"] == "query_question"
+
+
+def test_apply_target_query_prefers_channel_winning_template(tmp_path, monkeypatch):
+    qt = pytest.importorskip("scripts.query_targeting")
+    import scripts.performance_weights as pw_mod
+
+    seg = {
+        "title": "مقطع 0",
+        "transcript_text": "مصطفى بونيف تبون لما رفضوا الدفع انفجر الموقف بالكامل.",
+        "start_time": 0.0,
+        "end_time": 6.0,
+    }
+    monkeypatch.setattr(
+        pw_mod,
+        "preferred_title_template",
+        lambda insights: "query_question",
+    )
+    kept = qt.apply_target_query(
+        [dict(seg)], "مصطفى بونيف تبون", project_folder=str(tmp_path)
+    )
+    assert kept and kept[0]["title"].startswith("مصطفى بونيف تبون")
+
+
+# ---------------------------------------------------------------------------
+# Title-template funnel learning (feat/pro-cutting item 6)
+# ---------------------------------------------------------------------------
+
+
+def test_preferred_title_template_requires_samples_and_delta():
+    insights = {
+        "content_insights": {
+            "overall_avg_views": 1000.0,
+            "categories": {
+                "title_template": [
+                    {"value": "funnel_full", "samples": 4, "delta_pct": 32.0},
+                    {"value": "query_question", "samples": 1, "delta_pct": 60.0},
+                    {"value": "intro_ceremony", "samples": 3, "delta_pct": -18.0},
+                ]
+            },
+        }
+    }
+    assert pw.preferred_title_template(insights) == "funnel_full"
+    assert pw.preferred_title_template({}) == ""
+
+
+def test_winning_title_patterns_sorted_winners_first():
+    insights = {
+        "content_insights": {
+            "categories": {
+                "title_template": [
+                    {"value": "a", "samples": 2, "delta_pct": 10.0},
+                    {"value": "b", "samples": 3, "delta_pct": 25.0},
+                    {"value": "c", "samples": 1, "delta_pct": 90.0},
+                ]
+            }
+        }
+    }
+    winners = pw.winning_title_patterns(insights)
+    assert [row["value"] for row in winners] == ["b", "a"]
+
+
+def test_style_bonuses_cover_title_template():
+    insights = {
+        "with_metrics": 5,
+        "content_insights": {
+            "overall_avg_views": 800.0,
+            "categories": {
+                "title_template": [
+                    {"value": "query_question", "samples": 3, "delta_pct": 40.0}
+                ]
+            },
+        },
+    }
+    style = pw.style_bonuses(insights)
+    assert style["title_template"] == {"query_question": 1.6}
+    segment = {"title_template": "query_question"}
+    assert pw.style_bonus_for(segment, style) == 1.6
+
+
+def test_query_title_prefers_winning_template():
+    seg = {
+        "transcript_text": "مصطفى بونيف تبون قال كلاما مهما في الجلسة الأخيرة عن الملف.",
+    }
+    default = qt.build_query_title("مصطفى بونيف تبون", seg)
+    preferred = qt.build_query_title(
+        "مصطفى بونيف تبون", seg, prefer_template="query_question"
+    )
+    assert preferred["candidates"]
+    if any(
+        c["pattern"] == "query_question" and c["score"] >= 40.0
+        for c in preferred["candidates"]
+    ):
+        assert preferred["pattern"] == "query_question"
+    assert default["title"].startswith("مصطفى بونيف تبون")
+    assert preferred["title"].startswith("مصطفى بونيف تبون")
+
+
+def test_apply_target_query_reads_project_insights(tmp_path):
+    insights = {
+        "with_metrics": 5,
+        "content_insights": {
+            "overall_avg_views": 500.0,
+            "categories": {
+                "title_template": [
+                    {"value": "query_question", "samples": 3, "delta_pct": 50.0}
+                ]
+            },
+        },
+    }
+    (tmp_path / "performance_insights.json").write_text(
+        json.dumps(insights), encoding="utf-8"
+    )
+    transcript = "مصطفى بونيف تبون تطرح سؤالا مهما: من يقف وراء القرار؟ الجواب صادم فعلا."
+    seg = {
+        "title": "مقطع",
+        "start_time": 0.0,
+        "end_time": 10.0,
+        "transcript_text": transcript,
+        "title_template": "funnel_full",
+    }
+    kept = qt.apply_target_query([seg], "مصطفى بونيف تبون", project_folder=str(tmp_path))
+    assert len(kept) == 1
+    assert kept[0]["query_title_data"]["pattern"] in {"query_question", "funnel_full"}

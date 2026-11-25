@@ -100,7 +100,7 @@ def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
         return {}
     style: dict[str, Any] = {"basis": "content_insights"}
     categories = content.get("categories") or {}
-    for field in ("hook_type", "angle", "topic"):
+    for field in ("hook_type", "angle", "topic", "title_template"):
         by_value = {}
         for row in categories.get(field) or []:
             if int(row.get("samples") or 0) < 2:
@@ -128,7 +128,7 @@ def style_bonus_for(segment, style_map) -> float:
     if not style_map:
         return 0.0
     bonus = 0.0
-    for field in ("hook_type", "angle", "topic"):
+    for field in ("hook_type", "angle", "topic", "title_template"):
         value = str(segment.get(field) or "").strip()
         by_value = style_map.get(field) or {}
         if value in by_value:
@@ -139,6 +139,55 @@ def style_bonus_for(segment, style_map) -> float:
             if present and style_map.get(marker):
                 bonus += float(style_map[marker])
     return round(bonus, 2)
+
+
+def preferred_title_template(insights) -> str:
+    """The title TEMPLATE the channel's own data proved winning.
+
+    From ``content_insights.categories.title_template``: the value with the
+    largest positive views delta among templates with >=2 measured clips and
+    a >=15% delta. "" when nothing qualifies (never invent a template).
+    """
+    categories = ((insights or {}).get("content_insights") or {}).get(
+        "categories"
+    ) or {}
+    best_value, best_delta = "", 0.0
+    for row in categories.get("title_template") or []:
+        if not isinstance(row, dict) or int(row.get("samples") or 0) < 2:
+            continue
+        try:
+            delta = float(row.get("delta_pct") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if delta >= STYLE_MIN_DELTA_PCT and delta > best_delta:
+            best_value, best_delta = str(row.get("value") or ""), delta
+    return best_value
+
+
+def winning_title_patterns(insights, limit: int = 3) -> list[dict[str, Any]]:
+    """Past winning title templates, strongest first (for reuse as templates).
+
+    Only rows with >=2 measured clips and a positive views delta qualify.
+    Consumers reuse the PATTERN (e.g. ``query_question``), never the literal
+    title, so the next clip's wording stays grounded in its own transcript.
+    """
+    categories = ((insights or {}).get("content_insights") or {}).get(
+        "categories"
+    ) or {}
+    winners = []
+    for row in categories.get("title_template") or []:
+        if not isinstance(row, dict) or int(row.get("samples") or 0) < 2:
+            continue
+        try:
+            delta = float(row.get("delta_pct") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if delta > 0:
+            winners.append(row)
+    winners.sort(
+        key=lambda row: (-float(row.get("delta_pct") or 0.0), str(row.get("value") or ""))
+    )
+    return winners[: max(1, int(limit))]
 
 
 def _load(project_folder: str) -> dict[str, Any]:

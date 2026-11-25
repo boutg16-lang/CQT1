@@ -278,6 +278,7 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
         "topic": str(event.get("topic") or "").strip(),
         "angle": str(event.get("angle") or "").strip(),
         "hook_type": str(event.get("hook_type") or "").strip(),
+        "title_template": str(event.get("title_template") or "").strip(),
         "hashtag_count": hashtag_count,
         "title_question": bool(question),
         "title_number": bool(has_number),
@@ -644,7 +645,7 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     """Learn which content markers (topics/angles/hook styles) perform."""
     result: dict[str, Any] = {"overall_avg_views": _overall_avg_views(measured)}
     categories = {}
-    for field in ("hook_type", "angle", "topic"):
+    for field in ("hook_type", "angle", "topic", "title_template"):
         rows = _category_performance(measured, field)
         if rows:
             categories[field] = rows

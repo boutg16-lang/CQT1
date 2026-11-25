@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 import os
@@ -244,6 +245,7 @@ def build_query_title(
     segment: Optional[Dict[str, Any]] = None,
     *,
     keywords: Optional[List[str]] = None,
+    prefer_template: str = "",
 ) -> Dict[str, Any]:
     """Query-led title candidates ranked by ``seo_titles.score_title``.
 
@@ -289,6 +291,17 @@ def build_query_title(
             }
         )
     candidates.sort(key=lambda item: item["score"], reverse=True)
+    # Item 6: when the channel's own insights proved a title template
+    # winning, prefer it — but only when it still leads with the query and
+    # does not score in the gutter (a winning pattern cannot rescue a bad
+    # title).
+    preferred = str(prefer_template or "").strip()
+    if preferred:
+        for index, candidate in enumerate(candidates):
+            if candidate.get("pattern") == preferred and candidate["score"] >= 40.0:
+                if candidates[0] is not candidate:
+                    candidates.insert(0, candidates.pop(index))
+                break
     # Item 3 contract: the shipped title ALWAYS leads with the query.
     candidates = [c for c in candidates if c["title"].startswith(query)] or candidates
     if not candidates:
@@ -344,6 +357,7 @@ def apply_target_query(
     result: Optional[Dict[str, Any]] = None,
     *,
     min_relevance: float = DEFAULT_MIN_RELEVANCE,
+    project_folder: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Filter ``segments`` in place semantics: return the kept list.
 
@@ -358,9 +372,19 @@ def apply_target_query(
     kept: List[Dict[str, Any]] = []
     dropped: List[Dict[str, Any]] = []
     title_data: Dict[str, Any] = {}
+    preferred_template = ""
+    if project_folder:
+        try:
+            from scripts import performance_weights
+
+            preferred_template = performance_weights.preferred_title_template(
+                performance_weights._load(project_folder)
+            )
+        except Exception:
+            preferred_template = ""
     if not report.get("refused"):
         best = report["best"]
-        title_data = build_query_title(query, best)
+        title_data = build_query_title(query, best, prefer_template=preferred_template)
         for candidate in report["candidates"]:
             if candidate is best or (
                 candidate.get("start_time") == best.get("start_time")

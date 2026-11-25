@@ -243,6 +243,7 @@ def clip_metadata(project_path, video_path):
             "topic": "",
             "angle": "",
             "hook_type": "",
+            "title_template": "",
         }
     seg = segments[idx]
     title = seg.get("recommended_title") or seg.get("title") or ""
@@ -263,6 +264,9 @@ def clip_metadata(project_path, video_path):
         "topic": str(seg.get("topic") or ""),
         "angle": str(seg.get("angle") or ""),
         "hook_type": str(seg.get("hook_type") or ""),
+        # Item 6: the title pattern that built this title, recorded at
+        # publish time so the loop can measure which templates win.
+        "title_template": str(seg.get("title_template") or ""),
         # v7.41 review gating surfaced to the publish UI.
         "requires_review": bool(
             seg.get("requires_review") or seg.get("title_review_required")
@@ -1119,6 +1123,7 @@ def _upload_worker(
             "topic": meta.get("topic") or "",
             "angle": meta.get("angle") or "",
             "hook_type": meta.get("hook_type") or "",
+            "title_template": meta.get("title_template") or "",
         }
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)

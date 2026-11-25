@@ -2789,7 +2789,10 @@ def process_segments(
             from scripts import query_targeting
 
             validated_segments = query_targeting.apply_target_query(
-                validated_segments, str(target_query).strip(), final_result
+                validated_segments,
+                str(target_query).strip(),
+                final_result,
+                project_folder=project_folder,
             )
         except Exception as exc:
             logger.warning(

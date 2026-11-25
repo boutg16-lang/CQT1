@@ -95,6 +95,8 @@ def record(
             "topic",
             "angle",
             "hook_type",
+            # Item 6: which title pattern built this title (learned winners).
+            "title_template",
             "thumbnail",
             "variant_of",
             # Funnel template (feat/pro-cutting item 1): the Short's source
