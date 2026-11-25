@@ -102,3 +102,38 @@ def test_corrupt_scorecard_logs_and_keeps_published_history(tmp_path, caplog):
     assert any(
         "Could not read risk scorecard" in record.message for record in caplog.records
     )
+
+
+def test_analytics_failure_is_visible_but_report_still_builds(
+    tmp_path, caplog, monkeypatch
+):
+    """feat/pro-cutting item 5: a broken Analytics backend must not kill the
+    loop — the report still builds and the failure is logged with a reason."""
+    import logging
+
+    import scripts.analytics as analytics_mod
+
+    (tmp_path / "risk_scorecard.json").write_text("{}", encoding="utf-8")
+    _history(
+        tmp_path,
+        [
+            {
+                "video_id": "vid5",
+                "status": "uploaded",
+                "video": "clip_005.mp4",
+                "title": "T5",
+                "platform": "youtube",
+            }
+        ],
+    )
+
+    def _boom():
+        raise RuntimeError("no oauth token")
+
+    monkeypatch.setattr(analytics_mod, "_build_services", _boom)
+    with caplog.at_level(logging.WARNING, logger="scripts.performance_loop"):
+        report = performance_loop.analyze(str(tmp_path), fetch_live=True)
+
+    assert report["with_metrics"] == 0
+    assert report["published_count"] == 1
+    assert any("Analytics unavailable" in record.message for record in caplog.records)

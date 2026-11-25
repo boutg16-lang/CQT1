@@ -288,12 +288,22 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
 def _fetch_real_metrics(
     video_ids: list[str], project_folder: str | None = None
 ) -> dict[str, dict[str, Any]]:
-    """Pull views/retention via scripts.analytics. Empty when unavailable."""
+    """Pull views/retention via scripts.analytics. Empty when unavailable.
+
+    Failures are logged with a short reason (feat/pro-cutting item 5): the
+    performance report should say WHY numbers are missing instead of the
+    generic "Analytics returned no numbers" note.
+    """
     try:
         from scripts import analytics as analytics_mod
 
         ya, yt = analytics_mod._build_services()
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "YouTube Analytics unavailable (%s): %s",
+            type(exc).__name__,
+            str(exc)[:160],
+        )
         return {}
     metrics: dict[str, dict[str, float]] = {}
     start, end = analytics_mod._date_range(_window_days())
@@ -321,7 +331,13 @@ def _fetch_real_metrics(
                 )
                 .execute()
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Analytics query failed for %d videos (%s): %s",
+                len(chunk),
+                type(exc).__name__,
+                str(exc)[:160],
+            )
             continue
         for row in resp.get("rows", []) or []:
             row = list(row) + [None] * 6
@@ -699,7 +715,8 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
     if not measured:
         report["insights"].append(
             "Uploads found but YouTube Analytics returned no numbers yet "
-            "(OAuth not configured, or videos are too recent)."
+            "(OAuth not configured, or videos are too recent). "
+            "See the server log for the exact Analytics error."
         )
         return report
 
