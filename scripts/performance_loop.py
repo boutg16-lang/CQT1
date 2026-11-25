@@ -659,6 +659,46 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     if styles:
         styles.sort(key=lambda row: -abs(row["delta_pct"]))
         result["title_styles"] = styles
+    # Item 8 (feat/pro-cutting): the literal top titles by measured views.
+    # Consumers reuse their measured suffixes as templates (scripts/seo_titles
+    # ``winner_to_template``) for future query-led titles.
+    top_titles = [
+        item
+        for item in measured
+        if (item.get("metrics") or {}).get("views") is not None
+        and str(item.get("title") or "").strip()
+    ]
+    top_titles.sort(
+        key=lambda item: float(item["metrics"]["views"]), reverse=True
+    )
+    result["top_titles"] = [
+        {
+            "title": str(item.get("title") or ""),
+            "views": int(item["metrics"]["views"]),
+            "video": str(item.get("video") or ""),
+        }
+        for item in top_titles[:3]
+    ]
+    # Item 8: the literal best-performing titles — the next generation round
+    # reuses their shape (verbatim tail) as templates via seo_titles.
+    measured_with_views = [
+        item
+        for item in measured
+        if (item.get("metrics") or {}).get("views") is not None
+        and str(item.get("title") or "").strip()
+    ]
+    measured_with_views.sort(
+        key=lambda item: -float(item["metrics"]["views"])
+    )
+    top_titles = [
+        {
+            "title": str(item.get("title") or "").strip(),
+            "views": int(float(item["metrics"]["views"])),
+        }
+        for item in measured_with_views[:3]
+    ]
+    if top_titles:
+        result["top_titles"] = top_titles
     pairs = [
         (
             float((item.get("content") or {}).get("hashtag_count"))

@@ -246,6 +246,7 @@ def build_query_title(
     *,
     keywords: Optional[List[str]] = None,
     prefer_template: str = "",
+    winners: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Query-led title candidates ranked by ``seo_titles.score_title``.
 
@@ -290,6 +291,21 @@ def build_query_title(
                 **seo_titles.score_title(title, search_keywords),
             }
         )
+    # Item 8 (feat/pro-cutting): past WINNING TITLES reused as templates — the
+    # winner's measured suffix is kept verbatim, the hook slot becomes the new
+    # query. Each candidate is factually validated against THIS clip's own
+    # transcript, so an inherited tail the clip does not back is dropped.
+    candidate_titles = {c["title"].casefold() for c in candidates}
+    for item in seo_titles.titles_from_winners(
+        [w for w in (winners or []) if str(w or "").strip()][:4],
+        query,
+        keywords=search_keywords,
+        limit=4,
+        transcript_text=_segment_text(segment or {}, None) or None,
+    ):
+        if item["title"].casefold() in candidate_titles:
+            continue
+        candidates.append(item)
     candidates.sort(key=lambda item: item["score"], reverse=True)
     # Item 6: when the channel's own insights proved a title template
     # winning, prefer it — but only when it still leads with the query and
@@ -373,18 +389,33 @@ def apply_target_query(
     dropped: List[Dict[str, Any]] = []
     title_data: Dict[str, Any] = {}
     preferred_template = ""
+    winner_titles: List[str] = []
     if project_folder:
         try:
             from scripts import performance_weights
 
-            preferred_template = performance_weights.preferred_title_template(
-                performance_weights._load(project_folder)
-            )
+            insights = performance_weights._load(project_folder)
+            preferred_template = performance_weights.preferred_title_template(insights)
+            # Item 8: literal past-winning titles (highest measured views)
+            # become reusable templates for the query-led title.
+            winner_titles = [
+                str(row.get("title") or "").strip()
+                for row in (
+                    (insights.get("content_insights") or {}).get("top_titles") or []
+                )
+                if str(row.get("title") or "").strip()
+            ]
         except Exception:
             preferred_template = ""
+            winner_titles = []
     if not report.get("refused"):
         best = report["best"]
-        title_data = build_query_title(query, best, prefer_template=preferred_template)
+        title_data = build_query_title(
+            query,
+            best,
+            prefer_template=preferred_template,
+            winners=winner_titles,
+        )
         for candidate in report["candidates"]:
             if candidate is best or (
                 candidate.get("start_time") == best.get("start_time")

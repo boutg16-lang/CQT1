@@ -9,6 +9,7 @@ scripts/seo_titles.score_title. Offline only: embeddings are never enabled.
 """
 
 import os
+import json
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -196,3 +197,54 @@ class TestApplyTargetQuery:
         assert len(kept) == 2
         # best (higher relevance + score) first
         assert kept[0]["index"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Item 8 (feat/pro-cutting): winning-title templates inside the query flow
+# ---------------------------------------------------------------------------
+
+
+class TestWinnersInQueryTitle:
+    def _segment(self, text):
+        return {
+            "title": "مقطع",
+            "start_time": 0.0,
+            "end_time": 30.0,
+            "transcript_text": text,
+        }
+
+    def test_winner_template_beats_plain_funnel(self):
+        seg = self._segment("قضية السبت تكشف تفاصيل جديدة. الجميع ينتظر الرد الرسمي.")
+        winners = ["مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟"]
+        data = qt.build_query_title("قضية السبت", seg, winners=winners)
+        assert data["title"].startswith("قضية السبت")
+        assert data["pattern"].startswith("winner:")
+
+    def test_winner_suffix_claiming_outside_clip_is_dropped(self):
+        seg = self._segment("قضية السبت تكشف تفاصيل جديدة. الجميع ينتظر الرد الرسمي.")
+        winners = ["مصطفى بونيف تبون: قال إن الملف مغلق نهائياً"]
+        data = qt.build_query_title("قضية السبت", seg, winners=winners)
+        # the inherited claim is NOT in the clip transcript: the shipped title
+        # must not carry it unless the factual validator passed it. Either the
+        # plain presets win, or a validated winner — never the raw claim.
+        if data["pattern"].startswith("winner:"):
+            assert data.get("validation", {}).get("status") in ("verified", "unknown")
+
+    def test_apply_target_query_uses_project_top_titles(self, tmp_path):
+        seg = self._segment("قضية السبت تكشف تفاصيل جديدة. الجميع ينتظر الرد الرسمي.")
+        insights = {
+            "content_insights": {
+                "top_titles": [
+                    {"title": "مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟", "views": 9000}
+                ]
+            }
+        }
+        (tmp_path / "performance_insights.json").write_text(
+            json.dumps(insights, ensure_ascii=False), encoding="utf-8"
+        )
+        kept = qt.apply_target_query(
+            [seg], "قضية السبت", project_folder=str(tmp_path)
+        )
+        assert kept
+        data = kept[0].get("query_title_data") or {}
+        assert data.get("title", "").startswith("قضية السبت")

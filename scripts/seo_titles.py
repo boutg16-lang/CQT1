@@ -253,6 +253,86 @@ _BENEFITS = [
 
 
 def _topic_token(topic: str) -> str:
+    return re.sub(r"[\?؟!\s]+$", "", str(topic or "").strip()) or "هذا الموضوع"# Item 8: past-winning titles reused as templates. The winner's measured
+# suffix (everything after the first separator) is kept VERBATIM — only the
+# hook/topic slot becomes the new query. No invented claims.
+# Item 8 (feat/pro-cutting): reuse of past WINNING titles as templates. The
+# hook/topic slot is rebuilt from the NEW query; everything after the first
+# separator stays VERBATIM from the measured winner — the suffix is real
+# content that already earned views, never a fabricated claim.
+WINNER_SEPARATORS = (":", " | ", "|", " — ", "—", "–")
+_WINNER_MIN_TAIL = 12
+_WINNER_MAX_TAIL = 70
+
+
+def winner_to_template(title: str) -> str | None:
+    """Turn a past winning title into ``{hook}<sep> <measured tail>``.
+
+    Returns None when the title has no reusable separator/tail (short shouts,
+    single-clause titles) — never fabricates a template. """
+    text = re.sub(r"\s+", " ", str(title or "")).strip()
+    if not text:
+        return None
+    for separator in WINNER_SEPARATORS:
+        index = text.find(separator)
+        if index <= 0:
+            continue
+        tail = text[index + len(separator):].strip(" \t\u060c؛:-")
+        if _WINNER_MIN_TAIL <= len(tail) <= _WINNER_MAX_TAIL:
+            return "{hook}" + separator + " " + tail
+    return None
+
+
+def titles_from_winners(
+    winning_titles: list[str],
+    hook: str,
+    keywords: list[str] | None = None,
+    *,
+    limit: int = 3,
+    transcript_text: str | None = None,
+) -> list[dict[str, Any]]:
+    """Ranked candidates built from past winners' measured shapes.
+
+    Each candidate: new query as the hook + the winner's verbatim suffix,
+    scored by ``score_title`` and (when a transcript is supplied) validated
+    with ``title_factual`` — rejected claims never ship.
+    """
+    hook = str(hook or "").strip()
+    if not hook:
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for winner in winning_titles or []:
+        template = winner_to_template(winner)
+        if not template:
+            continue
+        title = re.sub(r"\s+", " ", template.format(hook=hook)).strip()
+        key = title.casefold()
+        if not title or key in seen:
+            continue
+        seen.add(key)
+        entry: dict[str, Any] = {
+            "title": title,
+            "pattern": "winner:" + template,
+            **score_title(title, keywords),
+        }
+        if transcript_text:
+            try:
+                from scripts import title_factual
+
+                validation = title_factual.validate_title_vs_clip(
+                    title, transcript_text, "auto"
+                )
+                entry["validation"] = validation
+                if validation.get("status") == "rejected":
+                    continue
+            except Exception:
+                pass
+        out.append(entry)
+    out.sort(key=lambda item: item["score"], reverse=True)
+    return out[: max(1, int(limit))]
+
+def _topic_token(topic: str) -> str:
     return re.sub(r"[\?؟!\s]+$", "", str(topic or "").strip()) or "هذا الموضوع"
 
 
@@ -356,11 +436,6 @@ def generate_titles(
 
     unique.sort(key=lambda item: item["score"], reverse=True)
     return unique[:count]
-
-
-# ---------------------------------------------------------------------------
-# Publish-time hints
-# ---------------------------------------------------------------------------
 
 
 def best_time_windows(platform: str = "youtube") -> dict[str, Any]:
