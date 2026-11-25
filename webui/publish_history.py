@@ -97,6 +97,10 @@ def record(
             "hook_type",
             "thumbnail",
             "variant_of",
+            # Funnel template (feat/pro-cutting item 1): the Short's source
+            # video (URL + id) so the loop can measure the funnel end-to-end.
+            "source_video_url",
+            "related_video_source",
         ):
             if extra.get(key) is not None:
                 event[key] = str(extra.get(key))[:1000]

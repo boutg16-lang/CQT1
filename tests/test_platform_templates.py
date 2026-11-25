@@ -76,3 +76,59 @@ class TestPersist:
 
     def test_save_missing_project_is_safe(self, tmp_path):
         pt.save_template_choice(str(tmp_path / "absent"), "reels")  # no raise
+
+
+class TestFunnelDescription:
+    """feat/pro-cutting item 1 — funnel description + related-video policy."""
+
+    FULL_URL = "https://www.youtube.com/watch?v=abcdefghijk"
+    CHANNEL = "https://www.youtube.com/@MostefaBounif"
+
+    def test_description_starts_with_full_video_line(self):
+        text = pt.build_funnel_description(self.FULL_URL, self.CHANNEL, body="شرح")
+        assert text.startswith(
+            "شاهدوا الفيديو الكامل على القناة: " + self.FULL_URL
+        )
+        lines = text.splitlines()
+        assert lines[1] == self.CHANNEL
+
+    def test_description_order_url_channel_hashtags(self):
+        text = pt.build_funnel_description(
+            self.FULL_URL, self.CHANNEL, body="شرح", hashtags=["الجزائر", "#مصطفى_بونيف"]
+        )
+        assert "#الجزائر" in text
+        assert "#مصطفى_بونيف" in text
+        assert text.index(self.CHANNEL) < text.index("#الجزائر")
+        assert text.index("شرح") < text.index("#الجزائر")
+
+    def test_description_without_channel_link(self):
+        text = pt.build_funnel_description(self.FULL_URL, "", body="", hashtags=None)
+        assert text.startswith("شاهدوا الفيديو الكامل على القناة: ")
+        assert text.strip().splitlines() == [
+            "شاهدوا الفيديو الكامل على القناة: " + self.FULL_URL
+        ]
+
+    def test_empty_url_returns_body_only(self):
+        assert pt.build_funnel_description("", "", body="نص") == "نص"
+
+    def test_unknown_template_falls_back_to_shorts_funnel(self):
+        text = pt.build_funnel_description(self.FULL_URL, template_name="nope")
+        assert text.startswith("شاهدوا الفيديو الكامل على القناة: ")
+
+    def test_related_video_policy_source_for_shorts(self):
+        assert pt.related_video_policy("yt_shorts") == "source"
+        assert pt.related_video_policy("yt_standard") == ""
+
+    def test_title_pattern(self):
+        assert pt.title_pattern("yt_shorts") == "{hook_quote} | الفيديو الكامل"
+
+    def test_apply_title_pattern_appends_and_is_idempotent(self):
+        assert (
+            pt.apply_title_pattern("حوار ساخر")
+            == "حوار ساخر | الفيديو الكامل"
+        )
+        assert (
+            pt.apply_title_pattern("حوار ساخر | الفيديو الكامل")
+            == "حوار ساخر | الفيديو الكامل"
+        )
+        assert pt.apply_title_pattern("") == ""

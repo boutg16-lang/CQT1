@@ -29,6 +29,64 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CLIP_SOURCES = ("auto", "final_polished", "final", "cuts", "specific_file")
 
+def source_video_id(url):
+    """Extract a YouTube video id from watch / youtu.be / shorts / embed URLs.
+
+    Returns '' for anything else (including an already-bare id). Best-effort:
+    used to pin a Short's related video to its source video.
+    """
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    patterns = (
+        r"(?:youtube\.com/watch\?(?:.*&)?v=)([\w-]{11})",
+        r"(?:youtu\.be/)([\w-]{11})",
+        r"(?:youtube\.com/shorts/)([\w-]{11})",
+        r"(?:youtube\.com/embed/)([\w-]{11})",
+        r"(?:youtube\.com/live/)([\w-]{11})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return ""
+
+def project_source_url(project_path):
+    """The source video's watch URL from the project manifest.
+
+    Returns '' for local-file sources (no watch URL exists) so the funnel
+    never prints a fake link.
+    """
+    try:
+        from webui import project_store
+
+        manifest = project_store.load_manifest(project_path) or {}
+    except Exception:
+        return ""
+    source = manifest.get("source") or {}
+    if not isinstance(source, dict) or str(source.get("type") or "") != "youtube":
+        return ""
+    url = str(source.get("url") or "").strip()
+    return url if source_video_id(url) else ""
+
+
+def project_channel_url(project_path):
+    """Channel link for the funnel description (settings.funnel.channel_url).
+
+    Empty when unset — the funnel line for the video itself always wins.
+    """
+    try:
+        from webui import project_store
+
+        manifest = project_store.load_manifest(project_path) or {}
+    except Exception:
+        return ""
+    settings = manifest.get("settings") or {}
+    funnel = settings.get("funnel") if isinstance(settings, dict) else None
+    if isinstance(funnel, dict):
+        return str(funnel.get("channel_url") or "").strip()
+    return ""
+
 
 def _mp4_files(folder):
     if not folder or not os.path.isdir(folder):
@@ -755,6 +813,8 @@ def _upload_worker(
     oauth_full_access=False,
     require_existing_auth=False,
     public_confirm=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     final_result = None
@@ -871,6 +931,41 @@ def _upload_worker(
             if publish_at:
                 uploader_kwargs["publish_at"] = publish_at
                 upload_kwargs["publish_at"] = publish_at
+            # Funnel template (feat/pro-cutting item 1): when the source
+            # full-video URL is known, the description MUST open with the
+            # funnel line and the Short's related video targets the source.
+            funnel_source_url = str(full_video_url or "").strip() or project_source_url(
+                project_path
+            )
+            channel_url = str(channel_url or "").strip() or project_channel_url(
+                project_path
+            )
+            if funnel_source_url:
+                upload_kwargs["source_url"] = funnel_source_url
+                upload_kwargs["channel_url"] = str(channel_url or "").strip()
+                emit(
+                    "[funnel] the description starts with the full-video link: {}".format(
+                        funnel_source_url
+                    )
+                )
+                from scripts import platform_templates as _funnel_templates
+
+                funnel_title = _funnel_templates.apply_title_pattern(title)
+                if funnel_title and funnel_title != str(title or "").strip():
+                    title = funnel_title
+                    emit("[funnel] title pattern applied: {}".format(title))
+
+                if _funnel_templates.related_video_policy("yt_shorts") == "source":
+                    source_id = source_video_id(funnel_source_url)
+                    if source_id:
+                        upload_kwargs["related_video_source"] = source_id
+                        # YouTube Data API v3 exposes NO related-video field:
+                        # the pin is recorded and surfaced as a Studio deep
+                        # link instead of pretending the API set it.
+                        emit(
+                            "[related-video] اربط الفيديو المرتبط يدوياً بعدها: "
+                            "https://studio.youtube.com/video/{}/edit".format(source_id)
+                        )
         prior = None
         if not dry_run:
             prior = publish_history.find_success(
@@ -1027,6 +1122,11 @@ def _upload_worker(
         }
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)
+        if str(funnel_source_url or "").strip():
+            record_extra["source_video_url"] = str(funnel_source_url).strip()
+        related_source = (result or {}).get("related_video_source")
+        if related_source:
+            record_extra["related_video_source"] = str(related_source)
         if upload_video != video_path:
             record_extra["variant_of"] = os.path.basename(video_path)
         publish_history.record(
@@ -1174,6 +1274,8 @@ def stream_upload(
     oauth_full_access=False,
     require_existing_auth=False,
     public_confirm=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     """Yield log lines and return one structured result to a batch caller."""
@@ -1202,6 +1304,8 @@ def stream_upload(
             oauth_full_access,
             require_existing_auth,
             public_confirm,
+            full_video_url,
+            channel_url,
             variant_policy,
         ),
         daemon=True,
@@ -1285,6 +1389,8 @@ def stream_upload_batch(
     public_confirm=False,
     schedule_interval_minutes=60,
     retry_failed_only=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     """Upload every selected clip and persist exact per-clip outcomes."""
@@ -1387,6 +1493,8 @@ def stream_upload_batch(
             oauth_full_access,
             require_existing_auth,
             public_confirm,
+            full_video_url,
+            channel_url,
             variant_policy,
         )
         result = result or _publish_result(

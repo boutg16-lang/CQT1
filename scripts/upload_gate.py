@@ -1509,7 +1509,16 @@ class YouTubeUploader(_BaseUploader):
         return creds
 
     def _do_upload(
-        self, video_path, title, caption, hashtags, privacy_status=None, publish_at=None
+        self,
+        video_path,
+        title,
+        caption,
+        hashtags,
+        privacy_status=None,
+        publish_at=None,
+        source_url=None,
+        channel_url=None,
+        related_video_source=None,
     ):
         if not os.path.exists(video_path):
             raise FileNotFoundError("video not found: {}".format(video_path))
@@ -1523,7 +1532,18 @@ class YouTubeUploader(_BaseUploader):
             ) from None
 
         tags = [str(h).lstrip("#") for h in (hashtags or []) if str(h).strip()]
-        description = caption or ""
+        source_url = str(source_url or "").strip()
+        if source_url:
+            # Funnel template (feat/pro-cutting item 1): the description MUST
+            # start with the full-video link, then the channel link, then the
+            # caption body; hashtags stay appended by the legacy block below.
+            from scripts import platform_templates
+
+            description = platform_templates.build_funnel_description(
+                source_url, channel_url, body=caption, hashtags=None
+            )
+        else:
+            description = caption or ""
         if tags:
             description += "\n\n" + " ".join("#" + t for t in tags)
         privacy = effective_privacy(privacy_status)
@@ -1588,7 +1608,7 @@ class YouTubeUploader(_BaseUploader):
                 )
         video_id = response.get("id")
         print("[youtube] uploaded '{}' → https://youtu.be/{}".format(title, video_id))
-        return {
+        result = {
             "status": "scheduled" if normalized_publish_at else "uploaded",
             "platform": "youtube",
             "video_id": video_id,
@@ -1596,6 +1616,21 @@ class YouTubeUploader(_BaseUploader):
             "privacy_status": privacy,
             "publish_at": normalized_publish_at,
         }
+        related_video_source = str(related_video_source or "").strip()
+        if related_video_source and related_video_source != video_id:
+            # YouTube Data API v3 has NO related-video field (verified against
+            # the videos resource docs, 2026-11): the funnel's related video
+            # must be attached once in YouTube Studio. Record the intent and
+            # surface the exact edit link so it is never forgotten.
+            result["related_video_source"] = related_video_source
+            print(
+                "[youtube] ⚠️ تعيين 'الفيديو المرتبط' لا تدعمه Data API — "
+                "أضفه يدوياً من: https://studio.youtube.com/video/{}/edit".format(
+                    video_id
+                ),
+                flush=True,
+            )
+        return result
 
     def attach_thumbnail(self, video_id, thumbnail_path):
         """Attach a local image as the video's YouTube thumbnail.

@@ -4541,6 +4541,21 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_hashtags = gr.Textbox(
                         label=i18n("Hashtags (comma separated)"), value=""
                     )
+                    pub_full_url = gr.Textbox(
+                        label="رابط الفيديو الكامل (المصدر)",
+                        placeholder="https://www.youtube.com/watch?v=...",
+                        info=(
+                            "يبدأ وصف كل Short بسطر «شاهدوا الفيديو الكامل على القناة:» + هذا الرابط. "
+                            "يُستخرج تلقائياً من مصدر المشروع عند تركه فارغاً."
+                        ),
+                        value="",
+                    )
+                    pub_channel_url = gr.Textbox(
+                        label="رابط القناة (يُدرج في الوصف)",
+                        placeholder="https://www.youtube.com/@channel",
+                        info="السطر الثاني في وصف كل Short — يُحفظ مع إعدادات المشروع.",
+                        value="",
+                    )
                     gr.Markdown("#### 🔐 تسجيل الدخول إلى YouTube عبر OAuth")
                     gr.Markdown(
                         "اختر ملف `client_secrets.json` من الكمبيوتر. يتم حفظ نسخة خاصة محلياً داخل مجلد إعدادات OUSSAMA Cutter، "
@@ -5085,6 +5100,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 music_gate,
                 full_access=False,
                 public_confirm=False,
+                full_video_url="",
+                channel_url="",
             ):
                 if (
                     platform == "youtube"
@@ -5098,6 +5115,20 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     yield i18n("Error: No project selected.")
                     return
                 project_path = _project_path_for_name(project_name)
+                # Persist the funnel channel link with the project settings so
+                # batch runs inherit it without retyping (feat/pro-cutting item 1).
+                if str(channel_url or "").strip():
+                    try:
+                        from webui import project_store
+
+                        project_store.update_manifest(
+                            project_path,
+                            settings={
+                                "funnel": {"channel_url": str(channel_url).strip()}
+                            },
+                        )
+                    except Exception:
+                        pass
                 tags = [h.strip() for h in (hashtags or "").split(",") if h.strip()]
                 yield from publish_panel.stream_upload(
                     project_path,
@@ -5113,6 +5144,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     publish_at,
                     full_access,
                     public_confirm=bool(public_confirm),
+                    full_video_url=full_video_url,
+                    channel_url=channel_url,
                 )
 
             pub_refresh.click(library.refresh_projects, outputs=pub_project)
@@ -5284,6 +5317,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_music_gate,
                     pub_full_oauth,
                     pub_public_confirm,
+                    pub_full_url,
+                    pub_channel_url,
                 ],
                 outputs=pub_log,
             )
@@ -5298,6 +5333,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 full_access,
                 public_confirm,
                 gap,
+                full_video_url="",
+                channel_url="",
             ):
                 """Batch-publish every rendered clip of the project."""
                 if not project_name:
@@ -5340,6 +5377,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     public_confirm=bool(public_confirm),
                     schedule_interval_minutes=interval,
                     variant_policy="auto",
+                    full_video_url=full_video_url,
+                    channel_url=channel_url,
                 ):
                     yield line
 
@@ -5355,6 +5394,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_full_oauth,
                     pub_public_confirm,
                     pub_batch_gap,
+                    pub_full_url,
+                    pub_channel_url,
                 ],
                 outputs=pub_log,
             )
