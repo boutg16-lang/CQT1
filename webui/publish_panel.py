@@ -243,7 +243,7 @@ def clip_metadata(project_path, video_path):
             "topic": "",
             "angle": "",
             "hook_type": "",
-            "title_template": "",
+            "title_template": "",            "transcript_text": "",
         }
     seg = segments[idx]
     title = seg.get("recommended_title") or seg.get("title") or ""
@@ -266,7 +266,9 @@ def clip_metadata(project_path, video_path):
         "hook_type": str(seg.get("hook_type") or ""),
         # Item 6: the title pattern that built this title, recorded at
         # publish time so the loop can measure which templates win.
-        "title_template": str(seg.get("title_template") or ""),
+        "title_template": str(seg.get("title_template") or ""),        # Self-certification scan (feat/pro-cutting item 7): the transcript
+        # rides along so the preflight questionnaire scan sees real words.
+        "transcript_text": str(seg.get("transcript_text") or ""),
         # v7.41 review gating surfaced to the publish UI.
         "requires_review": bool(
             seg.get("requires_review") or seg.get("title_review_required")
@@ -1125,6 +1127,37 @@ def _upload_worker(
             "hook_type": meta.get("hook_type") or "",
             "title_template": meta.get("title_template") or "",
         }
+        # Self-certification preflight (feat/pro-cutting item 7): scan the
+        # real content (title + caption + segment transcript) against the
+        # questionnaire categories BEFORE shipping. WARN only — the scan is
+        # heuristic, the upload gate (content_guard) stays the blocker — but
+        # the answer set is recorded so the loop can learn which clips the
+        # channel keeps certifying as clean.
+        try:
+            from scripts import self_certify
+
+            cert = self_certify.self_certify(
+                meta.get("transcript_text") or "",
+                title=title,
+                caption=caption,
+            )
+            if not cert.get("clean"):
+                for flag in (cert.get("recommended") or {}).get(
+                    "contains_yes"
+                ) or []:
+                    emit(
+                        "⚠️ [self-cert] فئة «{}» — تأكد من إجابة الاستبيان في "
+                        "Studio قبل النشر.".format(flag)
+                    )
+            record_extra["self_cert"] = json.dumps(
+                cert, ensure_ascii=False, separators=(",", ":")
+            )
+        except Exception as exc:
+            emit(
+                "[self-cert] ⚠️ تعذّر الفحص المسبق للاستبيان (لا يمنع النشر): {}".format(
+                    str(exc)[:200]
+                )
+            )
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)
         if str(funnel_source_url or "").strip():

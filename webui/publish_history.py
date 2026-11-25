@@ -96,7 +96,9 @@ def record(
             "angle",
             "hook_type",
             # Item 6: which title pattern built this title (learned winners).
-            "title_template",
+            "title_template",            # Item 7: the self-certification answers (compact JSON string)
+            # recorded per upload so the loop can correlate them with strikes.
+            "self_cert",
             "thumbnail",
             "variant_of",
             # Funnel template (feat/pro-cutting item 1): the Short's source
