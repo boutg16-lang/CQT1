@@ -30,12 +30,42 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont, features as pil_features
 
     HAS_PIL = True
 except Exception:  # pragma: no cover
     Image = ImageDraw = ImageFilter = ImageFont = None
+    pil_features = None
     HAS_PIL = False
+
+# RTL correctness (feat/pro-cutting item 2): Pillow only shapes Arabic
+# (joining + bidi reordering) through libraqm. Without it, every Arabic
+# draw.text call renders DISCONNECTED letterforms left-to-right — the real
+# bug this module ships against. Guarded once; every Arabic draw call routes
+# through _rtl_text_kwargs so text can never silently render unshaped.
+try:
+    HAS_RAQM = bool(pil_features.check("raqm")) if HAS_PIL else False
+except Exception:  # pragma: no cover
+    HAS_RAQM = False
+
+ARABIC_FONT_BLACK = "NotoKufiArabic-VF.ttf"  # variable, weight set to 900
+ARABIC_BLACK_WEIGHT = 900
+
+
+def _has_arabic(text) -> bool:
+    return any("\u0600" <= ch <= "\u06ff" for ch in str(text or ""))
+
+
+def _rtl_text_kwargs(text):
+    """Common kwargs for Arabic draw.text/textlength calls.
+
+    Returns ``{'direction': 'rtl', 'language': 'ar'}`` when libraqm is
+    available and the text contains Arabic script; ``{}`` otherwise so Latin
+    text and raqm-less builds keep byte-identical legacy behavior.
+    """
+    if HAS_RAQM and _has_arabic(text):
+        return {"direction": "rtl", "language": "ar"}
+    return {}
 
 try:
     import cv2
@@ -60,8 +90,19 @@ def _load_font(size: int, bold: bool = True, text: str = ""):
     if not HAS_PIL:
         return None
     # Arabic text needs an Arabic font (Montserrat has no Arabic glyphs).
-    has_arabic = any("\u0600" <= ch <= "\u06ff" for ch in (text or ""))
-    if has_arabic:
+    # Headline preference (feat/pro-cutting item 2): Noto Kufi Arabic at
+    # weight 900 (Black) — heavy kufi letterforms survive 720p compression
+    # and read instantly at thumbnail scale. Cairo-Bold stays as fallback.
+    if _has_arabic(text):
+        if bold:
+            path = _font_path(ARABIC_FONT_BLACK)
+            if path:
+                try:
+                    font = ImageFont.truetype(path, size)
+                    font.set_variation_by_axes([ARABIC_BLACK_WEIGHT])
+                    return font
+                except Exception:
+                    pass
         candidates = [
             _font_path("Cairo-Bold.ttf") if bold else _font_path("Cairo-Regular.ttf"),
             _font_path("Cairo-Bold.ttf"),
@@ -200,9 +241,10 @@ def _wrap_text(text: str, font, max_width: int) -> list[str]:
     draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
     words = str(text or "").split()
     lines, current = [], ""
+    rtl_kwargs = _rtl_text_kwargs(text)
     for word in words:
         candidate = (current + " " + word).strip()
-        if draw.textlength(candidate, font=font) <= max_width:
+        if draw.textlength(candidate, font=font, **rtl_kwargs) <= max_width:
             current = candidate
         else:
             if current:
@@ -261,28 +303,65 @@ def generate_thumbnail(
         accent_rgb = (255, 212, 0)
     draw.rectangle([0, TARGET_H - 14, TARGET_W, TARGET_H], fill=accent_rgb)
 
-    # hook badge (top-left)
+    # hook badge (top-left). RTL (item 2): Arabic hook text is shaped
+    # right-to-left and anchored "ra" (right/ascender) so the badge padding
+    # stays identical for Arabic and Latin text.
     if hook:
         hook_font = _load_font(64, bold=True, text=hook)
-        hw = draw.textlength(hook, font=hook_font) + 48
+        hook_kwargs = _rtl_text_kwargs(hook)
+        hw = draw.textlength(hook, font=hook_font, **hook_kwargs) + 48
         draw.rounded_rectangle([24, 24, 24 + hw, 112], radius=16, fill=accent_rgb)
-        draw.text((48, 40), hook, font=hook_font, fill=(10, 10, 10))
+        hook_x = 24 + hw - 24 if hook_kwargs else 48
+        # Center the (shaped) glyphs vertically in the 88px badge: anchor "ra"
+        # fixes the ascender top at y, so a kufi ascender/descender run taller
+        # than the legacy assumption would hang below the badge edge.
+        hook_y = 40
+        try:
+            bbox = draw.textbbox(
+                (0, 0), hook, font=hook_font, anchor="ra", **hook_kwargs
+            )
+            # Center the INK (not the anchor line) in the 88px badge. With
+            # anchor "ra" the ascender reference can sit far above the kufi
+            # glyph tops, so the anchor y itself may legitimately go negative
+            # — clamping it to the badge would push the ink out the bottom.
+            hook_y = 24 + (88 - (bbox[3] - bbox[1])) // 2 - bbox[1]
+        except Exception:
+            pass
+        draw.text(
+            (hook_x, hook_y),
+            hook,
+            font=hook_font,
+            fill=(10, 10, 10),
+            anchor="ra" if hook_kwargs else None,
+            **hook_kwargs,
+        )
 
-    # title (bottom, wrapped)
+    # title (bottom, wrapped). RTL (item 2): Arabic titles render shaped
+    # right-to-left, anchored "ra" and right-aligned to the 40px margin so
+    # long Arabic lines can never run off-canvas (the legacy left-anchored
+    # draw could overflow the right edge and disconnect letterforms).
     if title:
         title_font = _load_font(78, bold=True, text=title)
         lines = _wrap_text(title, title_font, TARGET_W - 80)
-        y = TARGET_H - 40 - len(lines) * 92
+        title_kwargs = _rtl_text_kwargs(title)
+        # Kufi ink runs ~94px tall at 78pt: a 92px baseline step collides
+        # between wrapped lines and the dot descenders touch the accent bar
+        # (measured 2026-11-25 on "الكوكايين بالأطنان"). Lift the block and
+        # step 96px so ink clears both.
+        line_step = 96
+        y = TARGET_H - 48 - len(lines) * line_step
         for line in lines:
             draw.text(
-                (40, y),
+                (TARGET_W - 40 if title_kwargs else 40, y),
                 line,
                 font=title_font,
                 fill=(255, 255, 255),
                 stroke_width=6,
                 stroke_fill=(0, 0, 0),
+                anchor="ra" if title_kwargs else None,
+                **title_kwargs,
             )
-            y += 92
+            y += line_step
 
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     cropped.save(out, "PNG")
