@@ -1749,6 +1749,7 @@ def main():
                         chunk_size_arg=args.chunk_size,
                         model_name_arg=args.ai_model_name,
                         title_language=args.title_language,
+                        target_query=getattr(args, "target_query", None) or None,
                     )
 
                 emit_progress("ai", 55, "تحليل AI")

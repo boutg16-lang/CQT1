@@ -237,6 +237,13 @@ _TEMPLATES = [
 ]
 
 _HOOKS = ["شرح واضح ومباشر", "تجربة عملية", "نصائح مفيدة", "خطوات بسيطة", "دليل مختصر"]
+# Channel title presets (feat/pro-cutting item 8). Measured winners on the
+# Mostefa Bounif channel opened mid-argument with a hook; the funnel preset
+# appends the full-video marker so every Short drives viewers to the source.
+TITLE_PRESETS = {
+    "funnel_full": "{hook} | الفيديو الكامل",
+    "query_question": "{query}: {question}",
+}
 _BENEFITS = [
     "وفّر وقتك وجهدك",
     "النتائج من أول مرة",

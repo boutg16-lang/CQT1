@@ -588,6 +588,14 @@ def build_parser():
         "--force-regenerate is the explicit CLI alias).",
     )
     parser.add_argument(
+        "--target-query",
+        default=None,
+        help="Query-targeted cutting: pick the segment that is genuinely "
+        "about this search query, lead its title with the query (scored by "
+        "scripts/seo_titles.score_title), and refuse unrelated segments "
+        "instead of shipping a misleading title. See scripts/query_targeting.py.",
+    )
+    parser.add_argument(
         "--auto-learn-blocked",
         action="store_true",
         help="After the risk scorecard, automatically teach the safety terms "

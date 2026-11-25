@@ -936,6 +936,7 @@ def run_viral_cutter(
     auto_upload_interval_minutes=60,
     auto_upload_oauth_file=None,
     voice_face_link=False,
+    target_query=None,
 ):
 
     # NOTE: parameter order MUST match the `inputs=[...]` order of every
@@ -1321,6 +1322,7 @@ def run_viral_cutter(
             output_aspect=output_aspect,
             reframe_mode=reframe_mode,
             force_new_segments=force_new_segments,
+            target_query=target_query,
             visual_check=visual_check,
             visual_gate=visual_gate,
             visual_frames=visual_frames,
@@ -2552,6 +2554,16 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         label=i18n("Themes"),
                         placeholder=i18n("funny, sad..."),
                         visible=False,
+                    )
+                    target_query_input = gr.Textbox(
+                        label=i18n("Target Query (cut FOR a search query)"),
+                        placeholder="مصطفى بونيف تبون",
+                        info=(
+                            "ميزة القطع حسب الاستعلام (feat/pro-cutting 3): يختار النظام "
+                            "المقطع الذي يتحدث فعلاً عن هذا الاستعلام، ويبدأ العنوان به، "
+                            "ويرفض المقاطع غير المتصلة به (بدون عناوين مضللة)."
+                        ),
+                        value="",
                     )
                     viral_input.change(
                         lambda x: gr.update(visible=not x), viral_input, themes_input
@@ -5819,8 +5831,12 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         priority = max(-5, min(5, int(float(plan_rest.pop(0) or 0))))
                     except (TypeError, ValueError):
                         priority = 0
-                if len(plan_rest) > 9:
-                    plan_rest[9] = None
+                if len(plan_rest) > 10:
+                    # Index 10 = api_key_input since feat/pro-cutting item 3
+                    # inserted target_query_input at position 4 of run_batch's
+                    # inputs (video_upload=0 … ai_backend=9, api_key=10).
+                    # Queued jobs must never persist the API key.
+                    plan_rest[10] = None
                 batch_id = uuid.uuid4().hex
                 job_ids = []
                 for url in urls:
@@ -6297,6 +6313,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_interval_minutes_input,
             auto_upload_oauth_file_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             logs_output,
@@ -6410,6 +6427,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_interval_minutes_input,
             auto_upload_oauth_file_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             logs_output,
@@ -6521,6 +6539,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_public_confirm_input,
             auto_upload_interval_minutes_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             batch_df,

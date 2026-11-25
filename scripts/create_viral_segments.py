@@ -1736,6 +1736,7 @@ def process_segments(
     llm_config=None,
     allow_auto_embeddings=False,
     selection_meta=None,
+    target_query=None,
 ):
     """
     Aligns raw AI segments (with reference tags) to actual transcript timestamps.
@@ -2778,6 +2779,24 @@ def process_segments(
             )
         validated_segments = distinct
 
+    # Query-targeted cutting (feat/pro-cutting item 3): when --target-query
+    # is set, only segments genuinely ABOUT the query survive; survivors get
+    # a query-led title scored by seo_titles.score_title. Unrelated segments
+    # are refused (dropped with a WARN) — never shipped with a misleading
+    # title. Fail-open: a targeting error keeps the unfiltered selection.
+    if str(target_query or "").strip():
+        try:
+            from scripts import query_targeting
+
+            validated_segments = query_targeting.apply_target_query(
+                validated_segments, str(target_query).strip(), final_result
+            )
+        except Exception as exc:
+            logger.warning(
+                "Target-query filtering failed (%s); keeping unfiltered segments.",
+                type(exc).__name__,
+            )
+
     final_result["segments"] = validated_segments
     if validation_errors:
         final_result["validation_errors"] = validation_errors
@@ -2972,6 +2991,7 @@ def create(
     chunk_size_arg=None,
     model_name_arg=None,
     title_language="auto",
+    target_query=None,
 ):
     quantidade_de_virals = max(1, int(num_segments or 1))
     # Ask for spare candidates so safety filtering and de-duplication can still
@@ -3459,4 +3479,5 @@ OUTPUT JSON ONLY:
         llm_config=config,
         allow_auto_embeddings=ai_mode in {"openai", "auto"},
         selection_meta=selection_meta,
+        target_query=target_query,
     )
