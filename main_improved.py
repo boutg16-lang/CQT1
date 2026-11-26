@@ -1535,6 +1535,40 @@ def main():
 
             # Se skip config, args.model é default
             # GPU OOM guard (Roadmap 4.1) + checkpoint resume (Roadmap 4.2)
+            # YouTube captions first (round 2 item 3b): when the source is a
+            # YouTube URL and the saved OAuth token can read the video's own
+            # caption tracks, use Studio's transcript instead of re-running
+            # Whisper. Every failure prints its exact reason and falls through
+            # to the Whisper stage below.
+            _yt_transcript_used = False
+            if url:
+                try:
+                    from scripts import yt_transcript
+
+                    _yt_caption_result = yt_transcript.try_source_transcript(
+                        url,
+                        project_folder,
+                        base_name=os.path.splitext(os.path.basename(input_video))[0]
+                        if input_video
+                        else None,
+                    )
+                    if _yt_caption_result:
+                        tracker.mark_done(project_folder, "transcribe")
+                        print(
+                            "[transcribe] caption-based srt/tsv: {} / {}".format(
+                                _yt_caption_result[0], _yt_caption_result[1]
+                            ),
+                            flush=True,
+                        )
+                        _transcribe_result = _yt_caption_result
+                        _yt_transcript_used = True
+                except Exception as caption_error:
+                    print(
+                        "[transcribe] YouTube captions attempt failed: {}".format(
+                            caption_error
+                        )
+                    )
+
             def _run_transcription_stage():
                 return tracker.run(
                     "transcribe",
@@ -1545,7 +1579,9 @@ def main():
                     device=args.transcription_device,
                 )
 
-            _transcribe_result = _run_transcription_stage()
+            _transcribe_result = None
+            if not _yt_transcript_used:
+                _transcribe_result = _run_transcription_stage()
             base_name = os.path.splitext(os.path.basename(input_video))[0]
             if _transcribe_result is None:
                 # Stage was marked done in a previous run; validate and repair
