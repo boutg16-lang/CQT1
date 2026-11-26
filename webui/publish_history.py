@@ -106,6 +106,8 @@ def record(
             # Funnel template (feat/pro-cutting item 1): the Short's source
             # video (URL + id) so the loop can measure the funnel end-to-end.
             "source_video_url",
+            "source_video_id",
+            "source_views_at_publish",
             "related_video_source",
             # Item 1 (round 2): the per-clip manual Studio checklist (compact
             # JSON). Needs more room than a scalar marker.
@@ -113,7 +115,8 @@ def record(
             # Item 7 (round 2): the A/B title candidates surfaced for this
             # clip and which one was actually published.
             "title_variants",
-            "title_variant_used",            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
+            "title_variant_used",
+            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
             "youtube_checks",
         ):
             if extra.get(key) is not None:

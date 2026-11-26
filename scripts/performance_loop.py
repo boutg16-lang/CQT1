@@ -296,6 +296,20 @@ def _thumbnail_variant_kind(thumbnail_name: str) -> str:
     match = re.search(r"_(v\d+)\.(?:png|jpg|jpeg|webp)$", str(thumbnail_name or "").strip())
     return match.group(1) if match else ""
 
+def _funnel_bucket(value) -> str:
+    """Bucket label for a funnel number (``""`` excludes the clip)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number <= 0:
+        return "zero"
+    if number < 25:
+        return "low"
+    if number < 100:
+        return "mid"
+    return "high"
+
 
 def _fetch_real_metrics(
     video_ids: list[str], project_folder: str | None = None
@@ -746,7 +760,14 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     """Learn which content markers (topics/angles/hook styles) perform."""
     result: dict[str, Any] = {"overall_avg_views": _overall_avg_views(measured)}
     categories = {}
-    for field in ("hook_type", "angle", "topic", "title_template"):
+    for field in (
+        "hook_type",
+        "angle",
+        "topic",
+        "title_template",
+        "funnel_source_delta",
+        "related_clicks",
+    ):
         rows = _category_performance(measured, field)
         if rows:
             categories[field] = rows
@@ -849,8 +870,48 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
                 )
         except Exception:
             logger.debug("youtube recheck pass failed", exc_info=True)
+    # Per-Short funnel metrics (round 2 item 6b): Short views, related-video
+    # clicks, source-video views before vs after the Short, subscribers gained.
+    # Best-effort; the report carries an explicit unavailable reason instead of
+    # fake zeros when OAuth is not configured.
+    funnel: dict[str, Any] = {}
+    if fetch_live:
+        try:
+            from scripts import funnel_metrics
+
+            funnel = funnel_metrics.funnel_rows(
+                project_folder,
+                fetch_metrics=lambda ids: {
+                    vid: metrics[vid] for vid in ids if vid in metrics
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "funnel metrics unavailable (%s): %s",
+                type(exc).__name__,
+                str(exc)[:160],
+            )
+    report["funnel"] = funnel
+    funnel_by_id = {
+        str(row.get("video_id") or "").strip(): row
+        for row in (funnel.get("rows") or [])
+        if isinstance(row, dict)
+    }
+
     for item in published:
         item["metrics"] = metrics.get(item["video_id"])
+        # Funnel buckets become learnable content categories: the same
+        # style-bonus machinery that learns "hook X earns +Y% views" now
+        # learns "Shorts that pull N source views / related clicks".
+        funnel_row = funnel_by_id.get(str(item.get("video_id") or "").strip())
+        if funnel_row:
+            content = item.setdefault("content", {})
+            delta_bucket = _funnel_bucket(funnel_row.get("source_delta"))
+            if delta_bucket:
+                content["funnel_source_delta"] = delta_bucket
+            clicks_bucket = _funnel_bucket(funnel_row.get("related_clicks"))
+            if clicks_bucket:
+                content["related_clicks"] = clicks_bucket
         report["clips"].append(item)
     measured = [item for item in published if item.get("metrics")]
     report["with_metrics"] = len(measured)
@@ -1050,6 +1111,30 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         report["insights"].append(
             "Metrics present but no feature shows a meaningful correlation yet "
             "— publish more clips to build signal."
+        )
+    # Funnel summary (round 2 item 6b) comes AFTER the no-signal fallback so a
+    # channel with one Short still gets the honest "no meaningful correlation"
+    # line rather than the funnel numbers masking it.
+    funnel_totals = funnel.get("totals") or {}
+    if funnel_totals:
+        report["insights"].append(
+            "funnel: {} Shorts pulled {} source views, {} related clicks, "
+            "{} subscribers in the window".format(
+                len(funnel.get("rows") or []),
+                funnel_totals.get("source_delta")
+                if funnel_totals.get("source_delta") is not None
+                else "—",
+                funnel_totals.get("related_clicks")
+                if funnel_totals.get("related_clicks") is not None
+                else "—",
+                funnel_totals.get("subscribers_gained")
+                if funnel_totals.get("subscribers_gained") is not None
+                else "—",
+            )
+        )
+    if funnel.get("unavailable_reason"):
+        report["insights"].append(
+            "funnel incomplete: {}".format(funnel["unavailable_reason"])
         )
     return report
 

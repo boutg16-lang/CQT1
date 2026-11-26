@@ -139,14 +139,23 @@ def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
 
     Only values with >=2 measured clips and a >=15% delta vs the channel
     average produce a bonus; no single style may move a score more than
-    STYLE_MAX_BONUS points.
+    STYLE_MAX_BONUS points. Funnel categories (round 2 item 6b) ride the same
+    machinery: a hook/topic that consistently pulls source-video views or
+    related-video clicks is worth more than views alone.
     """
     content = (insights or {}).get("content_insights") or {}
     if not content.get("overall_avg_views"):
         return {}
     style: dict[str, Any] = {"basis": "content_insights"}
     categories = content.get("categories") or {}
-    for field in ("hook_type", "angle", "topic", "title_template"):
+    for field in (
+        "hook_type",
+        "angle",
+        "topic",
+        "title_template",
+        "funnel_source_delta",
+        "related_clicks",
+    ):
         by_value = {}
         for row in categories.get(field) or []:
             if int(row.get("samples") or 0) < 2:

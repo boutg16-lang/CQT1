@@ -4644,7 +4644,49 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_checklist_btn = gr.Button(
                             "📋 قائمة الاستوديو اليدوية / Manual Studio checklist"
                         )
+                        pub_funnel_btn = gr.Button(
+                            "📊 قمع الأداء لكل شورت / Per-Short funnel"
+                        )
                         pub_checklist_out = gr.Markdown(visible=True)
+                        pub_funnel_note = gr.Markdown(visible=True)
+                        pub_funnel_out = gr.Dataframe(
+                            headers=publish_panel.FUNNEL_HEADERS,
+                            datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                            interactive=False,
+                            label=i18n("Funnel: Short views → related clicks → source views → subs"),
+                            elem_id="pub_funnel_df",
+                        )
+                    with gr.Row():
+                        pub_funnel_btn = gr.Button(
+                            "🕸️ عرض قمع الأداء لكل شورت / Per-Short funnel view"
+                        )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=[
+                            i18n("Short"),
+                            i18n("Short views"),
+                            i18n("Related clicks"),
+                            i18n("Source before"),
+                            i18n("Source after"),
+                            i18n("Source delta"),
+                            i18n("Subscribers"),
+                            i18n("Funnel score"),
+                        ],
+                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                        interactive=False,
+                        label=i18n("Per-Short funnel"),
+                    )
+                    pub_funnel_note = gr.Markdown()
+                    with gr.Row():
+                        pub_funnel_btn = gr.Button(
+                            "🎯 قمع الأداء لكل شورت / Per-Short funnel"
+                        )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=publish_panel.FUNNEL_HEADERS,
+                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                        label=i18n("Short views → related clicks → source views → subscribers"),
+                        interactive=False,
+                    )
+                    pub_funnel_note = gr.Markdown()
                     with gr.Row():
                         pub_batch_gap = gr.Number(
                             value=0,
@@ -4656,6 +4698,25 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_batch_btn = gr.Button(
                             "🚀 رفع كل المقاطع (دفعة كاملة)", variant="secondary"
                         )
+                    pub_funnel_btn = gr.Button(
+                        "📐 قمع الأداء لكل شورت / Per-Short funnel"
+                    )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=[
+                            "Short",
+                            "Views",
+                            "Related clicks",
+                            "Source before",
+                            "Source after",
+                            "Source delta",
+                            "Subs gained",
+                            "Funnel score",
+                        ],
+                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                        interactive=False,
+                        label="Funnel: Short → source video → subscribers",
+                    )
+                    pub_funnel_note = gr.Markdown(visible=True)
                     pub_batch_hint = gr.Markdown(
                         "**الدفعة:** ترفع كل مقاطع المشروع الجاهزة عبر نفس بوابة الأمان (Dry Run افتراضياً — فعّله "
                         "للرفع الحقيقي). عند فاصل > 0 تُجدول تلقائياً وتتطلب YouTube Private. منصات أخرى تلقائياً "
@@ -5351,6 +5412,47 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 show_pub_checklist,
                 inputs=[pub_project, pub_platform, pub_clip],
                 outputs=[pub_checklist_out],
+            )
+
+            def show_pub_funnel(project_name):
+                """Per-Short funnel view (round 2 item 6b)."""
+                project_path = _project_path_for_name(project_name)
+                rows, note = publish_panel.funnel_view(project_path)
+                return rows, note
+
+            pub_funnel_btn.click(
+                show_pub_funnel,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
+            )
+
+            # Per-Short funnel view (round 2 item 6b)
+            pub_funnel_btn = gr.Button(
+                "\U0001F4C9 \u0642\u0645\u0629 \u0627\u0644\u0623\u062f\u0627\u0621 \u0644\u0643\u0644 \u0634\u0648\u0631\u062a \u0645\u0646\u0634\u0648\u0631 / Per-Short funnel"
+            )
+            pub_funnel_out = gr.Dataframe(
+                headers=publish_panel.FUNNEL_HEADERS,
+                datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                interactive=False,
+                label=i18n("Funnel per Short"),
+            )
+            pub_funnel_note = gr.Markdown()
+            pub_funnel_btn.click(
+                publish_panel.funnel_view,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
+            )
+            def show_pub_funnel(project_name):
+                project_path = _project_path_for_name(project_name)
+                return publish_panel.funnel_view(
+                    project_path,
+                    token_path=str(os.getenv("YT_TOKEN_FILE") or ""),
+                )
+
+            pub_funnel_btn.click(
+                show_pub_funnel,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
             )
 
 

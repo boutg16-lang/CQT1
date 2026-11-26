@@ -1297,7 +1297,27 @@ def _upload_worker(
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)
         if str(funnel_source_url or "").strip():
-            record_extra["source_video_url"] = str(funnel_source_url).strip()
+            record_extra["source_video_url"] = str(funnel_source_url).strip()        # Funnel baseline (round 2 item 6b): the source video's view count at
+        # publish time. funnel_metrics later diffs it against the live count
+        # ("source views before vs after the Short"). Best-effort: a failed
+        # lookup records nothing instead of a fake zero.
+        try:
+            from scripts import funnel_metrics as _funnel_metrics
+
+            _source_id = _funnel_metrics.source_video_id(
+                str(funnel_source_url or "").strip()
+            )
+            if _source_id and not dry_run:
+                _baseline = _funnel_metrics.source_view_count(_source_id)
+                if _baseline is not None:
+                    record_extra["source_views_at_publish"] = int(_baseline)
+                    record_extra["source_video_id"] = _source_id
+        except Exception as baseline_exc:
+            emit(
+                "[funnel] source-view baseline not captured: {}".format(
+                    str(baseline_exc)[:120]
+                )
+            )
         related_source = (result or {}).get("related_video_source")
         if related_source:
             record_extra["related_video_source"] = str(related_source)
@@ -1527,6 +1547,58 @@ def studio_checklist_view(project_path, platform, video_path):
             "(نشر سابق لنظام قائمة الاستوديو)."
         )
     return studio_checklist.checklist_markdown(items)
+
+
+FUNNEL_HEADERS = [
+    "Short",
+    "Views",
+    "Related clicks",
+    "Source before",
+    "Source after",
+    "Source delta",
+    "Subs gained",
+    "Funnel score",
+]
+
+
+def funnel_view(project_path):
+    """Per-Short funnel rows for the WebUI (round 2 item 6b)."""
+    from scripts import funnel_metrics
+
+    if not str(project_path or "").strip() or not os.path.isdir(project_path):
+        return [], "اختر مشروعاً أولاً."
+    try:
+        report = funnel_metrics.funnel_rows(project_path)
+    except Exception as exc:
+        return [], "⚠️ تعذّر جمع مقاييس القمع: {}".format(str(exc)[:160])
+    rows = []
+    for row in report.get("rows") or []:
+        rows.append(
+            [
+                str(row.get("title") or row.get("video_id") or "")[:60],
+                row.get("short_views"),
+                row.get("related_clicks"),
+                row.get("source_before"),
+                row.get("source_after"),
+                row.get("source_delta"),
+                row.get("subscribers_gained"),
+                row.get("funnel_score"),
+            ]
+        )
+    note = ""
+    totals = report.get("totals") or {}
+    if rows:
+        note = "**الإجمالي:** مشاهدات الشورتات {} — نقرات مرتبط {} — مشاهدات المصدر {} — مشتركون {}".format(
+            totals.get("short_views") if totals.get("short_views") is not None else "—",
+            totals.get("related_clicks") if totals.get("related_clicks") is not None else "—",
+            totals.get("source_delta") if totals.get("source_delta") is not None else "—",
+            totals.get("subscribers_gained") if totals.get("subscribers_gained") is not None else "—",
+        )
+    if report.get("unavailable_reason"):
+        note = "ℹ️ {}\n\n{}".format(report["unavailable_reason"], note).strip()
+    if not rows:
+        return [], note or "لا توجد مقاطع منشورة بنجاح بعد."
+    return rows, note
 
 
 def stream_upload(
