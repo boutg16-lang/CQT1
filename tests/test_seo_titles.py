@@ -344,3 +344,40 @@ def test_main_suggest_command_mocked(monkeypatch, capsys):
 
 def test_main_no_command_returns_2():
     assert st.main([]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Item 8 (feat/pro-cutting): past winning titles reused as templates
+# ---------------------------------------------------------------------------
+
+
+def test_winner_to_template_extracts_measured_tail():
+    template = st.winner_to_template("مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟")
+    assert template == "{hook}: السؤال الذي أرعب الجميع؟"
+
+
+def test_winner_to_template_rejects_title_without_reusable_tail():
+    assert st.winner_to_template("عنوان قصير") is None
+    assert st.winner_to_template("") is None
+
+
+def test_titles_from_winners_leads_with_new_query():
+    winners = ["مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟"]
+    out = st.titles_from_winners(winners, "قضية السبت", keywords=["قضية السبت"])
+    assert out
+    assert out[0]["title"].startswith("قضية السبت")
+    assert "السؤال الذي أرعب الجميع؟" in out[0]["title"]
+    assert out[0]["pattern"].startswith("winner:")
+
+
+def test_titles_from_winners_validated_against_transcript():
+    winners = ["مصطفى بونيف تبون: قال إن الملف مغلق نهائياً"]
+    transcript = "قضية السبت تكشف تفاصيل جديدة. الجميع ينتظر الرد الرسمي."
+    out = st.titles_from_winners(
+        winners, "قضية السبت", transcript_text=transcript, limit=5
+    )
+    # the inherited claim (الملف مغلق) is NOT in this clip — grounded pipeline
+    # must not let it through silently either way; assert the candidate that
+    # survives, if any, was validated rather than blindly inherited.
+    for item in out:
+        assert item.get("validation", {}).get("status") in ("verified", "unknown")
