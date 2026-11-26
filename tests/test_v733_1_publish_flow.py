@@ -81,7 +81,13 @@ class TestThumbnails:
         captured = {}
 
         def fake_generate(
-            source, *, title="", out="thumbnail.png", at_seconds=0.0, accent="#FFD400"
+            source,
+            *,
+            title="",
+            hook="",
+            out="thumbnail.png",
+            at_seconds=0.0,
+            accent="#FFD400",
         ):
             captured["title"] = title
             os.makedirs(os.path.dirname(out), exist_ok=True)

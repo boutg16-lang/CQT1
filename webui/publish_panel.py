@@ -243,7 +243,9 @@ def clip_metadata(project_path, video_path):
             "topic": "",
             "angle": "",
             "hook_type": "",
-            "title_template": "",            "transcript_text": "",
+            "title_template": "",
+            "alt_titles": [],
+            "transcript_text": "",
         }
     seg = segments[idx]
     title = seg.get("recommended_title") or seg.get("title") or ""
@@ -266,7 +268,11 @@ def clip_metadata(project_path, video_path):
         "hook_type": str(seg.get("hook_type") or ""),
         # Item 6: the title pattern that built this title, recorded at
         # publish time so the loop can measure which templates win.
-        "title_template": str(seg.get("title_template") or ""),        # Self-certification scan (feat/pro-cutting item 7): the transcript
+        "title_template": str(seg.get("title_template") or ""),
+        # Thumbnail A/B variants (round 2 item 4): alternate headline
+        # wordings measured by the winning-title loop.
+        "alt_titles": list(seg.get("alt_titles") or []),
+        # Self-certification scan (feat/pro-cutting item 7): the transcript
         # rides along so the preflight questionnaire scan sees real words.
         "transcript_text": str(seg.get("transcript_text") or ""),
         # v7.41 review gating surfaced to the publish UI.
@@ -793,6 +799,37 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     try:
         from scripts import thumbnail_generator
 
+        variants_env = os.getenv("VIRALCUTTER_THUMBNAIL_VARIANTS", "1")
+        variants_on = variants_env.strip().lower() not in {"0", "false", "no", "off"}
+        if variants_on:
+            # Round 2 item 4: keep the primary thumbnail path but also write
+            # 2-3 Test & Compare variants next to it. Attaching still uses
+            # the primary; the user picks a winner in YouTube Studio.
+            meta = clip_metadata(project_path, video_path)
+            alt_titles = [
+                str(t).strip()
+                for t in (meta.get("alt_titles") or [])
+                if str(t or "").strip()
+            ]
+            var_result = thumbnail_generator.generate_variants(
+                video_path,
+                titles=[str(title or "")[:80]] + alt_titles[:2],
+                out_dir=os.path.join(project_path, "thumbnails"),
+                base_name=stem,
+                at_seconds=0.0,
+                max_variants=3,
+            )
+            if var_result.get("ok") and var_result.get("variants"):
+                primary = var_result["variants"][0]["out"]
+                if os.path.isfile(primary):
+                    if primary != output:
+                        try:
+                            import shutil
+
+                            shutil.copyfile(primary, output)
+                        except OSError:
+                            pass
+                    return output
         result = thumbnail_generator.generate_thumbnail(
             video_path, title=str(title or "")[:80], out=output, at_seconds=0.0
         )

@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -374,7 +374,109 @@ def generate_thumbnail(
     }
 
 
+def generate_variants(
+    source: str,
+    *,
+    titles: Optional[List[str]] = None,
+    hook: str = "",
+    out_dir: str = ".",
+    base_name: str = "thumbnail",
+    at_seconds: float = 0.0,
+    accent: str = "#FFD400",
+    max_variants: int = 3,
+) -> dict[str, Any]:
+    """Generate 2-3 thumbnail variants for YouTube Studio Test & Compare.
+
+    Variants differ in headline wording (``titles[0]`` / ``titles[1]``),
+    frame time (video sources get a second frame at ``+2.0s``), and hook
+    badge presence. Every variant lands next to the others in ``out_dir``
+    as ``<base_name>_v1.png`` … plus a combined ``<base_name>_variants.png``
+    contact sheet so the user can eyeball them side by side.
+    """
+    if not HAS_PIL:
+        return {"ok": False, "error": "Pillow is required (pip install Pillow)"}
+
+    candidate_titles = [t for t in (titles or []) if str(t or "").strip()]
+    if not candidate_titles:
+        candidate_titles = [""]
+
+    is_video = source.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".avi"))
+    specs: List[Dict[str, Any]] = [
+        {
+            "title": candidate_titles[0],
+            "at_seconds": at_seconds,
+            "hook": str(hook or "").strip(),
+        }
+    ]
+    if len(candidate_titles) > 1:
+        specs.append(
+            {
+                "title": candidate_titles[1],
+                "at_seconds": at_seconds,
+                "hook": "",
+            }
+        )
+    elif str(hook or "").strip():
+        # Single headline + hook badge: the second variant drops the badge so
+        # the user can compare badge on/off in Studio's Test & Compare.
+        specs.append({"title": candidate_titles[0], "at_seconds": at_seconds, "hook": ""})
+    if is_video and len(specs) < max_variants:
+        specs.append(
+            {
+                "title": candidate_titles[min(1, len(candidate_titles) - 1)],
+                "at_seconds": at_seconds + 2.0,
+                "hook": str(hook or "").strip(),
+            }
+        )
+    specs = specs[: max(1, int(max_variants))]
+
+    os.makedirs(out_dir, exist_ok=True)
+    results: List[Dict[str, Any]] = []
+    for index, spec in enumerate(specs, start=1):
+        out_path = os.path.join(out_dir, "{}_v{}.png".format(base_name, index))
+        result = generate_thumbnail(
+            source,
+            title=str(spec["title"]),
+            hook=str(spec["hook"]),
+            out=out_path,
+            at_seconds=float(spec["at_seconds"]),
+            accent=accent,
+        )
+        if not result.get("ok"):
+            return {"ok": False, "error": result.get("error"), "variants": results}
+        results.append(
+            {
+                "out": result["out"],
+                "title": str(spec["title"]),
+                "at_seconds": float(spec["at_seconds"]),
+                "hook": str(spec["hook"]),
+                "hook_badge": bool(spec["hook"]),
+                "face_detected": result.get("face_detected", False),
+            }
+        )
+
+    sheet_path = ""
+    paths = [item["out"] for item in results]
+    try:
+        images = [Image.open(path).convert("RGB") for path in paths]
+        total_w = sum(image.width for image in images)
+        height = max(image.height for image in images)
+        sheet = Image.new("RGB", (total_w, height), (16, 16, 16))
+        x = 0
+        for image in images:
+            sheet.paste(image, (x, 0))
+            x += image.width
+        sheet_path = os.path.join(out_dir, "{}_variants.png".format(base_name))
+        sheet.save(sheet_path, "PNG")
+    except Exception:
+        sheet_path = ""
+
+    return {"ok": True, "variants": results, "sheet": sheet_path}
+
+
 def main(argv=None) -> int:
+
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", help="video file or image")
     parser.add_argument("--title", default="", help="main title (bottom)")
@@ -384,7 +486,40 @@ def main(argv=None) -> int:
         "--at", type=float, default=0.0, help="video frame time in seconds (default 0)"
     )
     parser.add_argument("--accent", default="#FFD400", help="accent hex color")
+    parser.add_argument(
+        "--variants",
+        type=int,
+        default=0,
+        help="generate 2-3 Test & Compare variants instead of one thumbnail "
+        "(--out becomes the base name; a <base>_variants.png sheet is written)",
+    )
     args = parser.parse_args(argv)
+
+    if args.variants > 0:
+        out_dir = os.path.dirname(os.path.abspath(args.out)) or "."
+        base = os.path.splitext(os.path.basename(args.out))[0]
+        result = generate_variants(
+            args.source,
+            titles=[args.title],
+            hook=args.hook,
+            out_dir=out_dir,
+            base_name=base,
+            at_seconds=args.at,
+            accent=args.accent,
+            max_variants=args.variants,
+        )
+        if not result["ok"]:
+            print("[thumbnail] ERROR: {}".format(result.get("error")))
+            return 1
+        for variant in result["variants"]:
+            print(
+                "[thumbnail] variant -> {} (title={!r}, hook={!r}, frame={}s)".format(
+                    variant["out"], variant["title"], variant["hook"], variant["at_seconds"]
+                )
+            )
+        if result.get("sheet"):
+            print("[thumbnail] sheet -> {}".format(result["sheet"]))
+        return 0
 
     result = generate_thumbnail(
         args.source,
