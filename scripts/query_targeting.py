@@ -553,6 +553,124 @@ def _sentences_with_bounds(text, word_timings=None):
     return [(None, None, part) for part in parts]
 
 
+def sentences_with_bounds(
+    text: str, start_time: float, end_time: float, word_timings=None
+) -> List[Dict[str, Any]]:
+    """Absolute-time sentence rows for the WebUI transcript-cut view.
+
+    ``transcript_cut`` renders the source transcript sentence by sentence;
+    clicking a row selects [start_time, end_time] for a manual cut. Word
+    clocks from the transcript (WhisperX word timings or the YouTube caption
+    track) are used when present; otherwise each sentence owns the slice its
+    characters occupy inside the segment window.
+    """
+    start = float(start_time or 0.0)
+    end = float(end_time or start)
+    duration = max(0.0, end - start)
+    sentences = _sentences_with_bounds(str(text or ""), word_timings)
+    total_chars = sum(len(s_text) for _, _, s_text in sentences) or 1
+    rows: List[Dict[str, Any]] = []
+    for order, (rel_start, rel_end, sentence) in enumerate(sentences):
+        sentence = str(sentence or "").strip()
+        if not sentence:
+            continue
+        if rel_start is not None and rel_end is not None:
+            s, e = start + float(rel_start), start + float(rel_end)
+        else:
+            char_pos = sum(len(s_text) for _, _, s_text in sentences[:order])
+            s = start + duration * (char_pos / total_chars)
+            e = start + duration * ((char_pos + len(sentence)) / total_chars)
+        rows.append(
+            {
+                "order": order,
+                "start_time": round(max(start, s), 3),
+                "end_time": round(min(end, e) if e > s else e, 3),
+                "text": sentence,
+            }
+        )
+    return rows
+
+
+def manual_clip_proposal(
+    segment: Dict[str, Any],
+    query: str = "",
+    *,
+    min_hook_score: float = 30.0,
+    min_duration: float = 0.5,
+    max_duration: float = 90.0,
+) -> Dict[str, Any]:
+    """Validate + hook-score + title one user-chosen transcript window.
+
+    The transcript-click path (round 2 item 8 in webui/transcript_cut.py):
+    the user picks [start_time, end_time] from the transcript rows, this
+    function runs the same gauntlet the automatic pipeline runs —
+    ``segment_validator.validate_final_segment``,
+    ``hook_analyzer.analyze_opening`` and the query-led title when a query
+    is active. Returns ``{"ok": False, "reasons": [...]}`` when the window
+    is not shippable; a full proposal segment (``origin="manual_cut"``)
+    otherwise. Manual cuts are advisory-scored, never auto-refused for a
+    weak hook — the reviewer decides.
+    """
+    source = segment if isinstance(segment, dict) else {}
+    text = str(source.get("transcript_text") or "").strip()
+    proposal: Dict[str, Any] = {
+        "title": "",
+        "start_time": source.get("start_time"),
+        "end_time": source.get("end_time"),
+        "duration": source.get("duration"),
+        "transcript_text": text,
+        "hook_text": str(source.get("hook_text") or text),
+        "origin": "manual_cut",
+        "query": str(query or "").strip(),
+    }
+    try:
+        start = float(source.get("start_time"))
+        end = float(source.get("end_time"))
+    except (TypeError, ValueError):
+        return {"ok": False, "reasons": ["invalid_window"], "proposal": proposal}
+    if end <= start:
+        return {"ok": False, "reasons": ["invalid_window"], "proposal": proposal}
+    if len(text.split()) < 3:
+        return {"ok": False, "reasons": ["too_few_words"], "proposal": proposal}
+    hook_report = hook_analyzer.analyze_opening(text)
+    proposal["hook_score"] = round(
+        float(hook_report.get("hook_score") or 0.0), 1
+    )
+    proposal["hook_report"] = {
+        k: hook_report.get(k)
+        for k in ("hook_score", "opens_mid_thought", "has_question_hook")
+    }
+    verdict = segment_validator.validate_final_segment(
+        proposal,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        transcript_text=text,
+        require_title=False,
+    )
+    reasons = [str(issue) for issue in verdict.get("errors") or []]
+    if reasons:
+        proposal["validation"] = verdict
+        return {"ok": False, "reasons": reasons, "proposal": proposal}
+    proposal["duration"] = round(end - start, 3)
+    if str(query or "").strip():
+        title_data = build_query_title(query, {"transcript_text": text})
+        title = str(title_data.get("title") or "").strip()
+        if title:
+            proposal["title"] = title
+            proposal["recommended_title"] = title
+            proposal["query_title_data"] = {
+                k: v for k, v in title_data.items() if k != "candidates"
+            }
+    if not str(proposal.get("title") or "").strip():
+        fallback_title = " ".join(text.split()[:10])
+        proposal["title"] = fallback_title[:80]
+        proposal["recommended_title"] = proposal["title"]
+    proposal["hook_warning"] = bool(
+        float(hook_report.get("hook_score") or 0.0) < float(min_hook_score)
+    )
+    return {"ok": True, "reasons": [], "proposal": proposal}
+
+
 def continuation_candidates(
     segment: Dict[str, Any],
     query: str,
@@ -696,7 +814,9 @@ __all__ = [
     "DEFAULT_MIN_RELEVANCE",
     "apply_target_query",
     "build_query_title",
+    "manual_clip_proposal",
     "query_relevance",
     "query_tokens",
     "rank_segments_for_query",
+    "sentences_with_bounds",
 ]

@@ -42,6 +42,7 @@ try:
         settings_store,
         style,
         telegram_control,
+        transcript_cut,
     )
     from . import subtitle_editor as editor
     from . import subtitle_handler as subs
@@ -60,6 +61,7 @@ except ImportError:
     import settings_store  # Module for persistent AI settings (save/load Gemini key)
     import style  # Learn (strike feedback) & Performance (analytics) panels
     import subtitle_editor as editor  # Module for Editor Logic
+    import transcript_cut  # Transcript click-to-cut proposals (round 2 item 8)
     import subtitle_handler as subs  # Module for Subtitles
     import telegram_control  # Optional local Telegram queue control
 try:
@@ -4183,6 +4185,123 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     review_df,
                 ],
                 outputs=[review_df, review_ab_status],
+            )
+
+            # Transcript click-to-cut (round 2 item 8): show the source
+            # transcript, let the user click a sentence to fill Start/End,
+            # and append a validated manual segment to viral_segments.txt.
+            with gr.Accordion(
+                i18n(
+                    "النص الكامل — اضغط جملة لتحديد مقطع / Transcript click-to-cut"
+                ),
+                open=False,
+            ):
+                transcript_df = gr.Dataframe(
+                    headers=transcript_cut.HEADERS,
+                    datatype=["number", "number", "number", "str"],
+                    interactive=False,
+                    label=i18n("Source transcript (sentences)"),
+                    elem_id="review_transcript_df",
+                )
+                with gr.Row():
+                    cut_start = gr.Number(label=i18n("Start (s)"), value=None)
+                    cut_end = gr.Number(label=i18n("End (s)"), value=None)
+                    cut_query = gr.Textbox(
+                        label=i18n("Target query (optional — query-led title)"),
+                        value="",
+                    )
+                with gr.Row():
+                    transcript_load_btn = gr.Button(i18n("Load transcript"))
+                    transcript_cut_btn = gr.Button(
+                        i18n("Cut from transcript selection"), variant="primary"
+                    )
+                cut_status = gr.Markdown()
+
+            def load_transcript_rows(project_name):
+                project_path = _project_path_for_name(project_name)
+                if not project_path:
+                    return [], i18n("Select a project first.")
+                rows = transcript_cut.sentence_rows(project_path)
+                if not rows:
+                    return [], i18n(
+                        "No transcript in this project — run transcription first "
+                        "(input.tsv/input.srt/input.json; the Whisper/caption "
+                        "timestamps are the fallback)."
+                    )
+                return rows, "✅ {}".format(len(rows))
+
+            def pick_transcript_sentence(evt, rows):
+                """Fill Start/End from a clicked transcript row."""
+                try:
+                    row_index = int(evt.index[0])
+                except Exception:
+                    return None, None, i18n("Could not read the clicked row.")
+                try:
+                    if hasattr(rows, "iloc"):
+                        row = rows.iloc[row_index].tolist()
+                    else:
+                        row = list(rows[row_index])
+                    start, end = float(row[1]), float(row[2])
+                except Exception:
+                    return None, None, i18n("Could not read the clicked row.")
+                return start, end, i18n(
+                    "Start {}s — End {}s (adjust manually if needed)."
+                ).format(start, end)
+
+            def cut_from_transcript(project_name, start, end, query):
+                project_path = _project_path_for_name(project_name)
+                if not project_path or not project_name:
+                    return None, None, None, i18n("Select a project first.")
+                try:
+                    start = float(start)
+                    end = float(end)
+                except (TypeError, ValueError):
+                    return (
+                        None,
+                        None,
+                        None,
+                        i18n("Click a transcript sentence first (or type Start/End)."),
+                    )
+                proposal, reasons = transcript_cut.append_manual_cut(
+                    project_path, start, end, str(query or "").strip()
+                )
+                if proposal is None:
+                    return (
+                        None,
+                        None,
+                        None,
+                        "❌ " + i18n("Refused: {}".format(", ".join(reasons) or "unknown")),
+                    )
+                segments = segments_review.load_segments(project_path)
+                rows = segments_review.rows_from_segments(
+                    segments, segments_review.load_safety_map(project_path)
+                )
+                return (
+                    rows,
+                    float(proposal.get("start_time") or start),
+                    float(proposal.get("end_time") or end),
+                    "✅ {} — {}s…{}s ({}). حدّث جدول المقاطع وأزل ما لا تريده.".format(
+                        str(proposal.get("title") or "")[:80],
+                        proposal.get("start_time"),
+                        proposal.get("end_time"),
+                        proposal.get("origin"),
+                    ),
+                )
+
+            transcript_load_btn.click(
+                load_transcript_rows,
+                inputs=[review_project_dropdown],
+                outputs=[transcript_df, cut_status],
+            )
+            transcript_df.select(
+                pick_transcript_sentence,
+                inputs=[transcript_df],
+                outputs=[cut_start, cut_end, cut_status],
+            )
+            transcript_cut_btn.click(
+                cut_from_transcript,
+                inputs=[review_project_dropdown, cut_start, cut_end, cut_query],
+                outputs=[review_df, cut_start, cut_end, cut_status],
             )
 
             def clear_review_state(project_name):
