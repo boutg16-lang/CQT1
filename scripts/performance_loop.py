@@ -283,7 +283,18 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
         "title_question": bool(question),
         "title_number": bool(has_number),
         "title_hook_word": bool(hook_word),
+        # Thumbnail variant kind (round 2 item 6): "v1"/"v2"/"v3" when the
+        # recorded thumbnail filename came from generate_variants, else "".
+        "thumbnail_variant": _thumbnail_variant_kind(
+            str(event.get("thumbnail") or "")
+        ),
     }
+
+
+def _thumbnail_variant_kind(thumbnail_name: str) -> str:
+    """Extract the Test & Compare variant kind from a thumbnail filename."""
+    match = re.search(r"_(v\d+)\.(?:png|jpg|jpeg|webp)$", str(thumbnail_name or "").strip())
+    return match.group(1) if match else ""
 
 
 def _fetch_real_metrics(
@@ -315,6 +326,16 @@ def _fetch_real_metrics(
         # (video==a;country==IT). Semicolon-joining IDs produced an invalid
         # filter and silently returned zero rows for every batch.
         filters = "video==" + ",".join(chunk)
+        # CTR (round 2 item 6): impressions/clicks come from the same
+        # targeted query; some API versions reject the extra metrics, so the
+        # query degrades to the original column set instead of failing the
+        # whole batch.
+        base_metrics = (
+            "views,averageViewDuration,averageViewPercentage,"
+            "likes,shares,subscribersGained"
+        )
+        ctr_metrics = base_metrics + ",impressions,clicks"
+        resp = None
         try:
             resp = (
                 ya.reports()
@@ -322,27 +343,47 @@ def _fetch_real_metrics(
                     ids="channel==MINE",
                     startDate=start,
                     endDate=end,
-                    metrics=(
-                        "views,averageViewDuration,averageViewPercentage,"
-                        "likes,shares,subscribersGained"
-                    ),
+                    metrics=ctr_metrics,
                     dimensions="video",
                     filters=filters,
                     maxResults=40,
                 )
                 .execute()
             )
-        except Exception as exc:
-            logger.warning(
-                "Analytics query failed for %d videos (%s): %s",
+        except Exception as first_exc:
+            logger.debug(
+                "Analytics CTR query degraded for %d videos (%s): %s",
                 len(chunk),
-                type(exc).__name__,
-                str(exc)[:160],
+                type(first_exc).__name__,
+                str(first_exc)[:160],
             )
-            continue
+            try:
+                resp = (
+                    ya.reports()
+                    .query(
+                        ids="channel==MINE",
+                        startDate=start,
+                        endDate=end,
+                        metrics=base_metrics,
+                        dimensions="video",
+                        filters=filters,
+                        maxResults=40,
+                    )
+                    .execute()
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Analytics query failed for %d videos (%s): %s",
+                    len(chunk),
+                    type(exc).__name__,
+                    str(exc)[:160],
+                )
+                continue
         for row in resp.get("rows", []) or []:
             row = list(row) + [None] * 6
             vid, views, avg_dur, retention, likes, shares, subs = row[:7]
+            impressions = row[7] if len(row) > 7 else None
+            clicks = row[8] if len(row) > 8 else None
             metrics[vid] = {
                 "views": int(views or 0),
                 "avg_view_duration": round(float(avg_dur or 0), 1),
@@ -350,6 +391,15 @@ def _fetch_real_metrics(
                 "likes": int(likes or 0),
                 "shares": int(shares or 0),
                 "subscribers_gained": int(subs or 0),
+                # CTR (round 2 item 6): present only when the API accepted
+                # the impressions/clicks columns; absent otherwise.
+                "impressions": int(impressions) if impressions is not None else None,
+                "clicks": int(clicks) if clicks is not None else None,
+                "ctr": (
+                    round(float(clicks) / float(impressions) * 100.0, 2)
+                    if impressions is not None and impressions and clicks is not None
+                    else None
+                ),
             }
     if metrics and project_folder:
         attach_retention_curves(
@@ -549,6 +599,57 @@ def _overall_avg_retention(measured: list[dict[str, Any]]) -> float | None:
     return round(statistics.fmean(values), 2) if values else None
 
 
+def _thumbnail_variant_performance(
+    measured: list[dict[str, Any]], *, min_samples: int = 2
+) -> list[dict[str, Any]]:
+    """CTR-based per-variant table (round 2 item 6).
+
+    Rows compare the measured CTR of each generated thumbnail variant kind
+    (``v1`` headline+hook, ``v2`` headline-only, ``v3`` alternate frame)
+    against the channel's overall CTR. When the Analytics API did not return
+    impressions/clicks the table stays empty — weights fall back to views.
+    """
+    ctrs = [
+        float(item["metrics"]["ctr"])
+        for item in measured
+        if (item.get("metrics") or {}).get("ctr") is not None
+    ]
+    if not ctrs:
+        return []
+    overall_ctr = statistics.fmean(ctrs)
+    buckets: dict[str, list[float]] = {}
+    views_buckets: dict[str, list[float]] = {}
+    for item in measured:
+        kind = str((item.get("content") or {}).get("thumbnail_variant") or "").strip()
+        ctr = (item.get("metrics") or {}).get("ctr")
+        if kind and ctr is not None:
+            buckets.setdefault(kind, []).append(float(ctr))
+        views = (item.get("metrics") or {}).get("views")
+        if kind and views is not None:
+            views_buckets.setdefault(kind, []).append(float(views))
+    results = []
+    for kind, values in buckets.items():
+        if len(values) < min_samples:
+            continue
+        average = statistics.fmean(values)
+        row = {
+            "value": kind,
+            "samples": len(values),
+            "avg_ctr": round(average, 2),
+            "delta_pct": (
+                round((average - overall_ctr) / overall_ctr * 100.0, 1)
+                if overall_ctr
+                else 0.0
+            ),
+        }
+        views_values = views_buckets.get(kind) or []
+        if views_values:
+            row["avg_views"] = round(statistics.fmean(views_values), 1)
+        results.append(row)
+    results.sort(key=lambda item: (-item["delta_pct"], item["value"]))
+    return results
+
+
 def _category_performance(
     measured: list[dict[str, Any]], field: str, *, min_samples: int = 2
 ) -> list[dict[str, Any]]:
@@ -659,6 +760,10 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     if styles:
         styles.sort(key=lambda row: -abs(row["delta_pct"]))
         result["title_styles"] = styles
+    # Round 2 item 6: which generated thumbnail variant earns the CTR.
+    thumbnail_rows = _thumbnail_variant_performance(measured)
+    if thumbnail_rows:
+        result["thumbnail_variants"] = thumbnail_rows
     # Item 8 (feat/pro-cutting): the literal top titles by measured views.
     # Consumers reuse their measured suffixes as templates (scripts/seo_titles
     # ``winner_to_template``) for future query-led titles.
@@ -679,26 +784,6 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for item in top_titles[:3]
     ]
-    # Item 8: the literal best-performing titles — the next generation round
-    # reuses their shape (verbatim tail) as templates via seo_titles.
-    measured_with_views = [
-        item
-        for item in measured
-        if (item.get("metrics") or {}).get("views") is not None
-        and str(item.get("title") or "").strip()
-    ]
-    measured_with_views.sort(
-        key=lambda item: -float(item["metrics"]["views"])
-    )
-    top_titles = [
-        {
-            "title": str(item.get("title") or "").strip(),
-            "views": int(float(item["metrics"]["views"])),
-        }
-        for item in measured_with_views[:3]
-    ]
-    if top_titles:
-        result["top_titles"] = top_titles
     pairs = [
         (
             float((item.get("content") or {}).get("hashtag_count"))

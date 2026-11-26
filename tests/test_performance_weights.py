@@ -542,3 +542,80 @@ def test_apply_target_query_reads_project_insights(tmp_path):
     kept = qt.apply_target_query([seg], "مصطفى بونيف تبون", project_folder=str(tmp_path))
     assert len(kept) == 1
     assert kept[0]["query_title_data"]["pattern"] in {"query_question", "funnel_full"}
+
+
+# ---------------------------------------------------------------
+# Round 2 item 6 — CTR-driven thumbnail/headline weights
+# ---------------------------------------------------------------
+
+
+def _ctr_event(kind, ctr, views=1000, title="عنوان قصير", video="vid"):
+    return {
+        "title": title,
+        "video": video,
+        "content": {"thumbnail_variant": kind},
+        "metrics": {"views": views, "ctr": ctr},
+    }
+
+
+def test_thumbnail_variant_performance_ranks_by_ctr():
+    from scripts import performance_loop as loop
+
+    measured = [
+        _ctr_event("v1", 4.0), _ctr_event("v1", 6.0),
+        _ctr_event("v2", 9.0), _ctr_event("v2", 11.0),
+    ]
+    rows = loop._thumbnail_variant_performance(measured)
+    assert [r["value"] for r in rows] == ["v2", "v1"]
+    assert rows[0]["avg_ctr"] == 10.0
+    assert rows[0]["delta_pct"] > 0.0 > rows[1]["delta_pct"]
+
+
+def test_thumbnail_variant_performance_empty_without_ctr():
+    from scripts import performance_loop as loop
+
+    measured = [
+        {"title": "t", "video": "v", "content": {"thumbnail_variant": "v1"},
+         "metrics": {"views": 100}},
+    ]
+    assert loop._thumbnail_variant_performance(measured) == []
+
+
+def test_thumbnail_bonuses_and_preferred_variant():
+    insights = {
+        "thumbnail_variants": [
+            {"value": "v2", "samples": 3, "delta_pct": 40.0, "avg_ctr": 10.0},
+            {"value": "v1", "samples": 3, "delta_pct": -20.0, "avg_ctr": 5.0},
+        ]
+    }
+    bonuses = pw.thumbnail_bonuses(insights)
+    assert bonuses["basis"] == "thumbnail_variants"
+    assert bonuses["v2"] > 0.0 and bonuses["v1"] < 0.0
+    assert pw.preferred_thumbnail_variant(insights) == "v2"
+
+
+def test_preferred_thumbnail_variant_empty_when_unmeasured():
+    assert pw.preferred_thumbnail_variant({}) == ""
+    assert pw.preferred_thumbnail_variant({"thumbnail_variants": []}) == ""
+
+
+def test_publish_panel_prefers_measured_variant(tmp_path):
+    from webui import publish_panel as pp
+
+    video = tmp_path / "clips" / "001_clip.mp4"
+    (tmp_path / "clips").mkdir()
+    video.write_bytes(b"x")
+    thumbs = tmp_path / "thumbnails"
+    thumbs.mkdir()
+    for name in ("001_clip.png", "001_clip_v2.png"):
+        (thumbs / name).write_bytes(b"png")
+    insights = {
+        "thumbnail_variants": [
+            {"value": "v2", "samples": 4, "delta_pct": 30.0, "avg_ctr": 8.0}
+        ]
+    }
+    (tmp_path / "performance_insights.json").write_text(
+        json.dumps(insights), encoding="utf-8"
+    )
+    chosen = pp._thumbnail_for_clip(str(tmp_path), str(video))
+    assert chosen == str(thumbs / "001_clip_v2.png")

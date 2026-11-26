@@ -770,6 +770,56 @@ def _thumbnail_paths_for(project_path, video_path):
             "{:03d}.png".format(index),
         ):
             candidates.append(os.path.join(directory, name))
+    for number in (1, 2, 3):
+        candidates.append(
+            os.path.join(directory, "{}_v{}.png".format(stem, number))
+        )
+    seen = []
+    for candidate in candidates:
+        if candidate not in seen and os.path.isfile(candidate):
+            seen.append(candidate)
+    return seen
+
+
+def _thumbnail_variant_kind(path):
+    """Test & Compare variant kind of a thumbnail path (v1..v3)."""
+    match = re.search(r"_v(\d+)\.(?:png|jpg)$", os.path.basename(path or ""))
+    return "v{}".format(match.group(1)) if match else ""
+
+
+def _preferred_thumbnail_variant(project_path):
+    """Best-measured Test & Compare variant kind from the insights file."""
+    try:
+        from scripts import performance_weights
+
+        with open(
+            os.path.join(project_path, "performance_insights.json"),
+            "r",
+            encoding="utf-8",
+        ) as f:
+            insights = json.load(f)
+        return str(performance_weights.preferred_thumbnail_variant(insights) or "")
+    except (OSError, ValueError, Exception):
+        return ""
+    """Candidate thumbnail locations for a clip, in preference order."""
+    stem = os.path.splitext(os.path.basename(video_path or ""))[0]
+    index = clip_index(video_path)
+    directory = os.path.join(project_path, "thumbnails")
+    candidates = []
+    for name in (
+        "{}.png".format(stem),
+        "{}_thumbnail.png".format(stem),
+        "{}.jpg".format(stem),
+        "{}_thumbnail.jpg".format(stem),
+    ):
+        candidates.append(os.path.join(directory, name))
+    if index is not None:
+        for name in (
+            "{:03d}_thumbnail.png".format(index),
+            "{:03d}_thumbnail.jpg".format(index),
+            "{:03d}.png".format(index),
+        ):
+            candidates.append(os.path.join(directory, name))
     seen = []
     for candidate in candidates:
         if candidate not in seen and os.path.isfile(candidate):
@@ -785,6 +835,14 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     returns None — attaching a thumbnail must never block publishing.
     """
     existing = _thumbnail_paths_for(project_path, video_path)
+    # Round 2 item 6: when the performance loop has measured which Test &
+    # Compare variant wins on CTR, prefer that variant kind over the default
+    # order. Unmeasured projects keep the primary-first behaviour.
+    preferred_kind = _preferred_thumbnail_variant(project_path)
+    if preferred_kind:
+        for candidate in existing:
+            if _thumbnail_variant_kind(candidate) == preferred_kind:
+                return candidate
     if existing:
         return existing[0]
     if os.getenv("VIRALCUTTER_UPLOAD_THUMBNAIL", "1").strip().lower() in {

@@ -87,6 +87,52 @@ def _style_bonus(delta_pct) -> float:
         max(-STYLE_MAX_BONUS, min(STYLE_MAX_BONUS, float(delta_pct) / 25.0)), 2
     )
 
+def thumbnail_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
+    """Measured CTR -> per-thumbnail-variant bonus map (round 2 item 6).
+
+    Reads ``thumbnail_variants`` rows produced by performance_loop. Variants
+    need >=2 samples and a >=STYLE_MIN_DELTA_PCT CTR delta to move the
+    needle; the same STYLE_MAX_BONUS cap applies. Empty map when CTR was
+    never measured — variant choice then stays on the current order.
+    """
+    rows = (insights or {}).get("thumbnail_variants") or []
+    bonuses: dict[str, Any] = {"basis": "thumbnail_variants"}
+    for row in rows or []:
+        if int(row.get("samples") or 0) < 2:
+            continue
+        kind = str(row.get("value") or "").strip()
+        bonus = round(
+            _style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2
+        )
+        if kind and bonus:
+            bonuses[kind] = bonus
+    return bonuses if len(bonuses) > 1 else {}
+
+
+def preferred_thumbnail_variant(insights) -> str:
+    """The variant kind with the highest measured CTR bonus (or ``""``)."""
+    bonuses = thumbnail_bonuses(insights)
+    best_kind = ""
+    best_bonus = 0.0
+    for kind, bonus in bonuses.items():
+        if kind == "basis":
+            continue
+        if float(bonus) > best_bonus:
+            best_bonus = float(bonus)
+            best_kind = str(kind)
+    return best_kind
+
+__all__ = [
+    "feature_to_component",
+    "load_weights",
+    "preferred_thumbnail_variant",
+    "style_bonus_for",
+    "style_bonuses",
+    "thumbnail_bonuses",
+    "title_style_flags",
+    "winning_title_patterns",
+]
+
 
 def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
     """Content-insights -> per-value style bonuses (empty when unmeasured).
