@@ -1819,6 +1819,40 @@ def main():
                     viral_segments, project_folder=project_folder, overwrite=True
                 )
 
+            # YouTube chapters (round 2 item 5): for long sources (>3 min),
+            # build the chapter list from the accepted segments and write
+            # chapters.txt (+ chapters_description.txt when the source
+            # description template is known). Shorts-only projects skip this.
+            try:
+                from scripts import audio_qc, chapters
+
+                _chapters_report = chapters.write_project_chapters_from_segments(
+                    project_folder,
+                    viral_segments.get("segments") or [],
+                    source_video=input_video or "",
+                    source_description=chapters.read_source_description(
+                        project_folder
+                    ),
+                )
+                if _chapters_report.get("chapters"):
+                    print(
+                        i18n(
+                            "[chapters] {} فصول مكتوبة إلى chapters.txt ({})"
+                        ).format(
+                            len(_chapters_report["chapters"]),
+                            _chapters_report.get("reason") or "",
+                        ),
+                        flush=True,
+                    )
+                elif _chapters_report.get("reason"):
+                    print("[chapters] {}".format(_chapters_report["reason"]))
+            except Exception as chapters_error:
+                print(
+                    "[chapters] chapter generation skipped: {}".format(
+                        chapters_error
+                    )
+                )
+
         # 3.5. Fix Raw Segments (missing timestamps)
         if workflow_choice != "3" and viral_segments and "segments" in viral_segments:
             segs = viral_segments.get("segments", [])

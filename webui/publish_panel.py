@@ -940,6 +940,28 @@ def _upload_worker(
                 return
         from scripts import upload_gate as ug
         from webui import publish_history
+        # Chapters (round 2 item 5): long-form (yt_standard) uploads append
+        # the project's chapter block to the description when one was written.
+        if platform == "yt_standard":
+            try:
+                from scripts import chapters as _chapters
+
+                _chapters_text = _chapters.chapters_block_file(project_path)
+                if _chapters_text and not _chapters.contains_chapter_block(caption):
+                    caption = "\n\n".join(
+                        part for part in (caption, _chapters_text) if part
+                    )
+                    emit(
+                        "[chapters] chapter block appended to the yt_standard description"
+                    )
+            except Exception as chapters_exc:
+                emit(
+                    "[chapters] chapter block not appended: {}".format(
+                        str(chapters_exc)[:160]
+                    )
+                )
+
+        from webui import publish_history
 
         if platform == "youtube" and client_secrets_path:
             from webui.youtube_credentials import (
