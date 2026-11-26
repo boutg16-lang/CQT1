@@ -2800,6 +2800,41 @@ def process_segments(
                 type(exc).__name__,
             )
 
+    # Published-hook refusal (round 2 item 8a): a second Short from the same
+    # project may not open with the same quote/hook as an already-published
+    # Short. Fail-open: a history read error never blocks cutting.
+    try:
+        from scripts import hook_fingerprints
+
+        _hooks = hook_fingerprints.published_hooks(project_folder or "")
+        if _hooks:
+            _refused_hooks: List[Dict[str, Any]] = []
+            validated_segments = hook_fingerprints.apply_published_hook_guard(
+                validated_segments,
+                _hooks,
+                blocked=_refused_hooks,
+            )
+            if _refused_hooks:
+                final_result["published_hook_refusals"] = [
+                    {
+                        "title": str(item.get("title") or ""),
+                        "reason": str(item.get("blocked_reason") or ""),
+                        "hook_fingerprint": str(item.get("hook_fingerprint") or ""),
+                    }
+                    for item in _refused_hooks
+                ]
+                logger.warning(
+                    "Published-hook guard refused %d segment(s) that would "
+                    "re-cut an already-published opening quote.",
+                    len(_refused_hooks),
+                )
+    except Exception as hook_guard_exc:
+        logger.warning(
+            "Published-hook guard skipped (%s): %s",
+            type(hook_guard_exc).__name__,
+            str(hook_guard_exc)[:120],
+        )
+
     final_result["segments"] = validated_segments
     if validation_errors:
         final_result["validation_errors"] = validation_errors

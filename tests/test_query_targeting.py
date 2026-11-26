@@ -194,9 +194,13 @@ class TestApplyTargetQuery:
         second = "تبون صرح بالحوار مع بونيف في اجتماع خاص."
         segs = [_segment(0, ABOUT_QUERY), _segment(1, second, score=30.0)]
         kept = qt.apply_target_query(segs, "بونيف تبون", {})
-        assert len(kept) == 2
+        base = [s for s in kept if s.get("origin") != "continuation"]
+        assert len(base) == 2
         # best (higher relevance + score) first
-        assert kept[0]["index"] == 0
+        assert base[0]["index"] == 0
+        # any extra entries are continuation OFFERS, flagged for the review table
+        for extra in kept[len(base):]:
+            assert extra.get("origin") == "continuation"
 
 
 # ---------------------------------------------------------------------------

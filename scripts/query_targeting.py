@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts import hook_analyzer, segment_validator
 from scripts.segment_titles import (
     _normalized_match_text,
     _title_quality_score,
@@ -463,16 +464,46 @@ def apply_target_query(
                     "query_relevance": candidate["_query_relevance"],
                 }
             )
+    # Round 2 item 8: when the winning segment carries >= 2 related ideas,
+    # offer second-clip proposals that start at a later sentence. They are
+    # OFFERS (origin="continuation") for the review table, never auto-cuts.
+    continuations: List[Dict[str, Any]] = []
+    if not report.get("refused") and kept:
+        # Continuations inherit the RENAMED winner (the query-led title), not
+        # the raw candidate — the review table must show who the offer belongs
+        # to under its published name.
+        renamed_best = kept[0]
+        try:
+            continuations = continuation_candidates(
+                renamed_best, query, min_relevance=min_relevance
+            )
+            kept.extend(continuations)
+        except Exception as cont_exc:
+            logger.warning(
+                "Continuation proposals skipped (%s): %s",
+                type(cont_exc).__name__,
+                str(cont_exc)[:120],
+            )
     if result is not None:
         result["target_query"] = {
             "query": query,
             "min_relevance": min_relevance,
             "refused": bool(report.get("refused")),
             "refusal_reason": report.get("refusal_reason", ""),
-            "kept": len(kept),
+            "kept": len(kept) - len(continuations),
             "dropped": dropped,
             "title": title_data.get("title", ""),
             "title_score": title_data.get("score", 0.0),
+            "continuations": [
+                {
+                    "title": str(item.get("title") or ""),
+                    "start_time": item.get("start_time"),
+                    "end_time": item.get("end_time"),
+                    "hook_score": item.get("hook_score"),
+                    "continuation_of": item.get("continuation_of"),
+                }
+                for item in continuations
+            ],
         }
     if not kept:
         logger.warning(
@@ -481,6 +512,140 @@ def apply_target_query(
             query,
         )
     return kept
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!؟?؛])\s+")
+
+
+def _sentences_with_bounds(text, word_timings=None):
+    """Sentences of ``text`` with their (relative) time bounds.
+
+    Returns ``[(rel_start, rel_end, sentence), ...]`` where the bounds are
+    offsets from the segment start in seconds. When ``word_timings`` covers
+    the segment's words the bounds come from the real word clocks; otherwise
+    they are ``None`` and the caller falls back to character-proportional
+    slicing of the window.
+    """
+    text = str(text or "").strip()
+    if not text:
+        return []
+    parts = [part.strip() for part in _SENTENCE_SPLIT_RE.split(text) if part.strip()]
+    if len(parts) <= 1:
+        return [(None, None, text)]
+    timings = [t for t in (word_timings or []) if isinstance(t, dict)]
+    words = [str(t.get("word") or "").strip() for t in timings]
+    if timings and all(words) and sum(len(p.split()) for p in parts) <= len(words):
+        bounds = []
+        cursor = 0
+        for part in parts:
+            count = len(part.split())
+            chunk = words[cursor : cursor + count]
+            start = timings[cursor].get("start")
+            end = timings[min(cursor + count, len(timings)) - 1].get("end")
+            try:
+                start = float(start) if start is not None else None
+                end = float(end) if end is not None else None
+            except (TypeError, ValueError):
+                start, end = None, None
+            bounds.append((start, end, part))
+            cursor += count
+        return bounds
+    return [(None, None, part) for part in parts]
+
+
+def continuation_candidates(
+    segment: Dict[str, Any],
+    query: str,
+    *,
+    min_relevance: float = DEFAULT_MIN_RELEVANCE,
+    min_hook_score: float = 55.0,
+    max_extra: int = 2,
+) -> List[Dict[str, Any]]:
+    """Second-clip proposals that start at a later sentence (round 2 item 8).
+
+    When the winning segment carries >= 2 related ideas (the opening quote AND
+    a later sentence that is still genuinely about the query), each eligible
+    later sentence becomes a proposal for a second Short starting AT that
+    sentence. Every proposal is scored by ``hook_analyzer.analyze_opening``,
+    validated by ``segment_validator.validate_final_segment`` and titled by
+    ``build_query_title`` — a proposal that fails any of the three is dropped
+    instead of shipped broken. Proposals are offers for the review table, not
+    automatic cuts: they carry ``origin="continuation"`` and the UI decides.
+    """
+    source = segment if isinstance(segment, dict) else {}
+    text = str(source.get("transcript_text") or "").strip()
+    if not text:
+        return []
+    sentences = _sentences_with_bounds(text, source.get("word_timings"))
+    if len(sentences) < 2:
+        return []
+    start = float(source.get("start_time") or 0.0)
+    end = float(source.get("end_time") or start)
+    duration = max(0.0, end - start)
+    total_chars = sum(len(s_text) for _, _, s_text in sentences) or 1
+    origin_title = str(source.get("recommended_title") or source.get("title") or "")
+    proposals: List[Dict[str, Any]] = []
+    for order, (rel_start, rel_end, sentence) in enumerate(sentences):
+        if order == 0 or len(proposals) >= max(0, int(max_extra)):
+            continue
+        sentence = str(sentence or "").strip()
+        if len(sentence.split()) < 6:
+            continue
+        relevance = query_relevance(query, {"transcript_text": sentence})
+        if relevance < min_relevance:
+            continue
+        hook_report = hook_analyzer.analyze_opening(sentence)
+        if float(hook_report.get("hook_score") or 0.0) < float(min_hook_score):
+            continue
+        # Character-proportional timing: sentence k owns the window slice its
+        # characters occupy. With word_timings the bounds come from real words.
+        if rel_start is not None and rel_end is not None:
+            clip_start = start + rel_start
+            clip_end = start + rel_end
+        else:
+            char_pos = sum(len(s_text) for _, _, s_text in sentences[:order])
+            clip_start = start + duration * (char_pos / total_chars)
+            clip_end = start + duration * ((char_pos + len(sentence)) / total_chars)
+        proposal = {
+            "title": "",
+            "start_time": round(clip_start, 3),
+            "end_time": round(clip_end, 3),
+            "duration": round(max(0.5, clip_end - clip_start), 3),
+            "transcript_text": sentence,
+            "hook_text": sentence,
+            "origin": "continuation",
+            "continuation_of": origin_title,
+            "continuation_index": order,
+            "hook_score": round(float(hook_report.get("hook_score") or 0.0), 1),
+            "hook_report": {
+                k: hook_report.get(k)
+                for k in ("hook_score", "opens_mid_thought", "has_question_hook")
+            },
+            "query": query,
+            "query_relevance": round(relevance, 3),
+        }
+        # The title is proposed AFTER validation (the query-led title needs
+        # the surviving sentence), so require_title stays off here.
+        verdict = segment_validator.validate_final_segment(
+            proposal,
+            min_duration=0.5,
+            transcript_text=sentence,
+            require_title=False,
+        )
+        if not verdict.get("ok"):
+            continue
+        title_data = build_query_title(query, {"transcript_text": sentence})
+        if str(title_data.get("title") or "").strip():
+            proposal["title"] = title_data["title"]
+            proposal["recommended_title"] = title_data["title"]
+            proposal["query_title_data"] = {
+                k: v for k, v in title_data.items() if k != "candidates"
+            }
+        else:
+            proposal["title"] = sentence[:80]
+            proposal["recommended_title"] = proposal["title"]
+        proposals.append(proposal)
+    return proposals
 
 
 def main(argv=None) -> int:
