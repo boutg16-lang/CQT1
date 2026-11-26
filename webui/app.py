@@ -4641,6 +4641,10 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_upload_btn = gr.Button(
                             i18n("Upload / Schedule"), variant="primary"
                         )
+                        pub_checklist_btn = gr.Button(
+                            "📋 قائمة الاستوديو اليدوية / Manual Studio checklist"
+                        )
+                        pub_checklist_out = gr.Markdown(visible=True)
                     with gr.Row():
                         pub_batch_gap = gr.Number(
                             value=0,
@@ -5334,6 +5338,21 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 ],
                 outputs=pub_log,
             )
+
+            def show_pub_checklist(project_name, platform, clip_path):
+                project_path = _project_path_for_name(project_name)
+                if not project_path or not clip_path:
+                    return "اختر مشروعاً وملفاً أولاً."
+                return publish_panel.studio_checklist_view(
+                    project_path, platform, clip_path
+                )
+
+            pub_checklist_btn.click(
+                show_pub_checklist,
+                inputs=[pub_project, pub_platform, pub_clip],
+                outputs=[pub_checklist_out],
+            )
+
 
             def upload_batch_publish(
                 project_name,

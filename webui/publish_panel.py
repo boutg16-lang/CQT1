@@ -1167,6 +1167,27 @@ def _upload_worker(
             record_extra["related_video_source"] = str(related_source)
         if upload_video != video_path:
             record_extra["variant_of"] = os.path.basename(video_path)
+        # Studio checklist (feat/pro-cutting round 2 item 1): the four
+        # manual Studio steps as one-click deep links, stored with the event.
+        try:
+            from scripts import studio_checklist
+
+            checklist_items = studio_checklist.build_checklist(
+                str((result or {}).get("video_id") or ""),
+                related_video_id=str(record_extra.get("related_video_source") or ""),
+                thumbnail_uploaded=bool(thumb_attached),
+                source_video_url=str(funnel_source_url or "").strip(),
+            )
+            record_extra["studio_checklist"] = (
+                studio_checklist.checklist_json(checklist_items)
+            )
+            emit(studio_checklist.checklist_markdown(checklist_items))
+        except Exception as exc:
+            emit(
+                "[studio-checklist] ⚠️ تعذّر إنشاء قائمة الاستوديو (لا يمنع النشر): {}".format(
+                    str(exc)[:200]
+                )
+            )
         publish_history.record(
             project_path,
             platform=platform,
@@ -1295,6 +1316,25 @@ def _upload_worker(
                 )
             )
         out_queue.put({"type": "done"})
+
+
+
+def studio_checklist_view(project_path, platform, video_path):
+    """Markdown checklist of the manual Studio steps for a published clip."""
+    from scripts import studio_checklist
+
+    event = publish_history.find_success(
+        project_path, platform=platform, video_path=video_path
+    )
+    if not event:
+        return "لم يُنشر هذا المقطع بعد — لا توجد قائمة استوديو."
+    items = studio_checklist.checklist_for_event(event)
+    if not items:
+        return (
+            "لا توجد قائمة استوديو محفوظة لهذا النشر "
+            "(نشر سابق لنظام قائمة الاستوديو)."
+        )
+    return studio_checklist.checklist_markdown(items)
 
 
 def stream_upload(
