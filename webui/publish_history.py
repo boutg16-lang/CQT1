@@ -110,9 +110,11 @@ def record(
             # Item 1 (round 2): the per-clip manual Studio checklist (compact
             # JSON). Needs more room than a scalar marker.
             "studio_checklist",
+            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
+            "youtube_checks",
         ):
             if extra.get(key) is not None:
-                cap = 4000 if key == "studio_checklist" else 1000
+                cap = 4000 if key in ("studio_checklist", "youtube_checks") else 1000
                 event[key] = str(extra.get(key))[:cap]
     if isinstance(result, dict):
         for key in ("video_id", "url"):

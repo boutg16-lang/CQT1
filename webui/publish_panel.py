@@ -1188,6 +1188,38 @@ def _upload_worker(
                     str(exc)[:200]
                 )
             )
+        # Item 2 (round 2): first "what does YouTube think?" read-back. When
+        # an OAuth token exists the verdicts are read NOW and stored in the
+        # same event as the upload; otherwise honest "pending" with a 24h
+        # recheck stamp (performance_loop rechecks due entries).
+        if str((result or {}).get("video_id") or "").strip():
+            try:
+                from scripts import verify_youtube
+
+                verdict_checks = verify_youtube.initial_checks(
+                    str(result["video_id"])
+                )
+                record_extra[verify_youtube.HISTORY_KEY] = (
+                    verify_youtube.checks_json(verdict_checks)
+                )
+                emit(
+                    "[verify] ⚖️ حقوق النشر: {} — ملاءمة الإعلانات: {}".format(
+                        (verdict_checks.get(verify_youtube.COPYRIGHT) or {}).get(
+                            "verdict"
+                        )
+                        or "pending",
+                        (verdict_checks.get(verify_youtube.AD_SUITABILITY) or {}).get(
+                            "verdict"
+                        )
+                        or "pending",
+                    )
+                )
+            except Exception as exc:
+                emit(
+                    "[verify] ⚠️ تعذّر التحقق بعد الرفع (لا يمنع النشر): {}".format(
+                        str(exc)[:200]
+                    )
+                )
         publish_history.record(
             project_path,
             platform=platform,

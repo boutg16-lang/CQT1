@@ -86,3 +86,168 @@ def test_parse_rejects_garbage():
     assert sc.parse_checklist("{not json") == []
     assert sc.parse_checklist({"a": 1}) == []
     assert sc.parse_checklist("[{}]") == [{}]
+
+
+# ---------------------------------------------------------------------------
+# Round 2 item 2 — post-upload verification (copyright / ad suitability)
+# ---------------------------------------------------------------------------
+
+
+def _write_history(project, events):
+    path = os.path.join(str(project), "publish_history.jsonl")
+    with open(path, "w", encoding="utf-8") as fh:
+        for event in events:
+            fh.write(json.dumps(event) + "\n")
+
+
+def test_record_checks_anchors_on_upload_event(tmp_path):
+    from scripts import verify_youtube as vy
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    _write_history(
+        project,
+        [
+            {
+                "timestamp": "2026-11-25T10:00:00Z",
+                "platform": "youtube",
+                "video": "clip.mp4",
+                "title": "عنوان",
+                "status": "uploaded",
+                "video_id": "vid1234567",
+                "url": "https://youtube.com/shorts/vid1234567",
+            }
+        ],
+    )
+    checks = vy.build_pending("vid1234567", reason="async")
+    assert vy.record_checks(str(project), "youtube", "vid1234567", checks) is True
+    events = publish_history.load(str(project))
+    assert len(events) == 2
+    stored = vy.parse_checks(events[-1].get(vy.HISTORY_KEY))
+    assert stored is not None
+    assert stored[vy.COPYRIGHT]["verdict"] == vy.VERDICT_PENDING
+    assert stored[vy.AD_SUITABILITY]["verdict"] == vy.VERDICT_PENDING
+    assert events[-1]["video_id"] == "vid1234567"
+
+
+def test_record_checks_without_upload_event_is_noop(tmp_path):
+    from scripts import verify_youtube as vy
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    _write_history(project, [])
+    checks = vy.build_pending("vid1234567")
+    assert vy.record_checks(str(project), "youtube", "vid1234567", checks) is False
+
+
+def test_latest_checks_returns_newest(tmp_path):
+    from scripts import verify_youtube as vy
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    first = vy.build_pending("vid1234567", reason="first")
+    second = dict(first)
+    second[vy.COPYRIGHT] = {
+        "verdict": vy.VERDICT_NO_CLAIMS,
+        "source": "youtubePartner.claims.list",
+        "detail": "0 claim(s)",
+    }
+    _write_history(
+        project,
+        [
+            {
+                "timestamp": "2026-11-25T10:00:00Z",
+                "platform": "youtube",
+                "video": "clip.mp4",
+                "title": "t",
+                "status": "uploaded",
+                "video_id": "vid1234567",
+                vy.HISTORY_KEY: vy.checks_json(first),
+            },
+            {
+                "timestamp": "2026-11-25T12:00:00Z",
+                "platform": "youtube",
+                "video": "clip.mp4",
+                "title": "t",
+                "status": "uploaded",
+                "video_id": "vid1234567",
+                vy.HISTORY_KEY: vy.checks_json(second),
+            },
+        ],
+    )
+    got = vy.latest_checks(str(project), platform="youtube", video_id="vid1234567")
+    assert got[vy.COPYRIGHT]["verdict"] == vy.VERDICT_NO_CLAIMS
+
+
+def test_fetch_verdicts_maps_partner_responses(monkeypatch):
+    from scripts import verify_youtube as vy
+
+    monkeypatch.setattr(
+        vy, "_access_token", lambda token_path: "fake-access-token"
+    )
+
+    def fake_get(url, token):
+        if url.startswith(vy.DATA_API_BASE):
+            return {
+                "items": [
+                    {
+                        "status": {
+                            "uploadStatus": "processed",
+                            "privacyStatus": "public",
+                        }
+                    }
+                ]
+            }
+        if "claims" in url:
+            return {"items": [{"claimId": "c1"}]}
+        if "rating" in url:
+            return {"items": [{"rating": {"ytRating": "YT_RATING_LIMITED_ADS"}}]}
+        raise AssertionError("unexpected url " + url)
+
+    monkeypatch.setattr(vy, "_api_get_json", fake_get)
+    checks = vy.fetch_verdicts("vid1234567", "token.json")
+    assert checks[vy.COPYRIGHT]["verdict"] == vy.VERDICT_CLAIM_FOUND
+    assert checks[vy.AD_SUITABILITY]["verdict"] == vy.VERDICT_LIMITED
+    assert checks["data_api"]["upload_status"] == "processed"
+
+
+def test_recheck_pending_updates_when_window_passed(tmp_path, monkeypatch):
+    from scripts import verify_youtube as vy
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    stale = vy.build_pending("vid1234567", reason="initial")
+    # force the recheck window into the past
+    stale["recheck_at"] = "2026-01-01T00:00:00+00:00"
+    _write_history(
+        project,
+        [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "platform": "youtube",
+                "video": "clip.mp4",
+                "title": "t",
+                "status": "uploaded",
+                "video_id": "vid1234567",
+                vy.HISTORY_KEY: vy.checks_json(stale),
+            }
+        ],
+    )
+    fresh = vy.build_pending("vid1234567", reason="recheck")
+    fresh[vy.COPYRIGHT] = {
+        "verdict": vy.VERDICT_NO_CLAIMS,
+        "source": "youtubePartner.claims.list",
+        "detail": "0 claim(s)",
+    }
+    monkeypatch.setattr(vy, "fetch_verdicts", lambda vid, token_path: fresh)
+    monkeypatch.setattr(
+        vy,
+        "_latest_checks_event",
+        lambda project_path, platform, video_id: None,
+    )
+    token = tmp_path / "token.json"
+    token.write_text("{}", encoding="utf-8")
+    summary = vy.recheck_pending(str(project), token_path=str(token))
+    assert summary["checked"] == 1
+    assert summary["updated"] == 0  # anchor disabled in this test → no record
+    assert summary["details"][0][vy.COPYRIGHT] == vy.VERDICT_NO_CLAIMS

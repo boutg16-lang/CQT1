@@ -748,6 +748,22 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
 
     video_ids = [item["video_id"] for item in published]
     metrics = _fetch_real_metrics(video_ids, project_folder) if fetch_live else {}
+    # Item 2 (round 2): finish pending "what does YouTube think?" read-backs
+    # (24h after upload) while the loop already has the OAuth context loaded.
+    if fetch_live:
+        try:
+            from scripts import verify_youtube
+
+            recheck = verify_youtube.recheck_pending(project_folder)
+            if recheck.get("checked") or recheck.get("errors"):
+                logger.info(
+                    "youtube rechecks: %s updated, %s checked, errors: %s",
+                    recheck.get("updated", 0),
+                    recheck.get("checked", 0),
+                    recheck.get("errors") or "none",
+                )
+        except Exception:
+            logger.debug("youtube recheck pass failed", exc_info=True)
     for item in published:
         item["metrics"] = metrics.get(item["video_id"])
         report["clips"].append(item)
