@@ -2251,7 +2251,33 @@ def main():
                     print(i18n("Translation failed: {}").format(e))
             # -------------------------------
 
+            # Item 3 (round 2): Arabic caption style — sentence cues instead
+            # of word-flash, plus a Whisper fallback for clips that lost their
+            # caption JSON during cutting.
+            if getattr(args, "arabic_captions", "sentences") == "sentences":
+                try:
+                    from scripts import arabic_captions
+
+                    regen = arabic_captions.ensure_project_captions(
+                        project_folder,
+                        transcribe_fn=transcribe_video.transcribe,
+                    )
+                    if regen:
+                        print(
+                            i18n(
+                                "Regenerated {} missing caption file(s) via Whisper fallback."
+                            ).format(len(regen)),
+                            flush=True,
+                        )
+                except Exception as e:
+                    print(
+                        i18n("Arabic caption preparation failed (non-fatal): {}").format(e),
+                        flush=True,
+                    )
+
             sub_config = get_subtitle_config(args.subtitle_config)
+            if getattr(args, "arabic_captions", "sentences") != "sentences":
+                sub_config["arabic_sentence_style"] = False
             if args.caption_animation is not None:
                 sub_config["caption_animation"] = args.caption_animation
             if args.auto_emoji:

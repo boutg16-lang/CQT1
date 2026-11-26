@@ -1259,6 +1259,30 @@ def _upload_worker(
             )
         except Exception:
             pass
+        # Item 3 (round 2): upload the clip's Arabic caption track (.ar.srt)
+        # when one was exported with the sentence-style captions.
+        if platform == "youtube" and str((result or {}).get("video_id") or "").strip():
+            try:
+                from scripts import arabic_captions
+
+                srt_path = arabic_captions.arabic_srt_for_clip(
+                    project_path, video_path
+                )
+                if srt_path:
+                    caption_state = arabic_captions.upload_caption_track(
+                        str(result["video_id"]), srt_path
+                    )
+                    emit(
+                        "[captions] 🈶 مسار الترجمة العربية: {}".format(
+                            caption_state.get("state")
+                        )
+                    )
+            except Exception as exc:
+                emit(
+                    "[captions] ⚠️ تعذر رفع الترجمة العربية (لا يمنع النشر): {}".format(
+                        str(exc)[:200]
+                    )
+                )
         status = str(
             (result or {}).get("status") or ("scheduled" if publish_at else "uploaded")
         )

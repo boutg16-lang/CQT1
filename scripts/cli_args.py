@@ -99,6 +99,16 @@ def build_parser():
         help="Word-timed ASS caption animation; overrides subtitle config when supplied",
     )
     parser.add_argument(
+        "--arabic-captions",
+        choices=["sentences", "off"],
+        default="sentences",
+        help="Caption style for Arabic clips: 'sentences' renders consistent "
+        "phrase cues (Studio transcript-editor style, with word timings "
+        "driving the cue boundaries) and exports an .ar.srt caption track "
+        "for YouTube; 'off' keeps the word-by-word karaoke flash for every "
+        "clip.",
+    )
+    parser.add_argument(
         "--auto-emoji",
         action="store_true",
         help="Add conservative keyword emojis to burned captions",
