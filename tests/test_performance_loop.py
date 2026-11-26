@@ -137,3 +137,67 @@ def test_analytics_failure_is_visible_but_report_still_builds(
     assert report["with_metrics"] == 0
     assert report["published_count"] == 1
     assert any("Analytics unavailable" in record.message for record in caplog.records)
+
+
+def test_analytics_filter_commajoin_and_ctr_query(tmp_path, monkeypatch):
+    """Round 2 item 7 — live-verify the 39bac5b fix with a fake API service.
+
+    Captures the exact query kwargs _fetch_real_metrics sends and asserts:
+    * one video dimension value per batch, comma-joined (video==a,b,c) —
+      the semicolon bug would send video==a;b;c and silently return zero rows;
+    * the CTR column set is requested first and the query degrades to the
+      base metrics when the API rejects the extra columns.
+    """
+    captured = []
+
+    class _FakeRequest:
+        def __init__(self, kwargs, fail_ctr=False):
+            self._kwargs = kwargs
+            self._fail_ctr = fail_ctr
+
+        def execute(self):
+            captured.append(self._kwargs)
+            if self._fail_ctr and "impressions" in self._kwargs["metrics"]:
+                raise RuntimeError("invalidMetricsCombination")
+            return {
+                "rows": [
+                    ["abc", 120, 33.0, 40.0, 5, 1, 2, 900, 42],
+                ]
+            }
+
+    class _FakeReports:
+        def __init__(self, fail_ctr=False):
+            self._fail_ctr = fail_ctr
+
+        def query(self, **kwargs):
+            return _FakeRequest(kwargs, self._fail_ctr)
+
+    class _FakeAnalytics:
+        def __init__(self):
+            self.reports_called = 0
+
+        def reports(self):
+            self.reports_called += 1
+            return _FakeReports(fail_ctr=self.reports_called == 1)
+
+    fake = _FakeAnalytics()
+    import scripts.analytics as analytics_mod
+    monkeypatch.setattr(
+        analytics_mod, "_build_services", lambda: (fake, object())
+    )
+    metrics = performance_loop._fetch_real_metrics(["abc"], str(tmp_path))
+    # 39bac5b: the filter is comma-joined per dimension, never semicolons.
+    filters = [kwargs["filters"] for kwargs in captured]
+    # CTR attempt + degraded retry for the same batch: identical filter each
+    # time, and the metrics column set degrades instead of failing.
+    assert len(filters) == 3  # CTR attempt + degraded retry + retention
+    assert filters == ["video==abc", "video==abc", "video==abc"]
+    assert "impressions" in captured[0]["metrics"]
+    assert "impressions" not in captured[1]["metrics"]
+    assert all(";" not in f for f in filters)
+    # The batch row is parsed: CTR present when the API accepted the columns.
+    row = metrics["abc"]
+    assert row["views"] == 120
+    assert row["impressions"] == 900
+    assert row["clicks"] == 42
+    assert row["ctr"] == round(42 / 900 * 100.0, 2)
