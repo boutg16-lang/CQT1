@@ -1187,6 +1187,20 @@ def _upload_worker(
             if variant_line:
                 emit(variant_line)
 
+        try:
+            from scripts import seo_titles as _seo
+
+            title_variants = _seo.title_candidates(
+                clip_metadata(project_path, video_path)
+            )
+        except Exception:
+            title_variants = [title]
+        if len(title_variants) > 1:
+            emit(
+                "[title] مرشحات العنوان (A/B): {} — المنشور: {}".format(
+                    " | ".join(title_variants), title
+                )
+            )
         uploader = ug.UPLOADERS[platform](project_path, **uploader_kwargs)
         if platform == "youtube":
             # Belt-and-braces: pin the effective value on the uploader so a real
@@ -1237,12 +1251,17 @@ def _upload_worker(
                     )
 
         meta = clip_metadata(project_path, video_path)
+        # A/B title variants (round 2 item 7): record the full candidate list
+        # and the exact variant that shipped so the performance loop can learn
+        # which headline shape earns the views.
         record_extra = {
             "hashtags": ",".join(hashtags or meta.get("hashtags") or []),
             "topic": meta.get("topic") or "",
             "angle": meta.get("angle") or "",
             "hook_type": meta.get("hook_type") or "",
             "title_template": meta.get("title_template") or "",
+            "title_variant_used": title,
+            "title_variants": json.dumps(title_variants, ensure_ascii=False)[:1000],
         }
         # Self-certification preflight (feat/pro-cutting item 7): scan the
         # real content (title + caption + segment transcript) against the

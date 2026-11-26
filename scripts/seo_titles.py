@@ -192,6 +192,29 @@ def _penalty_score(title: str) -> float:
     return penalty
 
 
+def title_candidates(segment: dict[str, Any] | None) -> list[str]:
+    """A/B title candidates for one clip (round 2 item 7).
+
+    The published title first, then up to two validated ``alt_titles`` —
+    the same Test & Compare idea as the thumbnails, for the headline.
+    Returns at most three distinct, non-empty candidates (deduped, order
+    preserved).
+    """
+    seg = segment if isinstance(segment, dict) else {}
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for raw in [seg.get("title")] + list(seg.get("alt_titles") or [])[:2]:
+        title = str(raw or "").strip()
+        if not title:
+            continue
+        key = title.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(title)
+    return candidates[:3]
+
+
 def score_title(title: str, keywords: list[str] | None = None) -> dict[str, Any]:
     """Return a transparent 0-100 score with a breakdown."""
     title = str(title or "").strip()

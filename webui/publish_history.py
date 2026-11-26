@@ -110,7 +110,10 @@ def record(
             # Item 1 (round 2): the per-clip manual Studio checklist (compact
             # JSON). Needs more room than a scalar marker.
             "studio_checklist",
-            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
+            # Item 7 (round 2): the A/B title candidates surfaced for this
+            # clip and which one was actually published.
+            "title_variants",
+            "title_variant_used",            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
             "youtube_checks",
         ):
             if extra.get(key) is not None:
