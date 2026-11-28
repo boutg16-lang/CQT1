@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the upload gate (forced refusal before publishing)."""
 
+import datetime as _datetime
 import json
 import os
 import sys
@@ -616,7 +617,12 @@ class TestYouTubeUploaderReal:
         monkeypatch.setitem(_sys.modules, "googleapiclient.discovery", fake_discovery)
         monkeypatch.setitem(_sys.modules, "googleapiclient.http", fake_http)
 
-        future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        # R3-4: pick a future moment INSIDE a measured best-time window so the
+        # schedule gate passes (weekend windows are (10,13) and (17,21) UTC).
+        candidate = datetime.now(timezone.utc) + timedelta(hours=2)
+        while candidate.hour not in (10, 11, 12, 17, 18, 19, 20):
+            candidate += timedelta(hours=1)
+        future = candidate.isoformat()
         uploader = ug.YouTubeUploader(str(tmp_path), dry_run=False)
         monkeypatch.setattr(uploader, "_load_or_create_token", lambda: FakeCreds())
         result = uploader.upload(
@@ -643,3 +649,57 @@ class TestYouTubeUploaderReal:
                 privacy_status="public",
                 publish_at=future,
             )
+
+
+class TestScheduleSlotVerdict:
+    """R3-4: publish slots are validated before any scheduled upload ships."""
+
+    def test_off_hour_slot_is_refused_with_override_hint(self, monkeypatch):
+        monkeypatch.delenv("VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE", raising=False)
+        future = (
+            _datetime.datetime.now(_datetime.timezone.utc) + _datetime.timedelta(days=2)
+        ).replace(hour=3, minute=0, second=0, microsecond=0).isoformat()
+        reasons = ug.schedule_slot_verdict("youtube", future, "private")
+        codes = {reason["code"] for reason in reasons}
+        assert "schedule_slot_off_hour" in codes
+
+    def test_in_window_slot_passes_all_checks(self, monkeypatch):
+        monkeypatch.delenv("VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE", raising=False)
+        now = _datetime.datetime.now(_datetime.timezone.utc)
+        for day_offset in range(1, 15):
+            slot = (now + _datetime.timedelta(days=day_offset)).replace(
+                hour=18, minute=0, second=0, microsecond=0
+            )
+            if slot.weekday() < 5:
+                break
+        assert ug.schedule_slot_verdict("youtube", slot.isoformat(), "private") == []
+
+    def test_past_slot_and_missing_timezone_are_refused(self):
+        past = (
+            _datetime.datetime.now(_datetime.timezone.utc) - _datetime.timedelta(hours=1)
+        ).isoformat()
+        codes = {
+            reason["code"]
+            for reason in ug.schedule_slot_verdict("youtube", past, "private")
+        }
+        assert "schedule_slot_in_past" in codes
+        assert "schedule_slot_missing_timezone" in {
+            reason["code"]
+            for reason in ug.schedule_slot_verdict("youtube", "2026-08-15T18:30:00", "private")
+        }
+
+    def test_override_env_skips_only_the_window_check(self, monkeypatch):
+        monkeypatch.setenv("VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE", "1")
+        future = (
+            _datetime.datetime.now(_datetime.timezone.utc) + _datetime.timedelta(days=2)
+        ).replace(hour=3, minute=0, second=0, microsecond=0).isoformat()
+        assert ug.schedule_slot_verdict("youtube", future, "private") == []
+        # Non-schedule checks stay hard even under the override.
+        codes = {
+            reason["code"]
+            for reason in ug.schedule_slot_verdict("youtube", future, "public")
+        }
+        assert "schedule_slot_needs_private" in codes
+
+    def test_empty_publish_at_is_a_no_op(self):
+        assert ug.schedule_slot_verdict("youtube", "", "private") == []
