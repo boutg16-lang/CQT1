@@ -23,6 +23,18 @@ i18n = I18nAuto()
 
 _DOWNLOAD_TRANSPORT_RETRIES = 2
 _DOWNLOAD_RETRY_BASE_SECONDS = 2
+# Round 3 item 1: a 429/403 block is a rate limit, not a broken pipe — it needs
+# a longer cooldown before retrying, otherwise every ladder rung hammers YouTube
+# and makes the block worse.
+_HTTP_BLOCK_RETRIES = 2
+_HTTP_RETRY_BASE_SECONDS = 20
+_LOCAL_SOURCE_CANDIDATES = ("input.mp4", "source.mp4")
+_AUTH_BLOCK_MARKERS = (
+    "private video",
+    "sign in",
+    "age restrict",
+    "age-restrict",
+)
 
 
 def _require_yt_dlp():
@@ -304,7 +316,6 @@ def _is_http_block(error_text):
     low = str(error_text or "").lower()
     return "403" in low or "forbidden" in low or "429" in low or "http error" in low
 
-
 def _is_transient_download_error(error_text):
     low = str(error_text or "").lower()
     if "bytes read" in low and "more expected" in low:
@@ -325,24 +336,74 @@ def _is_transient_download_error(error_text):
     return any(marker in low for marker in markers)
 
 
+def _is_auth_block(error_text):
+    """Detect errors that only browser cookies can fix (never auto-retried)."""
+    low = str(error_text or "").lower()
+    return any(marker in low for marker in _AUTH_BLOCK_MARKERS)
+
+
 def _run_download_with_retries(run_download, options, sleep=None):
     sleeper = sleep or time.sleep
-    for retry_index in range(_DOWNLOAD_TRANSPORT_RETRIES + 1):
+    for retry_index in range(max(_DOWNLOAD_TRANSPORT_RETRIES, _HTTP_BLOCK_RETRIES) + 1):
         try:
             return run_download(options)
         except Exception as exc:
-            if (
-                not _is_transient_download_error(exc)
-                or retry_index >= _DOWNLOAD_TRANSPORT_RETRIES
-            ):
-                raise
-            delay = _DOWNLOAD_RETRY_BASE_SECONDS * (2**retry_index)
-            print(
-                i18n(
-                    "YouTube download was interrupted; retrying in {} seconds (attempt {}/{})."
-                ).format(delay, retry_index + 1, _DOWNLOAD_TRANSPORT_RETRIES)
+            transient = _is_transient_download_error(exc)
+            # Authentication blocks need the user's cookies, not patience.
+            http_block = _is_http_block(exc) and not _is_auth_block(exc)
+            max_retries = (
+                _HTTP_BLOCK_RETRIES if http_block else _DOWNLOAD_TRANSPORT_RETRIES
             )
+            if (not transient and not http_block) or retry_index >= max_retries:
+                raise
+            base = (
+                _HTTP_RETRY_BASE_SECONDS if http_block else _DOWNLOAD_RETRY_BASE_SECONDS
+            )
+            delay = base * (2**retry_index)
+            if http_block:
+                print(
+                    i18n(
+                        "YouTube is blocking this machine (429/403); waiting {} seconds before retry (attempt {}/{})."
+                    ).format(delay, retry_index + 1, max_retries)
+                )
+            else:
+                print(
+                    i18n(
+                        "YouTube download was interrupted; retrying in {} seconds (attempt {}/{})."
+                    ).format(delay, retry_index + 1, max_retries)
+                )
             sleeper(delay)
+
+
+def _adopt_local_source(project_folder):
+    """Return a usable local source video from the project folder, if any.
+
+    This is the "outside YouTube" escape hatch: when YouTube keeps blocking
+    downloads (429/403) the user can drop the original file into the project
+    folder as ``source.mp4`` and the pipeline continues without YouTube.
+    Returns the absolute path, or None when nothing usable is there.
+    """
+    if not project_folder or not os.path.isdir(project_folder):
+        return None
+    for name in _LOCAL_SOURCE_CANDIDATES:
+        candidate = os.path.join(project_folder, name)
+        if os.path.isfile(candidate) and os.path.getsize(candidate) > 1024:
+            return os.path.abspath(candidate)
+    return None
+
+
+def _announce_local_fallback(project_folder):
+    """Explain how to keep going without YouTube when no local source exists."""
+    print(
+        i18n(
+            "\nTo continue without YouTube: download the original file on another\n"
+            "machine (or a normal browser) and save it as:\n"
+            "  {}\n"
+            "then rerun this command — the pipeline will pick it up automatically.\n"
+            "Alternatively rerun with --local-video pointing at the file, or use\n"
+            "--cookies-from-browser / --cookies for blocked videos."
+        ).format(os.path.join(project_folder, "source.mp4"))
+    )
 
 
 def _format_attempts(selected_format):
@@ -383,10 +444,13 @@ def download(
         info_opts["cookiesfrombrowser"] = (cookies_from_browser,)
     if cookies_file:
         info_opts["cookiefile"] = cookies_file
+    def _extract_info(opts):
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(url, download=False)
+
     try:
-        with yt_dlp.YoutubeDL(info_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            title = info.get("title")
+        info = _run_download_with_retries(_extract_info, info_opts)
+        title = (info or {}).get("title")
     except Exception as e:
         try:
             print(i18n("Error getting video info: {}").format(e))
@@ -442,6 +506,25 @@ def download(
                     os.path.basename(final_video_path),
                     type(exc).__name__,
                 )
+    else:
+        # Round 3 item 1: no download yet — pick up a user-provided local
+        # source (the outside-YouTube path) instead of hammering a blocked
+        # YouTube again.
+        local_source = _adopt_local_source(project_folder)
+        if local_source:
+            try:
+                print(
+                    i18n(
+                        "YouTube download skipped — using the local source file: {}"
+                    ).format(local_source)
+                )
+            except UnicodeEncodeError:
+                print(
+                    i18n(
+                        "YouTube download skipped — using the local source file: {}"
+                    ).format(local_source.encode("ascii", "replace").decode("ascii"))
+                )
+            return local_source, project_folder
 
     # Limpeza de temp
     temp_path = f"{output_path_base}.temp.mp4"
@@ -601,6 +684,25 @@ def download(
             break
 
     if not video_downloaded:
+        # Round 3 item 1: last-chance local fallback - the user may have
+        # dropped source.mp4 into the project folder while YouTube was
+        # blocking this machine. Use it instead of dying here.
+        local_source = _adopt_local_source(project_folder)
+        if local_source:
+            try:
+                print(
+                    i18n(
+                        "YouTube blocked every download attempt - using the local source file: {}"
+                    ).format(local_source)
+                )
+            except UnicodeEncodeError:
+                print(
+                    i18n(
+                        "YouTube blocked every download attempt - using the local source file: {}"
+                    ).format(local_source.encode("ascii", "replace").decode("ascii"))
+                )
+            return local_source, project_folder
+        _announce_local_fallback(project_folder)
         if last_error is not None:
             print(i18n("All YouTube download fallbacks failed: {}.").format(last_error))
             _print_friendly_and_exit(last_error, url)
