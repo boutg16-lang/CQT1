@@ -254,3 +254,82 @@ def test_recheck_pending_updates_when_window_passed(tmp_path, monkeypatch):
     assert summary["checked"] == 1
     assert summary["updated"] == 0  # anchor disabled in this test → no record
     assert summary["details"][0][vy.COPYRIGHT] == vy.VERDICT_NO_CLAIMS
+
+
+# ---------------------------------------------------------------------------
+# R3-5 — real thumbnail state via the Data-API thumbnails read
+# ---------------------------------------------------------------------------
+
+
+def test_thumbnail_uploaded_reads_real_state(monkeypatch):
+    from scripts import verify_youtube as vy
+
+    monkeypatch.setattr(vy, "_access_token", lambda token_path: "fake-token")
+
+    def fake_get(url, token):
+        if "thumbnails" in url:
+            return {
+                "items": [
+                    {
+                        "details": {
+                            "default": {"url": "https://i.ytimg.com/vi/vid/default.jpg"},
+                            "medium": {"url": "https://i.ytimg.com/vi/vid/mq.jpg"},
+                        }
+                    }
+                ]
+            }
+        raise AssertionError("unexpected url " + url)
+
+    monkeypatch.setattr(vy, "_api_get_json", fake_get)
+    state = vy.thumbnail_uploaded("vid1234567", "token.json")
+    assert state["uploaded"] is True
+    assert len(state["urls"]) == 2
+
+
+def test_thumbnail_uploaded_missing_is_false(monkeypatch):
+    from scripts import verify_youtube as vy
+
+    monkeypatch.setattr(vy, "_access_token", lambda token_path: "fake-token")
+    monkeypatch.setattr(vy, "_api_get_json", lambda url, token: {"items": []})
+    state = vy.thumbnail_uploaded("vid1234567", "token.json")
+    assert state["uploaded"] is False
+
+
+def test_thumbnail_uploaded_api_error_never_guessed(monkeypatch):
+    from scripts import verify_youtube as vy
+
+    def boom(token_path):
+        raise RuntimeError("refresh failed")
+
+    monkeypatch.setattr(vy, "_access_token", boom)
+    state = vy.thumbnail_uploaded("vid1234567", "token.json")
+    assert state["uploaded"] is False
+    assert "refresh failed" in state["error"]
+
+
+def test_fetch_verdicts_includes_thumbnail_state(monkeypatch):
+    from scripts import verify_youtube as vy
+
+    monkeypatch.setattr(vy, "_access_token", lambda token_path: "fake-token")
+    monkeypatch.setattr(
+        vy,
+        "_api_get_json",
+        lambda url, token: {"items": []},
+    )
+    checks = vy.fetch_verdicts("vid1234567", "token.json")
+    assert checks["thumbnail"]["uploaded"] is False
+
+
+def test_checklist_thumbnail_done_reflected_in_build(monkeypatch):
+    from scripts import verify_youtube as vy
+    from scripts import studio_checklist as sc
+
+    monkeypatch.setattr(vy, "_access_token", lambda token_path: "fake-token")
+    monkeypatch.setattr(
+        vy,
+        "_api_get_json",
+        lambda url, token: {"items": [{"details": {"default": {"url": "u"}}}]},
+    )
+    state = vy.thumbnail_uploaded("vid1234567", "token.json")
+    items = sc.build_checklist("vid1234567", thumbnail_uploaded=state["uploaded"])
+    assert items[3]["done"] is True

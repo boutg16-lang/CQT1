@@ -151,6 +151,9 @@ def fetch_verdicts(video_id: str, token_path: str) -> Dict[str, Any]:
     except Exception as exc:
         checks["data_api"] = {"error": str(exc)[:200]}
 
+    # R3-5: real thumbnail state via the plain Data-API thumbnails read.
+    checks["thumbnail"] = thumbnail_uploaded(video_id, token_path)
+
     # Partner API: copyright verdict (no CMS account → stays pending).
     try:
         claims = _api_get_json(PARTNER_CLAIMS_URL.format(video_id=video_id), token)
@@ -188,6 +191,30 @@ def fetch_verdicts(video_id: str, token_path: str) -> Dict[str, Any]:
         )
 
     return checks
+
+
+def thumbnail_uploaded(video_id: str, token_path: str) -> Dict[str, Any]:
+    """R3-5: read the real thumbnail state back from the Data API.
+
+    ``thumbnails().list`` is a plain Data-API read — no CMS scope needed.
+    Returns ``{"uploaded": bool, "urls": [...]}`` on success or
+    ``{"uploaded": False, "error": "..."}`` on failure. Never guessed.
+    """
+    vid = str(video_id or "").strip()
+    try:
+        token = _access_token(token_path)
+        data = _api_get_json(
+            "https://www.googleapis.com/youtube/v3/thumbnails?videoId={}".format(vid),
+            token,
+        )
+        items = (data or {}).get("items") or []
+        details = ((items[0] or {}).get("details") or {}) if items else {}
+        urls = sorted(
+            str(v.get("url") or "") for v in details.values() if isinstance(v, dict)
+        )
+        return {"uploaded": bool(urls), "urls": urls}
+    except Exception as exc:
+        return {"uploaded": False, "error": str(exc)[:200]}
 
 
 def checks_json(checks: Dict[str, Any]) -> str:
@@ -348,5 +375,6 @@ __all__ = [
     "recheck_due",
     "recheck_pending",
     "record_checks",
+    "thumbnail_uploaded",
     "verify_after_upload",
 ]
