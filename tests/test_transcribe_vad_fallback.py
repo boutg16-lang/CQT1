@@ -126,7 +126,7 @@ def test_tokenizer_failure_during_transcribe_falls_back(tmp_path, monkeypatch):
         cuda = SimpleNamespace(is_available=lambda: False)
 
     class FakeModel:
-        def transcribe(self, audio, batch_size=16, chunk_size=10):
+        def transcribe(self, audio, batch_size=16, chunk_size=10, **kwargs):
             raise RuntimeError("tokenizers native extension failed")
 
     monkeypatch.setattr(tv, "torch", FakeTorch())
