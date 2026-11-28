@@ -37,7 +37,6 @@ import logging
 import os
 import re
 import sys
-import os
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -163,9 +162,12 @@ def _semantic_similarities(
         out = []
         for vector in vectors[1:]:
             try:
-                out.append(max(0.0, min(1.0, semantic_embeddings.similarity(
-                    query_vector, vector
-                ))))
+                out.append(
+                    max(
+                        0.0,
+                        min(1.0, semantic_embeddings.similarity(query_vector, vector)),
+                    )
+                )
             except Exception:
                 out.append(None)
         return out
@@ -195,12 +197,15 @@ def rank_segments_for_query(
 
     candidates = []
     for index, segment in enumerate(segments):
-        window_text = _window_text_from_transcript(
-            segment.get("transcript") or [],
-            segment.get("start_time"),
-            segment.get("end_time"),
-            segment.get("words"),
-        ) or None
+        window_text = (
+            _window_text_from_transcript(
+                segment.get("transcript") or [],
+                segment.get("start_time"),
+                segment.get("end_time"),
+                segment.get("words"),
+            )
+            or None
+        )
         relevance = query_relevance(
             query,
             segment,
@@ -539,7 +544,6 @@ def _sentences_with_bounds(text, word_timings=None):
         cursor = 0
         for part in parts:
             count = len(part.split())
-            chunk = words[cursor : cursor + count]
             start = timings[cursor].get("start")
             end = timings[min(cursor + count, len(timings)) - 1].get("end")
             try:
@@ -633,9 +637,7 @@ def manual_clip_proposal(
     if len(text.split()) < 3:
         return {"ok": False, "reasons": ["too_few_words"], "proposal": proposal}
     hook_report = hook_analyzer.analyze_opening(text)
-    proposal["hook_score"] = round(
-        float(hook_report.get("hook_score") or 0.0), 1
-    )
+    proposal["hook_score"] = round(float(hook_report.get("hook_score") or 0.0), 1)
     proposal["hook_report"] = {
         k: hook_report.get(k)
         for k in ("hook_score", "opens_mid_thought", "has_question_hook")
@@ -770,11 +772,11 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Rank viral segments against a search query (--target-query engine)."
     )
-    parser.add_argument("--segments-json", required=True, help="viral_segments.txt JSON path")
-    parser.add_argument("--query", required=True)
     parser.add_argument(
-        "--min-relevance", type=float, default=DEFAULT_MIN_RELEVANCE
+        "--segments-json", required=True, help="viral_segments.txt JSON path"
     )
+    parser.add_argument("--query", required=True)
+    parser.add_argument("--min-relevance", type=float, default=DEFAULT_MIN_RELEVANCE)
     args = parser.parse_args(argv)
     with open(args.segments_json, "r", encoding="utf-8") as handle:
         data = json.load(handle)

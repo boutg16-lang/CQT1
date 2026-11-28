@@ -13,8 +13,7 @@ Nothing here pretends to automate what has no API endpoint.
 from __future__ import annotations
 
 import json
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 STUDIO_EDIT_URL = "https://studio.youtube.com/video/{video_id}/edit"
 STUDIO_EDITOR_URL = "https://studio.youtube.com/video/{video_id}/editor"
@@ -138,7 +137,9 @@ def parse_checklist(value: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def mark_done(items: List[Dict[str, Any]], key: str, done: bool = True) -> List[Dict[str, Any]]:
+def mark_done(
+    items: List[Dict[str, Any]], key: str, done: bool = True
+) -> List[Dict[str, Any]]:
     updated: List[Dict[str, Any]] = []
     for item in items:
         entry = dict(item)

@@ -91,7 +91,10 @@ def published_hooks(
         events = publish_history.load(project_folder)
     hooks: Dict[str, Dict[str, Any]] = {}
     for event in events or []:
-        if str(event.get("status") or "").lower() not in publish_history.SUCCESS_STATUSES:
+        if (
+            str(event.get("status") or "").lower()
+            not in publish_history.SUCCESS_STATUSES
+        ):
             continue
         fp = _event_fingerprint(event)
         if fp and fp not in hooks:
@@ -104,9 +107,7 @@ def segment_hook_conflict(
     hooks: Dict[str, Dict[str, Any]],
 ) -> Tuple[str, Dict[str, Any]]:
     """(fingerprint, published_event) when this segment opens a published clip."""
-    fp = hook_fingerprint(
-        _first_sentence(str(segment.get("transcript_text") or ""))
-    )
+    fp = hook_fingerprint(_first_sentence(str(segment.get("transcript_text") or "")))
     if not fp:
         return "", {}
     published = hooks.get(fp)
@@ -131,10 +132,8 @@ def apply_published_hook_guard(
         fp, published = segment_hook_conflict(segment, hooks)
         if published:
             record = dict(segment)
-            record["blocked_reason"] = (
-                "opening hook already published: {}".format(
-                    str(published.get("title") or "")[:80]
-                )
+            record["blocked_reason"] = "opening hook already published: {}".format(
+                str(published.get("title") or "")[:80]
             )
             record["hook_fingerprint"] = fp
             if blocked is not None:

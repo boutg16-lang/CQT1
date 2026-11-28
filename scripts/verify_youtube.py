@@ -30,12 +30,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 DATA_API_BASE = "https://www.googleapis.com/youtube/v3/videos"
-PARTNER_CLAIMS_URL = (
-    "https://www.googleapis.com/youtubePartner/v1/claims?videoId={video_id}&part=status,id"
-)
-PARTNER_VIDEO_URL = (
-    "https://www.googleapis.com/youtubePartner/v1/videos?part=rating,status&id={video_id}"
-)
+PARTNER_CLAIMS_URL = "https://www.googleapis.com/youtubePartner/v1/claims?videoId={video_id}&part=status,id"
+PARTNER_VIDEO_URL = "https://www.googleapis.com/youtubePartner/v1/videos?part=rating,status&id={video_id}"
 
 COPYRIGHT = "copyright"
 AD_SUITABILITY = "ad_suitability"
@@ -178,15 +174,17 @@ def fetch_verdicts(video_id: str, token_path: str) -> Dict[str, Any]:
                 ((items[0].get("rating") or {}).get("ytRating")) or ""
             ).lower()
             checks[AD_SUITABILITY] = {
-                "verdict": VERDICT_LIMITED if "limited" in yt_rating else VERDICT_SUITABLE,
+                "verdict": VERDICT_LIMITED
+                if "limited" in yt_rating
+                else VERDICT_SUITABLE,
                 "source": "youtubePartner.videos.rating",
                 "detail": yt_rating or "empty ytRating",
             }
         else:
             checks[AD_SUITABILITY]["detail"] = "partner video not found; pending"
     except Exception as exc:
-        checks[AD_SUITABILITY]["detail"] = "partner API unavailable ({}); pending".format(
-            str(exc)[:160]
+        checks[AD_SUITABILITY]["detail"] = (
+            "partner API unavailable ({}); pending".format(str(exc)[:160])
         )
 
     return checks
@@ -238,7 +236,9 @@ def record_checks(
     )
 
 
-def latest_checks(project_path: str, *, platform: str, video_id: str) -> Optional[Dict[str, Any]]:
+def latest_checks(
+    project_path: str, *, platform: str, video_id: str
+) -> Optional[Dict[str, Any]]:
     """The newest youtube_checks payload for a video (None when none)."""
     from webui import publish_history
 
@@ -320,7 +320,9 @@ def initial_checks(video_id: str) -> Dict[str, Any]:
     return build_pending(video_id, reason="YouTube checks run asynchronously")
 
 
-def verify_after_upload(project_path: str, platform: str, video_id: str) -> Dict[str, Any]:
+def verify_after_upload(
+    project_path: str, platform: str, video_id: str
+) -> Dict[str, Any]:
     """Standalone verification: read verdicts AND record a checks event."""
     checks = initial_checks(video_id)
     record_checks(project_path, platform, video_id, checks)

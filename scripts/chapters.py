@@ -18,16 +18,19 @@ Output lands in ``chapters.txt`` inside the project (timestamp + title lines)
 and is appended to the long video's description template via
 ``description_with_chapters`` — idempotent, so re-running never duplicates.
 """
+
 from __future__ import annotations
 
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-MIN_SOURCE_SECONDS = 180.0   # only long videos get chapters (>3 minutes)
-MIN_CHAPTER_SECONDS = 10.0   # YouTube minimum per chapter
-MIN_CHAPTERS = 3             # YouTube minimum chapter count
+MIN_SOURCE_SECONDS = 180.0  # only long videos get chapters (>3 minutes)
+MIN_CHAPTER_SECONDS = 10.0  # YouTube minimum per chapter
+MIN_CHAPTERS = 3  # YouTube minimum chapter count
+CHAPTERS_HEADER = "الفصول:"  # chapter block header in descriptions
 
 __all__ = [
+    "CHAPTERS_HEADER",
     "MIN_CHAPTER_SECONDS",
     "MIN_CHAPTERS",
     "MIN_SOURCE_SECONDS",
@@ -128,7 +131,11 @@ def build_chapters(
         }
 
     out = [
-        {"timestamp": format_ts(ch["start"]), "title": ch["title"], "start": ch["start"]}
+        {
+            "timestamp": format_ts(ch["start"]),
+            "title": ch["title"],
+            "start": ch["start"],
+        }
         for ch in chapters
     ]
     return {"chapters": out, "reason": ""}
@@ -138,7 +145,9 @@ def chapters_block(chapters: List[Dict[str, Any]]) -> str:
     """The description block: header + ``timestamp title`` lines."""
     lines = ["الفصول:", ""]
     for ch in chapters or []:
-        lines.append("{} {}".format(ch.get("timestamp", ""), str(ch.get("title", "")).strip()))
+        lines.append(
+            "{} {}".format(ch.get("timestamp", ""), str(ch.get("title", "")).strip())
+        )
     return "\n".join(lines).rstrip()
 
 

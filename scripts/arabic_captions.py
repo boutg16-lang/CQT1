@@ -70,7 +70,13 @@ def group_sentences(
         if not text:
             cue_words, cue_start = [], None
             return
-        cues.append({"start": float(cue_start or 0.0), "end": float(last_end or cue_start or 0.0), "text": text})
+        cues.append(
+            {
+                "start": float(cue_start or 0.0),
+                "end": float(last_end or cue_start or 0.0),
+                "text": text,
+            }
+        )
         cue_words, cue_start = [], None
 
     for word in words:
@@ -110,9 +116,7 @@ def srt_text(cues: Iterable[Dict[str, Any]]) -> str:
     lines: List[str] = []
     for index, cue in enumerate(cues, start=1):
         lines.append(str(index))
-        lines.append(
-            "{} --> {}".format(_srt_time(cue["start"]), _srt_time(cue["end"]))
-        )
+        lines.append("{} --> {}".format(_srt_time(cue["start"]), _srt_time(cue["end"])))
         lines.append(str(cue.get("text") or "").strip())
         lines.append("")
     return "\n".join(lines)
@@ -233,7 +237,12 @@ def ensure_clip_captions(
             from scripts import transcribe_video
 
             transcribe_fn = transcribe_video.transcribe
-        transcribe_fn(video_path, model_name=model_name, project_folder=project_folder, device=device)
+        transcribe_fn(
+            video_path,
+            model_name=model_name,
+            project_folder=project_folder,
+            device=device,
+        )
         report["transcribed"] = True
     except Exception as exc:  # noqa: BLE001 - fallback must never break rendering
         report["error"] = str(exc)[:300]
@@ -252,9 +261,15 @@ def ensure_project_captions(
         if not name.endswith((".mp4", ".mkv", ".avi")):
             continue
         report = ensure_clip_captions(
-            project_folder, os.path.join(final_folder, name), transcribe_fn=transcribe_fn
+            project_folder,
+            os.path.join(final_folder, name),
+            transcribe_fn=transcribe_fn,
         )
-        if report.get("had_captions") or report.get("transcribed") or report.get("error"):
+        if (
+            report.get("had_captions")
+            or report.get("transcribed")
+            or report.get("error")
+        ):
             reports.append(report)
     return reports
 
@@ -294,7 +309,9 @@ def build_caption_assets(
     report["arabic"] = True
     report["cues"] = len(cues)
     ass_path = os.path.join(project_folder, "subs_ass", base + "_processed.ass")
-    write_sentence_ass(cues, ass_path, font=font, font_size=font_size, margin_v=margin_v)
+    write_sentence_ass(
+        cues, ass_path, font=font, font_size=font_size, margin_v=margin_v
+    )
     report["ass_path"] = ass_path
     report["srt_path"] = write_srt(cues, srt_path_for(project_folder, base))
     return report
@@ -315,7 +332,9 @@ def arabic_srt_for_clip(project_folder: str, video_path: str) -> str:
     return srt_path_for(project_folder, clip_base(video_path))
 
 
-def upload_caption_track(video_id: str, srt_path: str, token_path: str = "") -> Dict[str, Any]:
+def upload_caption_track(
+    video_id: str, srt_path: str, token_path: str = ""
+) -> Dict[str, Any]:
     """Upload the Arabic SRT as the video's caption track (youtube.captions).
 
     Uses the same OAuth token file as the uploader. Returns a JSON-safe
@@ -342,9 +361,13 @@ def upload_caption_track(video_id: str, srt_path: str, token_path: str = "") -> 
     try:
         from webui import youtube_credentials
 
-        creds = Credentials.from_authorized_user_file(token_path, youtube_credentials.FULL_SCOPES)
+        creds = Credentials.from_authorized_user_file(
+            token_path, youtube_credentials.FULL_SCOPES
+        )
         service = build("youtube", "v3", credentials=creds)
-        media = MediaFileUpload(srt_path, mimetype="application/x-subrip", chunksize=-1, resumable=False)
+        media = MediaFileUpload(
+            srt_path, mimetype="application/x-subrip", chunksize=-1, resumable=False
+        )
         result = (
             service.captions()
             .insert(

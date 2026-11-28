@@ -30,7 +30,8 @@ from typing import Any, Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter, ImageFont, features as pil_features
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    from PIL import features as pil_features
 
     HAS_PIL = True
 except Exception:  # pragma: no cover
@@ -66,6 +67,7 @@ def _rtl_text_kwargs(text):
     if HAS_RAQM and _has_arabic(text):
         return {"direction": "rtl", "language": "ar"}
     return {}
+
 
 try:
     import cv2
@@ -419,7 +421,9 @@ def generate_variants(
     elif str(hook or "").strip():
         # Single headline + hook badge: the second variant drops the badge so
         # the user can compare badge on/off in Studio's Test & Compare.
-        specs.append({"title": candidate_titles[0], "at_seconds": at_seconds, "hook": ""})
+        specs.append(
+            {"title": candidate_titles[0], "at_seconds": at_seconds, "hook": ""}
+        )
     if is_video and len(specs) < max_variants:
         specs.append(
             {
@@ -476,7 +480,6 @@ def generate_variants(
 
 def main(argv=None) -> int:
 
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", help="video file or image")
     parser.add_argument("--title", default="", help="main title (bottom)")
@@ -514,7 +517,10 @@ def main(argv=None) -> int:
         for variant in result["variants"]:
             print(
                 "[thumbnail] variant -> {} (title={!r}, hook={!r}, frame={}s)".format(
-                    variant["out"], variant["title"], variant["hook"], variant["at_seconds"]
+                    variant["out"],
+                    variant["title"],
+                    variant["hook"],
+                    variant["at_seconds"],
                 )
             )
         if result.get("sheet"):

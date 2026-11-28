@@ -33,7 +33,6 @@ _WORD_TAG = "s"
 _CUE_TAG = "p"
 
 __all__ = [
-    "ARTIFACT_REASONS",
     "parse_srv3",
     "segments_to_json_payload",
     "segments_to_srt",
@@ -74,15 +73,15 @@ def _access_token(token_path: str) -> str:
 def _api_get(url: str, token: str, timeout: int = 30) -> bytes:
     import urllib.request
 
-    request = urllib.request.Request(
-        url, headers={"Authorization": "Bearer " + token}
-    )
+    request = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
     with urllib.request.urlopen(request, timeout=timeout) as resp:
         return resp.read()
 
 
 def _api_get_json(url: str, token: str, timeout: int = 30) -> Dict[str, Any]:
-    return json.loads(_api_get(url, token, timeout=timeout).decode("utf-8", "replace") or "{}")
+    return json.loads(
+        _api_get(url, token, timeout=timeout).decode("utf-8", "replace") or "{}"
+    )
 
 
 def _err_text(exc: BaseException) -> str:
@@ -90,7 +89,7 @@ def _err_text(exc: BaseException) -> str:
     status = ""
     body = ""
     if hasattr(exc, "code"):
-        status = str(getattr(exc, "code"))
+        status = str(exc.code)
     if hasattr(exc, "read"):
         try:
             body = exc.read().decode("utf-8", "replace")[:300]
@@ -129,9 +128,7 @@ def list_captions(video_id: str, token_path: str) -> List[Dict[str, Any]]:
 def download_captions(caption_id: str, token_path: str, tfmt: str = "srv3") -> bytes:
     """The raw caption track bytes (captions.download with a timed format)."""
     token = _access_token(token_path)
-    return _api_get(
-        DATA_API_BASE + "/{}?tfmt={}".format(caption_id, tfmt), token
-    )
+    return _api_get(DATA_API_BASE + "/{}?tfmt={}".format(caption_id, tfmt), token)
 
 
 def parse_srv3(payload: bytes) -> List[Dict[str, Any]]:
@@ -143,7 +140,7 @@ def parse_srv3(payload: bytes) -> List[Dict[str, Any]]:
     try:
         root = ET.fromstring(payload.decode("utf-8", "replace"))
     except (ET.ParseError, UnicodeDecodeError) as exc:
-        raise ValueError("caption track is not valid srv3 XML: {}".format(exc))
+        raise ValueError("caption track is not valid srv3 XML: {}".format(exc)) from exc
 
     segments: List[Dict[str, Any]] = []
     for cue in root.iter(_CUE_TAG):
@@ -245,7 +242,10 @@ def write_transcript_artifacts(
         handle.write(segments_to_tsv(segments))
     with open(json_file, "w", encoding="utf-8") as handle:
         json.dump(
-            segments_to_json_payload(segments, language), handle, ensure_ascii=False, indent=2
+            segments_to_json_payload(segments, language),
+            handle,
+            ensure_ascii=False,
+            indent=2,
         )
     return srt_file, tsv_file, json_file
 

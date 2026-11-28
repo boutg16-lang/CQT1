@@ -25,7 +25,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Optional
@@ -68,9 +67,7 @@ def _access_token(token_path: str = "") -> str:
     """A fresh access token from the uploader's saved OAuth token file."""
     path = str(token_path or "").strip() or DEFAULT_TOKEN_PATH
     if not os.path.isfile(path):
-        raise RuntimeError(
-            "OAuth token file not found: {}".format(path)
-        )
+        raise RuntimeError("OAuth token file not found: {}".format(path))
     try:
         from google.oauth2.credentials import Credentials
     except ImportError as exc:  # pragma: no cover - env without google-auth
@@ -209,7 +206,9 @@ def funnel_rows(
     *,
     token_path: str = "",
     window_days: int = DEFAULT_WINDOW_DAYS,
-    fetch_metrics: Optional[Callable[[Iterable[str]], Dict[str, Dict[str, Any]]]] = None,
+    fetch_metrics: Optional[
+        Callable[[Iterable[str]], Dict[str, Dict[str, Any]]]
+    ] = None,
     fetch_source_views: Optional[Callable[[str], Optional[int]]] = None,
     fetch_related: Optional[Callable[[str], Optional[int]]] = None,
 ) -> Dict[str, Any]:
@@ -234,18 +233,19 @@ def funnel_rows(
         return report
 
     if fetch_metrics is None:
+
         def fetch_metrics(video_ids, project_folder=None):  # noqa: F811
             from scripts import performance_loop
 
-            return performance_loop._fetch_real_metrics(
-                list(video_ids), project_folder
-            )
+            return performance_loop._fetch_real_metrics(list(video_ids), project_folder)
 
     if fetch_source_views is None:
+
         def fetch_source_views(video_id):  # noqa: F811
             return source_view_count(video_id, token_path)
 
     if fetch_related is None:
+
         def fetch_related(video_id):  # noqa: F811
             return related_video_clicks(video_id, token_path, window_days)
 
@@ -308,7 +308,12 @@ def funnel_rows(
         row["funnel_score"] = funnel_score(row)
         row["missing"] = [
             key
-            for key in ("short_views", "related_clicks", "source_delta", "subscribers_gained")
+            for key in (
+                "short_views",
+                "related_clicks",
+                "source_delta",
+                "subscribers_gained",
+            )
             if row.get(key) is None
         ]
         rows.append(row)

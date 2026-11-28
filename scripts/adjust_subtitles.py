@@ -438,7 +438,9 @@ def adjust(
                         )
                         continue
                 except Exception as cap_error:
-                    print(f"[WARN] Arabic sentence captions failed for {filename}: {cap_error}")
+                    print(
+                        f"[WARN] Arabic sentence captions failed for {filename}: {cap_error}"
+                    )
 
             generate_ass_from_file(
                 input_path,

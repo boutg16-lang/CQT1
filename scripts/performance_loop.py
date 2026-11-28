@@ -285,16 +285,17 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
         "title_hook_word": bool(hook_word),
         # Thumbnail variant kind (round 2 item 6): "v1"/"v2"/"v3" when the
         # recorded thumbnail filename came from generate_variants, else "".
-        "thumbnail_variant": _thumbnail_variant_kind(
-            str(event.get("thumbnail") or "")
-        ),
+        "thumbnail_variant": _thumbnail_variant_kind(str(event.get("thumbnail") or "")),
     }
 
 
 def _thumbnail_variant_kind(thumbnail_name: str) -> str:
     """Extract the Test & Compare variant kind from a thumbnail filename."""
-    match = re.search(r"_(v\d+)\.(?:png|jpg|jpeg|webp)$", str(thumbnail_name or "").strip())
+    match = re.search(
+        r"_(v\d+)\.(?:png|jpg|jpeg|webp)$", str(thumbnail_name or "").strip()
+    )
     return match.group(1) if match else ""
+
 
 def _funnel_bucket(value) -> str:
     """Bucket label for a funnel number (``""`` excludes the clip)."""
@@ -794,9 +795,7 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
         if (item.get("metrics") or {}).get("views") is not None
         and str(item.get("title") or "").strip()
     ]
-    top_titles.sort(
-        key=lambda item: float(item["metrics"]["views"]), reverse=True
-    )
+    top_titles.sort(key=lambda item: float(item["metrics"]["views"]), reverse=True)
     result["top_titles"] = [
         {
             "title": str(item.get("title") or ""),

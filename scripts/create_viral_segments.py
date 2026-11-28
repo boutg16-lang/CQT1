@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import time
+from typing import Any, Dict, List
 
 from scripts.gemini_models import DEFAULT_GEMINI_MODEL, resolve_gemini_model
 

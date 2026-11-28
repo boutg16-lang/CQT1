@@ -87,6 +87,7 @@ def _style_bonus(delta_pct) -> float:
         max(-STYLE_MAX_BONUS, min(STYLE_MAX_BONUS, float(delta_pct) / 25.0)), 2
     )
 
+
 def thumbnail_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
     """Measured CTR -> per-thumbnail-variant bonus map (round 2 item 6).
 
@@ -101,9 +102,7 @@ def thumbnail_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
         if int(row.get("samples") or 0) < 2:
             continue
         kind = str(row.get("value") or "").strip()
-        bonus = round(
-            _style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2
-        )
+        bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2)
         if kind and bonus:
             bonuses[kind] = bonus
     return bonuses if len(bonuses) > 1 else {}
@@ -121,6 +120,7 @@ def preferred_thumbnail_variant(insights) -> str:
             best_bonus = float(bonus)
             best_kind = str(kind)
     return best_kind
+
 
 __all__ = [
     "feature_to_component",
@@ -240,7 +240,10 @@ def winning_title_patterns(insights, limit: int = 3) -> list[dict[str, Any]]:
         if delta > 0:
             winners.append(row)
     winners.sort(
-        key=lambda row: (-float(row.get("delta_pct") or 0.0), str(row.get("value") or ""))
+        key=lambda row: (
+            -float(row.get("delta_pct") or 0.0),
+            str(row.get("value") or ""),
+        )
     )
     return winners[: max(1, int(limit))]
 

@@ -276,7 +276,6 @@ def suggest_alternative_start(text: str, intro_word_count: int = 0) -> str:
     raw = str(text or "").strip()
     if not raw:
         return ""
-    words = [_norm_word(token) for token in _tokens(raw)]
     skip = max(0, int(intro_word_count or 0))
     sentences = []
     start_word = 0
@@ -287,7 +286,7 @@ def suggest_alternative_start(text: str, intro_word_count: int = 0) -> str:
         if re.fullmatch(r"[.!؟?\n]+", part):
             cursor += len(part.split()) if False else 0
             continue
-        count = len([w for w in _tokens(part)])
+        count = len(_tokens(part))
         sentences.append((start_word, start_word + count, part.strip()))
         start_word += count
     # ^ word counting via _tokens keeps parity with the normalized sequence
@@ -424,7 +423,9 @@ def analyze_opening(
             "greeting_label": "",
             "intro_word_count": 0,
             "suggested_start": "",
-            "hook_threshold": LIVE_HOOK_PASS_SCORE if source_is_live else HOOK_PASS_SCORE,
+            "hook_threshold": LIVE_HOOK_PASS_SCORE
+            if source_is_live
+            else HOOK_PASS_SCORE,
             "passes_hook_threshold": False,
             "source_is_live": bool(source_is_live),
             "notes": ["لا يوجد نص افتتاحي لتحليله"],
@@ -493,7 +494,9 @@ def analyze_opening(
     intro_word_count = int(ceremony.get("intro_word_count") or 0)
     suggested_start = ""
     if is_greeting or is_intro:
-        base_penalty = 20.0 if (is_greeting and is_intro) else (15.0 if is_greeting else 12.0)
+        base_penalty = (
+            20.0 if (is_greeting and is_intro) else (15.0 if is_greeting else 12.0)
+        )
         penalty = base_penalty * (LIVE_PENALTY_MULTIPLIER if source_is_live else 1.0)
         score -= penalty
         skip_words = max(trim_words, intro_word_count)

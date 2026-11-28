@@ -29,7 +29,9 @@ import re
 import sys
 from typing import Any, Dict, List
 
-sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
+sys.path.insert(
+    0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))
+)
 
 from scripts import safety_filter  # noqa: E402
 
@@ -187,7 +189,9 @@ def self_certify(
         "categories": categories,
         "recommended": {
             "contains_none": not any_signal,
-            "contains_yes": [name for name in CATEGORIES if categories[name]["contains"]],
+            "contains_yes": [
+                name for name in CATEGORIES if categories[name]["contains"]
+            ],
         },
         "needs_manual_confirmation": any_signal,
         "clean": not any_signal,
