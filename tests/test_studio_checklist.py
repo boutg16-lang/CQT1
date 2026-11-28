@@ -70,14 +70,19 @@ def test_update_history_checklist_appends_newest_state(tmp_path):
         extra={"studio_checklist": sc.checklist_json(sc.build_checklist(video_id))},
     )
     assert ok is True
-    ok2 = sc.update_history_checklist(str(tmp_path), "youtube", video_id, "related_video", True)
+    ok2 = sc.update_history_checklist(
+        str(tmp_path), "youtube", video_id, "related_video", True
+    )
     assert ok2 is True
     events = publish_history.load(str(tmp_path), limit=100)
     newest = sc.checklist_for_event(events[-1])
     assert [i for i in newest if i["key"] == "related_video"][0]["done"] is True
     assert sc.pending_count(newest) == 3
     # unknown key / unknown video -> no event appended
-    assert sc.update_history_checklist(str(tmp_path), "youtube", "nope", "self_assessment") is False
+    assert (
+        sc.update_history_checklist(str(tmp_path), "youtube", "nope", "self_assessment")
+        is False
+    )
 
 
 def test_parse_rejects_garbage():
@@ -182,9 +187,7 @@ def test_latest_checks_returns_newest(tmp_path):
 def test_fetch_verdicts_maps_partner_responses(monkeypatch):
     from scripts import verify_youtube as vy
 
-    monkeypatch.setattr(
-        vy, "_access_token", lambda token_path: "fake-access-token"
-    )
+    monkeypatch.setattr(vy, "_access_token", lambda token_path: "fake-access-token")
 
     def fake_get(url, token):
         if url.startswith(vy.DATA_API_BASE):

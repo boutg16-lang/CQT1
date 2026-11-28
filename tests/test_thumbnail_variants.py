@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for thumbnail Test & Compare variants (round 2, item 4)."""
+
 import os
 import sys
 

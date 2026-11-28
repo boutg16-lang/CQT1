@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for YouTube-captions transcript source (round 2, item 3b)."""
+
 import json
 import os
 import sys
-
-import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,7 +21,10 @@ SRV3 = (
 
 
 def test_video_id_from_url():
-    assert yt.video_id_from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30") == "dQw4w9WgXcQ"
+    assert (
+        yt.video_id_from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30")
+        == "dQw4w9WgXcQ"
+    )
     assert yt.video_id_from_url("https://youtu.be/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
     assert yt.video_id_from_url("https://vimeo.com/12345") == ""
     assert yt.video_id_from_url("") == ""
@@ -44,7 +46,9 @@ def test_write_transcript_artifacts_matches_transcribe_contract(tmp_path):
         {"start": 0.0, "end": 2.0, "text": "مرحبا بكم", "words": []},
         {"start": 2.0, "end": 3.8, "text": "في هذا الفيديو.", "words": []},
     ]
-    srt, tsv, jsn = yt.write_transcript_artifacts(str(tmp_path), "input", segments, "ar")
+    srt, tsv, jsn = yt.write_transcript_artifacts(
+        str(tmp_path), "input", segments, "ar"
+    )
     assert os.path.isfile(srt) and os.path.isfile(tsv) and os.path.isfile(jsn)
     tsv_rows = open(tsv, encoding="utf-8").read().strip().splitlines()
     assert tsv_rows[0] == "start\tend\ttext"
@@ -148,5 +152,7 @@ def test_success_writes_artifacts_and_returns_pair(tmp_path, monkeypatch):
     srt_file, tsv_file = result
     assert os.path.isfile(srt_file) and os.path.isfile(tsv_file)
     assert os.path.isfile(os.path.join(str(tmp_path), "input.json"))
-    payload = json.load(open(os.path.join(str(tmp_path), "input.json"), encoding="utf-8"))
+    payload = json.load(
+        open(os.path.join(str(tmp_path), "input.json"), encoding="utf-8")
+    )
     assert payload["language"] == "ar"

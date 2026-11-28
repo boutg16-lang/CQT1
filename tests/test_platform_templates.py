@@ -86,15 +86,16 @@ class TestFunnelDescription:
 
     def test_description_starts_with_full_video_line(self):
         text = pt.build_funnel_description(self.FULL_URL, self.CHANNEL, body="شرح")
-        assert text.startswith(
-            "شاهدوا الفيديو الكامل على القناة: " + self.FULL_URL
-        )
+        assert text.startswith("شاهدوا الفيديو الكامل على القناة: " + self.FULL_URL)
         lines = text.splitlines()
         assert lines[1] == self.CHANNEL
 
     def test_description_order_url_channel_hashtags(self):
         text = pt.build_funnel_description(
-            self.FULL_URL, self.CHANNEL, body="شرح", hashtags=["الجزائر", "#مصطفى_بونيف"]
+            self.FULL_URL,
+            self.CHANNEL,
+            body="شرح",
+            hashtags=["الجزائر", "#مصطفى_بونيف"],
         )
         assert "#الجزائر" in text
         assert "#مصطفى_بونيف" in text
@@ -123,10 +124,7 @@ class TestFunnelDescription:
         assert pt.title_pattern("yt_shorts") == "{hook_quote} | الفيديو الكامل"
 
     def test_apply_title_pattern_appends_and_is_idempotent(self):
-        assert (
-            pt.apply_title_pattern("حوار ساخر")
-            == "حوار ساخر | الفيديو الكامل"
-        )
+        assert pt.apply_title_pattern("حوار ساخر") == "حوار ساخر | الفيديو الكامل"
         assert (
             pt.apply_title_pattern("حوار ساخر | الفيديو الكامل")
             == "حوار ساخر | الفيديو الكامل"

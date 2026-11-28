@@ -47,9 +47,7 @@ def test_report_is_json_safe():
 def test_record_answer_attaches_studio_link():
     report = sc.self_certify("اذبحهم", title="عنوان")
     linked = sc.record_answer(report, "abc123XYZ_-")
-    assert (
-        linked["studio_url"] == "https://studio.youtube.com/video/abc123XYZ_-/edit"
-    )
+    assert linked["studio_url"] == "https://studio.youtube.com/video/abc123XYZ_-/edit"
 
 
 def test_publish_history_accepts_self_cert_extra(tmp_path):
@@ -61,9 +59,7 @@ def test_publish_history_accepts_self_cert_extra(tmp_path):
         title="عنوان",
         result={"status": "uploaded", "video_id": "vid1"},
         extra={
-            "self_cert": json.dumps(
-                report, ensure_ascii=False, separators=(",", ":")
-            )
+            "self_cert": json.dumps(report, ensure_ascii=False, separators=(",", ":"))
         },
     )
     assert ok is True

@@ -29,11 +29,7 @@ AR_WORDS = [
 def _write_clip(tmp_path, name="000_Test", words=None, arabic=True):
     subs = tmp_path / "subs"
     subs.mkdir(exist_ok=True)
-    payload = {
-        "segments": [
-            {"words": words or AR_WORDS, "start": 0.0, "end": 4.4}
-        ]
-    }
+    payload = {"segments": [{"words": words or AR_WORDS, "start": 0.0, "end": 4.4}]}
     path = subs / (name + "_processed.json")
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return str(path)
@@ -59,8 +55,10 @@ def test_srt_and_ass_are_written_for_arabic_clip(tmp_path):
 
 
 def test_non_arabic_clip_is_noop(tmp_path):
-    words = [{"word": w, "start": 0.5 * i, "end": 0.5 * i + 0.4}
-             for i, w in enumerate(["hello", "world", "friends"])]
+    words = [
+        {"word": w, "start": 0.5 * i, "end": 0.5 * i + 0.4}
+        for i, w in enumerate(["hello", "world", "friends"])
+    ]
     json_path = _write_clip(tmp_path, words=words)
     report = ac.build_caption_assets(str(tmp_path), json_path)
     assert report["arabic"] is False

@@ -27,14 +27,18 @@ def test_normalize_hook_unifies_hamza_and_diacritics():
 
 
 def test_hook_fingerprint_first_words_only():
-    fp = hf.hook_fingerprint("لما رفضوا الدفع انفجر الموقف بالكامل. في هذا الفيديو", words=4)
+    fp = hf.hook_fingerprint(
+        "لما رفضوا الدفع انفجر الموقف بالكامل. في هذا الفيديو", words=4
+    )
     assert fp == "لما رفضوا الدفع انفجر"
 
 
 def test_published_hooks_success_only(tmp_path):
     events = [
         _event("منشور", "لما رفضوا الدفع انفجر الموقف. بقية القصة."),
-        _event("مجدول", "لما رفضوا الدفع انفجر الموقف. بقية القصة.", status="scheduled"),
+        _event(
+            "مجدول", "لما رفضوا الدفع انفجر الموقف. بقية القصة.", status="scheduled"
+        ),
         _event("فاشل", "لما رفضوا الدفع انفجر الموقف. بقية القصة.", status="failed"),
     ]
     hooks = hf.published_hooks(str(tmp_path), events=events)
@@ -74,7 +78,10 @@ def test_apply_published_hook_guard_blocks_and_reports():
     blocked = []
     kept = hf.apply_published_hook_guard(
         [
-            {"title": "أ", "transcript_text": "لما رفضوا الدفع انفجر الموقف كله. ثانية."},
+            {
+                "title": "أ",
+                "transcript_text": "لما رفضوا الدفع انفجر الموقف كله. ثانية.",
+            },
             {"title": "ب", "transcript_text": "قضية السبت تكشف تفاصيل جديدة. المزيد."},
         ],
         hooks,
@@ -112,9 +119,7 @@ def test_continuation_offers_second_clip_when_two_related_ideas():
 
 
 def test_continuation_drops_unrelated_or_weak_sentences():
-    seg = _segment(
-        "لما رفضوا الدفع انفجر الموقف بالكامل. الطقس جميل اليوم في الجزائر."
-    )
+    seg = _segment("لما رفضوا الدفع انفجر الموقف بالكامل. الطقس جميل اليوم في الجزائر.")
     proposals = qt.continuation_candidates(seg, "رفض الدفع")
     assert proposals == []
 
@@ -131,7 +136,9 @@ def test_apply_target_query_reports_continuations():
     report = result["target_query"]
     assert report["kept"] >= 1
     for cont in report["continuations"]:
-        assert cont["continuation_of"] == (base[0].get("recommended_title") or base[0].get("title"))
+        assert cont["continuation_of"] == (
+            base[0].get("recommended_title") or base[0].get("title")
+        )
 
 
 def test_continuation_not_added_when_single_idea():

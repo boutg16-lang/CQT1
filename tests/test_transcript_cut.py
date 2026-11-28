@@ -27,7 +27,12 @@ def _project(tmp_path, segments, words=None):
     if words is not None:
         payload = {
             "segments": [
-                {"words": [{"word": w["word"], "start": w["start"], "end": w["end"]} for w in words]}
+                {
+                    "words": [
+                        {"word": w["word"], "start": w["start"], "end": w["end"]}
+                        for w in words
+                    ]
+                }
             ]
         }
         with open(os.path.join(project, "input.json"), "w", encoding="utf-8") as fh:

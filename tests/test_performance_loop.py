@@ -182,9 +182,8 @@ def test_analytics_filter_commajoin_and_ctr_query(tmp_path, monkeypatch):
 
     fake = _FakeAnalytics()
     import scripts.analytics as analytics_mod
-    monkeypatch.setattr(
-        analytics_mod, "_build_services", lambda: (fake, object())
-    )
+
+    monkeypatch.setattr(analytics_mod, "_build_services", lambda: (fake, object()))
     metrics = performance_loop._fetch_real_metrics(["abc"], str(tmp_path))
     # 39bac5b: the filter is comma-joined per dimension, never semicolons.
     filters = [kwargs["filters"] for kwargs in captured]

@@ -531,7 +531,9 @@ def test_apply_target_query_reads_project_insights(tmp_path):
     (tmp_path / "performance_insights.json").write_text(
         json.dumps(insights), encoding="utf-8"
     )
-    transcript = "مصطفى بونيف تبون تطرح سؤالا مهما: من يقف وراء القرار؟ الجواب صادم فعلا."
+    transcript = (
+        "مصطفى بونيف تبون تطرح سؤالا مهما: من يقف وراء القرار؟ الجواب صادم فعلا."
+    )
     seg = {
         "title": "مقطع",
         "start_time": 0.0,
@@ -539,7 +541,9 @@ def test_apply_target_query_reads_project_insights(tmp_path):
         "transcript_text": transcript,
         "title_template": "funnel_full",
     }
-    kept = qt.apply_target_query([seg], "مصطفى بونيف تبون", project_folder=str(tmp_path))
+    kept = qt.apply_target_query(
+        [seg], "مصطفى بونيف تبون", project_folder=str(tmp_path)
+    )
     assert len(kept) == 1
     assert kept[0]["query_title_data"]["pattern"] in {"query_question", "funnel_full"}
 
@@ -562,8 +566,10 @@ def test_thumbnail_variant_performance_ranks_by_ctr():
     from scripts import performance_loop as loop
 
     measured = [
-        _ctr_event("v1", 4.0), _ctr_event("v1", 6.0),
-        _ctr_event("v2", 9.0), _ctr_event("v2", 11.0),
+        _ctr_event("v1", 4.0),
+        _ctr_event("v1", 6.0),
+        _ctr_event("v2", 9.0),
+        _ctr_event("v2", 11.0),
     ]
     rows = loop._thumbnail_variant_performance(measured)
     assert [r["value"] for r in rows] == ["v2", "v1"]
@@ -575,8 +581,12 @@ def test_thumbnail_variant_performance_empty_without_ctr():
     from scripts import performance_loop as loop
 
     measured = [
-        {"title": "t", "video": "v", "content": {"thumbnail_variant": "v1"},
-         "metrics": {"views": 100}},
+        {
+            "title": "t",
+            "video": "v",
+            "content": {"thumbnail_variant": "v1"},
+            "metrics": {"views": 100},
+        },
     ]
     assert loop._thumbnail_variant_performance(measured) == []
 

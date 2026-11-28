@@ -48,9 +48,7 @@ def test_funnel_rows_compute_source_delta_and_score(tmp_path):
     )
     report = fm.funnel_rows(
         project,
-        fetch_metrics=lambda ids: {
-            "short1": {"views": 420, "subscribers_gained": 7}
-        },
+        fetch_metrics=lambda ids: {"short1": {"views": 420, "subscribers_gained": 7}},
         fetch_source_views=lambda vid: 1200 if vid == "srcVid98765" else None,
         fetch_related=lambda vid: 33 if vid == "short1" else None,
     )

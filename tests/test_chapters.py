@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for YouTube chapters generation (round 2, item 5)."""
+
 import os
 import sys
 
@@ -10,9 +11,21 @@ from scripts import chapters as ch  # noqa: E402
 
 def _segs():
     return [
-        {"start_time": 12.0, "end_time": 40.0, "hook_text": "قضية السبت تكشف تفاصيل جديدة."},
-        {"start_time": 45.0, "end_time": 90.0, "hook_text": "لما رفضوا الدفع انفجر الموقف."},
-        {"start_time": 120.0, "end_time": 180.0, "hook_text": "الرد الرسمي وصل متأخراً."},
+        {
+            "start_time": 12.0,
+            "end_time": 40.0,
+            "hook_text": "قضية السبت تكشف تفاصيل جديدة.",
+        },
+        {
+            "start_time": 45.0,
+            "end_time": 90.0,
+            "hook_text": "لما رفضوا الدفع انفجر الموقف.",
+        },
+        {
+            "start_time": 120.0,
+            "end_time": 180.0,
+            "hook_text": "الرد الرسمي وصل متأخراً.",
+        },
         {"start_time": 240.0, "end_time": 300.0, "hook_text": "ماذا حدث بعد الأزمة؟"},
     ]
 
@@ -24,7 +37,7 @@ def test_build_chapters_first_at_zero_and_min_spacing():
     assert chapters[0]["start"] == 0.0
     starts = [c["start"] for c in chapters]
     assert starts == sorted(starts)
-    for before, after in zip(starts, starts[1:]):
+    for before, after in zip(starts, starts[1:], strict=False):
         assert after - before >= ch.MIN_CHAPTER_SECONDS
 
 

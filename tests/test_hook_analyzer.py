@@ -106,7 +106,11 @@ class TestGreetingIntroPenalty:
         )
         assert report["is_intro_announcement"] is True
         assert report["is_greeting"] is False
-        assert report["intro_word_count"] == len("في هذا الفيديو".split())
+        # the ceremony is the whole first sentence (the announcement clause),
+        # not just the matched prefix — see detect_greeting_intro.
+        assert report["intro_word_count"] == len(
+            "في هذا الفيديو سنتحدث عن القبائل".split()
+        )
 
     def test_clean_content_is_not_flagged(self):
         report = hook_analyzer.detect_greeting_intro(self.STRONG)
@@ -150,24 +154,30 @@ class TestGreetingIntroPenalty:
         assert report["hook_threshold"] == hook_analyzer.LIVE_HOOK_PASS_SCORE
 
 
-class TestGreetingIntroPenalty:
+class TestGreetingIntroDetection:
     """Item 4: greeting/intro ceremony at the START must be flagged, penalised,
     and accompanied by a deterministic alternative start."""
 
     def test_detects_plain_greeting(self):
-        report = hook_analyzer.detect_greeting_intro("السلام عليكم، اهلا بكم. الموضوع اليوم خطير.")
+        report = hook_analyzer.detect_greeting_intro(
+            "السلام عليكم، اهلا بكم. الموضوع اليوم خطير."
+        )
         assert report["is_greeting"] is True
         assert report["label"] == "greeting"
         assert report["intro_word_count"] >= 3
 
     def test_detects_intro_announcement(self):
-        report = hook_analyzer.detect_greeting_intro("في هذا الفيديو سنتحدث عن القبائل والشرف.")
+        report = hook_analyzer.detect_greeting_intro(
+            "في هذا الفيديو سنتحدث عن القبائل والشرف."
+        )
         assert report["is_intro_announcement"] is True
         assert report["label"] == "intro_announcement"
         assert report["intro_word_count"] >= 4
 
     def test_clean_content_is_not_flagged(self):
-        report = hook_analyzer.detect_greeting_intro("لما رفضوا الدفع انفجر الموقف بالكامل.")
+        report = hook_analyzer.detect_greeting_intro(
+            "لما رفضوا الدفع انفجر الموقف بالكامل."
+        )
         assert report["is_greeting"] is False
         assert report["is_intro_announcement"] is False
         assert report["intro_word_count"] == 0

@@ -8,8 +8,8 @@ misleading titles), and lead the publish title with the query — scored with
 scripts/seo_titles.score_title. Offline only: embeddings are never enabled.
 """
 
-import os
 import json
+import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -64,7 +64,9 @@ class TestQueryRelevance:
     def test_zero_overlap_is_zero_even_with_semantics(self):
         seg = _segment(0, OTHER)
         # semantic similarity can never rescue zero lexical overlap
-        assert qt.query_relevance("مصطفى بونيف تبون", seg, semantic_similarity=1.0) == 0.0
+        assert (
+            qt.query_relevance("مصطفى بونيف تبون", seg, semantic_similarity=1.0) == 0.0
+        )
 
     def test_semantics_add_small_bonus_on_lexical_match(self):
         seg = _segment(0, ABOUT_QUERY)
@@ -78,8 +80,7 @@ class TestQueryRelevance:
     def test_window_text_overrides_transcript(self):
         seg = _segment(0, OTHER)
         assert (
-            qt.query_relevance("بونيف تبون", seg, window_text="بونيف و تبون معا")
-            == 1.0
+            qt.query_relevance("بونيف تبون", seg, window_text="بونيف و تبون معا") == 1.0
         )
 
 
@@ -105,7 +106,10 @@ class TestRankSegments:
         assert report["best"] is None
 
     def test_input_not_mutated(self):
-        segs = [_segment(0, OTHER, start=0.0, end=30.0), _segment(1, ABOUT_QUERY, start=60.0, end=90.0)]
+        segs = [
+            _segment(0, OTHER, start=0.0, end=30.0),
+            _segment(1, ABOUT_QUERY, start=60.0, end=90.0),
+        ]
         before = [dict(s) for s in segs]
         qt.rank_segments_for_query("بونيف تبون", segs)
         assert segs == before
@@ -128,15 +132,18 @@ class TestBuildQueryTitle:
         assert data["score"] == data["score"]  # numeric
         assert "score" in data and data["score"] > 0
         # scored by the SAME engine, not a local re-implementation
-        assert data["score"] == seo_titles.score_title(
-            data["title"], ["مصطفى بونيف تبون"]
-        )["score"]
+        assert (
+            data["score"]
+            == seo_titles.score_title(data["title"], ["مصطفى بونيف تبون"])["score"]
+        )
 
     def test_grounded_question_comes_from_transcript(self):
         seg = _segment(0, ABOUT_QUERY)
         data = qt.build_query_title("بونيف تبون", seg)
         question_candidates = [
-            c["title"] for c in data.get("candidates", []) if c["pattern"] == "query_question"
+            c["title"]
+            for c in data.get("candidates", [])
+            if c["pattern"] == "query_question"
         ]
         for title in question_candidates:
             # the question part after the query must be verbatim transcript words
@@ -163,7 +170,10 @@ class TestBuildQueryTitle:
 
 class TestApplyTargetQuery:
     def test_keeps_only_segments_about_the_query(self):
-        segs = [_segment(0, OTHER, start=0.0, end=30.0), _segment(1, ABOUT_QUERY, start=60.0, end=90.0)]
+        segs = [
+            _segment(0, OTHER, start=0.0, end=30.0),
+            _segment(1, ABOUT_QUERY, start=60.0, end=90.0),
+        ]
         result = {}
         kept = qt.apply_target_query(segs, "مصطفى بونيف تبون", result)
         assert [s["index"] for s in kept] == [1]
@@ -199,7 +209,7 @@ class TestApplyTargetQuery:
         # best (higher relevance + score) first
         assert base[0]["index"] == 0
         # any extra entries are continuation OFFERS, flagged for the review table
-        for extra in kept[len(base):]:
+        for extra in kept[len(base) :]:
             assert extra.get("origin") == "continuation"
 
 
@@ -239,16 +249,17 @@ class TestWinnersInQueryTitle:
         insights = {
             "content_insights": {
                 "top_titles": [
-                    {"title": "مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟", "views": 9000}
+                    {
+                        "title": "مصطفى بونيف تبون: السؤال الذي أرعب الجميع؟",
+                        "views": 9000,
+                    }
                 ]
             }
         }
         (tmp_path / "performance_insights.json").write_text(
             json.dumps(insights, ensure_ascii=False), encoding="utf-8"
         )
-        kept = qt.apply_target_query(
-            [seg], "قضية السبت", project_folder=str(tmp_path)
-        )
+        kept = qt.apply_target_query([seg], "قضية السبت", project_folder=str(tmp_path))
         assert kept
         data = kept[0].get("query_title_data") or {}
         assert data.get("title", "").startswith("قضية السبت")

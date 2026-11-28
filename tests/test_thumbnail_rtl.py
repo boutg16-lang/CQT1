@@ -104,7 +104,9 @@ def _ink_groups(mask, axis=0):
 
 def test_arabic_title_joined_and_inside_frame(tmp_path):
     result = tg.generate_thumbnail(
-        _flat_frame(tmp_path), title=ARABIC_TITLE, out=os.path.join(str(tmp_path), "t.png")
+        _flat_frame(tmp_path),
+        title=ARABIC_TITLE,
+        out=os.path.join(str(tmp_path), "t.png"),
     )
     assert result["ok"] is True
     image = np.array(Image.open(result["out"]).convert("L"))
