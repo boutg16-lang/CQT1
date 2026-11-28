@@ -56,7 +56,9 @@ def test_download_retries_resume_transient_errors_with_backoff():
     assert delays == [2, 4]
 
 
-def test_download_does_not_retry_permanent_http_errors():
+def test_http_block_retries_are_bounded_with_long_cooldown():
+    # Round 3 item 1: a 429 is a rate limit — retry with a long, increasing
+    # cooldown instead of giving up (old behaviour) or hammering instantly.
     calls = []
     delays = []
 
@@ -69,8 +71,11 @@ def test_download_does_not_retry_permanent_http_errors():
             fake_download, {}, sleep=delays.append
         )
 
-    assert len(calls) == 1
-    assert delays == []
+    assert len(calls) == download_video._HTTP_BLOCK_RETRIES + 1
+    assert delays == [
+        download_video._HTTP_RETRY_BASE_SECONDS,
+        download_video._HTTP_RETRY_BASE_SECONDS * 2,
+    ]
 
 
 def test_download_stops_after_bounded_transient_retries():

@@ -278,22 +278,59 @@ def _content_markers(event: dict[str, Any]) -> dict[str, Any]:
         "topic": str(event.get("topic") or "").strip(),
         "angle": str(event.get("angle") or "").strip(),
         "hook_type": str(event.get("hook_type") or "").strip(),
+        "title_template": str(event.get("title_template") or "").strip(),
         "hashtag_count": hashtag_count,
         "title_question": bool(question),
         "title_number": bool(has_number),
         "title_hook_word": bool(hook_word),
+        # Thumbnail variant kind (round 2 item 6): "v1"/"v2"/"v3" when the
+        # recorded thumbnail filename came from generate_variants, else "".
+        "thumbnail_variant": _thumbnail_variant_kind(str(event.get("thumbnail") or "")),
     }
+
+
+def _thumbnail_variant_kind(thumbnail_name: str) -> str:
+    """Extract the Test & Compare variant kind from a thumbnail filename."""
+    match = re.search(
+        r"_(v\d+)\.(?:png|jpg|jpeg|webp)$", str(thumbnail_name or "").strip()
+    )
+    return match.group(1) if match else ""
+
+
+def _funnel_bucket(value) -> str:
+    """Bucket label for a funnel number (``""`` excludes the clip)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if number <= 0:
+        return "zero"
+    if number < 25:
+        return "low"
+    if number < 100:
+        return "mid"
+    return "high"
 
 
 def _fetch_real_metrics(
     video_ids: list[str], project_folder: str | None = None
 ) -> dict[str, dict[str, Any]]:
-    """Pull views/retention via scripts.analytics. Empty when unavailable."""
+    """Pull views/retention via scripts.analytics. Empty when unavailable.
+
+    Failures are logged with a short reason (feat/pro-cutting item 5): the
+    performance report should say WHY numbers are missing instead of the
+    generic "Analytics returned no numbers" note.
+    """
     try:
         from scripts import analytics as analytics_mod
 
         ya, yt = analytics_mod._build_services()
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "YouTube Analytics unavailable (%s): %s",
+            type(exc).__name__,
+            str(exc)[:160],
+        )
         return {}
     metrics: dict[str, dict[str, float]] = {}
     start, end = analytics_mod._date_range(_window_days())
@@ -304,6 +341,16 @@ def _fetch_real_metrics(
         # (video==a;country==IT). Semicolon-joining IDs produced an invalid
         # filter and silently returned zero rows for every batch.
         filters = "video==" + ",".join(chunk)
+        # CTR (round 2 item 6): impressions/clicks come from the same
+        # targeted query; some API versions reject the extra metrics, so the
+        # query degrades to the original column set instead of failing the
+        # whole batch.
+        base_metrics = (
+            "views,averageViewDuration,averageViewPercentage,"
+            "likes,shares,subscribersGained"
+        )
+        ctr_metrics = base_metrics + ",impressions,clicks"
+        resp = None
         try:
             resp = (
                 ya.reports()
@@ -311,21 +358,47 @@ def _fetch_real_metrics(
                     ids="channel==MINE",
                     startDate=start,
                     endDate=end,
-                    metrics=(
-                        "views,averageViewDuration,averageViewPercentage,"
-                        "likes,shares,subscribersGained"
-                    ),
+                    metrics=ctr_metrics,
                     dimensions="video",
                     filters=filters,
                     maxResults=40,
                 )
                 .execute()
             )
-        except Exception:
-            continue
+        except Exception as first_exc:
+            logger.debug(
+                "Analytics CTR query degraded for %d videos (%s): %s",
+                len(chunk),
+                type(first_exc).__name__,
+                str(first_exc)[:160],
+            )
+            try:
+                resp = (
+                    ya.reports()
+                    .query(
+                        ids="channel==MINE",
+                        startDate=start,
+                        endDate=end,
+                        metrics=base_metrics,
+                        dimensions="video",
+                        filters=filters,
+                        maxResults=40,
+                    )
+                    .execute()
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Analytics query failed for %d videos (%s): %s",
+                    len(chunk),
+                    type(exc).__name__,
+                    str(exc)[:160],
+                )
+                continue
         for row in resp.get("rows", []) or []:
             row = list(row) + [None] * 6
             vid, views, avg_dur, retention, likes, shares, subs = row[:7]
+            impressions = row[7] if len(row) > 7 else None
+            clicks = row[8] if len(row) > 8 else None
             metrics[vid] = {
                 "views": int(views or 0),
                 "avg_view_duration": round(float(avg_dur or 0), 1),
@@ -333,6 +406,15 @@ def _fetch_real_metrics(
                 "likes": int(likes or 0),
                 "shares": int(shares or 0),
                 "subscribers_gained": int(subs or 0),
+                # CTR (round 2 item 6): present only when the API accepted
+                # the impressions/clicks columns; absent otherwise.
+                "impressions": int(impressions) if impressions is not None else None,
+                "clicks": int(clicks) if clicks is not None else None,
+                "ctr": (
+                    round(float(clicks) / float(impressions) * 100.0, 2)
+                    if impressions is not None and impressions and clicks is not None
+                    else None
+                ),
             }
     if metrics and project_folder:
         attach_retention_curves(
@@ -532,6 +614,57 @@ def _overall_avg_retention(measured: list[dict[str, Any]]) -> float | None:
     return round(statistics.fmean(values), 2) if values else None
 
 
+def _thumbnail_variant_performance(
+    measured: list[dict[str, Any]], *, min_samples: int = 2
+) -> list[dict[str, Any]]:
+    """CTR-based per-variant table (round 2 item 6).
+
+    Rows compare the measured CTR of each generated thumbnail variant kind
+    (``v1`` headline+hook, ``v2`` headline-only, ``v3`` alternate frame)
+    against the channel's overall CTR. When the Analytics API did not return
+    impressions/clicks the table stays empty — weights fall back to views.
+    """
+    ctrs = [
+        float(item["metrics"]["ctr"])
+        for item in measured
+        if (item.get("metrics") or {}).get("ctr") is not None
+    ]
+    if not ctrs:
+        return []
+    overall_ctr = statistics.fmean(ctrs)
+    buckets: dict[str, list[float]] = {}
+    views_buckets: dict[str, list[float]] = {}
+    for item in measured:
+        kind = str((item.get("content") or {}).get("thumbnail_variant") or "").strip()
+        ctr = (item.get("metrics") or {}).get("ctr")
+        if kind and ctr is not None:
+            buckets.setdefault(kind, []).append(float(ctr))
+        views = (item.get("metrics") or {}).get("views")
+        if kind and views is not None:
+            views_buckets.setdefault(kind, []).append(float(views))
+    results = []
+    for kind, values in buckets.items():
+        if len(values) < min_samples:
+            continue
+        average = statistics.fmean(values)
+        row = {
+            "value": kind,
+            "samples": len(values),
+            "avg_ctr": round(average, 2),
+            "delta_pct": (
+                round((average - overall_ctr) / overall_ctr * 100.0, 1)
+                if overall_ctr
+                else 0.0
+            ),
+        }
+        views_values = views_buckets.get(kind) or []
+        if views_values:
+            row["avg_views"] = round(statistics.fmean(views_values), 1)
+        results.append(row)
+    results.sort(key=lambda item: (-item["delta_pct"], item["value"]))
+    return results
+
+
 def _category_performance(
     measured: list[dict[str, Any]], field: str, *, min_samples: int = 2
 ) -> list[dict[str, Any]]:
@@ -628,7 +761,14 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     """Learn which content markers (topics/angles/hook styles) perform."""
     result: dict[str, Any] = {"overall_avg_views": _overall_avg_views(measured)}
     categories = {}
-    for field in ("hook_type", "angle", "topic"):
+    for field in (
+        "hook_type",
+        "angle",
+        "topic",
+        "title_template",
+        "funnel_source_delta",
+        "related_clicks",
+    ):
         rows = _category_performance(measured, field)
         if rows:
             categories[field] = rows
@@ -642,6 +782,28 @@ def _content_insights(measured: list[dict[str, Any]]) -> dict[str, Any]:
     if styles:
         styles.sort(key=lambda row: -abs(row["delta_pct"]))
         result["title_styles"] = styles
+    # Round 2 item 6: which generated thumbnail variant earns the CTR.
+    thumbnail_rows = _thumbnail_variant_performance(measured)
+    if thumbnail_rows:
+        result["thumbnail_variants"] = thumbnail_rows
+    # Item 8 (feat/pro-cutting): the literal top titles by measured views.
+    # Consumers reuse their measured suffixes as templates (scripts/seo_titles
+    # ``winner_to_template``) for future query-led titles.
+    top_titles = [
+        item
+        for item in measured
+        if (item.get("metrics") or {}).get("views") is not None
+        and str(item.get("title") or "").strip()
+    ]
+    top_titles.sort(key=lambda item: float(item["metrics"]["views"]), reverse=True)
+    result["top_titles"] = [
+        {
+            "title": str(item.get("title") or ""),
+            "views": int(item["metrics"]["views"]),
+            "video": str(item.get("video") or ""),
+        }
+        for item in top_titles[:3]
+    ]
     pairs = [
         (
             float((item.get("content") or {}).get("hashtag_count"))
@@ -691,15 +853,72 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
 
     video_ids = [item["video_id"] for item in published]
     metrics = _fetch_real_metrics(video_ids, project_folder) if fetch_live else {}
+    # Item 2 (round 2): finish pending "what does YouTube think?" read-backs
+    # (24h after upload) while the loop already has the OAuth context loaded.
+    if fetch_live:
+        try:
+            from scripts import verify_youtube
+
+            recheck = verify_youtube.recheck_pending(project_folder)
+            if recheck.get("checked") or recheck.get("errors"):
+                logger.info(
+                    "youtube rechecks: %s updated, %s checked, errors: %s",
+                    recheck.get("updated", 0),
+                    recheck.get("checked", 0),
+                    recheck.get("errors") or "none",
+                )
+        except Exception:
+            logger.debug("youtube recheck pass failed", exc_info=True)
+    # Per-Short funnel metrics (round 2 item 6b): Short views, related-video
+    # clicks, source-video views before vs after the Short, subscribers gained.
+    # Best-effort; the report carries an explicit unavailable reason instead of
+    # fake zeros when OAuth is not configured.
+    funnel: dict[str, Any] = {}
+    if fetch_live:
+        try:
+            from scripts import funnel_metrics
+
+            funnel = funnel_metrics.funnel_rows(
+                project_folder,
+                fetch_metrics=lambda ids: {
+                    vid: metrics[vid] for vid in ids if vid in metrics
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "funnel metrics unavailable (%s): %s",
+                type(exc).__name__,
+                str(exc)[:160],
+            )
+    report["funnel"] = funnel
+    funnel_by_id = {
+        str(row.get("video_id") or "").strip(): row
+        for row in (funnel.get("rows") or [])
+        if isinstance(row, dict)
+    }
+
     for item in published:
         item["metrics"] = metrics.get(item["video_id"])
+        # Funnel buckets become learnable content categories: the same
+        # style-bonus machinery that learns "hook X earns +Y% views" now
+        # learns "Shorts that pull N source views / related clicks".
+        funnel_row = funnel_by_id.get(str(item.get("video_id") or "").strip())
+        if funnel_row:
+            content = item.setdefault("content", {})
+            delta_bucket = _funnel_bucket(funnel_row.get("source_delta"))
+            if delta_bucket:
+                content["funnel_source_delta"] = delta_bucket
+            clicks_bucket = _funnel_bucket(funnel_row.get("related_clicks"))
+            if clicks_bucket:
+                content["related_clicks"] = clicks_bucket
         report["clips"].append(item)
     measured = [item for item in published if item.get("metrics")]
     report["with_metrics"] = len(measured)
     if not measured:
         report["insights"].append(
             "Uploads found but YouTube Analytics returned no numbers yet "
-            "(OAuth not configured, or videos are too recent)."
+            "(OAuth not configured, or videos are too recent). "
+            "See the server log for the exact Analytics error."
         )
         return report
 
@@ -891,6 +1110,30 @@ def analyze(project_folder: str, fetch_live: bool = True) -> dict[str, Any]:
         report["insights"].append(
             "Metrics present but no feature shows a meaningful correlation yet "
             "— publish more clips to build signal."
+        )
+    # Funnel summary (round 2 item 6b) comes AFTER the no-signal fallback so a
+    # channel with one Short still gets the honest "no meaningful correlation"
+    # line rather than the funnel numbers masking it.
+    funnel_totals = funnel.get("totals") or {}
+    if funnel_totals:
+        report["insights"].append(
+            "funnel: {} Shorts pulled {} source views, {} related clicks, "
+            "{} subscribers in the window".format(
+                len(funnel.get("rows") or []),
+                funnel_totals.get("source_delta")
+                if funnel_totals.get("source_delta") is not None
+                else "—",
+                funnel_totals.get("related_clicks")
+                if funnel_totals.get("related_clicks") is not None
+                else "—",
+                funnel_totals.get("subscribers_gained")
+                if funnel_totals.get("subscribers_gained") is not None
+                else "—",
+            )
+        )
+    if funnel.get("unavailable_reason"):
+        report["insights"].append(
+            "funnel incomplete: {}".format(funnel["unavailable_reason"])
         )
     return report
 

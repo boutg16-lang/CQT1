@@ -1300,7 +1300,10 @@ def transcribe(input_file, model_name="large-v3", project_folder="tmp", device="
                     result = _run_with_heartbeat(
                         "جاري التفريغ الصوتي على الجهاز المحدد",
                         lambda b=batch_size: model.transcribe(
-                            audio, batch_size=b, chunk_size=10
+                            audio,
+                            batch_size=b,
+                            chunk_size=10,
+                            print_progress=False,
                         ),
                         stage="transcribe",
                         start_percent=45,
@@ -1424,6 +1427,8 @@ def transcribe(input_file, model_name="large-v3", project_folder="tmp", device="
                 # Vamos apenas salvar o que temos (timestamps da legenda original podem não bater com áudio perfeitamente se não alinhar)
                 result = {"segments": start_segments, "language": detected_language}
             else:
+                # R3-2: keep the pre-align transcribe result (which now carries
+                # word_timestamps=True words) instead of discarding timings.
                 print("Continuando com transcrição bruta.")
 
         # 5. Salvar Resultados
@@ -1435,6 +1440,10 @@ def transcribe(input_file, model_name="large-v3", project_folder="tmp", device="
             "max_line_count": None,
             "max_line_width": None,
         }
+
+        # R3-2: word-level timings must survive into input.json even when the
+        # align model fails — boundary snapping falls back to segment edges
+        # otherwise and the hook-fingerprint trim loses its word anchors.
 
         # Se veio do alignment_only, result é {'segments': [...], ...}
         # Se o alinhamento falhou, result tem segments originais.

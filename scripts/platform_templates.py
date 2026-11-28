@@ -28,6 +28,18 @@ TEMPLATES = {
         "max_duration": 60,
         "recommended_resolution": "1080x1920",
         "caption_note": "Keep the hook in the first 3 seconds; end-screen friendly.",
+        # Funnel template (feat/pro-cutting item 1): every published Short
+        # opens its description with the full-video watch link, then the
+        # channel link, then hashtags — measured winners drive viewers from
+        # the Short back to the long-form video.
+        "description_template": (
+            "شاهدوا الفيديو الكامل على القناة: {full_video_url}\n"
+            "{channel_url}\n"
+            "\n{body}\n"
+            "\n{hashtags}"
+        ),
+        "related_video": "source",
+        "title_pattern": "{hook_quote} | الفيديو الكامل",
     },
     "tiktok": {
         "name": "TikTok",
@@ -56,6 +68,84 @@ TEMPLATES = {
 }
 
 DEFAULT_TEMPLATE = "yt_shorts"
+FULL_VIDEO_LABEL = "شاهدوا الفيديو الكامل على القناة:"
+FUNNEL_TITLE_SUFFIX = " | الفيديو الكامل"
+
+
+def _normalize_hashtags(hashtags):
+    """hashtags -> ['tag1', 'tag2'] (leading # stripped, de-duplicated)."""
+    out = []
+    for tag in hashtags or []:
+        cleaned = str(tag).strip().lstrip("#")
+        if cleaned and cleaned not in out:
+            out.append(cleaned)
+    return out
+
+
+def build_funnel_description(
+    full_video_url,
+    channel_url="",
+    body="",
+    hashtags=None,
+    template_name=DEFAULT_TEMPLATE,
+):
+    """Description that MUST start with the full-video funnel line.
+
+    Order (proven funnel): 1) full-video URL, 2) channel link, 3) body, 4)
+    hashtags. Unknown template falls back to the shorts template so the
+    funnel line is never lost for a YouTube Short.
+    """
+    full_video_url = str(full_video_url or "").strip()
+    if not full_video_url:
+        # A funnel line with no link is worse than no funnel line: fall back
+        # to the plain body so a local-source Short never ships a dangling
+        # «شاهدوا الفيديو الكامل على القناة:».
+        body = str(body or "").strip("\n")
+        tags_line = " ".join("#" + t for t in _normalize_hashtags(hashtags))
+        parts = [part for part in (body, tags_line) if part]
+        return "\n\n".join(parts)
+    tpl = get_template(template_name) or TEMPLATES[DEFAULT_TEMPLATE]
+    template = tpl.get("description_template") or "{body}"
+    text = template.format(
+        full_video_url=full_video_url,
+        channel_url=str(channel_url or "").strip(),
+        body=str(body or "").strip("\n"),
+        hashtags=" ".join("#" + t for t in _normalize_hashtags(hashtags)),
+    )
+    # Collapse accidental blank-line runs, keep single blank separators.
+    lines = [line.rstrip() for line in text.splitlines()]
+    collapsed = []
+    for line in lines:
+        if line == "" and (not collapsed or collapsed[-1] == ""):
+            continue
+        collapsed.append(line)
+    return "\n".join(collapsed).strip()
+
+
+def apply_title_pattern(title, template_name=DEFAULT_TEMPLATE):
+    """'{strongest quote/question from the clip} | الفيديو الكامل'.
+
+    Idempotent: a title already carrying the funnel suffix passes through
+    unchanged. Empty titles stay empty (the caller decides the fallback).
+    """
+    text = str(title or "").strip()
+    if not text:
+        return ""
+    if text.endswith(FUNNEL_TITLE_SUFFIX):
+        return text
+    return text + FUNNEL_TITLE_SUFFIX
+
+
+def related_video_policy(template_name=DEFAULT_TEMPLATE):
+    """'source' when the platform wants its related video pinned to the
+    source video, '' otherwise."""
+    tpl = get_template(template_name)
+    return str((tpl or {}).get("related_video") or "")
+
+
+def title_pattern(template_name=DEFAULT_TEMPLATE):
+    tpl = get_template(template_name)
+    return str((tpl or {}).get("title_pattern") or "")
 
 
 def get_template(name):

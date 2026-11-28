@@ -90,6 +90,8 @@ def build_command(
     audio_qc_gate="warn",
     # --- v7.36 voice-face link (v7.35 core, opt-in; WebUI round) ---
     voice_face_link=False,
+    # --- feat/pro-cutting item 3: query-targeted cutting ---
+    target_query=None,
 ):
     """Assemble the full CLI command for main_improved.py.
 
@@ -259,6 +261,8 @@ def build_command(
     # Force fresh viral segments instead of reusing viral_segments.txt (v6.16).
     if force_new_segments:
         cmd.append("--force-new-segments")
+    if target_query and str(target_query).strip():
+        cmd.extend(["--target-query", str(target_query).strip()])
 
     # Output framing (v6.13 reframe stage) — only when the user picks one.
     if output_aspect and output_aspect != "9:16":

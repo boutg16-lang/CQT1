@@ -71,7 +71,6 @@ except Exception:
 
 from scripts import (
     adjust_subtitles,
-    audio_qc,
     burn_subtitles,
     censor_engine,
     checkpoint,
@@ -1535,6 +1534,40 @@ def main():
 
             # Se skip config, args.model é default
             # GPU OOM guard (Roadmap 4.1) + checkpoint resume (Roadmap 4.2)
+            # YouTube captions first (round 2 item 3b): when the source is a
+            # YouTube URL and the saved OAuth token can read the video's own
+            # caption tracks, use Studio's transcript instead of re-running
+            # Whisper. Every failure prints its exact reason and falls through
+            # to the Whisper stage below.
+            _yt_transcript_used = False
+            if url:
+                try:
+                    from scripts import yt_transcript
+
+                    _yt_caption_result = yt_transcript.try_source_transcript(
+                        url,
+                        project_folder,
+                        base_name=os.path.splitext(os.path.basename(input_video))[0]
+                        if input_video
+                        else None,
+                    )
+                    if _yt_caption_result:
+                        tracker.mark_done(project_folder, "transcribe")
+                        print(
+                            "[transcribe] caption-based srt/tsv: {} / {}".format(
+                                _yt_caption_result[0], _yt_caption_result[1]
+                            ),
+                            flush=True,
+                        )
+                        _transcribe_result = _yt_caption_result
+                        _yt_transcript_used = True
+                except Exception as caption_error:
+                    print(
+                        "[transcribe] YouTube captions attempt failed: {}".format(
+                            caption_error
+                        )
+                    )
+
             def _run_transcription_stage():
                 return tracker.run(
                     "transcribe",
@@ -1545,7 +1578,9 @@ def main():
                     device=args.transcription_device,
                 )
 
-            _transcribe_result = _run_transcription_stage()
+            _transcribe_result = None
+            if not _yt_transcript_used:
+                _transcribe_result = _run_transcription_stage()
             base_name = os.path.splitext(os.path.basename(input_video))[0]
             if _transcribe_result is None:
                 # Stage was marked done in a previous run; validate and repair
@@ -1749,6 +1784,7 @@ def main():
                         chunk_size_arg=args.chunk_size,
                         model_name_arg=args.ai_model_name,
                         title_language=args.title_language,
+                        target_query=getattr(args, "target_query", None) or None,
                     )
 
                 emit_progress("ai", 55, "تحليل AI")
@@ -1780,6 +1816,34 @@ def main():
                     )
                 save_json.save_viral_segments(
                     viral_segments, project_folder=project_folder, overwrite=True
+                )
+
+            # YouTube chapters (round 2 item 5): for long sources (>3 min),
+            # build the chapter list from the accepted segments and write
+            # chapters.txt (+ chapters_description.txt when the source
+            # description template is known). Shorts-only projects skip this.
+            try:
+                from scripts import audio_qc, chapters
+
+                _chapters_report = chapters.write_project_chapters_from_segments(
+                    project_folder,
+                    viral_segments.get("segments") or [],
+                    source_video=input_video or "",
+                    source_description=chapters.read_source_description(project_folder),
+                )
+                if _chapters_report.get("chapters"):
+                    print(
+                        i18n("[chapters] {} فصول مكتوبة إلى chapters.txt ({})").format(
+                            len(_chapters_report["chapters"]),
+                            _chapters_report.get("reason") or "",
+                        ),
+                        flush=True,
+                    )
+                elif _chapters_report.get("reason"):
+                    print("[chapters] {}".format(_chapters_report["reason"]))
+            except Exception as chapters_error:
+                print(
+                    "[chapters] chapter generation skipped: {}".format(chapters_error)
                 )
 
         # 3.5. Fix Raw Segments (missing timestamps)
@@ -2250,7 +2314,35 @@ def main():
                     print(i18n("Translation failed: {}").format(e))
             # -------------------------------
 
+            # Item 3 (round 2): Arabic caption style — sentence cues instead
+            # of word-flash, plus a Whisper fallback for clips that lost their
+            # caption JSON during cutting.
+            if getattr(args, "arabic_captions", "sentences") == "sentences":
+                try:
+                    from scripts import arabic_captions, transcribe_video
+
+                    regen = arabic_captions.ensure_project_captions(
+                        project_folder,
+                        transcribe_fn=transcribe_video.transcribe,
+                    )
+                    if regen:
+                        print(
+                            i18n(
+                                "Regenerated {} missing caption file(s) via Whisper fallback."
+                            ).format(len(regen)),
+                            flush=True,
+                        )
+                except Exception as e:
+                    print(
+                        i18n(
+                            "Arabic caption preparation failed (non-fatal): {}"
+                        ).format(e),
+                        flush=True,
+                    )
+
             sub_config = get_subtitle_config(args.subtitle_config)
+            if getattr(args, "arabic_captions", "sentences") != "sentences":
+                sub_config["arabic_sentence_style"] = False
             if args.caption_animation is not None:
                 sub_config["caption_animation"] = args.caption_animation
             if args.auto_emoji:

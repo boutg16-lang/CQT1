@@ -462,3 +462,69 @@ def shutil_rmtree(project, sub):
     import shutil
 
     shutil.rmtree(os.path.join(project, sub))
+
+
+# ---------------------------------------------------------------------------
+# Funnel source resolution (feat/pro-cutting item 1)
+# ---------------------------------------------------------------------------
+
+
+class TestSourceVideoId:
+    def test_watch_url(self):
+        assert (
+            pp.source_video_id("https://www.youtube.com/watch?v=abcdefghijk&list=x")
+            == "abcdefghijk"
+        )
+
+    def test_short_link(self):
+        assert pp.source_video_id("https://youtu.be/abcdefghijk") == "abcdefghijk"
+
+    def test_shorts_and_embed_paths(self):
+        assert pp.source_video_id("https://www.youtube.com/shorts/abcdefghijk") == (
+            "abcdefghijk"
+        )
+        assert pp.source_video_id("https://www.youtube.com/embed/abcdefghijk") == (
+            "abcdefghijk"
+        )
+
+    def test_non_youtube_and_empty(self):
+        assert pp.source_video_id("https://vimeo.com/12345") == ""
+        assert pp.source_video_id("") == ""
+        assert pp.source_video_id(None) == ""
+
+
+class TestProjectSourceUrl:
+    def _manifest(self, tmp_path, source):
+        from webui import project_store
+
+        project_store.load_manifest(str(tmp_path), create=True)
+        project_store.update_manifest(str(tmp_path), source=source)
+
+    def test_youtube_source_url(self, tmp_path):
+        self._manifest(
+            tmp_path,
+            {"type": "youtube", "url": "https://www.youtube.com/watch?v=abcdefghijk"},
+        )
+        assert (
+            pp.project_source_url(str(tmp_path))
+            == "https://www.youtube.com/watch?v=abcdefghijk"
+        )
+
+    def test_local_source_returns_empty(self, tmp_path):
+        self._manifest(tmp_path, {"type": "local", "path": "/tmp/v.mp4"})
+        assert pp.project_source_url(str(tmp_path)) == ""
+
+    def test_missing_manifest_returns_empty(self, tmp_path):
+        assert pp.project_source_url(str(tmp_path)) == ""
+
+    def test_channel_url_from_settings(self, tmp_path):
+        self._manifest(tmp_path, {"type": "youtube", "url": "x"})
+        from webui import project_store
+
+        project_store.update_manifest(
+            str(tmp_path), settings={"funnel": {"channel_url": "https://youtu.be/@c"}}
+        )
+        assert pp.project_channel_url(str(tmp_path)) == "https://youtu.be/@c"
+
+    def test_channel_url_unset(self, tmp_path):
+        assert pp.project_channel_url(str(tmp_path)) == ""

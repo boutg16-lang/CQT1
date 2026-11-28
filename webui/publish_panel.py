@@ -30,6 +30,66 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CLIP_SOURCES = ("auto", "final_polished", "final", "cuts", "specific_file")
 
 
+def source_video_id(url):
+    """Extract a YouTube video id from watch / youtu.be / shorts / embed URLs.
+
+    Returns '' for anything else (including an already-bare id). Best-effort:
+    used to pin a Short's related video to its source video.
+    """
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    patterns = (
+        r"(?:youtube\.com/watch\?(?:.*&)?v=)([\w-]{11})",
+        r"(?:youtu\.be/)([\w-]{11})",
+        r"(?:youtube\.com/shorts/)([\w-]{11})",
+        r"(?:youtube\.com/embed/)([\w-]{11})",
+        r"(?:youtube\.com/live/)([\w-]{11})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def project_source_url(project_path):
+    """The source video's watch URL from the project manifest.
+
+    Returns '' for local-file sources (no watch URL exists) so the funnel
+    never prints a fake link.
+    """
+    try:
+        from webui import project_store
+
+        manifest = project_store.load_manifest(project_path) or {}
+    except Exception:
+        return ""
+    source = manifest.get("source") or {}
+    if not isinstance(source, dict) or str(source.get("type") or "") != "youtube":
+        return ""
+    url = str(source.get("url") or "").strip()
+    return url if source_video_id(url) else ""
+
+
+def project_channel_url(project_path):
+    """Channel link for the funnel description (settings.funnel.channel_url).
+
+    Empty when unset — the funnel line for the video itself always wins.
+    """
+    try:
+        from webui import project_store
+
+        manifest = project_store.load_manifest(project_path) or {}
+    except Exception:
+        return ""
+    settings = manifest.get("settings") or {}
+    funnel = settings.get("funnel") if isinstance(settings, dict) else None
+    if isinstance(funnel, dict):
+        return str(funnel.get("channel_url") or "").strip()
+    return ""
+
+
 def _mp4_files(folder):
     if not folder or not os.path.isdir(folder):
         return []
@@ -185,6 +245,9 @@ def clip_metadata(project_path, video_path):
             "topic": "",
             "angle": "",
             "hook_type": "",
+            "title_template": "",
+            "alt_titles": [],
+            "transcript_text": "",
         }
     seg = segments[idx]
     title = seg.get("recommended_title") or seg.get("title") or ""
@@ -205,6 +268,15 @@ def clip_metadata(project_path, video_path):
         "topic": str(seg.get("topic") or ""),
         "angle": str(seg.get("angle") or ""),
         "hook_type": str(seg.get("hook_type") or ""),
+        # Item 6: the title pattern that built this title, recorded at
+        # publish time so the loop can measure which templates win.
+        "title_template": str(seg.get("title_template") or ""),
+        # Thumbnail A/B variants (round 2 item 4): alternate headline
+        # wordings measured by the winning-title loop.
+        "alt_titles": list(seg.get("alt_titles") or []),
+        # Self-certification scan (feat/pro-cutting item 7): the transcript
+        # rides along so the preflight questionnaire scan sees real words.
+        "transcript_text": str(seg.get("transcript_text") or ""),
         # v7.41 review gating surfaced to the publish UI.
         "requires_review": bool(
             seg.get("requires_review") or seg.get("title_review_required")
@@ -700,11 +772,35 @@ def _thumbnail_paths_for(project_path, video_path):
             "{:03d}.png".format(index),
         ):
             candidates.append(os.path.join(directory, name))
+    for number in (1, 2, 3):
+        candidates.append(os.path.join(directory, "{}_v{}.png".format(stem, number)))
     seen = []
     for candidate in candidates:
         if candidate not in seen and os.path.isfile(candidate):
             seen.append(candidate)
     return seen
+
+
+def _thumbnail_variant_kind(path):
+    """Test & Compare variant kind of a thumbnail path (v1..v3)."""
+    match = re.search(r"_v(\d+)\.(?:png|jpg)$", os.path.basename(path or ""))
+    return "v{}".format(match.group(1)) if match else ""
+
+
+def _preferred_thumbnail_variant(project_path):
+    """Best-measured Test & Compare variant kind from the insights file."""
+    try:
+        from scripts import performance_weights
+
+        with open(
+            os.path.join(project_path, "performance_insights.json"),
+            "r",
+            encoding="utf-8",
+        ) as f:
+            insights = json.load(f)
+        return str(performance_weights.preferred_thumbnail_variant(insights) or "")
+    except (OSError, ValueError, Exception):
+        return ""
 
 
 def _thumbnail_for_clip(project_path, video_path, title=""):
@@ -715,6 +811,14 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     returns None — attaching a thumbnail must never block publishing.
     """
     existing = _thumbnail_paths_for(project_path, video_path)
+    # Round 2 item 6: when the performance loop has measured which Test &
+    # Compare variant wins on CTR, prefer that variant kind over the default
+    # order. Unmeasured projects keep the primary-first behaviour.
+    preferred_kind = _preferred_thumbnail_variant(project_path)
+    if preferred_kind:
+        for candidate in existing:
+            if _thumbnail_variant_kind(candidate) == preferred_kind:
+                return candidate
     if existing:
         return existing[0]
     if os.getenv("VIRALCUTTER_UPLOAD_THUMBNAIL", "1").strip().lower() in {
@@ -729,6 +833,37 @@ def _thumbnail_for_clip(project_path, video_path, title=""):
     try:
         from scripts import thumbnail_generator
 
+        variants_env = os.getenv("VIRALCUTTER_THUMBNAIL_VARIANTS", "1")
+        variants_on = variants_env.strip().lower() not in {"0", "false", "no", "off"}
+        if variants_on:
+            # Round 2 item 4: keep the primary thumbnail path but also write
+            # 2-3 Test & Compare variants next to it. Attaching still uses
+            # the primary; the user picks a winner in YouTube Studio.
+            meta = clip_metadata(project_path, video_path)
+            alt_titles = [
+                str(t).strip()
+                for t in (meta.get("alt_titles") or [])
+                if str(t or "").strip()
+            ]
+            var_result = thumbnail_generator.generate_variants(
+                video_path,
+                titles=[str(title or "")[:80]] + alt_titles[:2],
+                out_dir=os.path.join(project_path, "thumbnails"),
+                base_name=stem,
+                at_seconds=0.0,
+                max_variants=3,
+            )
+            if var_result.get("ok") and var_result.get("variants"):
+                primary = var_result["variants"][0]["out"]
+                if os.path.isfile(primary):
+                    if primary != output:
+                        try:
+                            import shutil
+
+                            shutil.copyfile(primary, output)
+                        except OSError:
+                            pass
+                    return output
         result = thumbnail_generator.generate_thumbnail(
             video_path, title=str(title or "")[:80], out=output, at_seconds=0.0
         )
@@ -755,6 +890,8 @@ def _upload_worker(
     oauth_full_access=False,
     require_existing_auth=False,
     public_confirm=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     final_result = None
@@ -838,6 +975,27 @@ def _upload_worker(
         from scripts import upload_gate as ug
         from webui import publish_history
 
+        # Chapters (round 2 item 5): long-form (yt_standard) uploads append
+        # the project's chapter block to the description when one was written.
+        if platform == "yt_standard":
+            try:
+                from scripts import chapters as _chapters
+
+                _chapters_text = _chapters.chapters_block_file(project_path)
+                if _chapters_text and not _chapters.contains_chapter_block(caption):
+                    caption = "\n\n".join(
+                        part for part in (caption, _chapters_text) if part
+                    )
+                    emit(
+                        "[chapters] chapter block appended to the yt_standard description"
+                    )
+            except Exception as chapters_exc:
+                emit(
+                    "[chapters] chapter block not appended: {}".format(
+                        str(chapters_exc)[:160]
+                    )
+                )
+
         if platform == "youtube" and client_secrets_path:
             from webui.youtube_credentials import (
                 replace_client_secrets,
@@ -871,6 +1029,41 @@ def _upload_worker(
             if publish_at:
                 uploader_kwargs["publish_at"] = publish_at
                 upload_kwargs["publish_at"] = publish_at
+            # Funnel template (feat/pro-cutting item 1): when the source
+            # full-video URL is known, the description MUST open with the
+            # funnel line and the Short's related video targets the source.
+            funnel_source_url = str(full_video_url or "").strip() or project_source_url(
+                project_path
+            )
+            channel_url = str(channel_url or "").strip() or project_channel_url(
+                project_path
+            )
+            if funnel_source_url:
+                upload_kwargs["source_url"] = funnel_source_url
+                upload_kwargs["channel_url"] = str(channel_url or "").strip()
+                emit(
+                    "[funnel] the description starts with the full-video link: {}".format(
+                        funnel_source_url
+                    )
+                )
+                from scripts import platform_templates as _funnel_templates
+
+                funnel_title = _funnel_templates.apply_title_pattern(title)
+                if funnel_title and funnel_title != str(title or "").strip():
+                    title = funnel_title
+                    emit("[funnel] title pattern applied: {}".format(title))
+
+                if _funnel_templates.related_video_policy("yt_shorts") == "source":
+                    source_id = source_video_id(funnel_source_url)
+                    if source_id:
+                        upload_kwargs["related_video_source"] = source_id
+                        # YouTube Data API v3 exposes NO related-video field:
+                        # the pin is recorded and surfaced as a Studio deep
+                        # link instead of pretending the API set it.
+                        emit(
+                            "[related-video] اربط الفيديو المرتبط يدوياً بعدها: "
+                            "https://studio.youtube.com/video/{}/edit".format(source_id)
+                        )
         prior = None
         if not dry_run:
             prior = publish_history.find_success(
@@ -969,6 +1162,20 @@ def _upload_worker(
             if variant_line:
                 emit(variant_line)
 
+        try:
+            from scripts import seo_titles as _seo
+
+            title_variants = _seo.title_candidates(
+                clip_metadata(project_path, video_path)
+            )
+        except Exception:
+            title_variants = [title]
+        if len(title_variants) > 1:
+            emit(
+                "[title] مرشحات العنوان (A/B): {} — المنشور: {}".format(
+                    " | ".join(title_variants), title
+                )
+            )
         uploader = ug.UPLOADERS[platform](project_path, **uploader_kwargs)
         if platform == "youtube":
             # Belt-and-braces: pin the effective value on the uploader so a real
@@ -1019,16 +1226,129 @@ def _upload_worker(
                     )
 
         meta = clip_metadata(project_path, video_path)
+        # A/B title variants (round 2 item 7): record the full candidate list
+        # and the exact variant that shipped so the performance loop can learn
+        # which headline shape earns the views.
         record_extra = {
             "hashtags": ",".join(hashtags or meta.get("hashtags") or []),
             "topic": meta.get("topic") or "",
             "angle": meta.get("angle") or "",
             "hook_type": meta.get("hook_type") or "",
+            "title_template": meta.get("title_template") or "",
+            "title_variant_used": title,
+            "title_variants": json.dumps(title_variants, ensure_ascii=False)[:1000],
         }
+        # Self-certification preflight (feat/pro-cutting item 7): scan the
+        # real content (title + caption + segment transcript) against the
+        # questionnaire categories BEFORE shipping. WARN only — the scan is
+        # heuristic, the upload gate (content_guard) stays the blocker — but
+        # the answer set is recorded so the loop can learn which clips the
+        # channel keeps certifying as clean.
+        try:
+            from scripts import self_certify
+
+            cert = self_certify.self_certify(
+                meta.get("transcript_text") or "",
+                title=title,
+                caption=caption,
+            )
+            if not cert.get("clean"):
+                for flag in (cert.get("recommended") or {}).get("contains_yes") or []:
+                    emit(
+                        "⚠️ [self-cert] فئة «{}» — تأكد من إجابة الاستبيان في "
+                        "Studio قبل النشر.".format(flag)
+                    )
+            record_extra["self_cert"] = json.dumps(
+                cert, ensure_ascii=False, separators=(",", ":")
+            )
+        except Exception as exc:
+            emit(
+                "[self-cert] ⚠️ تعذّر الفحص المسبق للاستبيان (لا يمنع النشر): {}".format(
+                    str(exc)[:200]
+                )
+            )
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)
+        if str(funnel_source_url or "").strip():
+            record_extra["source_video_url"] = str(
+                funnel_source_url
+            ).strip()  # Funnel baseline (round 2 item 6b): the source video's view count at
+        # publish time. funnel_metrics later diffs it against the live count
+        # ("source views before vs after the Short"). Best-effort: a failed
+        # lookup records nothing instead of a fake zero.
+        try:
+            from scripts import funnel_metrics as _funnel_metrics
+
+            _source_id = _funnel_metrics.source_video_id(
+                str(funnel_source_url or "").strip()
+            )
+            if _source_id and not dry_run:
+                _baseline = _funnel_metrics.source_view_count(_source_id)
+                if _baseline is not None:
+                    record_extra["source_views_at_publish"] = int(_baseline)
+                    record_extra["source_video_id"] = _source_id
+        except Exception as baseline_exc:
+            emit(
+                "[funnel] source-view baseline not captured: {}".format(
+                    str(baseline_exc)[:120]
+                )
+            )
+        related_source = (result or {}).get("related_video_source")
+        if related_source:
+            record_extra["related_video_source"] = str(related_source)
         if upload_video != video_path:
             record_extra["variant_of"] = os.path.basename(video_path)
+        # Studio checklist (feat/pro-cutting round 2 item 1): the four
+        # manual Studio steps as one-click deep links, stored with the event.
+        try:
+            from scripts import studio_checklist
+
+            checklist_items = studio_checklist.build_checklist(
+                str((result or {}).get("video_id") or ""),
+                related_video_id=str(record_extra.get("related_video_source") or ""),
+                thumbnail_uploaded=bool(thumb_attached),
+                source_video_url=str(funnel_source_url or "").strip(),
+            )
+            record_extra["studio_checklist"] = studio_checklist.checklist_json(
+                checklist_items
+            )
+            emit(studio_checklist.checklist_markdown(checklist_items))
+        except Exception as exc:
+            emit(
+                "[studio-checklist] ⚠️ تعذّر إنشاء قائمة الاستوديو (لا يمنع النشر): {}".format(
+                    str(exc)[:200]
+                )
+            )
+        # Item 2 (round 2): first "what does YouTube think?" read-back. When
+        # an OAuth token exists the verdicts are read NOW and stored in the
+        # same event as the upload; otherwise honest "pending" with a 24h
+        # recheck stamp (performance_loop rechecks due entries).
+        if str((result or {}).get("video_id") or "").strip():
+            try:
+                from scripts import verify_youtube
+
+                verdict_checks = verify_youtube.initial_checks(str(result["video_id"]))
+                record_extra[verify_youtube.HISTORY_KEY] = verify_youtube.checks_json(
+                    verdict_checks
+                )
+                emit(
+                    "[verify] ⚖️ حقوق النشر: {} — ملاءمة الإعلانات: {}".format(
+                        (verdict_checks.get(verify_youtube.COPYRIGHT) or {}).get(
+                            "verdict"
+                        )
+                        or "pending",
+                        (verdict_checks.get(verify_youtube.AD_SUITABILITY) or {}).get(
+                            "verdict"
+                        )
+                        or "pending",
+                    )
+                )
+            except Exception as exc:
+                emit(
+                    "[verify] ⚠️ تعذّر التحقق بعد الرفع (لا يمنع النشر): {}".format(
+                        str(exc)[:200]
+                    )
+                )
         publish_history.record(
             project_path,
             platform=platform,
@@ -1068,6 +1388,28 @@ def _upload_worker(
             )
         except Exception:
             pass
+        # Item 3 (round 2): upload the clip's Arabic caption track (.ar.srt)
+        # when one was exported with the sentence-style captions.
+        if platform == "youtube" and str((result or {}).get("video_id") or "").strip():
+            try:
+                from scripts import arabic_captions
+
+                srt_path = arabic_captions.arabic_srt_for_clip(project_path, video_path)
+                if srt_path:
+                    caption_state = arabic_captions.upload_caption_track(
+                        str(result["video_id"]), srt_path
+                    )
+                    emit(
+                        "[captions] 🈶 مسار الترجمة العربية: {}".format(
+                            caption_state.get("state")
+                        )
+                    )
+            except Exception as exc:
+                emit(
+                    "[captions] ⚠️ تعذر رفع الترجمة العربية (لا يمنع النشر): {}".format(
+                        str(exc)[:200]
+                    )
+                )
         status = str(
             (result or {}).get("status") or ("scheduled" if publish_at else "uploaded")
         )
@@ -1159,6 +1501,82 @@ def _upload_worker(
         out_queue.put({"type": "done"})
 
 
+def studio_checklist_view(project_path, platform, video_path):
+    """Markdown checklist of the manual Studio steps for a published clip."""
+    from scripts import studio_checklist
+    from webui import publish_history
+
+    event = publish_history.find_success(
+        project_path, platform=platform, video_path=video_path
+    )
+    if not event:
+        return "لم يُنشر هذا المقطع بعد — لا توجد قائمة استوديو."
+    items = studio_checklist.checklist_for_event(event)
+    if not items:
+        return (
+            "لا توجد قائمة استوديو محفوظة لهذا النشر (نشر سابق لنظام قائمة الاستوديو)."
+        )
+    return studio_checklist.checklist_markdown(items)
+
+
+FUNNEL_HEADERS = [
+    "Short",
+    "Views",
+    "Related clicks",
+    "Source before",
+    "Source after",
+    "Source delta",
+    "Subs gained",
+    "Funnel score",
+]
+
+
+def funnel_view(project_path):
+    """Per-Short funnel rows for the WebUI (round 2 item 6b)."""
+    from scripts import funnel_metrics
+
+    if not str(project_path or "").strip() or not os.path.isdir(project_path):
+        return [], "اختر مشروعاً أولاً."
+    try:
+        report = funnel_metrics.funnel_rows(project_path)
+    except Exception as exc:
+        return [], "⚠️ تعذّر جمع مقاييس القمع: {}".format(str(exc)[:160])
+    rows = []
+    for row in report.get("rows") or []:
+        rows.append(
+            [
+                str(row.get("title") or row.get("video_id") or "")[:60],
+                row.get("short_views"),
+                row.get("related_clicks"),
+                row.get("source_before"),
+                row.get("source_after"),
+                row.get("source_delta"),
+                row.get("subscribers_gained"),
+                row.get("funnel_score"),
+            ]
+        )
+    note = ""
+    totals = report.get("totals") or {}
+    if rows:
+        note = "**الإجمالي:** مشاهدات الشورتات {} — نقرات مرتبط {} — مشاهدات المصدر {} — مشتركون {}".format(
+            totals.get("short_views") if totals.get("short_views") is not None else "—",
+            totals.get("related_clicks")
+            if totals.get("related_clicks") is not None
+            else "—",
+            totals.get("source_delta")
+            if totals.get("source_delta") is not None
+            else "—",
+            totals.get("subscribers_gained")
+            if totals.get("subscribers_gained") is not None
+            else "—",
+        )
+    if report.get("unavailable_reason"):
+        note = "ℹ️ {}\n\n{}".format(report["unavailable_reason"], note).strip()
+    if not rows:
+        return [], note or "لا توجد مقاطع منشورة بنجاح بعد."
+    return rows, note
+
+
 def stream_upload(
     project_path,
     platform,
@@ -1174,6 +1592,8 @@ def stream_upload(
     oauth_full_access=False,
     require_existing_auth=False,
     public_confirm=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     """Yield log lines and return one structured result to a batch caller."""
@@ -1202,6 +1622,8 @@ def stream_upload(
             oauth_full_access,
             require_existing_auth,
             public_confirm,
+            full_video_url,
+            channel_url,
             variant_policy,
         ),
         daemon=True,
@@ -1285,6 +1707,8 @@ def stream_upload_batch(
     public_confirm=False,
     schedule_interval_minutes=60,
     retry_failed_only=False,
+    full_video_url="",
+    channel_url="",
     variant_policy="off",
 ):
     """Upload every selected clip and persist exact per-clip outcomes."""
@@ -1387,6 +1811,8 @@ def stream_upload_batch(
             oauth_full_access,
             require_existing_auth,
             public_confirm,
+            full_video_url,
+            channel_url,
             variant_policy,
         )
         result = result or _publish_result(

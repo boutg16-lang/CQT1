@@ -95,11 +95,33 @@ def record(
             "topic",
             "angle",
             "hook_type",
+            # Item 6: which title pattern built this title (learned winners).
+            "title_template",
+            # Item 7 (feat/pro-cutting): the self-certification answers
+            # (compact JSON string) recorded per upload so the loop can
+            # correlate them with strikes.
+            "self_cert",
             "thumbnail",
             "variant_of",
+            # Funnel template (feat/pro-cutting item 1): the Short's source
+            # video (URL + id) so the loop can measure the funnel end-to-end.
+            "source_video_url",
+            "source_video_id",
+            "source_views_at_publish",
+            "related_video_source",
+            # Item 1 (round 2): the per-clip manual Studio checklist (compact
+            # JSON). Needs more room than a scalar marker.
+            "studio_checklist",
+            # Item 7 (round 2): the A/B title candidates surfaced for this
+            # clip and which one was actually published.
+            "title_variants",
+            "title_variant_used",
+            # Item 2 (round 2): the post-upload YouTube checks (compact JSON).
+            "youtube_checks",
         ):
             if extra.get(key) is not None:
-                event[key] = str(extra.get(key))[:1000]
+                cap = 4000 if key in ("studio_checklist", "youtube_checks") else 1000
+                event[key] = str(extra.get(key))[:cap]
     if isinstance(result, dict):
         for key in ("video_id", "url"):
             if result.get(key):

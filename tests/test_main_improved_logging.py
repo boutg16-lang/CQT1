@@ -96,7 +96,7 @@ def test_no_logger_call_emits_progress_or_device_lines():
 
 
 def test_print_call_sites_untouched():
-    # All 200 print() call sites are still prints; the live log streaming
+    # All print() call sites are still prints; the live log streaming
     # reads stdout, so converting any of them would change visible output.
-    assert SOURCE.count("print(") == 200
+    assert SOURCE.count("print(") == 207
     assert "emit_progress(" in SOURCE

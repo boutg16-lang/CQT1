@@ -88,19 +88,74 @@ def _style_bonus(delta_pct) -> float:
     )
 
 
+def thumbnail_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
+    """Measured CTR -> per-thumbnail-variant bonus map (round 2 item 6).
+
+    Reads ``thumbnail_variants`` rows produced by performance_loop. Variants
+    need >=2 samples and a >=STYLE_MIN_DELTA_PCT CTR delta to move the
+    needle; the same STYLE_MAX_BONUS cap applies. Empty map when CTR was
+    never measured — variant choice then stays on the current order.
+    """
+    rows = (insights or {}).get("thumbnail_variants") or []
+    bonuses: dict[str, Any] = {"basis": "thumbnail_variants"}
+    for row in rows or []:
+        if int(row.get("samples") or 0) < 2:
+            continue
+        kind = str(row.get("value") or "").strip()
+        bonus = round(_style_bonus(float(row.get("delta_pct") or 0.0)) * confidence, 2)
+        if kind and bonus:
+            bonuses[kind] = bonus
+    return bonuses if len(bonuses) > 1 else {}
+
+
+def preferred_thumbnail_variant(insights) -> str:
+    """The variant kind with the highest measured CTR bonus (or ``""``)."""
+    bonuses = thumbnail_bonuses(insights)
+    best_kind = ""
+    best_bonus = 0.0
+    for kind, bonus in bonuses.items():
+        if kind == "basis":
+            continue
+        if float(bonus) > best_bonus:
+            best_bonus = float(bonus)
+            best_kind = str(kind)
+    return best_kind
+
+
+__all__ = [
+    "feature_to_component",
+    "load_weights",
+    "preferred_thumbnail_variant",
+    "style_bonus_for",
+    "style_bonuses",
+    "thumbnail_bonuses",
+    "title_style_flags",
+    "winning_title_patterns",
+]
+
+
 def style_bonuses(insights, confidence: float = 1.0) -> dict[str, Any]:
     """Content-insights -> per-value style bonuses (empty when unmeasured).
 
     Only values with >=2 measured clips and a >=15% delta vs the channel
     average produce a bonus; no single style may move a score more than
-    STYLE_MAX_BONUS points.
+    STYLE_MAX_BONUS points. Funnel categories (round 2 item 6b) ride the same
+    machinery: a hook/topic that consistently pulls source-video views or
+    related-video clicks is worth more than views alone.
     """
     content = (insights or {}).get("content_insights") or {}
     if not content.get("overall_avg_views"):
         return {}
     style: dict[str, Any] = {"basis": "content_insights"}
     categories = content.get("categories") or {}
-    for field in ("hook_type", "angle", "topic"):
+    for field in (
+        "hook_type",
+        "angle",
+        "topic",
+        "title_template",
+        "funnel_source_delta",
+        "related_clicks",
+    ):
         by_value = {}
         for row in categories.get(field) or []:
             if int(row.get("samples") or 0) < 2:
@@ -128,7 +183,7 @@ def style_bonus_for(segment, style_map) -> float:
     if not style_map:
         return 0.0
     bonus = 0.0
-    for field in ("hook_type", "angle", "topic"):
+    for field in ("hook_type", "angle", "topic", "title_template"):
         value = str(segment.get(field) or "").strip()
         by_value = style_map.get(field) or {}
         if value in by_value:
@@ -139,6 +194,58 @@ def style_bonus_for(segment, style_map) -> float:
             if present and style_map.get(marker):
                 bonus += float(style_map[marker])
     return round(bonus, 2)
+
+
+def preferred_title_template(insights) -> str:
+    """The title TEMPLATE the channel's own data proved winning.
+
+    From ``content_insights.categories.title_template``: the value with the
+    largest positive views delta among templates with >=2 measured clips and
+    a >=15% delta. "" when nothing qualifies (never invent a template).
+    """
+    categories = ((insights or {}).get("content_insights") or {}).get(
+        "categories"
+    ) or {}
+    best_value, best_delta = "", 0.0
+    for row in categories.get("title_template") or []:
+        if not isinstance(row, dict) or int(row.get("samples") or 0) < 2:
+            continue
+        try:
+            delta = float(row.get("delta_pct") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if delta >= STYLE_MIN_DELTA_PCT and delta > best_delta:
+            best_value, best_delta = str(row.get("value") or ""), delta
+    return best_value
+
+
+def winning_title_patterns(insights, limit: int = 3) -> list[dict[str, Any]]:
+    """Past winning title templates, strongest first (for reuse as templates).
+
+    Only rows with >=2 measured clips and a positive views delta qualify.
+    Consumers reuse the PATTERN (e.g. ``query_question``), never the literal
+    title, so the next clip's wording stays grounded in its own transcript.
+    """
+    categories = ((insights or {}).get("content_insights") or {}).get(
+        "categories"
+    ) or {}
+    winners = []
+    for row in categories.get("title_template") or []:
+        if not isinstance(row, dict) or int(row.get("samples") or 0) < 2:
+            continue
+        try:
+            delta = float(row.get("delta_pct") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if delta > 0:
+            winners.append(row)
+    winners.sort(
+        key=lambda row: (
+            -float(row.get("delta_pct") or 0.0),
+            str(row.get("value") or ""),
+        )
+    )
+    return winners[: max(1, int(limit))]
 
 
 def _load(project_folder: str) -> dict[str, Any]:

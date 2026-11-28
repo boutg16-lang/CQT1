@@ -99,6 +99,16 @@ def build_parser():
         help="Word-timed ASS caption animation; overrides subtitle config when supplied",
     )
     parser.add_argument(
+        "--arabic-captions",
+        choices=["sentences", "off"],
+        default="sentences",
+        help="Caption style for Arabic clips: 'sentences' renders consistent "
+        "phrase cues (Studio transcript-editor style, with word timings "
+        "driving the cue boundaries) and exports an .ar.srt caption track "
+        "for YouTube; 'off' keeps the word-by-word karaoke flash for every "
+        "clip.",
+    )
+    parser.add_argument(
         "--auto-emoji",
         action="store_true",
         help="Add conservative keyword emojis to burned captions",
@@ -586,6 +596,14 @@ def build_parser():
         help="Ignore an existing viral_segments.txt and generate fresh "
         "segments (the WebUI 'generate new segments' checkbox; "
         "--force-regenerate is the explicit CLI alias).",
+    )
+    parser.add_argument(
+        "--target-query",
+        default=None,
+        help="Query-targeted cutting: pick the segment that is genuinely "
+        "about this search query, lead its title with the query (scored by "
+        "scripts/seo_titles.score_title), and refuse unrelated segments "
+        "instead of shipping a misleading title. See scripts/query_targeting.py.",
     )
     parser.add_argument(
         "--auto-learn-blocked",

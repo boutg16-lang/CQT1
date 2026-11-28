@@ -412,11 +412,35 @@ def adjust(
             f"Subtitle folder missing at {input_dir}. Ensure transcription completed successfully."
         )
 
+    arabic_sentence_style = kwargs.get("arabic_sentence_style", True)
+
     for filename in os.listdir(input_dir):
         if filename.endswith(".json"):
             input_path = os.path.join(input_dir, filename)
             output_filename = os.path.splitext(filename)[0] + ".ass"
             output_path = os.path.join(output_dir, output_filename)
+
+            # Arabic caption style (feat/pro-cutting round 2 item 3): Arabic
+            # clips render consistent sentence cues (Studio transcript-editor
+            # style) and export an .ar.srt caption track for YouTube, instead
+            # of the fast word-by-word karaoke flash.
+            if arabic_sentence_style:
+                try:
+                    from scripts import arabic_captions
+
+                    assets = arabic_captions.build_caption_assets(
+                        project_folder, input_path
+                    )
+                    if assets.get("arabic"):
+                        print(
+                            f"Processed file (Arabic sentence style): {filename}"
+                            f" -> {output_filename} + .ar.srt"
+                        )
+                        continue
+                except Exception as cap_error:
+                    print(
+                        f"[WARN] Arabic sentence captions failed for {filename}: {cap_error}"
+                    )
 
             generate_ass_from_file(
                 input_path,

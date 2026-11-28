@@ -42,6 +42,7 @@ try:
         settings_store,
         style,
         telegram_control,
+        transcript_cut,
     )
     from . import subtitle_editor as editor
     from . import subtitle_handler as subs
@@ -62,6 +63,7 @@ except ImportError:
     import subtitle_editor as editor  # Module for Editor Logic
     import subtitle_handler as subs  # Module for Subtitles
     import telegram_control  # Optional local Telegram queue control
+    import transcript_cut  # Transcript click-to-cut proposals (round 2 item 8)
 try:
     # Launch/auth helpers moved to webui/launch.py; re-exported here so
     # ``from webui.app import _webui_auth`` keeps working.
@@ -936,6 +938,7 @@ def run_viral_cutter(
     auto_upload_interval_minutes=60,
     auto_upload_oauth_file=None,
     voice_face_link=False,
+    target_query=None,
 ):
 
     # NOTE: parameter order MUST match the `inputs=[...]` order of every
@@ -1321,6 +1324,7 @@ def run_viral_cutter(
             output_aspect=output_aspect,
             reframe_mode=reframe_mode,
             force_new_segments=force_new_segments,
+            target_query=target_query,
             visual_check=visual_check,
             visual_gate=visual_gate,
             visual_frames=visual_frames,
@@ -2552,6 +2556,16 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         label=i18n("Themes"),
                         placeholder=i18n("funny, sad..."),
                         visible=False,
+                    )
+                    target_query_input = gr.Textbox(
+                        label=i18n("Target Query (cut FOR a search query)"),
+                        placeholder="مصطفى بونيف تبون",
+                        info=(
+                            "ميزة القطع حسب الاستعلام (feat/pro-cutting 3): يختار النظام "
+                            "المقطع الذي يتحدث فعلاً عن هذا الاستعلام، ويبدأ العنوان به، "
+                            "ويرفض المقاطع غير المتصلة به (بدون عناوين مضللة)."
+                        ),
+                        value="",
                     )
                     viral_input.change(
                         lambda x: gr.update(visible=not x), viral_input, themes_input
@@ -4173,6 +4187,126 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 outputs=[review_df, review_ab_status],
             )
 
+            # Transcript click-to-cut (round 2 item 8): show the source
+            # transcript, let the user click a sentence to fill Start/End,
+            # and append a validated manual segment to viral_segments.txt.
+            with gr.Accordion(
+                i18n("النص الكامل — اضغط جملة لتحديد مقطع / Transcript click-to-cut"),
+                open=False,
+            ):
+                transcript_df = gr.Dataframe(
+                    headers=transcript_cut.HEADERS,
+                    datatype=["number", "number", "number", "str"],
+                    interactive=False,
+                    label=i18n("Source transcript (sentences)"),
+                    elem_id="review_transcript_df",
+                )
+                with gr.Row():
+                    cut_start = gr.Number(label=i18n("Start (s)"), value=None)
+                    cut_end = gr.Number(label=i18n("End (s)"), value=None)
+                    cut_query = gr.Textbox(
+                        label=i18n("Target query (optional — query-led title)"),
+                        value="",
+                    )
+                with gr.Row():
+                    transcript_load_btn = gr.Button(i18n("Load transcript"))
+                    transcript_cut_btn = gr.Button(
+                        i18n("Cut from transcript selection"), variant="primary"
+                    )
+                cut_status = gr.Markdown()
+
+            def load_transcript_rows(project_name):
+                project_path = _project_path_for_name(project_name)
+                if not project_path:
+                    return [], i18n("Select a project first.")
+                rows = transcript_cut.sentence_rows(project_path)
+                if not rows:
+                    return [], i18n(
+                        "No transcript in this project — run transcription first "
+                        "(input.tsv/input.srt/input.json; the Whisper/caption "
+                        "timestamps are the fallback)."
+                    )
+                return rows, "✅ {}".format(len(rows))
+
+            def pick_transcript_sentence(evt, rows):
+                """Fill Start/End from a clicked transcript row."""
+                try:
+                    row_index = int(evt.index[0])
+                except Exception:
+                    return None, None, i18n("Could not read the clicked row.")
+                try:
+                    if hasattr(rows, "iloc"):
+                        row = rows.iloc[row_index].tolist()
+                    else:
+                        row = list(rows[row_index])
+                    start, end = float(row[1]), float(row[2])
+                except Exception:
+                    return None, None, i18n("Could not read the clicked row.")
+                return (
+                    start,
+                    end,
+                    i18n("Start {}s — End {}s (adjust manually if needed).").format(
+                        start, end
+                    ),
+                )
+
+            def cut_from_transcript(project_name, start, end, query):
+                project_path = _project_path_for_name(project_name)
+                if not project_path or not project_name:
+                    return None, None, None, i18n("Select a project first.")
+                try:
+                    start = float(start)
+                    end = float(end)
+                except (TypeError, ValueError):
+                    return (
+                        None,
+                        None,
+                        None,
+                        i18n("Click a transcript sentence first (or type Start/End)."),
+                    )
+                proposal, reasons = transcript_cut.append_manual_cut(
+                    project_path, start, end, str(query or "").strip()
+                )
+                if proposal is None:
+                    return (
+                        None,
+                        None,
+                        None,
+                        "❌ "
+                        + i18n("Refused: {}".format(", ".join(reasons) or "unknown")),
+                    )
+                segments = segments_review.load_segments(project_path)
+                rows = segments_review.rows_from_segments(
+                    segments, segments_review.load_safety_map(project_path)
+                )
+                return (
+                    rows,
+                    float(proposal.get("start_time") or start),
+                    float(proposal.get("end_time") or end),
+                    "✅ {} — {}s…{}s ({}). حدّث جدول المقاطع وأزل ما لا تريده.".format(
+                        str(proposal.get("title") or "")[:80],
+                        proposal.get("start_time"),
+                        proposal.get("end_time"),
+                        proposal.get("origin"),
+                    ),
+                )
+
+            transcript_load_btn.click(
+                load_transcript_rows,
+                inputs=[review_project_dropdown],
+                outputs=[transcript_df, cut_status],
+            )
+            transcript_df.select(
+                pick_transcript_sentence,
+                inputs=[transcript_df],
+                outputs=[cut_start, cut_end, cut_status],
+            )
+            transcript_cut_btn.click(
+                cut_from_transcript,
+                inputs=[review_project_dropdown, cut_start, cut_end, cut_query],
+                outputs=[review_df, cut_start, cut_end, cut_status],
+            )
+
             def clear_review_state(project_name):
                 """Never carry one project's rows/checkboxes into another."""
                 return None, None, "", "", i18n("Project changed — load its segments.")
@@ -4541,6 +4675,21 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_hashtags = gr.Textbox(
                         label=i18n("Hashtags (comma separated)"), value=""
                     )
+                    pub_full_url = gr.Textbox(
+                        label="رابط الفيديو الكامل (المصدر)",
+                        placeholder="https://www.youtube.com/watch?v=...",
+                        info=(
+                            "يبدأ وصف كل Short بسطر «شاهدوا الفيديو الكامل على القناة:» + هذا الرابط. "
+                            "يُستخرج تلقائياً من مصدر المشروع عند تركه فارغاً."
+                        ),
+                        value="",
+                    )
+                    pub_channel_url = gr.Textbox(
+                        label="رابط القناة (يُدرج في الوصف)",
+                        placeholder="https://www.youtube.com/@channel",
+                        info="السطر الثاني في وصف كل Short — يُحفظ مع إعدادات المشروع.",
+                        value="",
+                    )
                     gr.Markdown("#### 🔐 تسجيل الدخول إلى YouTube عبر OAuth")
                     gr.Markdown(
                         "اختر ملف `client_secrets.json` من الكمبيوتر. يتم حفظ نسخة خاصة محلياً داخل مجلد إعدادات OUSSAMA Cutter، "
@@ -4614,6 +4763,83 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_upload_btn = gr.Button(
                             i18n("Upload / Schedule"), variant="primary"
                         )
+                        pub_checklist_btn = gr.Button(
+                            "📋 قائمة الاستوديو اليدوية / Manual Studio checklist"
+                        )
+                        pub_funnel_btn = gr.Button(
+                            "📊 قمع الأداء لكل شورت / Per-Short funnel"
+                        )
+                        pub_checklist_out = gr.Markdown(visible=True)
+                        pub_funnel_note = gr.Markdown(visible=True)
+                        pub_funnel_out = gr.Dataframe(
+                            headers=publish_panel.FUNNEL_HEADERS,
+                            datatype=[
+                                "str",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                            ],
+                            interactive=False,
+                            label=i18n(
+                                "Funnel: Short views → related clicks → source views → subs"
+                            ),
+                            elem_id="pub_funnel_df",
+                        )
+                    with gr.Row():
+                        pub_funnel_btn = gr.Button(
+                            "🕸️ عرض قمع الأداء لكل شورت / Per-Short funnel view"
+                        )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=[
+                            i18n("Short"),
+                            i18n("Short views"),
+                            i18n("Related clicks"),
+                            i18n("Source before"),
+                            i18n("Source after"),
+                            i18n("Source delta"),
+                            i18n("Subscribers"),
+                            i18n("Funnel score"),
+                        ],
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
+                        interactive=False,
+                        label=i18n("Per-Short funnel"),
+                    )
+                    pub_funnel_note = gr.Markdown()
+                    with gr.Row():
+                        pub_funnel_btn = gr.Button(
+                            "🎯 قمع الأداء لكل شورت / Per-Short funnel"
+                        )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=publish_panel.FUNNEL_HEADERS,
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
+                        label=i18n(
+                            "Short views → related clicks → source views → subscribers"
+                        ),
+                        interactive=False,
+                    )
+                    pub_funnel_note = gr.Markdown()
                     with gr.Row():
                         pub_batch_gap = gr.Number(
                             value=0,
@@ -4625,6 +4851,34 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_batch_btn = gr.Button(
                             "🚀 رفع كل المقاطع (دفعة كاملة)", variant="secondary"
                         )
+                    pub_funnel_btn = gr.Button(
+                        "📐 قمع الأداء لكل شورت / Per-Short funnel"
+                    )
+                    pub_funnel_out = gr.Dataframe(
+                        headers=[
+                            "Short",
+                            "Views",
+                            "Related clicks",
+                            "Source before",
+                            "Source after",
+                            "Source delta",
+                            "Subs gained",
+                            "Funnel score",
+                        ],
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
+                        interactive=False,
+                        label="Funnel: Short → source video → subscribers",
+                    )
+                    pub_funnel_note = gr.Markdown(visible=True)
                     pub_batch_hint = gr.Markdown(
                         "**الدفعة:** ترفع كل مقاطع المشروع الجاهزة عبر نفس بوابة الأمان (Dry Run افتراضياً — فعّله "
                         "للرفع الحقيقي). عند فاصل > 0 تُجدول تلقائياً وتتطلب YouTube Private. منصات أخرى تلقائياً "
@@ -5085,6 +5339,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 music_gate,
                 full_access=False,
                 public_confirm=False,
+                full_video_url="",
+                channel_url="",
             ):
                 if (
                     platform == "youtube"
@@ -5098,6 +5354,20 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     yield i18n("Error: No project selected.")
                     return
                 project_path = _project_path_for_name(project_name)
+                # Persist the funnel channel link with the project settings so
+                # batch runs inherit it without retyping (feat/pro-cutting item 1).
+                if str(channel_url or "").strip():
+                    try:
+                        from webui import project_store
+
+                        project_store.update_manifest(
+                            project_path,
+                            settings={
+                                "funnel": {"channel_url": str(channel_url).strip()}
+                            },
+                        )
+                    except Exception:
+                        pass
                 tags = [h.strip() for h in (hashtags or "").split(",") if h.strip()]
                 yield from publish_panel.stream_upload(
                     project_path,
@@ -5113,6 +5383,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     publish_at,
                     full_access,
                     public_confirm=bool(public_confirm),
+                    full_video_url=full_video_url,
+                    channel_url=channel_url,
                 )
 
             pub_refresh.click(library.refresh_projects, outputs=pub_project)
@@ -5284,8 +5556,75 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_music_gate,
                     pub_full_oauth,
                     pub_public_confirm,
+                    pub_full_url,
+                    pub_channel_url,
                 ],
                 outputs=pub_log,
+            )
+
+            def show_pub_checklist(project_name, platform, clip_path):
+                project_path = _project_path_for_name(project_name)
+                if not project_path or not clip_path:
+                    return "اختر مشروعاً وملفاً أولاً."
+                return publish_panel.studio_checklist_view(
+                    project_path, platform, clip_path
+                )
+
+            pub_checklist_btn.click(
+                show_pub_checklist,
+                inputs=[pub_project, pub_platform, pub_clip],
+                outputs=[pub_checklist_out],
+            )
+
+            def show_pub_funnel(project_name):
+                """Per-Short funnel view (round 2 item 6b)."""
+                project_path = _project_path_for_name(project_name)
+                rows, note = publish_panel.funnel_view(project_path)
+                return rows, note
+
+            pub_funnel_btn.click(
+                show_pub_funnel,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
+            )
+
+            # Per-Short funnel view (round 2 item 6b)
+            pub_funnel_btn = gr.Button(
+                "\U0001f4c9 \u0642\u0645\u0629 \u0627\u0644\u0623\u062f\u0627\u0621 \u0644\u0643\u0644 \u0634\u0648\u0631\u062a \u0645\u0646\u0634\u0648\u0631 / Per-Short funnel"
+            )
+            pub_funnel_out = gr.Dataframe(
+                headers=publish_panel.FUNNEL_HEADERS,
+                datatype=[
+                    "str",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                ],
+                interactive=False,
+                label=i18n("Funnel per Short"),
+            )
+            pub_funnel_note = gr.Markdown()
+            pub_funnel_btn.click(
+                publish_panel.funnel_view,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
+            )
+
+            def show_pub_funnel(project_name):
+                project_path = _project_path_for_name(project_name)
+                return publish_panel.funnel_view(
+                    project_path,
+                    token_path=str(os.getenv("YT_TOKEN_FILE") or ""),
+                )
+
+            pub_funnel_btn.click(
+                show_pub_funnel,
+                inputs=[pub_project],
+                outputs=[pub_funnel_out, pub_funnel_note],
             )
 
             def upload_batch_publish(
@@ -5298,6 +5637,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 full_access,
                 public_confirm,
                 gap,
+                full_video_url="",
+                channel_url="",
             ):
                 """Batch-publish every rendered clip of the project."""
                 if not project_name:
@@ -5340,6 +5681,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     public_confirm=bool(public_confirm),
                     schedule_interval_minutes=interval,
                     variant_policy="auto",
+                    full_video_url=full_video_url,
+                    channel_url=channel_url,
                 ):
                     yield line
 
@@ -5355,6 +5698,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     pub_full_oauth,
                     pub_public_confirm,
                     pub_batch_gap,
+                    pub_full_url,
+                    pub_channel_url,
                 ],
                 outputs=pub_log,
             )
@@ -5778,8 +6123,12 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         priority = max(-5, min(5, int(float(plan_rest.pop(0) or 0))))
                     except (TypeError, ValueError):
                         priority = 0
-                if len(plan_rest) > 9:
-                    plan_rest[9] = None
+                if len(plan_rest) > 10:
+                    # Index 10 = api_key_input since feat/pro-cutting item 3
+                    # inserted target_query_input at position 4 of run_batch's
+                    # inputs (video_upload=0 … ai_backend=9, api_key=10).
+                    # Queued jobs must never persist the API key.
+                    plan_rest[10] = None
                 batch_id = uuid.uuid4().hex
                 job_ids = []
                 for url in urls:
@@ -6256,6 +6605,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_interval_minutes_input,
             auto_upload_oauth_file_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             logs_output,
@@ -6369,6 +6719,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_interval_minutes_input,
             auto_upload_oauth_file_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             logs_output,
@@ -6480,6 +6831,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             auto_upload_public_confirm_input,
             auto_upload_interval_minutes_input,
             voice_face_link_input,
+            target_query_input,
         ],
         outputs=[
             batch_df,

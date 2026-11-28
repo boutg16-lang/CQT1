@@ -1023,6 +1023,110 @@ def _find_clip_video(project_folder, index):
     return None
 
 
+def schedule_slot_verdict(
+    platform,
+    publish_at,
+    privacy_status=None,
+    now=None,
+):
+    """R3-4: validate a planned publish slot against the platform windows.
+
+    Returns a list of reason dicts (empty == OK). Checks, in order:
+    1. ISO-8601 with timezone (YouTube API requirement).
+    2. Future slot.
+    3. YouTube: scheduled posts must be private (YouTube API rule).
+    4. Slot hour falls inside a best-time window for the platform
+       (measured defaults from seo_titles.BEST_TIMES_BY_PLATFORM).
+
+    VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE=1 disables check 4 for owners who
+    deliberately want an off-hour slot; the other checks stay hard.
+    """
+    import datetime as _dt
+
+    reasons = []
+    raw = str(publish_at or "").strip()
+    if not raw:
+        return reasons
+    normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = _datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        reasons.append(
+            {
+                "source": "upload_gate",
+                "code": "schedule_slot_not_iso",
+                "severity": "high",
+                "detail": "publish_at must be ISO 8601 with a timezone, e.g. 2026-08-15T18:30:00+00:00",
+            }
+        )
+        return reasons
+    if parsed.tzinfo is None:
+        reasons.append(
+            {
+                "source": "upload_gate",
+                "code": "schedule_slot_missing_timezone",
+                "severity": "high",
+                "detail": "publish_at must include a timezone (e.g. +00:00 or Z)",
+            }
+        )
+        return reasons
+    current = now or _datetime.datetime.now(_datetime.timezone.utc)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_datetime.timezone.utc)
+    if parsed <= current:
+        reasons.append(
+            {
+                "source": "upload_gate",
+                "code": "schedule_slot_in_past",
+                "severity": "high",
+                "detail": "publish_at must be in the future",
+            }
+        )
+    platform_key = str(platform or "youtube").lower()
+    if platform_key == "youtube" and str(privacy_status or "") != "private":
+        reasons.append(
+            {
+                "source": "upload_gate",
+                "code": "schedule_slot_needs_private",
+                "severity": "high",
+                "detail": "YouTube scheduled videos must use private privacy_status",
+            }
+        )
+    allow_offhour = str(os.getenv("VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE", "")).strip() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not allow_offhour:
+        from scripts import seo_titles
+
+        data = seo_titles.BEST_TIMES_BY_PLATFORM.get(
+            platform_key, seo_titles.BEST_TIMES_BY_PLATFORM["youtube"]
+        )
+        local_hour = parsed.astimezone(_datetime.timezone.utc).hour
+        is_weekend = parsed.weekday() >= 5
+        windows = data.get("weekend" if is_weekend else "weekday", [])
+        in_window = any(start <= local_hour < end for start, end in windows)
+        if not in_window:
+            reasons.append(
+                {
+                    "source": "upload_gate",
+                    "code": "schedule_slot_off_hour",
+                    "severity": "medium",
+                    "detail": (
+                        "الموعد المجدول خارج نافذة الذروة المُقاسة لـ {} "
+                        "(UTC hour {}؛ النوافذ {}). اضبط الموعد داخل النافذة "
+                        "أو فعّل VIRALCUTTER_ALLOW_OFFHOUR_SCHEDULE للتجاوز الواعي."
+                    ).format(
+                        platform_key,
+                        local_hour,
+                        windows or "لا نوافذ",
+                    ),
+                }
+            )
+    return reasons
+
+
 def gate_upload(
     project_folder,
     index=None,
@@ -1036,6 +1140,8 @@ def gate_upload(
     platform="youtube",
     require_reports=False,
     quality_gate=False,
+    publish_at=None,
+    privacy_status=None,
 ):
     """Enforcement wrapper: raises UploadGateError when the clip must not go out."""
     verdict = check_clip(
@@ -1053,6 +1159,11 @@ def gate_upload(
         quality_gate=quality_gate,
     )
     if not verdict["allowed"]:
+        raise UploadGateError(verdict["reasons"])
+    schedule_reasons = schedule_slot_verdict(platform, publish_at, privacy_status)
+    if schedule_reasons:
+        verdict["reasons"].extend(schedule_reasons)
+        verdict["allowed"] = False
         raise UploadGateError(verdict["reasons"])
     return verdict
 
@@ -1193,6 +1304,8 @@ class _BaseUploader:
             platform=self.platform,
             require_reports=bool(getattr(self, "require_preflight_reports", False)),
             quality_gate=bool(getattr(self, "require_quality_gate", False)),
+            publish_at=effective_publish_at,
+            privacy_status=resolved_privacy,
         )
         if self.dry_run:
             print(
@@ -1509,7 +1622,16 @@ class YouTubeUploader(_BaseUploader):
         return creds
 
     def _do_upload(
-        self, video_path, title, caption, hashtags, privacy_status=None, publish_at=None
+        self,
+        video_path,
+        title,
+        caption,
+        hashtags,
+        privacy_status=None,
+        publish_at=None,
+        source_url=None,
+        channel_url=None,
+        related_video_source=None,
     ):
         if not os.path.exists(video_path):
             raise FileNotFoundError("video not found: {}".format(video_path))
@@ -1523,7 +1645,18 @@ class YouTubeUploader(_BaseUploader):
             ) from None
 
         tags = [str(h).lstrip("#") for h in (hashtags or []) if str(h).strip()]
-        description = caption or ""
+        source_url = str(source_url or "").strip()
+        if source_url:
+            # Funnel template (feat/pro-cutting item 1): the description MUST
+            # start with the full-video link, then the channel link, then the
+            # caption body; hashtags stay appended by the legacy block below.
+            from scripts import platform_templates
+
+            description = platform_templates.build_funnel_description(
+                source_url, channel_url, body=caption, hashtags=None
+            )
+        else:
+            description = caption or ""
         if tags:
             description += "\n\n" + " ".join("#" + t for t in tags)
         privacy = effective_privacy(privacy_status)
@@ -1588,7 +1721,7 @@ class YouTubeUploader(_BaseUploader):
                 )
         video_id = response.get("id")
         print("[youtube] uploaded '{}' → https://youtu.be/{}".format(title, video_id))
-        return {
+        result = {
             "status": "scheduled" if normalized_publish_at else "uploaded",
             "platform": "youtube",
             "video_id": video_id,
@@ -1596,6 +1729,21 @@ class YouTubeUploader(_BaseUploader):
             "privacy_status": privacy,
             "publish_at": normalized_publish_at,
         }
+        related_video_source = str(related_video_source or "").strip()
+        if related_video_source and related_video_source != video_id:
+            # YouTube Data API v3 has NO related-video field (verified against
+            # the videos resource docs, 2026-11): the funnel's related video
+            # must be attached once in YouTube Studio. Record the intent and
+            # surface the exact edit link so it is never forgotten.
+            result["related_video_source"] = related_video_source
+            print(
+                "[youtube] ⚠️ تعيين 'الفيديو المرتبط' لا تدعمه Data API — "
+                "أضفه يدوياً من: https://studio.youtube.com/video/{}/edit".format(
+                    video_id
+                ),
+                flush=True,
+            )
+        return result
 
     def attach_thumbnail(self, video_id, thumbnail_path):
         """Attach a local image as the video's YouTube thumbnail.

@@ -124,6 +124,69 @@ PERSONAL_HOOK_TOKENS = frozenset(
         "اسمع",
     }
 )
+# Greeting/intro openers (feat/pro-cutting item 4). A clip that OPENS with
+# "السلام عليكم / أهلا بكم / مرحبا بكم" or an announcement ("في هذا الفيديو
+# سوف...") burns the first 3 seconds on ceremony — measured losers did this
+# while winners opened mid-argument. Tokens are orthography-normalized before
+# membership, exactly like FILLER_OPENERS.
+GREETING_OPENERS = frozenset(
+    {
+        "السلام",
+        "عليكم",
+        "اهلا",
+        "أهلا",
+        "سهلا",
+        "مرحبا",
+        "مرحبتين",
+        "بكم",
+        "بيكم",
+        "زوار",
+        "مشاهدين",
+        "مشاهدي",
+        "اصدقاء",
+        "أصدقاء",
+        "احبائي",
+        "أحبائي",
+        "اخواني",
+        "إخواني",
+    }
+)
+
+# Announcement openers: a promise ABOUT the video instead of the content
+# itself. Matched as prefixes of the normalized opening text.
+INTRO_ANNOUNCEMENT_PREFIXES = (
+    "في هذا الفيديو",
+    "في هذا المقطع",
+    "في هذا الحلقة",
+    "في هده الحلقة",
+    "في حلقة اليوم",
+    "في هذا الاشرط",
+    "اليوم سنتعرف",
+    "اليوم سنتحدث",
+    "اليوم سنشرح",
+    "سوف نتعرف",
+    "سوف نتحدث",
+    "سوف نشرح",
+    "سنتعرف في",
+    "سنشرح في",
+    "سنرى في",
+    "قبل ما نبدأ",
+    "قبل ان نبدأ",
+    "دعوني اشرح",
+    "نبدأ في هذا",
+    "هذا الفيديو عن",
+    "هذا المقطع عن",
+)
+
+# The hook score below which an opening needs a trim/alternative start.
+# Live recordings are held to a STRICTER threshold (item 4/7): a live cut
+# competes with Studio-cut Shorts only through local editing, so a weak
+# opening cannot be waved through.
+HOOK_PASS_SCORE = 60.0
+LIVE_HOOK_PASS_SCORE = 70.0
+LIVE_PENALTY_MULTIPLIER = 1.25
+
+_GREETING_RUN_MAX = 4
 
 _NUMBER_RE = re.compile(r"[0-9٠-٩۱۲۳۴۵۶۷۸۹]+")
 _WS_RE = re.compile(r"\s+")
@@ -143,6 +206,108 @@ def _first_sentence(text: str) -> str:
 def _norm_word(word: str) -> str:
     value = arabic_text.normalize_arabic_orthography(str(word or ""))
     return value.strip(_PUNCT_STRIP).strip()
+
+
+def detect_greeting_intro(text: str) -> Dict[str, Any]:
+    """Detect a greeting or "about this video" announcement at the START.
+
+    Returns a JSON-safe report with ``is_greeting`` (welcome words first),
+    ``is_intro_announcement`` (promise about the video instead of content),
+    ``intro_word_count`` — how many leading tokens belong to the ceremony —
+    and the matched ``label`` for the review UI. Deterministic, LLM-free.
+    """
+    raw = str(text or "").strip()
+    tokens = _tokens(raw)
+    words = [_norm_word(token) for token in tokens]
+    is_greeting = False
+    greeting_run = 0
+    for word in words[:_GREETING_RUN_MAX]:
+        if word in GREETING_OPENERS:
+            greeting_run += 1
+        else:
+            break
+    if greeting_run:
+        is_greeting = True
+
+    is_intro = False
+    intro_words = 0
+    opening = " ".join(words[:14]).strip()
+    for prefix in INTRO_ANNOUNCEMENT_PREFIXES:
+        if opening.startswith(prefix):
+            is_intro = True
+            intro_words = len(prefix.split())
+            break
+    if is_greeting:
+        # the whole first sentence is ceremony when it opens with a welcome
+        first_break = re.search(r"[.!؟?\n]", raw)
+        ceremony_text = raw[: first_break.start()] if first_break else raw
+        greeting_run = len(_tokens(ceremony_text)) or greeting_run
+    # The ceremony extends through the first sentence (the whole greeting
+    # formula / announcement clause), not just the matched prefix —
+    # «السلام عليكم ورحمة الله» or «في هذا الفيديو سنتحدث عن…».
+    first_sentence = _first_sentence(raw)
+    sentence_words = [_norm_word(t) for t in _tokens(first_sentence)]
+    if is_greeting or is_intro:
+        intro_word_count = max(greeting_run, intro_words, len(sentence_words))
+    else:
+        intro_word_count = max(greeting_run, intro_words)
+    label = ""
+    if is_greeting and is_intro:
+        label = "greeting_and_announcement"
+    elif is_greeting:
+        label = "greeting"
+    elif is_intro:
+        label = "intro_announcement"
+    return {
+        "is_greeting": is_greeting,
+        "is_intro_announcement": is_intro,
+        "intro_word_count": int(intro_word_count),
+        "label": label,
+    }
+
+
+def suggest_alternative_start(text: str, intro_word_count: int = 0) -> str:
+    """The first strong sentence AFTER the greeting/intro ceremony.
+
+    A sentence is "strong" when it carries a hook signal (question, number,
+    direct address) or is a full content sentence (>= 6 words). '' when the
+    text is ceremony-only — the caller then trims to the first content word.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    skip = max(0, int(intro_word_count or 0))
+    sentences = []
+    start_word = 0
+    cursor = 0
+    for part in re.split(r"([.!؟?\n]+)", raw):
+        if not part:
+            continue
+        if re.fullmatch(r"[.!؟?\n]+", part):
+            cursor += len(part.split()) if False else 0
+            continue
+        count = len(_tokens(part))
+        sentences.append((start_word, start_word + count, part.strip()))
+        start_word += count
+    # ^ word counting via _tokens keeps parity with the normalized sequence
+    for begin, _end, sentence in sentences:
+        if begin < skip:
+            # the sentence STARTS inside the greeting/intro ceremony — skip it
+            continue
+        sentence_text = re.sub(r"\s+", " ", sentence).strip(" \t،؛:|-")
+        if len(sentence_text) < 12:
+            continue
+        sentence_words = [_norm_word(t) for t in _tokens(sentence_text)]
+        first = sentence_words[0] if sentence_words else ""
+        strong = (
+            first in QUESTION_OPENERS
+            or bool(_NUMBER_RE.search(sentence_text))
+            or any(w in PERSONAL_HOOK_TOKENS for w in sentence_words)
+            or len(sentence_words) >= 6
+        )
+        if strong:
+            return sentence_text
+    return ""
 
 
 def leading_filler_trim(
@@ -227,7 +392,12 @@ def drop_leading_filler_tokens(text: str, count: int) -> str:
     return " ".join(tokens[drop:]) if drop else str(text)
 
 
-def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]:
+def analyze_opening(
+    text: str,
+    *,
+    max_opening_words: int = 14,
+    source_is_live: bool = False,
+) -> Dict[str, Any]:
     """Score the opening of a clip from its transcript text.
 
     Returns a JSON-safe report: booleans for each hook signal, a 0-100
@@ -248,6 +418,16 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
             "has_personal_hook": False,
             "emotional_charge": 0.0,
             "trim_words": 0,
+            "opens_with_greeting": False,
+            "is_intro_announcement": False,
+            "greeting_label": "",
+            "intro_word_count": 0,
+            "suggested_start": "",
+            "hook_threshold": LIVE_HOOK_PASS_SCORE
+            if source_is_live
+            else HOOK_PASS_SCORE,
+            "passes_hook_threshold": False,
+            "source_is_live": bool(source_is_live),
             "notes": ["لا يوجد نص افتتاحي لتحليله"],
         }
 
@@ -306,6 +486,35 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
         notes.append(
             "تبدأ منتصف فكرة («{}») — المشاهد الجديد يفتقد السياق".format(first_word)
         )
+
+    # --- greeting / intro announcement penalty (feat/pro-cutting item 4)
+    ceremony = detect_greeting_intro(raw)
+    is_greeting = bool(ceremony.get("is_greeting"))
+    is_intro = bool(ceremony.get("is_intro_announcement"))
+    intro_word_count = int(ceremony.get("intro_word_count") or 0)
+    suggested_start = ""
+    if is_greeting or is_intro:
+        base_penalty = (
+            20.0 if (is_greeting and is_intro) else (15.0 if is_greeting else 12.0)
+        )
+        penalty = base_penalty * (LIVE_PENALTY_MULTIPLIER if source_is_live else 1.0)
+        score -= penalty
+        skip_words = max(trim_words, intro_word_count)
+        suggested_start = suggest_alternative_start(raw, skip_words)
+        if is_greeting:
+            notes.append(
+                "تبدأ بترحيب/تحية («{}») — ابدأ من الجملة القوية التالية{}: {}".format(
+                    ceremony.get("label") or "greeting",
+                    " (البث المباشر عتبة أكثر صرامة)" if source_is_live else "",
+                    suggested_start or "—",
+                )
+            )
+        if is_intro:
+            notes.append(
+                "تبدأ بإعلان عن الفيديو («في هذا…») — قصّها وادخل في الموضوع مباشرة"
+            )
+
+    hook_threshold = LIVE_HOOK_PASS_SCORE if source_is_live else HOOK_PASS_SCORE
     if not notes:
         notes.append("افتتاحية نظيفة بلا إشارات قوة واضحة")
     if trim_words and not opens_mid_thought:
@@ -313,8 +522,9 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
         # sure it is reported even when the first token is not a marker
         pass
 
+    final_score = round(max(0.0, min(100.0, score)), 1)
     return {
-        "hook_score": round(max(0.0, min(100.0, score)), 1),
+        "hook_score": final_score,
         "opens_with_filler": opens_with_filler,
         "filler_word": filler_word,
         "opens_mid_thought": opens_mid_thought,
@@ -324,6 +534,14 @@ def analyze_opening(text: str, *, max_opening_words: int = 14) -> Dict[str, Any]
         "has_personal_hook": has_personal_hook,
         "emotional_charge": emotional_charge,
         "trim_words": trim_words,
+        "opens_with_greeting": is_greeting,
+        "is_intro_announcement": is_intro,
+        "greeting_label": str(ceremony.get("label") or ""),
+        "intro_word_count": intro_word_count,
+        "suggested_start": suggested_start,
+        "hook_threshold": hook_threshold,
+        "passes_hook_threshold": final_score >= hook_threshold,
+        "source_is_live": bool(source_is_live),
         "notes": notes,
     }
 
@@ -337,7 +555,12 @@ def analyze_segment_opening(segment: Dict[str, Any]) -> Dict[str, Any]:
         or segment.get("title")
         or ""
     )
-    report = analyze_opening(text)
+    source_is_live = bool(
+        segment.get("source_is_live")
+        or segment.get("is_live")
+        or segment.get("live_source")
+    )
+    report = analyze_opening(text, source_is_live=source_is_live)
     report["segment_title"] = segment.get("recommended_title") or segment.get("title")
     return report
 
@@ -358,12 +581,24 @@ def rank_openings(segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 __all__ = [
     "CONTINUATION_MARKERS",
+    "HOOK_PASS_SCORE",
+    "LIVE_HOOK_PASS_SCORE",
+    "LIVE_PENALTY_MULTIPLIER",
     "FILLER_OPENERS",
+    "GREETING_OPENERS",
+    "HOOK_PASS_SCORE",
+    "INTRO_ANNOUNCEMENT_PREFIXES",
+    "LIVE_HOOK_PASS_SCORE",
+    "LIVE_PENALTY_MULTIPLIER",
     "PERSONAL_HOOK_TOKENS",
     "QUESTION_OPENERS",
     "analyze_opening",
     "analyze_segment_opening",
+    "detect_greeting_intro",
+    "detect_greeting_intro",
     "drop_leading_filler_tokens",
+    "suggest_alternative_start",
     "leading_filler_trim",
     "rank_openings",
+    "suggest_alternative_start",
 ]
