@@ -132,6 +132,24 @@ def _load_manifest(project_folder: str) -> dict[str, Any]:
         return {}
 
 
+def is_self_source(project_folder: str) -> bool:
+    """True when the project source is the owner's own footage (R3-3).
+
+    A local upload registered through the WebUI or CLI has source.type
+    "local" and no YouTube URL. Duplicate/strike logic that assumes a
+    third-party source must not fire on those clips.
+    """
+    manifest = _load_manifest(project_folder)
+    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source_type = str(source.get("type") or "").strip().lower()
+    if source_type != "local":
+        return False
+    for key in ("url", "video_url", "source_url"):
+        if str(source.get(key) or "").strip():
+            return False
+    return True
+
+
 def source_identity(project_folder: str) -> str | None:
     """Resolve a stable source identity from manifest, URL, or local input."""
     manifest = _load_manifest(project_folder)
@@ -393,6 +411,8 @@ def assess_clip(
         "source_start": start,
         "source_end": end,
     }
+    self_source = is_self_source(project_folder)
+    evidence["self_source"] = self_source
     connection = _connect(project_folder, registry_path)
     try:
         state = channel_status(project_folder, platform, registry_path)
