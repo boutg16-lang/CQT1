@@ -27,10 +27,7 @@ from typing import Any, Dict, List, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts import segment_transcript
-from scripts import transcript_window
-from scripts import query_targeting
-
+from scripts import query_targeting, segment_transcript, transcript_window
 from webui import segments_review
 
 HEADERS = ["#", "Start", "End", "Sentence"]
@@ -127,15 +124,16 @@ def sentence_rows(project_path: str, max_rows: int = 400) -> List[List[Any]]:
                 count = len(sentence_text.split())
                 s = float(seg_words[cursor].get("start") or start)
                 e = float(
-                    seg_words[min(cursor + count, len(seg_words)) - 1].get("end")
-                    or end
+                    seg_words[min(cursor + count, len(seg_words)) - 1].get("end") or end
                 )
                 cursor += count
             else:
                 total_chars = sum(len(p) for _, _, p in sentences) or 1
                 char_pos = sum(len(p) for _, _, p in sentences[:order])
                 s = start + (end - start) * (char_pos / total_chars)
-                e = start + (end - start) * ((char_pos + len(sentence_text)) / total_chars)
+                e = start + (end - start) * (
+                    (char_pos + len(sentence_text)) / total_chars
+                )
             rows.append(
                 {
                     "order": len(rows) + 1,

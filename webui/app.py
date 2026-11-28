@@ -61,9 +61,9 @@ except ImportError:
     import settings_store  # Module for persistent AI settings (save/load Gemini key)
     import style  # Learn (strike feedback) & Performance (analytics) panels
     import subtitle_editor as editor  # Module for Editor Logic
-    import transcript_cut  # Transcript click-to-cut proposals (round 2 item 8)
     import subtitle_handler as subs  # Module for Subtitles
     import telegram_control  # Optional local Telegram queue control
+    import transcript_cut  # Transcript click-to-cut proposals (round 2 item 8)
 try:
     # Launch/auth helpers moved to webui/launch.py; re-exported here so
     # ``from webui.app import _webui_auth`` keeps working.
@@ -4191,9 +4191,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
             # transcript, let the user click a sentence to fill Start/End,
             # and append a validated manual segment to viral_segments.txt.
             with gr.Accordion(
-                i18n(
-                    "النص الكامل — اضغط جملة لتحديد مقطع / Transcript click-to-cut"
-                ),
+                i18n("النص الكامل — اضغط جملة لتحديد مقطع / Transcript click-to-cut"),
                 open=False,
             ):
                 transcript_df = gr.Dataframe(
@@ -4244,9 +4242,13 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                     start, end = float(row[1]), float(row[2])
                 except Exception:
                     return None, None, i18n("Could not read the clicked row.")
-                return start, end, i18n(
-                    "Start {}s — End {}s (adjust manually if needed)."
-                ).format(start, end)
+                return (
+                    start,
+                    end,
+                    i18n("Start {}s — End {}s (adjust manually if needed).").format(
+                        start, end
+                    ),
+                )
 
             def cut_from_transcript(project_name, start, end, query):
                 project_path = _project_path_for_name(project_name)
@@ -4270,7 +4272,8 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         None,
                         None,
                         None,
-                        "❌ " + i18n("Refused: {}".format(", ".join(reasons) or "unknown")),
+                        "❌ "
+                        + i18n("Refused: {}".format(", ".join(reasons) or "unknown")),
                     )
                 segments = segments_review.load_segments(project_path)
                 rows = segments_review.rows_from_segments(
@@ -4770,9 +4773,20 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         pub_funnel_note = gr.Markdown(visible=True)
                         pub_funnel_out = gr.Dataframe(
                             headers=publish_panel.FUNNEL_HEADERS,
-                            datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                            datatype=[
+                                "str",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                                "number",
+                            ],
                             interactive=False,
-                            label=i18n("Funnel: Short views → related clicks → source views → subs"),
+                            label=i18n(
+                                "Funnel: Short views → related clicks → source views → subs"
+                            ),
                             elem_id="pub_funnel_df",
                         )
                     with gr.Row():
@@ -4790,7 +4804,16 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                             i18n("Subscribers"),
                             i18n("Funnel score"),
                         ],
-                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
                         interactive=False,
                         label=i18n("Per-Short funnel"),
                     )
@@ -4801,8 +4824,19 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                         )
                     pub_funnel_out = gr.Dataframe(
                         headers=publish_panel.FUNNEL_HEADERS,
-                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
-                        label=i18n("Short views → related clicks → source views → subscribers"),
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
+                        label=i18n(
+                            "Short views → related clicks → source views → subscribers"
+                        ),
                         interactive=False,
                     )
                     pub_funnel_note = gr.Markdown()
@@ -4831,7 +4865,16 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                             "Subs gained",
                             "Funnel score",
                         ],
-                        datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                        datatype=[
+                            "str",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                            "number",
+                        ],
                         interactive=False,
                         label="Funnel: Short → source video → subscribers",
                     )
@@ -5547,11 +5590,20 @@ with gr.Blocks(**_blocks_kwargs) as demo:
 
             # Per-Short funnel view (round 2 item 6b)
             pub_funnel_btn = gr.Button(
-                "\U0001F4C9 \u0642\u0645\u0629 \u0627\u0644\u0623\u062f\u0627\u0621 \u0644\u0643\u0644 \u0634\u0648\u0631\u062a \u0645\u0646\u0634\u0648\u0631 / Per-Short funnel"
+                "\U0001f4c9 \u0642\u0645\u0629 \u0627\u0644\u0623\u062f\u0627\u0621 \u0644\u0643\u0644 \u0634\u0648\u0631\u062a \u0645\u0646\u0634\u0648\u0631 / Per-Short funnel"
             )
             pub_funnel_out = gr.Dataframe(
                 headers=publish_panel.FUNNEL_HEADERS,
-                datatype=["str", "number", "number", "number", "number", "number", "number", "number"],
+                datatype=[
+                    "str",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                    "number",
+                ],
                 interactive=False,
                 label=i18n("Funnel per Short"),
             )
@@ -5561,6 +5613,7 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 inputs=[pub_project],
                 outputs=[pub_funnel_out, pub_funnel_note],
             )
+
             def show_pub_funnel(project_name):
                 project_path = _project_path_for_name(project_name)
                 return publish_panel.funnel_view(
@@ -5573,7 +5626,6 @@ with gr.Blocks(**_blocks_kwargs) as demo:
                 inputs=[pub_project],
                 outputs=[pub_funnel_out, pub_funnel_note],
             )
-
 
             def upload_batch_publish(
                 project_name,

@@ -29,6 +29,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CLIP_SOURCES = ("auto", "final_polished", "final", "cuts", "specific_file")
 
+
 def source_video_id(url):
     """Extract a YouTube video id from watch / youtu.be / shorts / embed URLs.
 
@@ -50,6 +51,7 @@ def source_video_id(url):
         if match:
             return match.group(1)
     return ""
+
 
 def project_source_url(project_path):
     """The source video's watch URL from the project manifest.
@@ -771,9 +773,7 @@ def _thumbnail_paths_for(project_path, video_path):
         ):
             candidates.append(os.path.join(directory, name))
     for number in (1, 2, 3):
-        candidates.append(
-            os.path.join(directory, "{}_v{}.png".format(stem, number))
-        )
+        candidates.append(os.path.join(directory, "{}_v{}.png".format(stem, number)))
     seen = []
     for candidate in candidates:
         if candidate not in seen and os.path.isfile(candidate):
@@ -801,30 +801,6 @@ def _preferred_thumbnail_variant(project_path):
         return str(performance_weights.preferred_thumbnail_variant(insights) or "")
     except (OSError, ValueError, Exception):
         return ""
-    """Candidate thumbnail locations for a clip, in preference order."""
-    stem = os.path.splitext(os.path.basename(video_path or ""))[0]
-    index = clip_index(video_path)
-    directory = os.path.join(project_path, "thumbnails")
-    candidates = []
-    for name in (
-        "{}.png".format(stem),
-        "{}_thumbnail.png".format(stem),
-        "{}.jpg".format(stem),
-        "{}_thumbnail.jpg".format(stem),
-    ):
-        candidates.append(os.path.join(directory, name))
-    if index is not None:
-        for name in (
-            "{:03d}_thumbnail.png".format(index),
-            "{:03d}_thumbnail.jpg".format(index),
-            "{:03d}.png".format(index),
-        ):
-            candidates.append(os.path.join(directory, name))
-    seen = []
-    for candidate in candidates:
-        if candidate not in seen and os.path.isfile(candidate):
-            seen.append(candidate)
-    return seen
 
 
 def _thumbnail_for_clip(project_path, video_path, title=""):
@@ -998,6 +974,7 @@ def _upload_worker(
                 return
         from scripts import upload_gate as ug
         from webui import publish_history
+
         # Chapters (round 2 item 5): long-form (yt_standard) uploads append
         # the project's chapter block to the description when one was written.
         if platform == "yt_standard":
@@ -1018,8 +995,6 @@ def _upload_worker(
                         str(chapters_exc)[:160]
                     )
                 )
-
-        from webui import publish_history
 
         if platform == "youtube" and client_secrets_path:
             from webui.youtube_credentials import (
@@ -1278,9 +1253,7 @@ def _upload_worker(
                 caption=caption,
             )
             if not cert.get("clean"):
-                for flag in (cert.get("recommended") or {}).get(
-                    "contains_yes"
-                ) or []:
+                for flag in (cert.get("recommended") or {}).get("contains_yes") or []:
                     emit(
                         "⚠️ [self-cert] فئة «{}» — تأكد من إجابة الاستبيان في "
                         "Studio قبل النشر.".format(flag)
@@ -1297,7 +1270,9 @@ def _upload_worker(
         if thumb_attached:
             record_extra["thumbnail"] = os.path.basename(thumb_path)
         if str(funnel_source_url or "").strip():
-            record_extra["source_video_url"] = str(funnel_source_url).strip()        # Funnel baseline (round 2 item 6b): the source video's view count at
+            record_extra["source_video_url"] = str(
+                funnel_source_url
+            ).strip()  # Funnel baseline (round 2 item 6b): the source video's view count at
         # publish time. funnel_metrics later diffs it against the live count
         # ("source views before vs after the Short"). Best-effort: a failed
         # lookup records nothing instead of a fake zero.
@@ -1334,8 +1309,8 @@ def _upload_worker(
                 thumbnail_uploaded=bool(thumb_attached),
                 source_video_url=str(funnel_source_url or "").strip(),
             )
-            record_extra["studio_checklist"] = (
-                studio_checklist.checklist_json(checklist_items)
+            record_extra["studio_checklist"] = studio_checklist.checklist_json(
+                checklist_items
             )
             emit(studio_checklist.checklist_markdown(checklist_items))
         except Exception as exc:
@@ -1352,11 +1327,9 @@ def _upload_worker(
             try:
                 from scripts import verify_youtube
 
-                verdict_checks = verify_youtube.initial_checks(
-                    str(result["video_id"])
-                )
-                record_extra[verify_youtube.HISTORY_KEY] = (
-                    verify_youtube.checks_json(verdict_checks)
+                verdict_checks = verify_youtube.initial_checks(str(result["video_id"]))
+                record_extra[verify_youtube.HISTORY_KEY] = verify_youtube.checks_json(
+                    verdict_checks
                 )
                 emit(
                     "[verify] ⚖️ حقوق النشر: {} — ملاءمة الإعلانات: {}".format(
@@ -1421,9 +1394,7 @@ def _upload_worker(
             try:
                 from scripts import arabic_captions
 
-                srt_path = arabic_captions.arabic_srt_for_clip(
-                    project_path, video_path
-                )
+                srt_path = arabic_captions.arabic_srt_for_clip(project_path, video_path)
                 if srt_path:
                     caption_state = arabic_captions.upload_caption_track(
                         str(result["video_id"]), srt_path
@@ -1530,10 +1501,10 @@ def _upload_worker(
         out_queue.put({"type": "done"})
 
 
-
 def studio_checklist_view(project_path, platform, video_path):
     """Markdown checklist of the manual Studio steps for a published clip."""
     from scripts import studio_checklist
+    from webui import publish_history
 
     event = publish_history.find_success(
         project_path, platform=platform, video_path=video_path
@@ -1543,8 +1514,7 @@ def studio_checklist_view(project_path, platform, video_path):
     items = studio_checklist.checklist_for_event(event)
     if not items:
         return (
-            "لا توجد قائمة استوديو محفوظة لهذا النشر "
-            "(نشر سابق لنظام قائمة الاستوديو)."
+            "لا توجد قائمة استوديو محفوظة لهذا النشر (نشر سابق لنظام قائمة الاستوديو)."
         )
     return studio_checklist.checklist_markdown(items)
 
@@ -1590,9 +1560,15 @@ def funnel_view(project_path):
     if rows:
         note = "**الإجمالي:** مشاهدات الشورتات {} — نقرات مرتبط {} — مشاهدات المصدر {} — مشتركون {}".format(
             totals.get("short_views") if totals.get("short_views") is not None else "—",
-            totals.get("related_clicks") if totals.get("related_clicks") is not None else "—",
-            totals.get("source_delta") if totals.get("source_delta") is not None else "—",
-            totals.get("subscribers_gained") if totals.get("subscribers_gained") is not None else "—",
+            totals.get("related_clicks")
+            if totals.get("related_clicks") is not None
+            else "—",
+            totals.get("source_delta")
+            if totals.get("source_delta") is not None
+            else "—",
+            totals.get("subscribers_gained")
+            if totals.get("subscribers_gained") is not None
+            else "—",
         )
     if report.get("unavailable_reason"):
         note = "ℹ️ {}\n\n{}".format(report["unavailable_reason"], note).strip()
