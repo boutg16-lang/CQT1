@@ -71,7 +71,6 @@ except Exception:
 
 from scripts import (
     adjust_subtitles,
-    audio_qc,
     burn_subtitles,
     censor_engine,
     checkpoint,
@@ -1830,15 +1829,11 @@ def main():
                     project_folder,
                     viral_segments.get("segments") or [],
                     source_video=input_video or "",
-                    source_description=chapters.read_source_description(
-                        project_folder
-                    ),
+                    source_description=chapters.read_source_description(project_folder),
                 )
                 if _chapters_report.get("chapters"):
                     print(
-                        i18n(
-                            "[chapters] {} فصول مكتوبة إلى chapters.txt ({})"
-                        ).format(
+                        i18n("[chapters] {} فصول مكتوبة إلى chapters.txt ({})").format(
                             len(_chapters_report["chapters"]),
                             _chapters_report.get("reason") or "",
                         ),
@@ -1848,9 +1843,7 @@ def main():
                     print("[chapters] {}".format(_chapters_report["reason"]))
             except Exception as chapters_error:
                 print(
-                    "[chapters] chapter generation skipped: {}".format(
-                        chapters_error
-                    )
+                    "[chapters] chapter generation skipped: {}".format(chapters_error)
                 )
 
         # 3.5. Fix Raw Segments (missing timestamps)
@@ -2326,7 +2319,7 @@ def main():
             # caption JSON during cutting.
             if getattr(args, "arabic_captions", "sentences") == "sentences":
                 try:
-                    from scripts import arabic_captions
+                    from scripts import arabic_captions, transcribe_video
 
                     regen = arabic_captions.ensure_project_captions(
                         project_folder,
@@ -2341,7 +2334,9 @@ def main():
                         )
                 except Exception as e:
                     print(
-                        i18n("Arabic caption preparation failed (non-fatal): {}").format(e),
+                        i18n(
+                            "Arabic caption preparation failed (non-fatal): {}"
+                        ).format(e),
                         flush=True,
                     )
 
